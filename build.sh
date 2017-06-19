@@ -1,0 +1,1 @@
+clang++ *.cpp imgui/*.cpp -std=c++11 -lGL -lglfw -o ImDbg
