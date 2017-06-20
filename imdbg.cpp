@@ -181,7 +181,7 @@ void imProfNewFrame( int width, int height, int mouseX, int mouseY, bool leftMou
    // Setup time step
    auto curTime = std::chrono::system_clock::now();
    io.DeltaTime = static_cast<float>(
-       std::chrono::duration_cast<std::chrono::milliseconds>( ( curTime - g_Time ) ).count() );
+       std::chrono::duration_cast<std::chrono::milliseconds>( ( curTime - g_Time ) ).count() ) / 1000.0f;
    g_Time = curTime;
 
    // Mouse position in screen coordinates (set to -1,-1 if no mouse / on another screen, etc.)
