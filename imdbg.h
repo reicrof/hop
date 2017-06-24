@@ -1,57 +1,66 @@
 #ifndef IMDBG_H_
 #define IMDBG_H_
 
+#include "imgui/imgui.h"
 #include <chrono>
 #include <vector>
+#include <memory>
 
-class ImProfiler;
-
-void imProfInit();
-ImProfiler* imNewProfiler( const char* );
-void imProfNewFrame( int width, int height, int mouseX, int mouseY, bool leftMouseButtonPressed );
-void imProfDraw();
-
-class ImProfiler
+namespace imdbg
 {
-   using Delta_t = float;
+    // Initialize the imgui framework
+    void init();
+    // Updates the imgui data. Should be called each frame
+    void onNewFrame( int width, int height, int mouseX, int mouseY, bool lmbPressed, bool rmbPressed );
+    // Draw the ui
+    void draw();
 
-  public:
-   struct ProfTrace
-   {
-      const char* name;
-      std::chrono::time_point<std::chrono::system_clock> startTime;
-      Delta_t* deltaTimeRef;
-   };
-   struct ProfRes
-   {
-      const char* name;
-      Delta_t deltaTime;
-      int level;
-   };
+    // New profiler window
+    class Profiler
+    {
+    public:
+       struct TraceDetails
+       {
+          std::vector< float > prevTimes;
+       };
 
-   ImProfiler( ImProfiler&& ) = default;
-   ImProfiler( const ImProfiler& ) = delete;
-   ImProfiler& operator=( const ImProfiler& ) = delete;
-   ImProfiler& operator=( ImProfiler&& ) = delete;
+       struct Trace
+       {
+          Trace( const char* aName, int aLevel );
+          const char* name{nullptr};
+          std::unique_ptr< TraceDetails > details;
+          float curTime;
+          int level{-1};
+          unsigned flags {0};
+          bool operator<( const Trace& rhs ) { return name < rhs.name; }
+       };
+       using TracePushTime = 
+          std::pair< size_t, /*idx in vector of the trace*/
+                     std::chrono::time_point<std::chrono::system_clock> >;
 
-   void draw() const;
-   void clear()
-   {
-      _tracesResults.clear();
-      _traceStack.clear();
-   }
-   void pushProfTrace( const char* traceName );
-   void popProfTrace();
+       Profiler( Profiler&& ) = default;
+       Profiler( const Profiler& ) = delete;
+       Profiler& operator=( const Profiler& ) = delete;
+       Profiler& operator=( Profiler&& ) = delete;
 
-  private:
-   friend ImProfiler* imNewProfiler( const char* name );
-   ImProfiler( const char* name );
+       void draw();
+       void pushTrace( const char* traceName );
+       void popTrace();
 
-   std::vector<ProfTrace> _traceStack;
-   std::vector<ProfRes> _tracesResults;
-   const char* _name;
-   Delta_t* _curDelta;
-   int currentLevel = {-1};
-};
+      private:
+       friend Profiler* newProfiler( const char* name );
+       Profiler( const char* name );
+
+       std::vector<Trace> _traces;
+       std::vector<TracePushTime> _traceStack;
+       const char* _name{ nullptr };
+       size_t  _traceCount{ 0 };
+       int _curTreeLevel{ -1 };
+       bool _needSorting{ false };
+    };
+
+    // Returns a non-owning pointer of a new profiler.
+    Profiler* newProfiler( const char* );
+}
 
 #endif  // IMDBG_H_

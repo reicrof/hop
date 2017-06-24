@@ -3,15 +3,17 @@
 
 #include <GL/gl.h>
 
-#include <assert.h>
+#include <cassert>
 #include <chrono>
 #include <vector>
+#include <algorithm>
+#include <stdio.h>
 
 namespace
 {
 static std::chrono::time_point<std::chrono::system_clock> g_Time = std::chrono::system_clock::now();
 static GLuint g_FontTexture = 0;
-std::vector<ImProfiler> _profilers;
+std::vector<imdbg::Profiler> _profilers;
 
 // This is the main rendering function that you have to implement and provide to ImGui (via setting
 // up 'RenderDrawListsFn' in the ImGuiIO structure)
@@ -157,17 +159,27 @@ void createResources()
    glBindTexture( GL_TEXTURE_2D, last_texture );
 }
 
-bool dummy = false;
-bool drawTrace( const ImProfiler::ProfRes& trace )
+bool ShowHelpMarker(const char* desc)
 {
-   bool isOpen = ImGui::TreeNode( trace.name, "%s :    %f", trace.name, trace.deltaTime );
-   ImGui::SameLine();
-   ImGui::Checkbox( "Read-only", &dummy );
-   return isOpen;
-}
+    ImGui::TextDisabled("(?)");
+    if (ImGui::IsItemHovered())
+    {
+        ImGui::BeginTooltip();
+        ImGui::PushTextWrapPos(450.0f);
+        ImGui::TextUnformatted(desc);
+        ImGui::PopTextWrapPos();
+        ImGui::EndTooltip();
+    }
+
+    return true;
 }
 
-void imProfNewFrame( int width, int height, int mouseX, int mouseY, bool leftMouseButtonPressed )
+} // end of anonymous namespace
+
+namespace imdbg
+{
+
+void onNewFrame( int width, int height, int mouseX, int mouseY, bool lmbPressed, bool rmbPressed )
 {
    if ( !g_FontTexture ) createResources();
 
@@ -187,7 +199,8 @@ void imProfNewFrame( int width, int height, int mouseX, int mouseY, bool leftMou
    // Mouse position in screen coordinates (set to -1,-1 if no mouse / on another screen, etc.)
    io.MousePos = ImVec2( (float)mouseX, (float)mouseY );
 
-   io.MouseDown[0] = leftMouseButtonPressed;
+   io.MouseDown[0] = lmbPressed;
+   io.MouseDown[1] = rmbPressed;
 
    // io.MouseWheel = g_MouseWheel;
    // g_MouseWheel = 0.0f;
@@ -196,22 +209,23 @@ void imProfNewFrame( int width, int height, int mouseX, int mouseY, bool leftMou
    ImGui::NewFrame();
 }
 
-void imProfDraw()
+void draw()
 {
-   for ( const auto& p : _profilers )
+   static const auto preDrawTime = std::chrono::system_clock::now();
+
+   for ( auto& p : _profilers )
    {
       p.draw();
    }
 
    ImGui::Render();
 
-   for ( auto& p : _profilers )
-   {
-      p.clear();
-   }
+   static const auto postDrawTime = std::chrono::system_clock::now();
+   size_t milis = std::chrono::duration_cast<std::chrono::milliseconds>( ( postDrawTime - preDrawTime ) ).count();
+   //printf( "immediate gui draw took : %zu\n", milis );
 }
 
-void imProfInit()
+void init()
 {
    ImGuiIO& io = ImGui::GetIO();
 
@@ -226,18 +240,55 @@ void imProfInit()
    // glfwSetScrollCallback(window, ImGui_ImplGlfw_ScrollCallback);
 }
 
-ImProfiler* imNewProfiler( const char* name )
+imdbg::Profiler* newProfiler( const char* name )
 {
-   ImProfiler prof{name};
+   imdbg::Profiler prof{name};
    _profilers.emplace_back( std::move( prof ) );
    return &_profilers.back();
 }
 
-ImProfiler::ImProfiler( const char* name ) : _name( name ) { _traceStack.reserve( 20 ); }
-
-void ImProfiler::draw() const
+namespace
 {
-   assert( currentLevel == -1 );
+   enum TraceFlags { SHOW_GRAPH = 1 };
+   bool drawTrace( Profiler::Trace& trace )
+   {
+      const bool isOpen = ImGui::TreeNode( trace.name, "%s :    %f ms", trace.name, trace.curTime );
+      if (ImGui::BeginPopupContextItem(trace.name) )
+      {
+          if (ImGui::Selectable( (trace.flags & SHOW_GRAPH) ? "Hide graph" : "Show graph"))
+            trace.flags ^= SHOW_GRAPH;
+          ImGui::SameLine();
+          ShowHelpMarker("Enable/Disable graph of previous times for the current trace");
+
+          ImGui::EndPopup();
+      }
+
+      if( isOpen && trace.flags > 0 )
+      {
+         if( ImGui::CollapsingHeader("More Info") )
+         {
+            if( ( trace.flags & SHOW_GRAPH ) )
+            {
+              ImGui::PlotLines( "Times", trace.details->prevTimes.data(), (int)trace.details->prevTimes.size(), 0, "avg 0.0", -0.1f, 100.0f, ImVec2(0,80));
+            }
+
+            ImGui::Separator();
+         }
+      }
+      return isOpen;
+   }
+}
+
+Profiler::Profiler( const char* name ) : _name( name )
+{
+   _traceStack.reserve( 20 );
+   _traces.reserve( 20 );
+}
+
+void Profiler::draw()
+{
+   assert( _curTreeLevel == -1 && _traceStack.empty() ); // There is probably a popTrace missing.
+
    ImGui::SetNextWindowSize( ImVec2( 300, 100 ), ImGuiSetCond_Once );
    if ( !ImGui::Begin( _name ) )
    {
@@ -247,9 +298,9 @@ void ImProfiler::draw() const
 
    // Draw the traces
    int level = 0;
-   for ( size_t i = 0; i < _tracesResults.size(); ++i )
+   for ( size_t i = 0; i < _traces.size(); ++i )
    {
-      const auto& trace = _tracesResults[i];
+      auto& trace = _traces[i];
       if ( trace.level == level )
       {
          if ( drawTrace( trace ) )
@@ -275,22 +326,52 @@ void ImProfiler::draw() const
    ImGui::End();
 }
 
-void ImProfiler::pushProfTrace( const char* traceName )
+void Profiler::pushTrace( const char* traceName )
 {
-   _tracesResults.emplace_back( ProfRes{traceName, -1.0f, ++currentLevel} );
-   _traceStack.emplace_back(
-       ProfTrace{traceName, std::chrono::system_clock::now(), &_tracesResults.back().deltaTime} );
+   // Increase the stack level
+   ++_curTreeLevel;
+
+   // Try to find if the trace already exists
+   Trace trace {traceName, _curTreeLevel};
+   auto it = std::lower_bound( _traces.begin(), _traces.end(), trace );
+   if( it == _traces.end() || it->name != traceName )
+   {
+      // If it does not exists, append to the end of the vector, and flag
+      // that a sort is required
+      _traces.emplace_back( std::move( trace ) );
+      it = _traces.end() - 1;
+      _needSorting = true;
+   }
+
+   // Add a new TracePushTime with the associated idx of the trace
+   const size_t idx = std::distance( _traces.begin(), it );
+   _traceStack.emplace_back( idx, std::chrono::system_clock::now() );
 }
 
-void ImProfiler::popProfTrace()
+void Profiler::popTrace()
 {
-   assert( _traceStack.size() > 0 );
-   --currentLevel;
-   auto& trace = _traceStack.back();
-   *trace.deltaTimeRef =
-       static_cast<float>( std::chrono::duration_cast<std::chrono::milliseconds>(
-                               ( std::chrono::system_clock::now() - trace.startTime ) )
-                               .count() );
-   ;
+   assert( _traceStack.size() > 0 ); // push/pop count mismatch
+
+   --_curTreeLevel;
+   auto& trace = _traces[ _traceStack.back().first ];
+   trace.details->prevTimes.push_back( trace.curTime );
+   trace.curTime =  static_cast<float>( std::chrono::duration_cast<std::chrono::nanoseconds>(
+         ( std::chrono::system_clock::now() - _traceStack.back().second ) ).count() / 1000000.0f );
    _traceStack.pop_back();
+
+   // Sort the traces if new traces were added. This should be done only when
+   // the stack is empty since it keeps an index back to the traces vector and
+   // we do not want to mess the ids.
+   if( _needSorting && _traceStack.empty() )
+   {
+      std::sort( _traces.begin(), _traces.end() );
+      _needSorting = false;
+   }
 }
+
+Profiler::Trace::Trace( const char* aName, int aLevel ) :
+  name{aName}, details{new TraceDetails()}, level{aLevel} 
+{
+}
+
+} // end of namespace imdbg

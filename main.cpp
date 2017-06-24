@@ -2,7 +2,8 @@
 
 #include <stdio.h>
 #include "imdbg.h"
-#include "imgui/imgui.h"
+
+#include <cmath>
 
 int main( void )
 {
@@ -22,51 +23,46 @@ int main( void )
    /* Make the window's context current */
    glfwMakeContextCurrent( window );
 
-   imProfInit();
+   imdbg::init();
 
    bool show_test_window = true;
    bool show_another_window = false;
    ImVec4 clear_color = ImColor( 114, 144, 154 );
 
-   ImProfiler* prof = imNewProfiler( "My Profiler" );
+   imdbg::Profiler* prof = imdbg::newProfiler( "My Profiler" );
 
    /* Loop until the user closes the window */
    while ( !glfwWindowShouldClose( window ) )
    {
-      prof->pushProfTrace( "Main" );
+      prof->pushTrace( "Main" );
       int w, h;
       glfwGetWindowSize( window, &w, &h );
       double mouseX, mouseY;
       glfwGetCursorPos( window, &mouseX, &mouseY );
-      imProfNewFrame( w, h, (int)mouseX, (int)mouseY, glfwGetMouseButton( window, 0 ) );
+      imdbg::onNewFrame( w, h, (int)mouseX, (int)mouseY, glfwGetMouseButton( window, 0 ), glfwGetMouseButton( window, 1 ) );
       /* Poll for and process events */
       glfwPollEvents();
 
       ImGui::ShowTestWindow( &show_test_window );
+      
+      if( mouseX > 500 )
+      {
+         prof->pushTrace( "A trace" );
+         prof->popTrace();
 
-      prof->pushProfTrace( "A trace" );
-      prof->pushProfTrace( "Another one##23233" );
-      prof->pushProfTrace( "Another one##23232" );
-      prof->pushProfTrace( "Another one##2323" );
-      prof->popProfTrace();
-      prof->pushProfTrace( "Another one##232" );
-      prof->popProfTrace();
-      prof->popProfTrace();
-      prof->popProfTrace();
-      prof->popProfTrace();
+         prof->pushTrace( "Another one" );
+         prof->popTrace();
+      }
+      prof->popTrace();
 
-      prof->popProfTrace();
-      prof->pushProfTrace( "Another one" );
-      prof->popProfTrace();
-
-      // Rendering
+      // Rendering   
       int display_w, display_h;
       glfwGetFramebufferSize( window, &display_w, &display_h );
       glViewport( 0, 0, display_w, display_h );
       glClearColor( clear_color.x, clear_color.y, clear_color.z, clear_color.w );
       glClear( GL_COLOR_BUFFER_BIT );
 
-      imProfDraw();
+      imdbg::draw();
 
       /* Swap front and back buffers */
       glfwSwapBuffers( window );
