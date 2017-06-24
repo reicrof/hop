@@ -249,7 +249,7 @@ imdbg::Profiler* newProfiler( const char* name )
 
 namespace
 {
-   enum TraceFlags { SHOW_GRAPH = 1 };
+   enum TraceFlags { SHOW_GRAPH = 1, SHOW_GL_MATRICES = 1 << 1};
    bool drawTrace( Profiler::Trace& trace )
    {
       const bool isOpen = ImGui::TreeNode( trace.name, "%s :    %f ms", trace.name, trace.curTime );
@@ -258,7 +258,12 @@ namespace
           if (ImGui::Selectable( (trace.flags & SHOW_GRAPH) ? "Hide graph" : "Show graph"))
             trace.flags ^= SHOW_GRAPH;
           ImGui::SameLine();
-          ShowHelpMarker("Enable/Disable graph of previous times for the current trace");
+          ShowHelpMarker("Enable/Disable the graph history of the current trace");
+
+          if (ImGui::Selectable( (trace.flags & SHOW_GL_MATRICES) ? "Hide GL Matrices" : "Show GL Matrices"))
+            trace.flags ^= SHOW_GL_MATRICES;
+          ImGui::SameLine();
+          ShowHelpMarker("Show/Hide the GL modelview and projection matrices. They are the Matrices at the time when the trace was pushed.");
 
           ImGui::EndPopup();
       }
@@ -267,9 +272,36 @@ namespace
       {
          if( ImGui::CollapsingHeader("More Info") )
          {
-            if( ( trace.flags & SHOW_GRAPH ) )
+            if( trace.flags & SHOW_GRAPH )
             {
-              ImGui::PlotLines( "Times", trace.details->prevTimes.data(), (int)trace.details->prevTimes.size(), 0, "avg 0.0", -0.1f, 100.0f, ImVec2(0,80));
+              static constexpr float PAD = 0.1f;
+              ImGui::PlotLines( "Times", trace.details->prevTimes.data(), (int)trace.details->prevTimes.size(),
+                                0, nullptr, -PAD, trace.details->maxValue + PAD, ImVec2(0,100));
+            }
+
+            if( trace.flags & SHOW_GL_MATRICES )
+            {
+              ImGui::Columns(2, "GL State Header");
+              ImGui::Separator();
+              ImGui::Text("ModelView"); ImGui::NextColumn();
+              ImGui::Text("Projection");
+              ImGui::Separator();
+
+              ImGui::Columns(2, "GL State");
+              const std::array< float, 16 >& mv = trace.details->modelViewGL;
+              ImGui::Text("%f\n%f\n%f\n%f\n", mv[0], mv[4], mv[8], mv[12]); ImGui::SameLine();
+              ImGui::Text("%f\n%f\n%f\n%f\n", mv[1], mv[5], mv[9], mv[13]); ImGui::SameLine();
+              ImGui::Text("%f\n%f\n%f\n%f\n", mv[2], mv[6], mv[10], mv[14]); ImGui::SameLine();
+              ImGui::Text("%f\n%f\n%f\n%f\n", mv[3], mv[7], mv[11], mv[15]);
+
+              ImGui::NextColumn();
+
+              const std::array< float, 16 >& p = trace.details->projectionGL;
+              ImGui::Text("%f\n%f\n%f\n%f\n", p[0], p[4], p[8], p[12]); ImGui::SameLine();
+              ImGui::Text("%f\n%f\n%f\n%f\n", p[1], p[5], p[9], p[13]); ImGui::SameLine();
+              ImGui::Text("%f\n%f\n%f\n%f\n", p[2], p[6], p[10], p[14]); ImGui::SameLine();
+              ImGui::Text("%f\n%f\n%f\n%f\n", p[3], p[7], p[11], p[15]);
+              ImGui::Columns(1);
             }
 
             ImGui::Separator();
@@ -343,6 +375,12 @@ void Profiler::pushTrace( const char* traceName )
       _needSorting = true;
    }
 
+   if( it->flags & SHOW_GL_MATRICES )
+   {
+      glGetFloatv (GL_MODELVIEW_MATRIX, it->details->modelViewGL.data()); 
+      glGetFloatv (GL_PROJECTION_MATRIX, it->details->projectionGL.data()); 
+   }
+
    // Add a new TracePushTime with the associated idx of the trace
    const size_t idx = std::distance( _traces.begin(), it );
    _traceStack.emplace_back( idx, std::chrono::system_clock::now() );
@@ -355,6 +393,7 @@ void Profiler::popTrace()
    --_curTreeLevel;
    auto& trace = _traces[ _traceStack.back().first ];
    trace.details->prevTimes.push_back( trace.curTime );
+   trace.details->maxValue = std::max( trace.curTime, trace.details->maxValue );
    trace.curTime =  static_cast<float>( std::chrono::duration_cast<std::chrono::nanoseconds>(
          ( std::chrono::system_clock::now() - _traceStack.back().second ) ).count() / 1000000.0f );
    _traceStack.pop_back();

@@ -21,14 +21,20 @@ namespace imdbg
     public:
        struct TraceDetails
        {
+          // Gl state values
+          std::array< float, 16 > modelViewGL;
+          std::array< float, 16 > projectionGL;
+
+          // Previous trace time values
           std::vector< float > prevTimes;
+          float maxValue { 0.0f };
        };
 
        struct Trace
        {
           Trace( const char* aName, int aLevel );
+          std::unique_ptr< TraceDetails > details; // Cold data
           const char* name{nullptr};
-          std::unique_ptr< TraceDetails > details;
           float curTime;
           int level{-1};
           unsigned flags {0};
