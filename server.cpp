@@ -134,9 +134,9 @@ bool Server::handleNewMessage( int clientId, vdbg::MsgType type, uint32_t size )
 {
    switch ( type )
    {
-      case MsgType::MSG_1:
+      case MsgType::PROFILER_TRACE:
       {
-         printf( "Msg1\n" );
+         printf( "PROFILER_TRACE\n" );
          return true;
       }
       default:
