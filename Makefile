@@ -3,9 +3,10 @@ TARGET_SERVER = multiproc_server
 TARGET_CLIENT = multiproc_client
 
 CXXFLAGS = -std=c++14 -Wall -Werror
-SERVER_SOURCES = $(wildcard *server.cpp)
+IMGUI_SOURCES = $(wildcard imgui/*.cpp)
+SERVER_SOURCES = $(wildcard *server.cpp) imdbg.cpp $(IMGUI_SOURCES)
 CLIENT_SOURCES = $(wildcard *client.cpp)
-COMMON_INCLUDES = -isystem.
+COMMON_INCLUDES = -isystem. -lGL
 
 ifeq ($(UNAME), Linux)
    CXX = g++
@@ -15,7 +16,7 @@ endif
 
 #includes
 INC = $(COMMON_INCLUDES)
-LDFLAGS = -lpthread
+LDFLAGS = -lpthread ./SDL2/libSDL2.a -ldl
 
 .PHONY: all
 

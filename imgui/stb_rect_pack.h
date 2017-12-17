@@ -489,6 +489,7 @@ static stbrp__findresult stbrp__skyline_pack_rectangle(stbrp_context *context, i
 
    {
       stbrp_node *L1 = NULL, *L2 = NULL;
+      (void)L1; (void)L2;
       int count=0;
       cur = context->active_head;
       while (cur) {

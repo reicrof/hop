@@ -113,7 +113,7 @@ bool Server::handleNewConnection()
 {
    int connection = accept( _socket, NULL, NULL );
    if ( connection < 0 )
-   {MsgType
+   {
       perror( "accept() failed" );
       return false;
    }
