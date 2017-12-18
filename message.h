@@ -18,7 +18,7 @@ struct MsgHeader
 {
    // Type of the message sent
    MsgType type;
-   // Size of the message, including header
+   // Size of the message
    uint32_t size;
 };
 
@@ -30,16 +30,17 @@ inline auto getTimeStamp()
 }
 using TimeStamp = decltype( getTimeStamp() );
 static constexpr const uint32_t MAX_FCT_NAME_LENGTH = 64 - 2 * sizeof( TimeStamp );
-struct TraceInfo
+
+struct TracesInfo
+{
+   uint32_t traceCount;
+   uint32_t threadId;
+};
+
+struct Trace
 {
    TimeStamp start, end;
    char name[MAX_FCT_NAME_LENGTH];
-};
-
-struct Traces
-{
-   uint8_t threadId;
-   uint32_t traceCount;
 };
 
 }  // namespace vdbg

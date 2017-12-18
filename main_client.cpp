@@ -21,6 +21,8 @@ int main()
    tinfo[15] = info;
    tinfo[31] = info;
 
+   uint8_t messageBuf[ sizeof( vdbg::MsgHeader ) + sizeof( vdbg::TraceInfo ) + sizeof( vdbg::Traces ) ];
+
    uint32_t size = sizeof( traces ) + sizeof( tinfo );
    vdbg::MsgHeader h = { vdbg::MsgType::PROFILER_TRACE, size };
    memcpy( buffer, &h, sizeof( h ) );
