@@ -4,27 +4,30 @@
 
 int main()
 {
-   unsigned char buffer[4096];
-   memset( buffer, 'a', sizeof( buffer ) );
-
    vdbg::Client client;
    client.connect( vdbg::SERVER_PATH );
 
-   vdbg::TraceInfo info;
-   info.start = vdbg::getTimeStamp();
-   info.end = vdbg::getTimeStamp();
-   strncpy( info.name, __func__, vdbg::MAX_FCT_NAME_LENGTH );
-   vdbg::TraceInfo tinfo[32] = {};
-   vdbg::Traces traces = {};
+   vdbg::Trace aTrace = {};
+   aTrace.start = vdbg::getTimeStamp();
+   aTrace.end = vdbg::getTimeStamp();
+   strncpy( aTrace.name, __func__, vdbg::MAX_FCT_NAME_LENGTH-1 );
+   vdbg::Trace tinfo[32] = {};
 
-   tinfo[0] = info;
-   tinfo[15] = info;
-   tinfo[31] = info;
+   tinfo[0] = aTrace;
+   tinfo[15] = aTrace;
+   tinfo[31] = aTrace;
 
-   uint8_t messageBuf[ sizeof( vdbg::MsgHeader ) + sizeof( vdbg::TraceInfo ) + sizeof( vdbg::Traces ) ];
+   vdbg::TracesInfo info;
+   info.threadId = 0;
+   info.traceCount = 32;
 
-   uint32_t size = sizeof( traces ) + sizeof( tinfo );
-   vdbg::MsgHeader h = { vdbg::MsgType::PROFILER_TRACE, size };
+   uint32_t msgSize = sizeof( vdbg::TracesInfo ) + 32 * sizeof( vdbg::Trace );
+   uint8_t buffer[ sizeof( vdbg::MsgHeader ) + msgSize ];
+
+   vdbg::MsgHeader h = { vdbg::MsgType::PROFILER_TRACE, msgSize };
    memcpy( buffer, &h, sizeof( h ) );
-   client.send( buffer, sizeof( buffer ) );
+   memcpy( buffer+sizeof(h), &info, sizeof( info ) );
+   memcpy( buffer+sizeof(h)+sizeof(info), tinfo, sizeof( tinfo ) );
+   for(int i = 0; i < 1024; ++i )
+      client.send( buffer, sizeof( buffer ) );
 }

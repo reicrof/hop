@@ -9,8 +9,6 @@
 
 #include <chrono>
 
-static constexpr uint32_t BUFFER_LENGTH = 4096;
-
 namespace vdbg
 {
 bool Server::start( const char* name, int connections )
@@ -136,7 +134,18 @@ bool Server::handleNewMessage( int clientId, vdbg::MsgType type, uint32_t size )
    {
       case MsgType::PROFILER_TRACE:
       {
-         printf( "PROFILER_TRACE\n" );
+         vdbg::TracesInfo info;
+         int valread = ::read( clientId, (void*)&info, sizeof( info ) );
+
+         if( valread != sizeof( info ) )
+            return false;
+
+         std::vector< vdbg::Trace > traces( info.traceCount );
+         valread = ::read( clientId, (void*)traces.data(), sizeof( vdbg::Trace ) * info.traceCount );
+         if( valread != sizeof( vdbg::Trace ) * info.traceCount )
+            return false;
+
+         printf( "Profiler Trace with %d traces received\n", info.traceCount );
          return true;
       }
       default:

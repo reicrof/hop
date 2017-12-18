@@ -33,8 +33,8 @@ static constexpr const uint32_t MAX_FCT_NAME_LENGTH = 64 - 2 * sizeof( TimeStamp
 
 struct TracesInfo
 {
-   uint32_t traceCount;
    uint32_t threadId;
+   uint32_t traceCount;
 };
 
 struct Trace

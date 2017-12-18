@@ -1,7 +1,11 @@
 #include "imdbg.h"
 #include "imgui/imgui.h"
 
+#ifdef __APPLE__
+#include <OpenGL/gl.h>
+#else
 #include <GL/gl.h>
+#endif
 
 #include <cassert>
 #include <chrono>
@@ -179,7 +183,7 @@ bool ShowHelpMarker(const char* desc)
 namespace imdbg
 {
 
-void onNewFrame( int width, int height, int mouseX, int mouseY, bool lmbPressed, bool rmbPressed )
+void onNewFrame( int width, int height, int mouseX, int mouseY, bool lmbPressed, bool rmbPressed, float mousewheel )
 {
    if ( !g_FontTexture ) createResources();
 
@@ -201,9 +205,7 @@ void onNewFrame( int width, int height, int mouseX, int mouseY, bool lmbPressed,
 
    io.MouseDown[0] = lmbPressed;
    io.MouseDown[1] = rmbPressed;
-
-   // io.MouseWheel = g_MouseWheel;
-   // g_MouseWheel = 0.0f;
+   io.MouseWheel = mousewheel;
 
    // Start the frame
    ImGui::NewFrame();

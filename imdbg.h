@@ -2,6 +2,7 @@
 #define IMDBG_H_
 
 #include "imgui/imgui.h"
+#include <array>
 #include <chrono>
 #include <vector>
 #include <memory>
@@ -11,7 +12,7 @@ namespace imdbg
     // Initialize the imgui framework
     void init();
     // Updates the imgui data. Should be called each frame
-    void onNewFrame( int width, int height, int mouseX, int mouseY, bool lmbPressed, bool rmbPressed );
+    void onNewFrame( int width, int height, int mouseX, int mouseY, bool lmbPressed, bool rmbPressed, float mouseWheel );
     // Draw the ui
     void draw();
 
@@ -38,7 +39,7 @@ namespace imdbg
           float curTime;
           int level{-1};
           unsigned flags {0};
-          bool operator<( const Trace& rhs ) { return name < rhs.name; }
+          bool operator<( const Trace& rhs ) const { return name < rhs.name; }
        };
        using TracePushTime = 
           std::pair< size_t, /*idx in vector of the trace*/

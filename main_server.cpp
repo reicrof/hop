@@ -3,15 +3,36 @@
 #include <SDL2/SDL.h>
 
 #include <imdbg.h>
+
+#include <rapidjson/document.h>
+
+#ifdef __APPLE__
+#include <OpenGL/gl.h>
+#else
 #include <GL/gl.h>
+#endif
 
 static bool g_run = true;
+static float g_mouseWheel = 0.0f;
+
+static void handleMouseWheel( const SDL_Event& e )
+{
+   if ( e.wheel.y == 1 )  // scroll up
+   {
+      g_mouseWheel = 1.0f;
+   }
+   else if ( e.wheel.y == -1 )  // scroll down
+   {
+      g_mouseWheel = -1.0f;
+   }
+}
 
 static void handleInput()
 {
    SDL_Event event;
    while ( g_run && SDL_PollEvent( &event ) )
    {
+      handleMouseWheel( event );
       switch ( event.type )
       {
          case SDL_QUIT:
@@ -56,6 +77,8 @@ int main()
    vdbg::Server serv;
    serv.start( vdbg::SERVER_PATH, 10 );
 
+   rapidjson::Document doc;
+
    bool show_test_window = true;
 
    imdbg::Profiler* prof = imdbg::newProfiler( "My Profiler" );
@@ -78,7 +101,9 @@ int main()
           x,
           y,
           buttonState & SDL_BUTTON( SDL_BUTTON_LEFT ),
-          buttonState & SDL_BUTTON( SDL_BUTTON_RIGHT ) );
+          buttonState & SDL_BUTTON( SDL_BUTTON_RIGHT ),
+          g_mouseWheel );
+      g_mouseWheel = 0;
 
       ImGui::ShowTestWindow( &show_test_window );
 

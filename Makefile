@@ -6,17 +6,20 @@ CXXFLAGS = -std=c++14 -Wall -Werror
 IMGUI_SOURCES = $(wildcard imgui/*.cpp)
 SERVER_SOURCES = $(wildcard *server.cpp) imdbg.cpp $(IMGUI_SOURCES)
 CLIENT_SOURCES = $(wildcard *client.cpp)
-COMMON_INCLUDES = -isystem. -lGL
+COMMON_INCLUDES = -isystem.
 
+PLATFORM_LD_FLAGS = 
 ifeq ($(UNAME), Linux)
    CXX = g++
+   PLATFORM_LD_FLAGS = -lGL
 else ifeq ($(UNAME), Darwin)
    CXX = clang++
+   PLATFORM_LD_FLAGS = -framework OpenGL -framework Quartz -framework Cocoa -Wl,-undefined,dynamic_lookup
 endif
 
 #includes
 INC = $(COMMON_INCLUDES)
-LDFLAGS = -lpthread ./SDL2/libSDL2.a -ldl
+LDFLAGS = -lpthread ./SDL2/libSDL2.a -ldl $(PLATFORM_LD_FLAGS)
 
 .PHONY: all
 
