@@ -5,6 +5,7 @@
 #include <message.h>
 #include <array>
 #include <chrono>
+#include <string>
 #include <vector>
 #include <memory>
 

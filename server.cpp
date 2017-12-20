@@ -153,9 +153,9 @@ bool Server::handleNewMessage( int clientId, vdbg::MsgType type, uint32_t /*size
          {
             // TODO: hack! needs to taking into account the precision specified in message.h
             auto difference = t.end - t.start;
-            traceFrame.traces.push_back( DisplayableTrace{ t.start, difference * 0.000001f, 1, 0 } );
+            traceFrame.traces.push_back( DisplayableTrace{ t.start, difference * 0.000001f, 1, {0} } );
             strncpy( traceFrame.traces.back().name, t.name, 63 );
-            traceFrame.traces.push_back( DisplayableTrace{ t.end, 0.0f, 0, 0 } );
+            traceFrame.traces.push_back( DisplayableTrace{ t.end, 0.0f, 0, {0} } );
          }
 
          std::sort(
