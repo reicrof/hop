@@ -76,7 +76,7 @@ int main()
    }
 
    SDL_Window* window = SDL_CreateWindow(
-       "vdbg", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, 640, 480, SDL_WINDOW_OPENGL );
+       "vdbg", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, 1600, 1024, SDL_WINDOW_OPENGL );
 
    if ( window == NULL )
    {
@@ -101,27 +101,44 @@ int main()
 
    bool show_test_window = true;
 
-   imdbg::Profiler* prof = imdbg::newProfiler( "My Profiler" );
-
-
+   std::vector< imdbg::Profiler* > profilers;
+   std::vector< uint32_t > profTrheadsId;
    while ( g_run )
    {
       handleInput();
 
       std::vector< vdbg::DisplayableTraceFrame > pendingTraces;
       serv.getProfilingTraces( pendingTraces );
-      if( pendingTraces.size() > 0 )
+      for ( auto& t : pendingTraces )
       {
-         for( auto& t : pendingTraces )
+         size_t i = 0;
+         bool found = false;
+         for( ; i < profTrheadsId.size(); ++i )
          {
-            prof->addTraces( std::move( t ) );
+            if( profTrheadsId[i] == t.threadId )
+            {
+               found = true;
+               break;
+            }
+         }
+
+         if( found )
+         {
+            profilers[i]->addTraces( t );
+         }
+         else
+         {
+            profilers.push_back(
+                imdbg::newProfiler( "Profiler : Thread  " + std::to_string( t.threadId ) ) );
+            profTrheadsId.push_back( t.threadId );
+            profilers.back()->addTraces( std::move( t ) );
+            printf( "THREAD ADDED %u\n", t.threadId );
          }
       }
 
       int w, h, x, y;
       SDL_GetWindowSize( window, &w, &h );
       uint32_t buttonState = SDL_GetMouseState( &x, &y );
-
 
       imdbg::onNewFrame(
           w,

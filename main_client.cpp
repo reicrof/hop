@@ -2,6 +2,7 @@
 #include <cstring>
 #include <vdbg_client.h>
 #include <chrono>
+#include <thread>
 
 static void func3()
 {
@@ -18,7 +19,16 @@ static void func1()
    func2();
 }
 
-
+static void threadFunc()
+{
+   using namespace std::chrono_literals;
+   std::this_thread::sleep_for(1s);
+   while(true)
+   {
+      std::this_thread::sleep_for(500ms);
+      func1();
+   }
+}
 
 
 int main()
@@ -47,10 +57,14 @@ int main()
    memcpy( buffer, &h, sizeof( h ) );
    memcpy( buffer+sizeof(h), &info, sizeof( info ) );
    memcpy( buffer+sizeof(h)+sizeof(info), tinfo, sizeof( tinfo ) );
-   for(int i = 0; i < 1024; ++i )
+
+   std::thread t1( threadFunc );
+
+   while(true)
    {
       using namespace std::chrono_literals;
-      std::this_thread::sleep_for(1s);
+      std::this_thread::sleep_for(200ms);
       func1();
    }
+
 }

@@ -145,8 +145,9 @@ bool Server::handleNewMessage( int clientId, vdbg::MsgType type, uint32_t /*size
          if( valread != sizeof( vdbg::Trace ) * info.traceCount )
             return false;
 
-         printf( "Profiler Trace with %d traces received\n", info.traceCount );
+         printf( "Profiler Trace from thread %u with %d traces received\n", info.threadId, info.traceCount );
          vdbg::DisplayableTraceFrame traceFrame;
+         traceFrame.threadId = info.threadId;
          traceFrame.traces.reserve( info.traceCount * 2 );
          for( const auto& t : traces )
          {

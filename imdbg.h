@@ -71,29 +71,37 @@ namespace imdbg
        void pushTrace( const char* traceName );
        void popTrace();
 
-       void addTraces( vdbg::DisplayableTraceFrame&& traces );
+       uint32_t getThreadId() const { return _threadId;}
+       void setThreadId( uint32_t t )
+       {
+            _threadId = t;
+       }
+
+       void addTraces( const vdbg::DisplayableTraceFrame& traces );
 
 
       private:
-       friend Profiler* newProfiler( const char* name );
-       Profiler( const char* name );
+       friend Profiler* newProfiler(const std::string& name );
+       Profiler(const std::string& name );
 
        std::vector<Trace> _traces;
        std::vector<TracePushTime> _traceStack;
 
        std::vector< vdbg::DisplayableTraceFrame > _dispTraces;
-       const char* _name{ nullptr };
+       std::string _name;
        size_t  _traceCount{ 0 };
        int _curTreeLevel{ -1 };
        bool _needSorting{ false };
 
+       uint32_t _threadId{0};
+       bool _recording{false};
        int _frameToShow{0};
-       float _maxFrameTime{0.5f};
+       float _maxFrameTime{0.1f};
        size_t _frameCountToShow{50};
     };
 
     // Returns a non-owning pointer of a new profiler.
-    Profiler* newProfiler( const char* );
+    Profiler* newProfiler( const std::string& name );
 }
 
 #endif  // IMDBG_H_

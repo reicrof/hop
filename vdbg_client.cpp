@@ -4,6 +4,7 @@
 #include <cassert>
 #include <cstring>
 #include <vector>
+#include <mutex>
 
 namespace vdbg
 {
@@ -101,6 +102,8 @@ class ClientProfiler::Impl
 
 ClientProfiler::Impl* ClientProfiler::Get( std::thread::id tId )
 {
+   static std::mutex m;
+   std::lock_guard< std::mutex > guard(m);
    const size_t threadIdHash = std::hash<std::thread::id>{}( tId );
 
    int tIndex = 0;

@@ -242,9 +242,15 @@ void init()
    // glfwSetScrollCallback(window, ImGui_ImplGlfw_ScrollCallback);
 }
 
-imdbg::Profiler* newProfiler( const char* name )
+imdbg::Profiler* newProfiler( const std::string& name )
 {
-   imdbg::Profiler prof{name};
+   static bool first = true;
+   if( first )
+   {
+      _profilers.reserve( 128 );
+      first = false;
+   }
+   imdbg::Profiler prof(name);
    _profilers.emplace_back( std::move( prof ) );
    return &_profilers.back();
 }
@@ -313,7 +319,7 @@ namespace
    // }
 }
 
-Profiler::Profiler( const char* name ) : _name( name )
+Profiler::Profiler( const std::string& name ) : _name( name )
 {
    _traceStack.reserve( 20 );
    _traces.reserve( 20 );
@@ -361,12 +367,15 @@ static bool drawDispTrace( const vdbg::DisplayableTraceFrame& frame, size_t& i )
 
 void Profiler::draw()
 {
-   if ( !ImGui::Begin( _name ) )
+   ImGui::SetNextWindowSize(ImVec2(700,500), ImGuiSetCond_FirstUseEver);
+   if ( !ImGui::Begin( _name.c_str() ) )
    {
       // Early out
       ImGui::End();
       return;
    }
+
+   ImGui::Checkbox("Listening", &_recording);
 
    ImGui::SliderInt("Frame to show", &_frameToShow, 0, _dispTraces.size()-1);
 
@@ -379,15 +388,26 @@ void Profiler::draw()
       }
    }
 
-   ImGui::PlotHistogram(
+   // int offset = _frameCountToShow;
+   // if( offset > (int)values.size() )
+   //    offset = 0;
+
+   int pickedFrame = ImGui::PlotHistogram(
        "",
        values.data(),
        values.size(),
-       _frameToShow,
+       0,
        "Frames (ms)",
        0.001f,
        _maxFrameTime * 1.05f,
-       ImVec2{0, 100} );
+       ImVec2{0, 100},
+       sizeof(float),
+       0 );
+
+   if( pickedFrame != -1 )
+   {
+      _frameToShow += pickedFrame;
+   }
 
    if ( ImGui::IsItemHovered() )
    {
@@ -432,59 +452,10 @@ void Profiler::draw()
    ImGui::End();
 }
 
-void Profiler::pushTrace( const char* traceName )
+void Profiler::addTraces( const vdbg::DisplayableTraceFrame& traces )
 {
-   // Increase the stack level
-   ++_curTreeLevel;
-
-   // Try to find if the trace already exists
-   Trace trace {traceName, _curTreeLevel};
-   auto it = std::lower_bound( _traces.begin(), _traces.end(), trace );
-   if( it == _traces.end() || it->name != traceName )
-   {
-      // If it does not exists, append to the end of the vector, and flag
-      // that a sort is required
-      _traces.emplace_back( std::move( trace ) );
-      it = _traces.end() - 1;
-      _needSorting = true;
-   }
-
-   if( it->flags & SHOW_GL_MATRICES )
-   {
-      glGetFloatv (GL_MODELVIEW_MATRIX, it->details->modelViewGL.data()); 
-      glGetFloatv (GL_PROJECTION_MATRIX, it->details->projectionGL.data()); 
-   }
-
-   // Add a new TracePushTime with the associated idx of the trace
-   const size_t idx = std::distance( _traces.begin(), it );
-   _traceStack.emplace_back( idx, std::chrono::system_clock::now() );
-}
-
-void Profiler::popTrace()
-{
-   assert( _traceStack.size() > 0 ); // push/pop count mismatch
-
-   --_curTreeLevel;
-   auto& trace = _traces[ _traceStack.back().first ];
-   trace.details->prevTimes.push_back( trace.curTime );
-   trace.details->maxValue = std::max( trace.curTime, trace.details->maxValue );
-   trace.curTime =  static_cast<float>( std::chrono::duration_cast<std::chrono::nanoseconds>(
-         ( std::chrono::system_clock::now() - _traceStack.back().second ) ).count() / 1000000.0f );
-   _traceStack.pop_back();
-
-   // Sort the traces if new traces were added. This should be done only when
-   // the stack is empty since it keeps an index back to the traces vector and
-   // we do not want to mess the ids.
-   if( _needSorting && _traceStack.empty() )
-   {
-      std::sort( _traces.begin(), _traces.end() );
-      _needSorting = false;
-   }
-}
-
-void Profiler::addTraces( vdbg::DisplayableTraceFrame&& traces )
-{
-   _dispTraces.emplace_back( std::move(traces) );
+   if( _recording )
+      _dispTraces.emplace_back( std::move(traces) );
 }
 
 Profiler::Trace::Trace( const char* aName, int aLevel ) :
