@@ -1,5 +1,5 @@
-#ifndef VDBG_CLIENT_H_
-#define VDBG_CLIENT_H_
+#ifndef CLIENT_H_
+#define CLIENT_H_
 
 #include <stdint.h>
 
@@ -17,4 +17,4 @@ class Client
 };
 } // namespace vdbg
 
-#endif // VDBG_CLIENT_H_
+#endif // CLIENT_H_

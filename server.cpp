@@ -1,12 +1,13 @@
 #include <server.h>
-#include <message.h>
 
 #include <stdio.h>
+#include <errno.h>
 #include <assert.h>
 #include <string.h>
 #include <sys/socket.h>
 #include <sys/un.h>
 
+#include <algorithm>
 #include <chrono>
 
 namespace vdbg
@@ -47,7 +48,7 @@ bool Server::start( const char* name, int connections )
 
    _thread = std::thread( [this]() {
       int max_sd = 0;
-      struct timeval timeout = {3, 0};
+      struct timeval timeout = {0, 500000};
       while ( _running )
       {
          // clear the socket set
@@ -66,37 +67,36 @@ bool Server::start( const char* name, int connections )
          // wait for an activity on one of the sockets with a timeout
          int activity = select( max_sd + 1, &_fdSet, NULL, NULL, &timeout );
 
-         if ( ( activity < 0 ) && ( errno != EINTR ) )
+         if ( activity >= 0 )
          {
-            printf( "select error" );
-         }
-
-         if ( FD_ISSET( _socket, &_fdSet ) )
-         {
-            bool hasNewConnection = handleNewConnection();
-            if ( hasNewConnection )
+            if ( FD_ISSET( _socket, &_fdSet ) )
             {
-               printf( "New Connection!\n" );
-            }
-         }
-         else
-         {
-            for ( auto& i : _clients )
-            {
-               if ( FD_ISSET( i, &_fdSet ) )
+               bool hasNewConnection = handleNewConnection();
+               if ( hasNewConnection )
                {
-                  unsigned char buffer[sizeof( vdbg::MsgHeader )];
-                  int valread = read( i, buffer, sizeof( vdbg::MsgHeader ) );
-                  if ( valread == 0 )
+                  printf( "New Connection!\n" );
+               }
+            }
+            else
+            {
+               for ( auto& i : _clients )
+               {
+                  if ( FD_ISSET( i, &_fdSet ) )
                   {
-                     // Client disconnect
-                     printf( "Client %d has disconnected.\n", i );
-                     i = 0;
-                  }
-                  else
-                  {
-                     MsgHeader* header = reinterpret_cast<vdbg::MsgHeader*>( buffer );
-                     handleNewMessage( i, header->type, header->size - sizeof( vdbg::MsgHeader ) );
+                     unsigned char buffer[sizeof( vdbg::MsgHeader )];
+                     size_t valread = read( i, buffer, sizeof( vdbg::MsgHeader ) );
+                     if ( valread == 0 )
+                     {
+                        // Client disconnect
+                        printf( "Client %d has disconnected.\n", i );
+                        i = 0;
+                     }
+                     else
+                     {
+                        MsgHeader* header = reinterpret_cast<vdbg::MsgHeader*>( buffer );
+                        handleNewMessage(
+                            i, header->type, header->size - sizeof( vdbg::MsgHeader ) );
+                     }
                   }
                }
             }
@@ -128,14 +128,14 @@ bool Server::handleNewConnection()
    return false;
 }
 
-bool Server::handleNewMessage( int clientId, vdbg::MsgType type, uint32_t size )
+bool Server::handleNewMessage( int clientId, vdbg::MsgType type, uint32_t /*size*/ )
 {
    switch ( type )
    {
       case MsgType::PROFILER_TRACE:
       {
          vdbg::TracesInfo info;
-         int valread = ::read( clientId, (void*)&info, sizeof( info ) );
+         size_t valread = ::read( clientId, (void*)&info, sizeof( info ) );
 
          if( valread != sizeof( info ) )
             return false;
@@ -146,11 +146,39 @@ bool Server::handleNewMessage( int clientId, vdbg::MsgType type, uint32_t size )
             return false;
 
          printf( "Profiler Trace with %d traces received\n", info.traceCount );
+         vdbg::DisplayableTraceFrame traceFrame;
+         traceFrame.traces.reserve( info.traceCount * 2 );
+         for( const auto& t : traces )
+         {
+            // TODO: hack! needs to taking into account the precision specified in message.h
+            auto difference = t.end - t.start;
+            traceFrame.traces.push_back( DisplayableTrace{ t.start, difference * 0.000001f, 1, 0 } );
+            strncpy( traceFrame.traces.back().name, t.name, 63 );
+            traceFrame.traces.push_back( DisplayableTrace{ t.end, 0.0f, 0, 0 } );
+         }
+
+         std::sort(
+             traceFrame.traces.begin(),
+             traceFrame.traces.end(),
+             []( const DisplayableTrace& a, const DisplayableTrace& b ) -> bool {
+                return a.time < b.time;
+             } );
+
+         std::lock_guard<std::mutex> guard( pendingTracesMutex );
+         pendingTraces.emplace_back( std::move( traceFrame ) );
          return true;
       }
       default:
          return false;
    }
+}
+
+void Server::getProfilingTraces(
+    std::vector< vdbg::DisplayableTraceFrame >& tracesFrame )
+{
+   std::lock_guard<std::mutex> guard( pendingTracesMutex );
+   tracesFrame = std::move( pendingTraces );
+   pendingTraces.clear();
 }
 
 void Server::stop()

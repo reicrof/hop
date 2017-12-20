@@ -163,20 +163,20 @@ void createResources()
    glBindTexture( GL_TEXTURE_2D, last_texture );
 }
 
-bool ShowHelpMarker(const char* desc)
-{
-    ImGui::TextDisabled("(?)");
-    if (ImGui::IsItemHovered())
-    {
-        ImGui::BeginTooltip();
-        ImGui::PushTextWrapPos(450.0f);
-        ImGui::TextUnformatted(desc);
-        ImGui::PopTextWrapPos();
-        ImGui::EndTooltip();
-    }
+// bool ShowHelpMarker(const char* desc)
+// {
+//     ImGui::TextDisabled("(?)");
+//     if (ImGui::IsItemHovered())
+//     {
+//         ImGui::BeginTooltip();
+//         ImGui::PushTextWrapPos(450.0f);
+//         ImGui::TextUnformatted(desc);
+//         ImGui::PopTextWrapPos();
+//         ImGui::EndTooltip();
+//     }
 
-    return true;
-}
+//     return true;
+// }
 
 } // end of anonymous namespace
 
@@ -252,65 +252,65 @@ imdbg::Profiler* newProfiler( const char* name )
 namespace
 {
    enum TraceFlags { SHOW_GRAPH = 1, SHOW_GL_MATRICES = 1 << 1};
-   bool drawTrace( Profiler::Trace& trace )
-   {
-      const bool isOpen = ImGui::TreeNode( trace.name, "%s :    %f ms", trace.name, trace.curTime );
-      if (ImGui::BeginPopupContextItem(trace.name) )
-      {
-          if (ImGui::Selectable( (trace.flags & SHOW_GRAPH) ? "Hide graph" : "Show graph"))
-            trace.flags ^= SHOW_GRAPH;
-          ImGui::SameLine();
-          ShowHelpMarker("Enable/Disable the graph history of the current trace");
+   // bool drawTrace( Profiler::Trace& trace )
+   // {
+   //    const bool isOpen = ImGui::TreeNode( trace.name, "%s :    %f ms", trace.name, trace.curTime );
+   //    if (ImGui::BeginPopupContextItem(trace.name) )
+   //    {
+   //        if (ImGui::Selectable( (trace.flags & SHOW_GRAPH) ? "Hide graph" : "Show graph"))
+   //          trace.flags ^= SHOW_GRAPH;
+   //        ImGui::SameLine();
+   //        ShowHelpMarker("Enable/Disable the graph history of the current trace");
 
-          if (ImGui::Selectable( (trace.flags & SHOW_GL_MATRICES) ? "Hide GL Matrices" : "Show GL Matrices"))
-            trace.flags ^= SHOW_GL_MATRICES;
-          ImGui::SameLine();
-          ShowHelpMarker("Show/Hide the GL modelview and projection matrices. They are the Matrices at the time when the trace was pushed.");
+   //        if (ImGui::Selectable( (trace.flags & SHOW_GL_MATRICES) ? "Hide GL Matrices" : "Show GL Matrices"))
+   //          trace.flags ^= SHOW_GL_MATRICES;
+   //        ImGui::SameLine();
+   //        ShowHelpMarker("Show/Hide the GL modelview and projection matrices. They are the Matrices at the time when the trace was pushed.");
 
-          ImGui::EndPopup();
-      }
+   //        ImGui::EndPopup();
+   //    }
 
-      if( isOpen && trace.flags > 0 )
-      {
-         if( ImGui::CollapsingHeader("More Info") )
-         {
-            if( trace.flags & SHOW_GRAPH )
-            {
-              static constexpr float PAD = 0.1f;
-              ImGui::PlotLines( "Times", trace.details->prevTimes.data(), (int)trace.details->prevTimes.size(),
-                                0, nullptr, -PAD, trace.details->maxValue + PAD, ImVec2(0,100));
-            }
+   //    if( isOpen && trace.flags > 0 )
+   //    {
+   //       if( ImGui::CollapsingHeader("More Info") )
+   //       {
+   //          if( trace.flags & SHOW_GRAPH )
+   //          {
+   //            static constexpr float PAD = 0.1f;
+   //            ImGui::PlotLines( "Times", trace.details->prevTimes.data(), (int)trace.details->prevTimes.size(),
+   //                              0, nullptr, -PAD, trace.details->maxValue + PAD, ImVec2(0,100));
+   //          }
 
-            if( trace.flags & SHOW_GL_MATRICES )
-            {
-              ImGui::Columns(2, "GL State Header");
-              ImGui::Separator();
-              ImGui::Text("ModelView"); ImGui::NextColumn();
-              ImGui::Text("Projection");
-              ImGui::Separator();
+   //          if( trace.flags & SHOW_GL_MATRICES )
+   //          {
+   //            ImGui::Columns(2, "GL State Header");
+   //            ImGui::Separator();
+   //            ImGui::Text("ModelView"); ImGui::NextColumn();
+   //            ImGui::Text("Projection");
+   //            ImGui::Separator();
 
-              ImGui::Columns(2, "GL State");
-              const std::array< float, 16 >& mv = trace.details->modelViewGL;
-              ImGui::Text("%f\n%f\n%f\n%f\n", mv[0], mv[4], mv[8], mv[12]); ImGui::SameLine();
-              ImGui::Text("%f\n%f\n%f\n%f\n", mv[1], mv[5], mv[9], mv[13]); ImGui::SameLine();
-              ImGui::Text("%f\n%f\n%f\n%f\n", mv[2], mv[6], mv[10], mv[14]); ImGui::SameLine();
-              ImGui::Text("%f\n%f\n%f\n%f\n", mv[3], mv[7], mv[11], mv[15]);
+   //            ImGui::Columns(2, "GL State");
+   //            const std::array< float, 16 >& mv = trace.details->modelViewGL;
+   //            ImGui::Text("%f\n%f\n%f\n%f\n", mv[0], mv[4], mv[8], mv[12]); ImGui::SameLine();
+   //            ImGui::Text("%f\n%f\n%f\n%f\n", mv[1], mv[5], mv[9], mv[13]); ImGui::SameLine();
+   //            ImGui::Text("%f\n%f\n%f\n%f\n", mv[2], mv[6], mv[10], mv[14]); ImGui::SameLine();
+   //            ImGui::Text("%f\n%f\n%f\n%f\n", mv[3], mv[7], mv[11], mv[15]);
 
-              ImGui::NextColumn();
+   //            ImGui::NextColumn();
 
-              const std::array< float, 16 >& p = trace.details->projectionGL;
-              ImGui::Text("%f\n%f\n%f\n%f\n", p[0], p[4], p[8], p[12]); ImGui::SameLine();
-              ImGui::Text("%f\n%f\n%f\n%f\n", p[1], p[5], p[9], p[13]); ImGui::SameLine();
-              ImGui::Text("%f\n%f\n%f\n%f\n", p[2], p[6], p[10], p[14]); ImGui::SameLine();
-              ImGui::Text("%f\n%f\n%f\n%f\n", p[3], p[7], p[11], p[15]);
-              ImGui::Columns(1);
-            }
+   //            const std::array< float, 16 >& p = trace.details->projectionGL;
+   //            ImGui::Text("%f\n%f\n%f\n%f\n", p[0], p[4], p[8], p[12]); ImGui::SameLine();
+   //            ImGui::Text("%f\n%f\n%f\n%f\n", p[1], p[5], p[9], p[13]); ImGui::SameLine();
+   //            ImGui::Text("%f\n%f\n%f\n%f\n", p[2], p[6], p[10], p[14]); ImGui::SameLine();
+   //            ImGui::Text("%f\n%f\n%f\n%f\n", p[3], p[7], p[11], p[15]);
+   //            ImGui::Columns(1);
+   //          }
 
-            ImGui::Separator();
-         }
-      }
-      return isOpen;
-   }
+   //          ImGui::Separator();
+   //       }
+   //    }
+   //    return isOpen;
+   // }
 }
 
 Profiler::Profiler( const char* name ) : _name( name )
@@ -319,42 +319,114 @@ Profiler::Profiler( const char* name ) : _name( name )
    _traces.reserve( 20 );
 }
 
+static bool drawDispTrace( const vdbg::DisplayableTraceFrame& frame, size_t& i )
+{
+   const auto& trace = frame.traces[i];
+   if( !trace.flags ) return false;
+
+   bool isOpen = ImGui::TreeNode( trace.name, "%s :    %f ms", trace.name, trace.deltaTime );
+   if( isOpen )
+   {
+      ++i;
+      while( frame.traces[i].flags )
+      {
+         drawDispTrace( frame, i );
+      }
+      ImGui::TreePop();
+      ++i;
+   }
+   else
+   {
+      int lvl = 0;
+      for ( size_t j = i + 1; j < frame.traces.size(); ++j )
+      {
+         if ( frame.traces[j].flags )
+         {
+            ++lvl;
+         }
+         else
+         {
+            --lvl;
+            if ( lvl < 0 )
+            {
+               i = std::min( ++j, frame.traces.size()-1);
+               break;
+            }
+         }
+      }
+      assert( i < frame.traces.size() );
+   }
+   return isOpen;
+}
+
 void Profiler::draw()
 {
-   assert( _curTreeLevel == -1 && _traceStack.empty() ); // There is probably a popTrace missing.
-
-   ImGui::SetNextWindowSize( ImVec2( 300, 100 ), ImGuiSetCond_Once );
    if ( !ImGui::Begin( _name ) )
    {
+      // Early out
       ImGui::End();
       return;
    }
 
-   // Draw the traces
-   int level = 0;
-   for ( size_t i = 0; i < _traces.size(); ++i )
+   ImGui::SliderInt("Frame to show", &_frameToShow, 0, _dispTraces.size()-1);
+
+   std::vector< float > values( _frameCountToShow );
    {
-      auto& trace = _traces[i];
-      if ( trace.level == level )
+      size_t count = 0;
+      for( size_t i = _frameToShow; i < _dispTraces.size() && count < _frameCountToShow ; ++i, ++count )
       {
-         if ( drawTrace( trace ) )
+         values[count] = _dispTraces[i].traces.front().deltaTime;
+      }
+   }
+
+   ImGui::PlotHistogram(
+       "",
+       values.data(),
+       values.size(),
+       _frameToShow,
+       "Frames (ms)",
+       0.001f,
+       _maxFrameTime * 1.05f,
+       ImVec2{0, 100} );
+
+   if ( ImGui::IsItemHovered() )
+   {
+      ImGuiIO& io = ImGui::GetIO();
+      if ( io.MouseWheel > 0 )
+      {
+         if ( io.KeyCtrl )
          {
-            ++level;
+            _maxFrameTime *= 0.95f;
+         }
+         else
+         {
+            if ( _frameCountToShow > 6 ) _frameCountToShow -= 2;
          }
       }
-      else if ( trace.level < level )
+      else if ( io.MouseWheel < 0 )
       {
-         ImGui::TreePop();
-         if ( !drawTrace( trace ) )
+         if ( io.KeyCtrl )
          {
-            --level;
+            _maxFrameTime *= 1.05f;
+         }
+         else
+         {
+            if ( _frameCountToShow < _dispTraces.size() - 3 ) _frameCountToShow += 2;
          }
       }
    }
 
-   while ( level-- > 0 )
+   // Draw the traces
+   if( !_dispTraces.empty() )
    {
-      ImGui::TreePop();
+      const vdbg::DisplayableTraceFrame& frameToDraw = _dispTraces[_frameToShow];
+      for( size_t i = 0; i < frameToDraw.traces.size(); )
+      {
+          if( !drawDispTrace( frameToDraw, i ) )
+          {
+            ++i;
+          }
+      }
    }
 
    ImGui::End();
@@ -408,6 +480,11 @@ void Profiler::popTrace()
       std::sort( _traces.begin(), _traces.end() );
       _needSorting = false;
    }
+}
+
+void Profiler::addTraces( vdbg::DisplayableTraceFrame&& traces )
+{
+   _dispTraces.emplace_back( std::move(traces) );
 }
 
 Profiler::Trace::Trace( const char* aName, int aLevel ) :

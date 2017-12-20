@@ -30,6 +30,7 @@ static void handleMouseWheel( const SDL_Event& e )
 static void handleInput()
 {
    SDL_Event event;
+   ImGuiIO& io = ImGui::GetIO();
    while ( g_run && SDL_PollEvent( &event ) )
    {
       handleMouseWheel( event );
@@ -38,9 +39,28 @@ static void handleInput()
          case SDL_QUIT:
             g_run = false;
             break;
-         case SDL_KEYDOWN:
-            if ( event.key.keysym.sym == SDLK_ESCAPE ) g_run = false;
+         case SDL_TEXTINPUT:
+         {
+            io.AddInputCharactersUTF8( event.text.text );
             break;
+         }
+         case SDL_KEYDOWN:
+         case SDL_KEYUP:
+         {
+            if ( event.key.keysym.sym == SDLK_ESCAPE )
+            {
+               g_run = false;
+               break;
+            }
+            int key = event.key.keysym.sym & ~SDLK_SCANCODE_MASK;
+            io.KeysDown[key] = ( event.type == SDL_KEYDOWN );
+            io.KeyShift = ( ( SDL_GetModState() & KMOD_SHIFT ) != 0 );
+            io.KeyCtrl = ( ( SDL_GetModState() & KMOD_CTRL ) != 0 );
+            io.KeyAlt = ( ( SDL_GetModState() & KMOD_ALT ) != 0 );
+            io.KeySuper = ( ( SDL_GetModState() & KMOD_GUI ) != 0 );
+            break;
+         }
+
          default:
             break;
       }
@@ -83,17 +103,25 @@ int main()
 
    imdbg::Profiler* prof = imdbg::newProfiler( "My Profiler" );
 
+
    while ( g_run )
    {
       handleInput();
 
-      prof->pushTrace( "Main" );
+      std::vector< vdbg::DisplayableTraceFrame > pendingTraces;
+      serv.getProfilingTraces( pendingTraces );
+      if( pendingTraces.size() > 0 )
+      {
+         for( auto& t : pendingTraces )
+         {
+            prof->addTraces( std::move( t ) );
+         }
+      }
 
       int w, h, x, y;
       SDL_GetWindowSize( window, &w, &h );
       uint32_t buttonState = SDL_GetMouseState( &x, &y );
 
-      prof->popTrace();
 
       imdbg::onNewFrame(
           w,

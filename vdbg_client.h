@@ -16,19 +16,15 @@
 #include <thread>
 
 // Create a new profiling trace for a free function
-//#define VDBG_PROF_FUNC() vdbg::details::ProfGuard vdbgProfGuard( __func__, NULL, 0 )
-#define VDBG_PROF_FUNC() VDBG_PROF_GUARD_VAR(__LINE__,( __func__, NULL, 0 ))
+#define VDBG_PROF_FUNC() VDBG_PROF_GUARD_VAR( __LINE__, ( __func__, NULL, 0 ) )
 // Create a new profiling trace for a member function
 #define VDBG_PROF_MEMBER_FUNC() \
-   VDBG_PROF_GUARD_VAR(__LINE__,(__func__, typeid( this ).name(), 0 ))
+   VDBG_PROF_GUARD_VAR( __LINE__, ( __func__, typeid( this ).name(), 0 ) )
 // Create a new profiling trace for a free function that falls under category x
 #define VDBG_PROF_FUNC_WITH_GROUP( x ) VDBG_PROF_GUARD_VAR(__LINE__,(( __func__, NULL, x ))
 // Create a new profiling trace for a member function that falls under category x
 #define VDBG_PROF_MEMBER_FUNC_WITH_GROUP( x ) \
    VDBG_PROF_GUARD_VAR(__LINE__,(( __func__, typeid( this ).name(), x ))
-
-#define VDBG_COMBINE( X,Y ) X##Y
-#define VDBG_PROF_GUARD_VAR( LINE, ARGS ) vdbg::details::ProfGuard COMBINE(vdbgProfGuard,LINE) ARGS
 
 namespace vdbg
 {
@@ -78,6 +74,9 @@ class ProfGuard
    ClientProfiler::Impl* impl;
    uint8_t group;
 };
+
+#define VDBG_COMBINE( X,Y ) X##Y
+#define VDBG_PROF_GUARD_VAR( LINE, ARGS ) vdbg::details::ProfGuard VDBG_COMBINE(vdbgProfGuard,LINE) ARGS
 
 }  // namespace details
 }  // namespace vdbg

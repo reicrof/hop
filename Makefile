@@ -2,15 +2,16 @@ UNAME := $(shell uname)
 TARGET_SERVER = multiproc_server
 TARGET_CLIENT = multiproc_client
 
-CXXFLAGS = -std=c++14 -Wall -Werror
+CXXFLAGS = -std=c++14 -Wall -Wextra -pedantic
 IMGUI_SOURCES = $(wildcard imgui/*.cpp)
 SERVER_SOURCES = $(wildcard *server.cpp) imdbg.cpp $(IMGUI_SOURCES)
 CLIENT_SOURCES = $(wildcard *client.cpp)
 COMMON_INCLUDES = -isystem.
+CLIENT_DEFINE = -DVDBG_ENABLED
 
 PLATFORM_LD_FLAGS = 
 ifeq ($(UNAME), Linux)
-   CXX = g++
+   CXX = g++7
    PLATFORM_LD_FLAGS = -lGL
 else ifeq ($(UNAME), Darwin)
    CXX = clang++
@@ -29,7 +30,7 @@ $(TARGET_SERVER): $(SERVER_SOURCES)
 
 # client target
 $(TARGET_CLIENT): $(CLIENT_SOURCES)
-	$(CXX) $(CXXFLAGS) $(CLIENT_SOURCES) $(INC) $(LDFLAGS) -o $(TARGET_CLIENT)
+	$(CXX) $(CXXFLAGS) $(CLIENT_SOURCES) $(INC) $(LDFLAGS) -o $(TARGET_CLIENT) $(CLIENT_DEFINE)
 
 .PHONY : clean
 clean:
@@ -38,9 +39,9 @@ clean:
 
 
 .PHONY: debug
-debug :  CXXFLAGS += -g -D_DEBUG
+debug :  CXXFLAGS += -g -D_DEBUG -Werror -pg
 debug : $(TARGET_SERVER) $(TARGET_CLIENT)
 
 .PHONY: release
-release :   CXXFLAGS += -O3 -pg -DNDEBUG
+release :   CXXFLAGS += -O3 -DNDEBUG
 release : $(TARGET_SERVER) $(TARGET_CLIENT)

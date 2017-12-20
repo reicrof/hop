@@ -2,10 +2,27 @@
 #define IMDBG_H_
 
 #include "imgui/imgui.h"
+#include <message.h>
 #include <array>
 #include <chrono>
 #include <vector>
 #include <memory>
+
+namespace vdbg
+{
+   struct DisplayableTrace
+   {
+      TimeStamp time;
+      float deltaTime;
+      uint32_t flags;
+      char name[64];
+   };
+   struct DisplayableTraceFrame
+   {
+      uint32_t threadId;
+      std::vector< DisplayableTrace > traces;
+   };
+}
 
 namespace imdbg
 {
@@ -54,16 +71,25 @@ namespace imdbg
        void pushTrace( const char* traceName );
        void popTrace();
 
+       void addTraces( vdbg::DisplayableTraceFrame&& traces );
+
+
       private:
        friend Profiler* newProfiler( const char* name );
        Profiler( const char* name );
 
        std::vector<Trace> _traces;
        std::vector<TracePushTime> _traceStack;
+
+       std::vector< vdbg::DisplayableTraceFrame > _dispTraces;
        const char* _name{ nullptr };
        size_t  _traceCount{ 0 };
        int _curTreeLevel{ -1 };
        bool _needSorting{ false };
+
+       int _frameToShow{0};
+       float _maxFrameTime{0.5f};
+       size_t _frameCountToShow{50};
     };
 
     // Returns a non-owning pointer of a new profiler.

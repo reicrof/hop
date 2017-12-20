@@ -1,6 +1,25 @@
 #include <client.h>
 #include <cstring>
-#include <message.h>
+#include <vdbg_client.h>
+#include <chrono>
+
+static void func3()
+{
+   VDBG_PROF_FUNC();
+}
+static void func2()
+{
+   VDBG_PROF_FUNC();
+   func3();
+}
+static void func1()
+{
+   VDBG_PROF_FUNC();
+   func2();
+}
+
+
+
 
 int main()
 {
@@ -21,7 +40,7 @@ int main()
    info.threadId = 0;
    info.traceCount = 32;
 
-   uint32_t msgSize = sizeof( vdbg::TracesInfo ) + 32 * sizeof( vdbg::Trace );
+   constexpr uint32_t msgSize = sizeof( vdbg::TracesInfo ) + 32 * sizeof( vdbg::Trace );
    uint8_t buffer[ sizeof( vdbg::MsgHeader ) + msgSize ];
 
    vdbg::MsgHeader h = { vdbg::MsgType::PROFILER_TRACE, msgSize };
@@ -29,5 +48,9 @@ int main()
    memcpy( buffer+sizeof(h), &info, sizeof( info ) );
    memcpy( buffer+sizeof(h)+sizeof(info), tinfo, sizeof( tinfo ) );
    for(int i = 0; i < 1024; ++i )
-      client.send( buffer, sizeof( buffer ) );
+   {
+      using namespace std::chrono_literals;
+      std::this_thread::sleep_for(1s);
+      func1();
+   }
 }
