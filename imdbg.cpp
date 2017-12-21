@@ -376,13 +376,22 @@ void Profiler::draw()
    }
 
    ImGui::Checkbox("Listening", &_recording);
+   ImGui::SameLine();
+   ImGui::Checkbox("Live", &_realTime);
+
+   if( _realTime && _recording )
+   {
+      _frameToShow = std::max( ((int)_dispTraces.size())-1, 0 );
+   }
 
    ImGui::SliderInt("Frame to show", &_frameToShow, 0, _dispTraces.size()-1);
 
-   std::vector< float > values( _frameCountToShow );
+   std::vector< float > values( _frameCountToShow, 0.0f );
+   if( !_dispTraces.empty() )
    {
-      size_t count = 0;
-      for( size_t i = _frameToShow; i < _dispTraces.size() && count < _frameCountToShow ; ++i, ++count )
+      int startFrame = std::max( (int)_frameToShow - (int)(_frameCountToShow-1), 0 );
+      int count = 0;
+      for( int i = startFrame + 1; i <= (int)_frameToShow; ++i, ++count )
       {
          values[count] = _dispTraces[i].traces.front().deltaTime;
       }
@@ -396,17 +405,17 @@ void Profiler::draw()
        "",
        values.data(),
        values.size(),
-       0,
+       values.size()-1,
        "Frames (ms)",
        0.001f,
        _maxFrameTime * 1.05f,
        ImVec2{0, 100},
        sizeof(float),
-       0 );
+       values.size()-1 );
 
    if( pickedFrame != -1 )
    {
-      _frameToShow += pickedFrame;
+      _frameToShow -= (_frameCountToShow - (pickedFrame+1));
    }
 
    if ( ImGui::IsItemHovered() )

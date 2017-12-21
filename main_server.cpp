@@ -12,6 +12,9 @@
 #include <GL/gl.h>
 #endif
 
+#define STB_IMAGE_IMPLEMENTATION
+#include <stb_image.h>
+
 static bool g_run = true;
 static float g_mouseWheel = 0.0f;
 
@@ -103,6 +106,28 @@ int main()
 
    std::vector< imdbg::Profiler* > profilers;
    std::vector< uint32_t > profTrheadsId;
+
+   int w;
+   int h;
+   int comp;
+   unsigned char* image = stbi_load( "flame.jpg", &w, &h, &comp, STBI_rgb_alpha );
+   unsigned texture = -1;
+   if( image )
+   {
+      glGenTextures(1, &texture);
+      glBindTexture( GL_TEXTURE_2D, texture );
+
+      glTexParameteri( GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR );
+      glTexParameteri( GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST );
+
+      if ( comp == 3 )
+         glTexImage2D( GL_TEXTURE_2D, 0, GL_RGB, w, h, 0, GL_RGB, GL_UNSIGNED_BYTE, image );
+      else if ( comp == 4 )
+         glTexImage2D( GL_TEXTURE_2D, 0, GL_RGBA, w, h, 0, GL_RGBA, GL_UNSIGNED_BYTE, image );
+
+      glBindTexture( GL_TEXTURE_2D, 0 );
+   }
+
    while ( g_run )
    {
       handleInput();
@@ -162,6 +187,8 @@ int main()
    }
 
    serv.stop();
+
+   stbi_image_free( image );
 
    SDL_GL_DeleteContext( mainContext );
    SDL_DestroyWindow( window );

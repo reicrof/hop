@@ -96,6 +96,7 @@ namespace imdbg
 
        uint32_t _threadId{0};
        bool _recording{false};
+       bool _realTime{true};
        int _frameToShow{0};
        float _maxFrameTime{0.1f};
        size_t _frameCountToShow{50};
