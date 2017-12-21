@@ -141,6 +141,7 @@ int main()
       SDL_GetWindowSize( window, &w, &h );
       uint32_t buttonState = SDL_GetMouseState( &x, &y );
 
+      printf( "before frame%f\n", g_mouseWheel );
       imdbg::onNewFrame(
           w,
           h,

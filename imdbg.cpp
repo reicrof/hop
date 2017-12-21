@@ -512,7 +512,7 @@ static void saveAsJson( const char* path, const vdbg::DisplayableTraceFrame& fra
    {
       writer.StartObject();
       writer.Key("ts");
-      writer.Uint64( t.time );
+      writer.Double( (double)t.time );
       writer.Key("ph");
       writer.String( t.flags ? "B" : "E" );
       writer.Key("pid");

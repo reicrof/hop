@@ -13,7 +13,7 @@ namespace vdbg
 {
    struct DisplayableTrace
    {
-      TimeStamp time;
+      double time;
       float deltaTime;
       uint32_t flags;
       char name[64];

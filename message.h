@@ -25,7 +25,7 @@ struct MsgHeader
 };
 
 using Clock = std::chrono::high_resolution_clock;
-using Precision = std::chrono::microseconds;
+using Precision = std::chrono::nanoseconds;
 inline auto getTimeStamp()
 {
    return std::chrono::duration_cast<Precision>( Clock::now().time_since_epoch() ).count();

@@ -145,17 +145,17 @@ bool Server::handleNewMessage( int clientId, vdbg::MsgType type, uint32_t /*size
          if( valread != sizeof( vdbg::Trace ) * info.traceCount )
             return false;
 
-         printf( "Profiler Trace from thread %u with %d traces received\n", info.threadId, info.traceCount );
+         //printf( "Profiler Trace from thread %u with %d traces received\n", info.threadId, info.traceCount );
          vdbg::DisplayableTraceFrame traceFrame;
          traceFrame.threadId = info.threadId;
          traceFrame.traces.reserve( info.traceCount * 2 );
          for( const auto& t : traces )
          {
             // TODO: hack! needs to taking into account the precision specified in message.h
-            auto difference = t.end - t.start;
-            traceFrame.traces.push_back( DisplayableTrace{ t.start, difference * 0.001f, 1, {0} } );
+            const float difference = (t.end - t.start) * 0.000001;
+            traceFrame.traces.push_back( DisplayableTrace{ static_cast<double>(t.start), difference, 1, {0} } );
             strncpy( traceFrame.traces.back().name, t.name, 63 );
-            traceFrame.traces.push_back( DisplayableTrace{ t.end, 0.0f, 0, {0} } );
+            traceFrame.traces.push_back( DisplayableTrace{ static_cast<double>(t.end), 0.0f, 0, {0} } );
          }
 
          std::sort(
