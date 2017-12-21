@@ -13,6 +13,8 @@
 #include <algorithm>
 #include <stdio.h>
 
+static void saveAsJson( const char* path, const vdbg::DisplayableTraceFrame& frame );
+
 namespace
 {
 static std::chrono::time_point<std::chrono::system_clock> g_Time = std::chrono::system_clock::now();
@@ -458,6 +460,18 @@ void Profiler::draw()
       }
    }
 
+   ImGui::Spacing();
+
+   static char pathToSave[256] = ""; ImGui::InputText("", pathToSave, 256);
+   ImGui::SameLine();
+   if( ImGui::Button("Save As") )
+   {
+      if( _frameCountToShow < _dispTraces.size() )
+      {
+         saveAsJson( pathToSave, _dispTraces[_frameToShow] );
+      }
+   }
+
    ImGui::End();
 }
 
@@ -473,3 +487,44 @@ Profiler::Trace::Trace( const char* aName, int aLevel ) :
 }
 
 } // end of namespace imdbg
+
+#include <rapidjson/document.h>
+#include <rapidjson/writer.h>
+#include <rapidjson/prettywriter.h>
+#include <rapidjson/stringbuffer.h>
+#include <fstream>
+
+static void saveAsJson( const char* path, const vdbg::DisplayableTraceFrame& frame )
+{
+   using namespace rapidjson;
+
+   StringBuffer s;
+   PrettyWriter<StringBuffer> writer(s);
+   printf( "Should save as json\n" );
+   writer.StartObject();
+   writer.Key("traceEvents");
+   writer.StartArray();
+   const auto& traces = frame.traces;
+   const uint32_t threadId = frame.threadId;
+   for( const auto& t : traces )
+   {
+      writer.StartObject();
+      writer.Key("ts");
+      writer.Uint64( t.time );
+      writer.Key("ph");
+      writer.String( t.flags ? "B" : "E" );
+      writer.Key("pid");
+      writer.Uint(threadId);
+      writer.Key("name");
+      writer.String( t.name );
+      writer.EndObject();
+   }
+   writer.EndArray();
+   writer.Key("displayTimeUnit");
+   writer.String("ms");
+   writer.EndObject();
+
+   std::ofstream of(path);
+   of << s.GetString();
+
+}

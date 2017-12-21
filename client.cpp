@@ -29,7 +29,7 @@ bool Client::connect( const char* serverName )
    int rc = ::connect( _socket, (struct sockaddr*)&serveraddr, SUN_LEN( &serveraddr ) );
    if ( rc < 0 )
    {
-      perror( "connect() failed" );
+      //perror( "connect() failed" );
       return false;
    }
 

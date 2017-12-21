@@ -15,7 +15,7 @@ int bug = -1;
 static void stall()
 {
    VDBG_PROF_FUNC();
-   std::this_thread::sleep_for(500ms);
+   std::this_thread::sleep_for(5000ms);
 }
 
 static void buggyFunction()
@@ -62,7 +62,6 @@ static void threadFunc()
       func3();
    }
 }
-
 
 int main()
 {
