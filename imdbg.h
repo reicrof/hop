@@ -98,7 +98,7 @@ namespace imdbg
        bool _recording{false};
        bool _realTime{true};
        int _frameToShow{0};
-       float _maxFrameTime{0.1f};
+       float _maxFrameTime{2.0f};
        size_t _frameCountToShow{50};
     };
 

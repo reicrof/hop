@@ -15,7 +15,7 @@ int bug = -1;
 static void stall()
 {
    VDBG_PROF_FUNC();
-   std::this_thread::sleep_for(5000ms);
+   std::this_thread::sleep_for(10ms);
 }
 
 static void buggyFunction()
@@ -31,6 +31,7 @@ static void buggyFunction()
 static void func3()
 {
    VDBG_PROF_FUNC();
+   std::this_thread::sleep_for(1ms);
 }
 static void func2()
 {
@@ -50,14 +51,12 @@ static void func1()
 
 static void threadFunc()
 {
-   std::this_thread::sleep_for(1s);
    while(true)
    {
-      std::this_thread::sleep_for(50ms);
+      std::this_thread::sleep_for(1000ms);
       func3();
       func3();
       func3();
-      buggyFunction();
       func3();
       func3();
    }
@@ -98,8 +97,9 @@ int main()
 
    while(true)
    {
+      VDBG_PROF_FUNC();
       using namespace std::chrono_literals;
-      std::this_thread::sleep_for(10ms);
+      std::this_thread::sleep_for(1ms);
       func1();
    }
 

@@ -12,15 +12,17 @@
 namespace vdbg
 {
 
-bool Client::connect( const char* serverName )
+Client::Client()
 {
    _socket = socket( AF_UNIX, SOCK_STREAM, 0 );
    if ( _socket < 0 )
    {
       perror( "socket() failed" );
-      return false;
    }
+}
 
+bool Client::connect( const char* serverName )
+{
    struct sockaddr_un serveraddr;
    memset( &serveraddr, 0, sizeof( serveraddr ) );
    serveraddr.sun_family = AF_UNIX;

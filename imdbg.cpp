@@ -447,6 +447,8 @@ void Profiler::draw()
       }
    }
 
+   ImGui::DragFloat("Max value", &_maxFrameTime, 0.005f);
+
    // Draw the traces
    if( !_dispTraces.empty() )
    {

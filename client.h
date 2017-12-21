@@ -8,7 +8,8 @@ namespace vdbg
 class Client
 {
   public:
-   bool connect( const char* serverName );
+   Client();
+   bool connect( const char* serverName  );
    bool send( uint8_t* data, uint32_t size ) const;
    void disconnect();
 
