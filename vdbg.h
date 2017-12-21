@@ -154,12 +154,23 @@ class Client
 {
   public:
    Client();
+   ~Client();
    bool connect( const char* serverName );
    bool send( uint8_t* data, uint32_t size ) const;
    void disconnect();
 
   private:
+   enum class State : uint8_t
+   {
+      NOT_CONNECTED = 0,
+      CONNECTED,
+      BROKEN_PIPE,
+      ACCESS_ERROR,
+      UNKNOWN_SHOULD_INVESTIGATE,
+   };
+
    int _socket{-1};
+   mutable State _state{State::NOT_CONNECTED};
 };
 
 }  // namespace details
@@ -170,6 +181,7 @@ class Client
 #ifdef VDBG_IMPLEMENTATION
 
 // C sockets include
+#include <errno.h>
 #include <sys/socket.h>
 #include <sys/un.h>
 #include <unistd.h>
@@ -209,22 +221,37 @@ bool Client::connect( const char* serverName )
       return false;
    }
 
+   _state = State::CONNECTED;
    return true;
 }
 
 bool Client::send( uint8_t* data, uint32_t size ) const
 {
-   int rc = ::send( _socket, data, size, 0 );
+   if( _state != State::CONNECTED ) return false;
+
+   int rc = ::send( _socket, data, size, MSG_NOSIGNAL );
    if ( rc < 0 )
    {
-      perror( "send() failed" );
+      switch ( errno )
+      {
+         case EPIPE:
+            _state = State::BROKEN_PIPE;
+            break;
+         case EACCES:
+            _state = State::ACCESS_ERROR;
+            break;
+         default:
+            perror( "send() falied with unhandled error" );
+            _state = State::UNKNOWN_SHOULD_INVESTIGATE;
+            break;
+      }
       return false;
    }
 
    return true;
 }
 
-void Client::disconnect() { ::close( _socket ); }
+Client::~Client() { ::close( _socket ); }
 
 // ------ end of client.cpp ------------
 

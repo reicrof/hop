@@ -357,7 +357,10 @@ static void saveAsJson( const char* path, const vdbg::DisplayableTraceFrame& fra
 
 void vdbg::ThreadTraces::addTraces(const vdbg::DisplayableTraceFrame& traces )
 {
-   _dispTraces.emplace_back( traces );
+   if( _recording )
+   {
+      _dispTraces.emplace_back( traces );
+   }
 }
 
 
