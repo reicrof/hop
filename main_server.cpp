@@ -102,6 +102,7 @@ int main()
    bool show_test_window = true;
 
    std::vector< imdbg::Profiler* > profilers;
+   profilers.push_back( imdbg::newProfiler( "Profiler Test" ) );
    std::vector< uint32_t > profTrheadsId;
 
    while ( g_run )
@@ -112,36 +113,13 @@ int main()
       serv.getProfilingTraces( pendingTraces );
       for ( auto& t : pendingTraces )
       {
-         size_t i = 0;
-         bool found = false;
-         for( ; i < profTrheadsId.size(); ++i )
-         {
-            if( profTrheadsId[i] == t.threadId )
-            {
-               found = true;
-               break;
-            }
-         }
-
-         if( found )
-         {
-            profilers[i]->addTraces( t );
-         }
-         else
-         {
-            profilers.push_back(
-                imdbg::newProfiler( "Profiler : Thread  " + std::to_string( t.threadId ) ) );
-            profTrheadsId.push_back( t.threadId );
-            profilers.back()->addTraces( std::move( t ) );
-            printf( "THREAD ADDED %u\n", t.threadId );
-         }
+         profilers[0]->addTraces( t );
       }
 
       int w, h, x, y;
       SDL_GetWindowSize( window, &w, &h );
       uint32_t buttonState = SDL_GetMouseState( &x, &y );
 
-      printf( "before frame%f\n", g_mouseWheel );
       imdbg::onNewFrame(
           w,
           h,
