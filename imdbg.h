@@ -31,6 +31,7 @@ namespace vdbg
        std::vector< vdbg::DisplayableTraceFrame > _dispTraces;
        int _frameToShow{0};
        float _maxFrameTime{0.1f};
+       float _allTimeMaxFrameTime{0.1f};
        size_t _frameCountToShow{50};
        bool _recording{false};
        bool _realTime{true};

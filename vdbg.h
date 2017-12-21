@@ -63,6 +63,8 @@ struct MsgHeader
    uint32_t size;
 };
 
+static const char* SERVER_PATH = "/tmp/my_server";
+
 using Clock = std::chrono::high_resolution_clock;
 using Precision = std::chrono::nanoseconds;
 inline auto getTimeStamp()
@@ -153,11 +155,11 @@ class ProfGuard
 class Client
 {
   public:
-   Client();
+   Client() VDBG_NOEXCEPT;
    ~Client();
-   bool connect( const char* serverName );
-   bool send( uint8_t* data, uint32_t size ) const;
-   void disconnect();
+   bool connect() VDBG_NOEXCEPT;
+   bool send( uint8_t* data, uint32_t size ) VDBG_NOEXCEPT;
+   bool connected() const VDBG_NOEXCEPT;
 
   private:
    enum class State : uint8_t
@@ -169,8 +171,13 @@ class Client
       UNKNOWN_SHOULD_INVESTIGATE,
    };
 
+   bool tryConnect( const char* serverName, bool force ) VDBG_NOEXCEPT;
+   void handleError() VDBG_NOEXCEPT;
+
    int _socket{-1};
-   mutable State _state{State::NOT_CONNECTED};
+   State _state{State::NOT_CONNECTED};
+   Clock::time_point _lastConnectionAttempt{};
+   static VDBG_CONSTEXPR uint32_t connectionAttemptTimeoutInMs = 1000;
 };
 
 }  // namespace details
@@ -198,7 +205,7 @@ namespace details
 
 // ------ client.cpp ------------
 
-Client::Client()
+Client::Client() VDBG_NOEXCEPT
 {
    _socket = socket( AF_UNIX, SOCK_STREAM, 0 );
    if ( _socket < 0 )
@@ -207,48 +214,71 @@ Client::Client()
    }
 }
 
-bool Client::connect( const char* serverName )
+bool Client::connect() VDBG_NOEXCEPT
 {
-   struct sockaddr_un serveraddr;
-   memset( &serveraddr, 0, sizeof( serveraddr ) );
-   serveraddr.sun_family = AF_UNIX;
-   strcpy( serveraddr.sun_path, serverName );
-
-   int rc = ::connect( _socket, (struct sockaddr*)&serveraddr, SUN_LEN( &serveraddr ) );
-   if ( rc < 0 )
-   {
-      // perror( "connect() failed" );
-      return false;
-   }
-
-   _state = State::CONNECTED;
-   return true;
+   return tryConnect( SERVER_PATH, true );
 }
 
-bool Client::send( uint8_t* data, uint32_t size ) const
+bool Client::tryConnect( const char* serverName, bool force ) VDBG_NOEXCEPT
 {
-   if( _state != State::CONNECTED ) return false;
+   using namespace std::chrono;
+   auto now = Clock::now();
+   if ( force || duration_cast<milliseconds>( now - _lastConnectionAttempt ).count() >
+                     connectionAttemptTimeoutInMs )
+   {
+      struct sockaddr_un serveraddr;
+      memset( &serveraddr, 0, sizeof( serveraddr ) );
+      serveraddr.sun_family = AF_UNIX;
+      strcpy( serveraddr.sun_path, serverName );
+
+      int rc = ::connect( _socket, (struct sockaddr*)&serveraddr, SUN_LEN( &serveraddr ) );
+      if ( rc < 0 )
+      {
+         // perror( "connect() failed" );
+         handleError();
+         return false;
+      }
+
+      _state = State::CONNECTED;
+      return true;
+   }
+   return false;
+}
+
+bool Client::send( uint8_t* data, uint32_t size ) VDBG_NOEXCEPT
+{
+   if( _state != State::CONNECTED && !tryConnect( SERVER_PATH, false ) ) return false;
 
    int rc = ::send( _socket, data, size, MSG_NOSIGNAL );
    if ( rc < 0 )
    {
-      switch ( errno )
-      {
-         case EPIPE:
-            _state = State::BROKEN_PIPE;
-            break;
-         case EACCES:
-            _state = State::ACCESS_ERROR;
-            break;
-         default:
-            perror( "send() falied with unhandled error" );
-            _state = State::UNKNOWN_SHOULD_INVESTIGATE;
-            break;
-      }
+      handleError();
       return false;
    }
 
    return true;
+}
+
+bool Client::connected() const VDBG_NOEXCEPT
+{
+   return _state == State::CONNECTED;
+}
+
+void Client::handleError() VDBG_NOEXCEPT
+{
+   switch ( errno )
+   {
+      case EPIPE:
+         _state = State::BROKEN_PIPE;
+         break;
+      case EACCES:
+         _state = State::ACCESS_ERROR;
+         break;
+      default:
+         perror( "send() falied with unhandled error" );
+         _state = State::UNKNOWN_SHOULD_INVESTIGATE;
+         break;
+   }
 }
 
 Client::~Client() { ::close( _socket ); }
@@ -274,7 +304,7 @@ class ClientProfiler::Impl
    Impl(size_t id) : _hashedThreadId( id )
    {
       _shallowTraces.reserve( 64 );
-      _isClientConnected = _client.connect( "/tmp/my_server" );
+      _client.connect();
    }
 
    void addProfilingTrace(
@@ -289,10 +319,9 @@ class ClientProfiler::Impl
 
    void flushToServer()
    {
-      if( !_isClientConnected )
+      if( !_client.connected() )
       {
-         _isClientConnected = _client.connect("/tmp/my_server");
-         if( !_isClientConnected )
+         if( !_client.connect() )
          {
             // Cannot connect to server
             _shallowTraces.clear();
@@ -345,7 +374,6 @@ class ClientProfiler::Impl
    size_t _hashedThreadId{0};
    std::vector< ShallowTrace > _shallowTraces;
    Client _client;
-   bool _isClientConnected{false};
 };
 
 ClientProfiler::Impl* ClientProfiler::Get( std::thread::id tId )

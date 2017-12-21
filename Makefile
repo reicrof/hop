@@ -27,7 +27,7 @@ LDFLAGS = -lpthread ./SDL2/libSDL2.a -ldl $(PLATFORM_LD_FLAGS)
 
 # server target
 $(TARGET_SERVER): $(SERVER_SOURCES)
-	$(CXX) $(CXXFLAGS) $(SERVER_SOURCES) $(INC) $(LDFLAGS) -o $(TARGET_SERVER)
+	$(CXX) $(CXXFLAGS) $(SERVER_SOURCES) $(INC) $(LDFLAGS) -o $(TARGET_SERVER) -ffast-math
 
 # client target
 $(TARGET_CLIENT): $(CLIENT_SOURCES)

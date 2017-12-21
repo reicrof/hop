@@ -431,7 +431,13 @@ void vdbg::ThreadTraces::draw()
    // int offset = _frameCountToShow;
    // if( offset > (int)values.size() )
    //    offset = 0;
-
+   float maxFrameTime = _maxFrameTime;
+   if( _allTimeMaxFrameTime >= 0.0f )
+   {
+      _allTimeMaxFrameTime =
+          std::max( *std::max_element( values.begin(), values.end() ), _allTimeMaxFrameTime );
+      maxFrameTime = _maxFrameTime = _allTimeMaxFrameTime;
+   }
    int pickedFrame = ImGui::PlotHistogram(
        "",
        values.data(),
@@ -439,7 +445,7 @@ void vdbg::ThreadTraces::draw()
        values.size() - 1,
        "Frames (ms)",
        0.001f,
-       _maxFrameTime * 1.05f,
+       maxFrameTime * 1.05f,
        ImVec2{0, 100},
        sizeof( float ),
        values.size() - 1 );
@@ -457,6 +463,7 @@ void vdbg::ThreadTraces::draw()
          if ( io.KeyCtrl )
          {
             _maxFrameTime *= 0.95f;
+            _allTimeMaxFrameTime = -1.0f;
          }
          else
          {
@@ -468,6 +475,7 @@ void vdbg::ThreadTraces::draw()
          if ( io.KeyCtrl )
          {
             _maxFrameTime *= 1.05f;
+            _allTimeMaxFrameTime = -1.0f;
          }
          else
          {
@@ -476,7 +484,8 @@ void vdbg::ThreadTraces::draw()
       }
    }
 
-   ImGui::DragFloat( "Max value", &_maxFrameTime, 0.005f );
+   if( ImGui::DragFloat( "Max value", &_maxFrameTime, 0.005f ) )
+      _allTimeMaxFrameTime = -1.0f;
 
    // Draw the traces
    if ( !_dispTraces.empty() )
