@@ -8,7 +8,7 @@
 
 namespace vdbg
 {
-static constexpr const char* SERVER_PATH = "/tmp/my_server";
+static VDBG_CONSTEXPR const char* SERVER_PATH = "/tmp/my_server";
 
 enum class MsgType : uint32_t
 {
@@ -32,25 +32,26 @@ inline auto getTimeStamp()
 }
 using TimeStamp = decltype( getTimeStamp() );
 
-// Right now, I expect the trace to be 64 bytes. The name of the function should fit inside the rest
-// of the 64 bytes that is not used. It could (and should) be optimized later so we
-// do not send all of the null character on the socket
-constexpr uint32_t EXPECTED_TRACE_SIZE = 64;
-static constexpr const uint32_t MAX_FCT_NAME_LENGTH =
-    EXPECTED_TRACE_SIZE - sizeof( unsigned char ) - 2 * sizeof( TimeStamp );
-
+VDBG_CONSTEXPR uint32_t EXPECTED_TRACE_INFO_SIZE = 16;
 struct TracesInfo
 {
    uint32_t threadId;
+   uint32_t stringDataSize;
    uint32_t traceCount;
+   uint32_t padding;
 };
-VDBG_STATIC_ASSERT( sizeof(TracesInfo) == 8, "TracesInfo layout has changed unexpectedly" );
+VDBG_STATIC_ASSERT(
+    sizeof( TracesInfo ) == EXPECTED_TRACE_INFO_SIZE,
+    "TracesInfo layout has changed unexpectedly" );
 
+VDBG_CONSTEXPR uint32_t EXPECTED_TRACE_SIZE = 32;
 struct Trace
 {
-   TimeStamp start, end;
-   unsigned char group;
-   char name[MAX_FCT_NAME_LENGTH];
+   TimeStamp start, end;  // Timestamp for start/end of this trace
+   uint32_t classNameIdx; // Index into string array for class name
+   uint32_t fctNameIdx;   // Index into string array for function name
+   uint32_t group;        // Group to which this trace belongs
+   uint32_t padding;      // extra dummy padding...
 };
 VDBG_STATIC_ASSERT( sizeof(Trace) == EXPECTED_TRACE_SIZE, "Trace layout has changed unexpectedly" );
 

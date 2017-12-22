@@ -34,14 +34,21 @@
    VDBG_PROF_GUARD_VAR(__LINE__,(( __func__, typeid( this ).name(), x ))
 
 ///////////////////////////////////////////////////////////////
-/////       EVERYTHING AFTER IS IMPL DETAILS           ////////
+/////     EVERYTHING AFTER THIS IS IMPL DETAILS        ////////
 ///////////////////////////////////////////////////////////////
 
+
 // ------ platform.h ------------
+// This is most things that are potentially non-portable.
 #define VDBG_CONSTEXPR constexpr
 #define VDBG_NOEXCEPT noexcept
 #define VDBG_STATIC_ASSERT static_assert
 #define VDBG_GET_THREAD_ID() std::this_thread::get_id()
+extern char* __progname;
+inline const char* getProgName() VDBG_NOEXCEPT
+{
+   return __progname;
+}
 // -----------------------------
 
 // ------ message.h ------------
@@ -73,29 +80,28 @@ inline auto getTimeStamp()
 }
 using TimeStamp = decltype( getTimeStamp() );
 
-// Right now, I expect the trace to be 64 bytes. The name of the function should fit inside the rest
-// of the 64 bytes that is not used. It could (and should) be optimized later so we
-// do not send all of the null character on the socket when the name is smaller than the array
-constexpr uint32_t EXPECTED_TRACE_SIZE = 64;
-static constexpr const uint32_t MAX_FCT_NAME_LENGTH =
-    EXPECTED_TRACE_SIZE - sizeof( unsigned char ) - 2 * sizeof( TimeStamp );
-
+VDBG_CONSTEXPR uint32_t EXPECTED_TRACE_INFO_SIZE = 16;
 struct TracesInfo
 {
    uint32_t threadId;
+   uint32_t stringDataSize;
    uint32_t traceCount;
-};
-VDBG_STATIC_ASSERT( sizeof( TracesInfo ) == 8, "TracesInfo layout has changed unexpectedly" );
-
-struct Trace
-{
-   TimeStamp start, end;
-   unsigned char group;
-   char name[MAX_FCT_NAME_LENGTH];
+   uint32_t padding;
 };
 VDBG_STATIC_ASSERT(
-    sizeof( Trace ) == EXPECTED_TRACE_SIZE,
-    "Trace layout has changed unexpectedly" );
+    sizeof( TracesInfo ) == EXPECTED_TRACE_INFO_SIZE,
+    "TracesInfo layout has changed unexpectedly" );
+
+VDBG_CONSTEXPR uint32_t EXPECTED_TRACE_SIZE = 32;
+struct Trace
+{
+   TimeStamp start, end;  // Timestamp for start/end of this trace
+   uint32_t classNameIdx; // Index into string array for class name
+   uint32_t fctNameIdx;   // Index into string array for function name
+   uint32_t group;        // Group to which this trace belongs
+   uint32_t padding;      // extra dummy padding...
+};
+VDBG_STATIC_ASSERT( sizeof(Trace) == EXPECTED_TRACE_SIZE, "Trace layout has changed unexpectedly" );
 
 // ------ end of message.h ------------
 
@@ -157,7 +163,7 @@ class Client
   public:
    Client() VDBG_NOEXCEPT;
    ~Client();
-   bool connect() VDBG_NOEXCEPT;
+   bool connect( bool force ) VDBG_NOEXCEPT;
    bool send( uint8_t* data, uint32_t size ) VDBG_NOEXCEPT;
    bool connected() const VDBG_NOEXCEPT;
 
@@ -172,7 +178,6 @@ class Client
    };
 
    bool tryCreateSocket() VDBG_NOEXCEPT;
-   bool tryConnect( const char* serverName, bool force ) VDBG_NOEXCEPT;
    void handleError() VDBG_NOEXCEPT;
    void closeSocket() VDBG_NOEXCEPT;
 
@@ -196,6 +201,7 @@ class Client
 #include <unistd.h>
 
 // C++ standard includes
+#include <algorithm>
 #include <cassert>
 #include <mutex>
 #include <vector>
@@ -212,38 +218,21 @@ Client::Client() VDBG_NOEXCEPT
    tryCreateSocket();
 }
 
-bool Client::connect() VDBG_NOEXCEPT
-{
-   return tryConnect( SERVER_PATH, true );
-}
-
-bool Client::tryCreateSocket() VDBG_NOEXCEPT
-{
-   _socket = socket( AF_UNIX, SOCK_STREAM, 0 );
-   if( _socket < 0 )
-   {
-      handleError();
-      return false;
-   }
-
-   return true;
-}
-
-bool Client::tryConnect( const char* serverName, bool force ) VDBG_NOEXCEPT
+bool Client::connect( bool force ) VDBG_NOEXCEPT
 {
    using namespace std::chrono;
    auto now = Clock::now();
    if ( force || duration_cast<milliseconds>( now - _lastConnectionAttempt ).count() >
                      connectionAttemptTimeoutInMs )
    {
-      if( _socket == -1 )
+      if ( _socket == -1 )
       {
-         if( !tryCreateSocket() ) return false;
+         if ( !tryCreateSocket() ) return false;
       }
       struct sockaddr_un serveraddr;
       memset( &serveraddr, 0, sizeof( serveraddr ) );
       serveraddr.sun_family = AF_UNIX;
-      strcpy( serveraddr.sun_path, serverName );
+      strcpy( serveraddr.sun_path, SERVER_PATH );
 
       int rc = ::connect( _socket, (struct sockaddr*)&serveraddr, SUN_LEN( &serveraddr ) );
       if ( rc < 0 )
@@ -260,9 +249,21 @@ bool Client::tryConnect( const char* serverName, bool force ) VDBG_NOEXCEPT
    return false;
 }
 
+bool Client::tryCreateSocket() VDBG_NOEXCEPT
+{
+   _socket = socket( AF_UNIX, SOCK_STREAM, 0 );
+   if( _socket < 0 )
+   {
+      handleError();
+      return false;
+   }
+
+   return true;
+}
+
 bool Client::send( uint8_t* data, uint32_t size ) VDBG_NOEXCEPT
 {
-   if( _state != State::CONNECTED && !tryConnect( SERVER_PATH, false ) ) return false;
+   if( _state != State::CONNECTED && !connect( false ) ) return false;
 
    int rc = ::send( _socket, data, size, MSG_NOSIGNAL );
    if ( rc < 0 )
@@ -337,7 +338,14 @@ class ClientProfiler::Impl
    Impl(size_t id) : _hashedThreadId( id )
    {
       _shallowTraces.reserve( 64 );
-      _client.connect();
+      _nameArrayId.reserve( 64 );
+      _nameArrayData.reserve( 64 * 32 );
+
+      // Push back first name as empty string
+      _nameArrayData.push_back(NULL);
+      _nameArrayId.push_back(NULL);
+
+      _client.connect( true );
    }
 
    void addProfilingTrace(
@@ -350,11 +358,43 @@ class ClientProfiler::Impl
       _shallowTraces.push_back( ShallowTrace{ className, fctName, start, end, group } );
    }
 
+   uint32_t findOrAddStringToDb( const char* strId )
+   {
+      // Early return on NULL. The db should always contains NULL as first
+      // entry
+      if( strId == NULL ) return 0;
+
+      auto nameIt = std::find( _nameArrayId.begin(), _nameArrayId.end(), strId );
+      // If the string was not found, add it to the database and return its index
+      if( nameIt == _nameArrayId.end() )
+      {
+         _nameArrayId.push_back( strId );
+         const size_t newEntryPos = _nameArrayData.size();
+         _nameArrayData.resize( _nameArrayData.size() + strlen( strId ) + 1 );
+         strcpy( &_nameArrayData[newEntryPos], strId );
+         return newEntryPos;
+      }
+      auto index = std::distance( _nameArrayId.begin(), nameIt );
+
+      size_t nullCount = 0;
+      size_t charIdx = 0;
+      for( ; charIdx < _nameArrayData.size(); ++charIdx )
+      {
+         if( _nameArrayData[ charIdx ] == 0 )
+         {
+            if( ++nullCount == index ) break;
+         }
+      }
+
+      assert( charIdx + 1 < _nameArrayData.size() );
+      return charIdx + 1;
+   }
+
    void flushToServer()
    {
       if( !_client.connected() )
       {
-         if( !_client.connect() )
+         if( !_client.connect( false ) )
          {
             // Cannot connect to server
             _shallowTraces.clear();
@@ -362,41 +402,56 @@ class ClientProfiler::Impl
          }
       }
 
-      // Allocate raw buffer to send to server
-      const size_t traceMsgSize =
-          sizeof( TracesInfo ) + sizeof( Trace ) * _shallowTraces.size();
-      uint8_t* buffer = (uint8_t*)malloc( sizeof( MsgHeader ) + traceMsgSize );
-      memset ( buffer, 0, sizeof( MsgHeader ) + traceMsgSize );
+      std::vector< std::pair< uint32_t, uint32_t > > classFctNamesIdx;
+      classFctNamesIdx.reserve( _shallowTraces.size() );
+      for( const auto& t : _shallowTraces  )
+      {
+         classFctNamesIdx.emplace_back(
+             findOrAddStringToDb( t.className ), findOrAddStringToDb( t.fctName ) );
+      }
+
+      // Allocate raw buffer to send to server. This raw data should be as follow:
+      // =========================================================
+      // msgHeader   = Generic Msg Header       - Generic msg information
+      // tracesInfo  = Profiler specific Header - Information about the profiler specific msg
+      // stringData  = String Data              - Array with all strings referenced by the traces
+      // traceToSend = Traces                   - Array containing all of the traces
+      const uint32_t stringDataSize = _nameArrayData.size();
+      const size_t profilerMsgSize =
+          sizeof( TracesInfo ) + stringDataSize + sizeof( Trace ) * _shallowTraces.size();
+      uint8_t* buffer = (uint8_t*)malloc( sizeof( MsgHeader ) + profilerMsgSize );
+      memset ( buffer, 0, sizeof( MsgHeader ) + profilerMsgSize );
 
       MsgHeader* msgHeader = (MsgHeader*)buffer;
       TracesInfo* tracesInfo = (TracesInfo*)(buffer + sizeof( MsgHeader ) );
+      char* stringData = (char*)( buffer + sizeof( MsgHeader ) + sizeof( TracesInfo ) );
       Trace* traceToSend =
-          (Trace*)( buffer + sizeof( MsgHeader ) + sizeof( TracesInfo ) );
+          (Trace*)( buffer + sizeof( MsgHeader ) + sizeof( TracesInfo ) + stringDataSize );
 
       // Create the msg header first
       msgHeader->type = MsgType::PROFILER_TRACE;
-      msgHeader->size = traceMsgSize;
+      msgHeader->size = profilerMsgSize;
 
       // TODO: Investigate if the truncation from size_t to uint32 is safe .. or not
       tracesInfo->threadId = (uint32_t)_hashedThreadId;
+      tracesInfo->stringDataSize = stringDataSize;
       tracesInfo->traceCount = (uint32_t)_shallowTraces.size();
 
+      // Copy string data into its array
+      memcpy( stringData, _nameArrayData.data(), stringDataSize );
+
+      // Copy trace information into buffer to send
       for( size_t i = 0; i < _shallowTraces.size(); ++i )
       {
          auto& t = traceToSend[i];
          t.start = _shallowTraces[i].start;
          t.end = _shallowTraces[i].end;
+         t.classNameIdx = classFctNamesIdx[i].first;
+         t.fctNameIdx = classFctNamesIdx[i].second;
          t.group = _shallowTraces[i].group;
-
-         // Copy the actual string into the buffer that will be transfer
-         if( _shallowTraces[i].className )
-         {
-            strncpy( t.name, _shallowTraces[i].className, sizeof( t.name )-1 );
-         }
-         strncat( t.name, _shallowTraces[i].fctName, sizeof( t.name ) - strlen( t.name ) -1 );
       }
 
-      _client.send( buffer, sizeof( MsgHeader ) + traceMsgSize );
+      _client.send( buffer, sizeof( MsgHeader ) + profilerMsgSize );
 
       // Free the buffer
       _shallowTraces.clear();
@@ -406,6 +461,8 @@ class ClientProfiler::Impl
    int _pushTraceLevel{0};
    size_t _hashedThreadId{0};
    std::vector< ShallowTrace > _shallowTraces;
+   std::vector< const char* > _nameArrayId;
+   std::vector< char > _nameArrayData;
    Client _client;
 };
 

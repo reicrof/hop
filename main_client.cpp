@@ -31,6 +31,15 @@ static void buggyFunction()
    }
 }
 
+struct MaClasse
+{
+   void callBuggyFunction()
+   {
+      VDBG_PROF_MEMBER_FUNC();
+      buggyFunction();
+   }
+};
+
 static void func3()
 {
    VDBG_PROF_FUNC();
@@ -78,6 +87,8 @@ int main()
       using namespace std::chrono_literals;
       std::this_thread::sleep_for(1ms);
       func1();
+      MaClasse a;
+      a.callBuggyFunction();
    }
 
 }

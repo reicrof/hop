@@ -140,6 +140,11 @@ bool Server::handleNewMessage( int clientId, vdbg::MsgType type, uint32_t /*size
          if( valread != sizeof( info ) )
             return false;
 
+         std::vector< char > stringData( info.stringDataSize );
+         valread = ::read( clientId, stringData.data(), info.stringDataSize );
+         if( valread != info.stringDataSize )
+            return false;
+
          std::vector< vdbg::Trace > traces( info.traceCount );
          valread = ::read( clientId, (void*)traces.data(), sizeof( vdbg::Trace ) * info.traceCount );
          if( valread != sizeof( vdbg::Trace ) * info.traceCount )
@@ -156,7 +161,13 @@ bool Server::handleNewMessage( int clientId, vdbg::MsgType type, uint32_t /*size
             const double start =static_cast<double>(t.start);
             const double end = static_cast<double>(t.end);
             traceFrame.traces.push_back( DisplayableTrace{ start, difference, 1, 0 } );
-            strncpy( traceFrame.traces.back().name, t.name, 63 );
+            auto& curTrace = traceFrame.traces.back();
+            if( t.classNameIdx > 0 )
+            {
+               strncpy( curTrace.name, &stringData[t.classNameIdx], sizeof( curTrace.name )-1 );
+               strncat( curTrace.name, "::", sizeof( curTrace.name ) - strlen( curTrace.name ) -1 );
+            }
+            strncat( curTrace.name, &stringData[t.fctNameIdx], sizeof( curTrace.name ) - strlen( curTrace.name ) -1 );
             traceFrame.traces.push_back( DisplayableTrace{ end, 0.0f, 0, 0 } );
          }
 
