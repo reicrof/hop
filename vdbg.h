@@ -171,8 +171,10 @@ class Client
       UNKNOWN_SHOULD_INVESTIGATE,
    };
 
+   bool tryCreateSocket() VDBG_NOEXCEPT;
    bool tryConnect( const char* serverName, bool force ) VDBG_NOEXCEPT;
    void handleError() VDBG_NOEXCEPT;
+   void closeSocket() VDBG_NOEXCEPT;
 
    int _socket{-1};
    State _state{State::NOT_CONNECTED};
@@ -207,16 +209,24 @@ namespace details
 
 Client::Client() VDBG_NOEXCEPT
 {
-   _socket = socket( AF_UNIX, SOCK_STREAM, 0 );
-   if ( _socket < 0 )
-   {
-      perror( "socket() failed" );
-   }
+   tryCreateSocket();
 }
 
 bool Client::connect() VDBG_NOEXCEPT
 {
    return tryConnect( SERVER_PATH, true );
+}
+
+bool Client::tryCreateSocket() VDBG_NOEXCEPT
+{
+   _socket = socket( AF_UNIX, SOCK_STREAM, 0 );
+   if( _socket < 0 )
+   {
+      handleError();
+      return false;
+   }
+
+   return true;
 }
 
 bool Client::tryConnect( const char* serverName, bool force ) VDBG_NOEXCEPT
@@ -226,6 +236,10 @@ bool Client::tryConnect( const char* serverName, bool force ) VDBG_NOEXCEPT
    if ( force || duration_cast<milliseconds>( now - _lastConnectionAttempt ).count() >
                      connectionAttemptTimeoutInMs )
    {
+      if( _socket == -1 )
+      {
+         if( !tryCreateSocket() ) return false;
+      }
       struct sockaddr_un serveraddr;
       memset( &serveraddr, 0, sizeof( serveraddr ) );
       serveraddr.sun_family = AF_UNIX;
@@ -236,6 +250,7 @@ bool Client::tryConnect( const char* serverName, bool force ) VDBG_NOEXCEPT
       {
          // perror( "connect() failed" );
          handleError();
+         _lastConnectionAttempt = now;
          return false;
       }
 
@@ -264,24 +279,42 @@ bool Client::connected() const VDBG_NOEXCEPT
    return _state == State::CONNECTED;
 }
 
+void Client::closeSocket() VDBG_NOEXCEPT
+{
+   if ( _socket != -1 )
+   {
+      ::close( _socket );
+      _socket = -1;
+   }
+}
+
 void Client::handleError() VDBG_NOEXCEPT
 {
+   int d = errno;
    switch ( errno )
    {
+      case ENOENT:
+         break;
       case EPIPE:
          _state = State::BROKEN_PIPE;
+         closeSocket();
          break;
       case EACCES:
          _state = State::ACCESS_ERROR;
+         closeSocket();
          break;
       default:
          perror( "send() falied with unhandled error" );
          _state = State::UNKNOWN_SHOULD_INVESTIGATE;
+         closeSocket();
          break;
    }
 }
 
-Client::~Client() { ::close( _socket ); }
+Client::~Client()
+{
+   closeSocket();
+}
 
 // ------ end of client.cpp ------------
 
