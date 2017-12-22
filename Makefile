@@ -3,6 +3,10 @@ TARGET_SERVER = multiproc_server
 TARGET_CLIENT = multiproc_client
 
 CXXFLAGS = -std=c++14 -Wall -Wextra -pedantic
+ENABLED_WARNINGS = -Wconversion-null -Wempty-body -Wignored-qualifiers -Wsign-compare -Wtype-limits -Wuninitialized -Wunused-but-set-parameter
+DISABLED_WARNINGS = 
+
+CXXFLAGS += $(ENABLED_WARNINGS) $(DISABLED_WARNINGS)
 IMGUI_SOURCES = $(wildcard imgui/*.cpp)
 SERVER_SOURCES = $(wildcard *server.cpp) imdbg.cpp $(IMGUI_SOURCES)
 #CLIENT_SOURCES = $(wildcard *client.cpp)

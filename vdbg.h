@@ -14,9 +14,6 @@
 
 #else  // We do want to profile
 
-#include <stdint.h>
-#include <chrono>
-#include <thread>
 
 ///////////////////////////////////////////////////////////////
 /////    THESE ARE THE MACROS YOU SHOULD USE        ///////////
@@ -37,6 +34,9 @@
 /////     EVERYTHING AFTER THIS IS IMPL DETAILS        ////////
 ///////////////////////////////////////////////////////////////
 
+#include <stdint.h>
+#include <chrono>
+#include <thread>
 
 // ------ platform.h ------------
 // This is most things that are potentially non-portable.
@@ -70,11 +70,9 @@ struct MsgHeader
    uint32_t size;
 };
 
-static const char* SERVER_PATH = "/tmp/my_server";
-
 using Clock = std::chrono::high_resolution_clock;
 using Precision = std::chrono::nanoseconds;
-inline auto getTimeStamp()
+inline decltype( std::chrono::duration_cast<Precision>( Clock::now().time_since_epoch() ).count() ) getTimeStamp()
 {
    return std::chrono::duration_cast<Precision>( Clock::now().time_since_epoch() ).count();
 }
@@ -131,8 +129,8 @@ class ProfGuard
   public:
    ProfGuard( const char* name, const char* classStr, uint8_t groupId ) VDBG_NOEXCEPT
        : start( getTimeStamp() ),
-         fctName( name ),
          className( classStr ),
+         fctName( name ),
          impl( ClientProfiler::Get( VDBG_GET_THREAD_ID() ) ),
          group( groupId )
    {
@@ -210,6 +208,8 @@ namespace vdbg
 {
 namespace details
 {
+
+static const char* SERVER_PATH = "/tmp/my_server";
 
 // ------ client.cpp ------------
 
@@ -291,7 +291,6 @@ void Client::closeSocket() VDBG_NOEXCEPT
 
 void Client::handleError() VDBG_NOEXCEPT
 {
-   int d = errno;
    switch ( errno )
    {
       case ENOENT:
@@ -342,7 +341,7 @@ class ClientProfiler::Impl
       _nameArrayData.reserve( 64 * 32 );
 
       // Push back first name as empty string
-      _nameArrayData.push_back(NULL);
+      _nameArrayData.push_back('\0');
       _nameArrayId.push_back(NULL);
 
       _client.connect( true );
