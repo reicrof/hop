@@ -216,7 +216,6 @@ void onNewFrame( int width, int height, int mouseX, int mouseY, bool lmbPressed,
 void draw()
 {
    //static const auto preDrawTime = std::chrono::system_clock::now();
-
    for ( auto& p : _profilers )
    {
       p.draw();
@@ -438,6 +437,7 @@ void vdbg::ThreadTraces::draw()
           std::max( *std::max_element( values.begin(), values.end() ), _allTimeMaxFrameTime );
       maxFrameTime = _maxFrameTime = _allTimeMaxFrameTime;
    }
+
    int pickedFrame = ImGui::PlotHistogram(
        "",
        values.data(),
@@ -455,6 +455,7 @@ void vdbg::ThreadTraces::draw()
       _frameToShow -= ( _frameCountToShow - ( pickedFrame + 1 ) );
    }
 
+   // Handle mousewheel
    if ( ImGui::IsItemHovered() )
    {
       ImGuiIO& io = ImGui::GetIO();
@@ -483,6 +484,81 @@ void vdbg::ThreadTraces::draw()
          }
       }
    }
+
+   static float secondToDisplay = 1.0f;
+   static float modifier = 1.0f;
+   ImGui::SliderFloat("slider log float", &secondToDisplay, 0.00001, 1000.0f, "%.4f", 2.0f);
+   float width = ImGui::GetWindowWidth();
+   float secsPerPxl = (secondToDisplay * width) / (modifier);
+   float sliceCount = width / secsPerPxl;
+
+   if( sliceCount < 5 )
+   {
+      while( sliceCount < 5 )
+      {
+         modifier *= 5.0f;
+         secsPerPxl = (secondToDisplay * width) / (modifier);
+         sliceCount = width / secsPerPxl;
+      }
+      printf( "%f\n", modifier );
+   }
+   else if( sliceCount > 10 )
+   {
+      while( sliceCount > 10 )
+      {
+         modifier /= 5.0f;
+         secsPerPxl = (secondToDisplay * width) / (modifier);
+         sliceCount = width / secsPerPxl;
+      }
+      printf( "%f\n", modifier );
+   }
+
+   ImVec2 top = ImGui::GetCursorScreenPos();
+   ImVec2 bottom = top;
+   bottom.y += 20;
+   ImDrawList* DrawList = ImGui::GetWindowDrawList();
+
+   std::vector< std::pair< ImVec2, double > > textPos;
+   for( float i = 0.0f; i < width; i += secsPerPxl )
+   {
+      DrawList->AddLine( top, bottom, ImGui::GetColorU32( ImGuiCol_TextDisabled ), 1.0f );
+      textPos.emplace_back( bottom, (i / secsPerPxl)*secondToDisplay );
+      bottom.y -= 15;
+      for( int i = 0; i < 4; ++i )
+      {
+         top.x += secsPerPxl/10.0f;
+         bottom.x += secsPerPxl/10.0f;
+         DrawList->AddLine( top, bottom, ImGui::GetColorU32( ImGuiCol_TextDisabled ), 1.0f );
+      }
+      top.x += secsPerPxl/10.0f;
+      bottom.x += secsPerPxl/10.0f;
+      ImVec2 midLine = bottom;
+      midLine.y += 5.0f;
+      DrawList->AddLine( top, midLine, ImGui::GetColorU32( ImGuiCol_TextDisabled ), 1.0f );
+      for( int i = 0; i < 5; ++i )
+      {
+         top.x += secsPerPxl/10.0f;
+         bottom.x += secsPerPxl/10.0f;
+         DrawList->AddLine( top, bottom, ImGui::GetColorU32( ImGuiCol_TextDisabled ), 1.0f );
+      }
+      bottom.y += 15;
+   }
+   auto cursBackup = ImGui::GetCursorScreenPos();
+   for( const auto& pos : textPos )
+   {
+      ImGui::SetCursorScreenPos( pos.first );
+      ImGui::Text( "%f", pos.second );
+   }
+   ImGui::SetCursorScreenPos( cursBackup );
+
+      //top = ImGui::GetCursorScreenPos();
+      //top.x += i;
+      //bottom.x = top.x;
+   top.y += 40;
+   ImGui::SetCursorScreenPos( top );
+   ImGui::Text("Thread %d", 1);
+         ImGui::Button("Test", ImVec2(50, 20));
+   //ImGui::EndChild();
 
    if( ImGui::DragFloat( "Max value", &_maxFrameTime, 0.005f ) )
       _allTimeMaxFrameTime = -1.0f;

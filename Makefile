@@ -3,8 +3,8 @@ TARGET_SERVER = multiproc_server
 TARGET_CLIENT = multiproc_client
 
 CXXFLAGS = -std=c++14 -Wall -Wextra -pedantic
-ENABLED_WARNINGS = -Wconversion-null -Wempty-body -Wignored-qualifiers -Wsign-compare -Wtype-limits -Wuninitialized -Wunused-but-set-parameter
-DISABLED_WARNINGS = 
+ENABLED_WARNINGS = -Wconversion-null -Wempty-body -Wignored-qualifiers -Wsign-compare -Wtype-limits -Wuninitialized
+DISABLED_WARNINGS = -Wno-missing-braces
 
 CXXFLAGS += $(ENABLED_WARNINGS) $(DISABLED_WARNINGS)
 IMGUI_SOURCES = $(wildcard imgui/*.cpp)
@@ -16,7 +16,7 @@ CLIENT_DEFINE = -DVDBG_ENABLED
 
 PLATFORM_LD_FLAGS = 
 ifeq ($(UNAME), Linux)
-   CXX = g++7
+   CXX = clang++
    PLATFORM_LD_FLAGS = -lGL
 else ifeq ($(UNAME), Darwin)
    CXX = clang++
@@ -50,3 +50,7 @@ debug : $(TARGET_SERVER) $(TARGET_CLIENT)
 .PHONY: release
 release :   CXXFLAGS += -O3 -DNDEBUG
 release : $(TARGET_SERVER) $(TARGET_CLIENT)
+
+.PHONY: asan
+asan :  CXXFLAGS += -g -pg -fsanitize=address -fno-omit-frame-pointer 
+asan : $(TARGET_SERVER) $(TARGET_CLIENT)

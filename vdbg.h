@@ -418,14 +418,13 @@ class ClientProfiler::Impl
       const uint32_t stringDataSize = _nameArrayData.size();
       const size_t profilerMsgSize =
           sizeof( TracesInfo ) + stringDataSize + sizeof( Trace ) * _shallowTraces.size();
-      uint8_t* buffer = (uint8_t*)malloc( sizeof( MsgHeader ) + profilerMsgSize );
-      memset ( buffer, 0, sizeof( MsgHeader ) + profilerMsgSize );
+      std::vector< uint8_t > buffer( sizeof( MsgHeader ) + profilerMsgSize, 0 );
 
-      MsgHeader* msgHeader = (MsgHeader*)buffer;
-      TracesInfo* tracesInfo = (TracesInfo*)(buffer + sizeof( MsgHeader ) );
-      char* stringData = (char*)( buffer + sizeof( MsgHeader ) + sizeof( TracesInfo ) );
+      MsgHeader* msgHeader = (MsgHeader*)buffer.data();
+      TracesInfo* tracesInfo = (TracesInfo*)(buffer.data() + sizeof( MsgHeader ) );
+      char* stringData = (char*)( buffer.data() + sizeof( MsgHeader ) + sizeof( TracesInfo ) );
       Trace* traceToSend =
-          (Trace*)( buffer + sizeof( MsgHeader ) + sizeof( TracesInfo ) + stringDataSize );
+          (Trace*)( buffer.data() + sizeof( MsgHeader ) + sizeof( TracesInfo ) + stringDataSize );
 
       // Create the msg header first
       msgHeader->type = MsgType::PROFILER_TRACE;
@@ -450,11 +449,10 @@ class ClientProfiler::Impl
          t.group = _shallowTraces[i].group;
       }
 
-      _client.send( buffer, sizeof( MsgHeader ) + profilerMsgSize );
+      _client.send( buffer.data(), sizeof( MsgHeader ) + profilerMsgSize );
 
       // Free the buffer
       _shallowTraces.clear();
-      free( buffer );
    }
 
    int _pushTraceLevel{0};
