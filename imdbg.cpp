@@ -485,64 +485,45 @@ void vdbg::ThreadTraces::draw()
       }
    }
 
-   static float secondToDisplay = 1.0f;
-   static float modifier = 1.0f;
-   ImGui::SliderFloat("slider log float", &secondToDisplay, 0.00001, 1000.0f, "%.4f", 2.0f);
-   float width = ImGui::GetWindowWidth();
-   float secsPerPxl = (secondToDisplay * width) / (modifier);
-   float sliceCount = width / secsPerPxl;
+   static float millisToDisplay = 1000.0f;
+   ImGui::SliderFloat("slider log float", &millisToDisplay, 0.001, 1000.0f, "%.4f", 1.5f);
 
-   if( sliceCount < 5 )
+   const float windowWidthPxl = ImGui::GetWindowWidth();
+   static double stepSize = 1.0f;
+
+   double stepsCount = millisToDisplay / stepSize;
+   while ( stepsCount > 150 )
    {
-      while( sliceCount < 5 )
-      {
-         modifier *= 5.0f;
-         secsPerPxl = (secondToDisplay * width) / (modifier);
-         sliceCount = width / secsPerPxl;
-      }
-      printf( "%f\n", modifier );
+      stepSize *= 10.0f;
+      stepsCount = millisToDisplay / stepSize;
    }
-   else if( sliceCount > 10 )
+
+   while ( stepsCount < 40 )
    {
-      while( sliceCount > 10 )
-      {
-         modifier /= 5.0f;
-         secsPerPxl = (secondToDisplay * width) / (modifier);
-         sliceCount = width / secsPerPxl;
-      }
-      printf( "%f\n", modifier );
+      stepSize /= 10.0f;
+      stepsCount = millisToDisplay / stepSize;
    }
+
+   double stepSizePxl = windowWidthPxl / (millisToDisplay / stepSize);
 
    ImVec2 top = ImGui::GetCursorScreenPos();
    ImVec2 bottom = top;
    bottom.y += 20;
    ImDrawList* DrawList = ImGui::GetWindowDrawList();
 
+   int count = 0;
    std::vector< std::pair< ImVec2, double > > textPos;
-   for( float i = 0.0f; i < width; i += secsPerPxl )
+   for( double i = 0.0f; i < windowWidthPxl; i += stepSizePxl, ++count )
    {
       DrawList->AddLine( top, bottom, ImGui::GetColorU32( ImGuiCol_TextDisabled ), 1.0f );
-      textPos.emplace_back( bottom, (i / secsPerPxl)*secondToDisplay );
-      bottom.y -= 15;
-      for( int i = 0; i < 4; ++i )
+      if( count % 10 == 0 )
       {
-         top.x += secsPerPxl/10.0f;
-         bottom.x += secsPerPxl/10.0f;
-         DrawList->AddLine( top, bottom, ImGui::GetColorU32( ImGuiCol_TextDisabled ), 1.0f );
+         textPos.emplace_back( bottom, count * stepSize );
       }
-      top.x += secsPerPxl/10.0f;
-      bottom.x += secsPerPxl/10.0f;
-      ImVec2 midLine = bottom;
-      midLine.y += 5.0f;
-      DrawList->AddLine( top, midLine, ImGui::GetColorU32( ImGuiCol_TextDisabled ), 1.0f );
-      for( int i = 0; i < 5; ++i )
-      {
-         top.x += secsPerPxl/10.0f;
-         bottom.x += secsPerPxl/10.0f;
-         DrawList->AddLine( top, bottom, ImGui::GetColorU32( ImGuiCol_TextDisabled ), 1.0f );
-      }
-      bottom.y += 15;
+      top.x += stepSizePxl;
+      bottom.x += stepSizePxl;
    }
+
    auto cursBackup = ImGui::GetCursorScreenPos();
    for( const auto& pos : textPos )
    {
@@ -550,6 +531,71 @@ void vdbg::ThreadTraces::draw()
       ImGui::Text( "%f", pos.second );
    }
    ImGui::SetCursorScreenPos( cursBackup );
+
+   // static float modifier = 1.0f;
+   // ImGui::SliderFloat("slider log float", &secondToDisplay, 0.00001, 1000.0f, "%.4f", 2.0f);
+   // float width = ImGui::GetWindowWidth();
+   // float secsPerPxl = (secondToDisplay * width) / (modifier);
+   // float sliceCount = width / secsPerPxl;
+
+   // if( sliceCount < 5 )
+   // {
+   //    while( sliceCount < 5 )
+   //    {
+   //       modifier *= 5.0f;
+   //       secsPerPxl = (secondToDisplay * width) / (modifier);
+   //       sliceCount = width / secsPerPxl;
+   //    }
+   //    printf( "%f\n", modifier );
+   // }
+   // else if( sliceCount > 10 )
+   // {
+   //    while( sliceCount > 10 )
+   //    {
+   //       modifier /= 5.0f;
+   //       secsPerPxl = (secondToDisplay * width) / (modifier);
+   //       sliceCount = width / secsPerPxl;
+   //    }
+   //    printf( "%f\n", modifier );
+   // }
+
+   // ImVec2 top = ImGui::GetCursorScreenPos();
+   // ImVec2 bottom = top;
+   // bottom.y += 20;
+   // ImDrawList* DrawList = ImGui::GetWindowDrawList();
+
+   // std::vector< std::pair< ImVec2, double > > textPos;
+   // for( float i = 0.0f; i < width; i += secsPerPxl )
+   // {
+   //    DrawList->AddLine( top, bottom, ImGui::GetColorU32( ImGuiCol_TextDisabled ), 1.0f );
+   //    textPos.emplace_back( bottom, (i / secsPerPxl)*secondToDisplay );
+   //    bottom.y -= 15;
+   //    for( int i = 0; i < 4; ++i )
+   //    {
+   //       top.x += secsPerPxl/10.0f;
+   //       bottom.x += secsPerPxl/10.0f;
+   //       DrawList->AddLine( top, bottom, ImGui::GetColorU32( ImGuiCol_TextDisabled ), 1.0f );
+   //    }
+   //    top.x += secsPerPxl/10.0f;
+   //    bottom.x += secsPerPxl/10.0f;
+   //    ImVec2 midLine = bottom;
+   //    midLine.y += 5.0f;
+   //    DrawList->AddLine( top, midLine, ImGui::GetColorU32( ImGuiCol_TextDisabled ), 1.0f );
+   //    for( int i = 0; i < 5; ++i )
+   //    {
+   //       top.x += secsPerPxl/10.0f;
+   //       bottom.x += secsPerPxl/10.0f;
+   //       DrawList->AddLine( top, bottom, ImGui::GetColorU32( ImGuiCol_TextDisabled ), 1.0f );
+   //    }
+   //    bottom.y += 15;
+   // }
+   // auto cursBackup = ImGui::GetCursorScreenPos();
+   // for( const auto& pos : textPos )
+   // {
+   //    ImGui::SetCursorScreenPos( pos.first );
+   //    ImGui::Text( "%f", pos.second );
+   // }
+   // ImGui::SetCursorScreenPos( cursBackup );
 
       //top = ImGui::GetCursorScreenPos();
       //top.x += i;
