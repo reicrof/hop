@@ -8,6 +8,7 @@
 #endif
 
 #include <cassert>
+#include <cmath>
 #include <chrono>
 #include <vector>
 #include <algorithm>
@@ -485,51 +486,96 @@ void vdbg::ThreadTraces::draw()
       }
    }
 
-   static float millisToDisplay = 1000.0f;
-   ImGui::SliderFloat("slider log float", &millisToDisplay, 0.001, 1000.0f, "%.4f", 1.5f);
+   static float millisToDisplay = 5.0f;
+   ImGui::SliderFloat("slider log float", &millisToDisplay, 0.1, 100000.0f, "%.4f", 1.5f);
+   double microsToDisplay = millisToDisplay * 1000;
 
    const float windowWidthPxl = ImGui::GetWindowWidth();
-   static double stepSize = 1.0f;
+   static double stepSize = 1000;
 
-   double stepsCount = millisToDisplay / stepSize;
-   while ( stepsCount > 150 )
+   size_t stepsCount = microsToDisplay / stepSize;
+
+   constexpr double minStepSize = 10.0;
+   while( stepsCount > 150 || (stepsCount < 30 && stepSize > minStepSize) )
    {
-      stepSize *= 10.0f;
-      stepsCount = millisToDisplay / stepSize;
+     if( stepsCount > 150 )
+     {
+        if( stepSize == minStepSize ) { stepSize = 8; }
+        stepSize *= 5;
+     }
+     else if( stepsCount < 30 )
+     {
+        stepSize /= 5;
+        stepSize = std::max( stepSize, minStepSize );
+     }
+     stepsCount = microsToDisplay / stepSize;
    }
+   printf("%f micros\n", stepSize);
 
-   while ( stepsCount < 40 )
-   {
-      stepSize /= 10.0f;
-      stepsCount = millisToDisplay / stepSize;
-   }
-
-   double stepSizePxl = windowWidthPxl / (millisToDisplay / stepSize);
+   double stepSizePxl = windowWidthPxl / (microsToDisplay / stepSize);
 
    ImVec2 top = ImGui::GetCursorScreenPos();
    ImVec2 bottom = top;
-   bottom.y += 20;
+   bottom.y += 10;
    ImDrawList* DrawList = ImGui::GetWindowDrawList();
 
    int count = 0;
    std::vector< std::pair< ImVec2, double > > textPos;
    for( double i = 0.0f; i < windowWidthPxl; i += stepSizePxl, ++count )
    {
-      DrawList->AddLine( top, bottom, ImGui::GetColorU32( ImGuiCol_TextDisabled ), 1.0f );
       if( count % 10 == 0 )
       {
-         textPos.emplace_back( bottom, count * stepSize );
+         auto startEndLine = bottom;
+         startEndLine.y += 10.0f;
+         DrawList->AddLine( top, startEndLine, ImGui::GetColorU32( ImGuiCol_TextDisabled ), 1.0f );
+         textPos.emplace_back( startEndLine, count * stepSize );
       }
+      else if( count % 5 == 0 )
+      {
+          auto midLine = bottom;
+          midLine.y += 5.0f;
+          DrawList->AddLine( top, midLine, ImGui::GetColorU32( ImGuiCol_TextDisabled ), 1.0f );
+      }
+      else
+      {
+        DrawList->AddLine( top, bottom, ImGui::GetColorU32( ImGuiCol_TextDisabled ), 1.0f ); 
+      }
+
       top.x += stepSizePxl;
       bottom.x += stepSizePxl;
    }
 
-   auto cursBackup = ImGui::GetCursorScreenPos();
-   for( const auto& pos : textPos )
+   const auto cursBackup = ImGui::GetCursorScreenPos();
+
+   const size_t total = stepsCount * stepSize;
+   if( total < 1000 )
    {
-      ImGui::SetCursorScreenPos( pos.first );
-      ImGui::Text( "%f", pos.second );
+        // print as microsecs
+       for( const auto& pos : textPos )
+       {
+          ImGui::SetCursorScreenPos( pos.first );
+          ImGui::Text( "%d us",  (int)pos.second );
+       }
    }
+   else if( total < 1000000 )
+   {
+    // print as milliseconds
+     for( const auto& pos : textPos )
+     {
+        ImGui::SetCursorScreenPos( pos.first );
+        ImGui::Text( "%.3f ms", (pos.second / 1000) );
+     }
+   }
+   else if( total < 1000000000 )
+   {
+       // print as seconds
+     for( const auto& pos : textPos )
+     {
+        ImGui::SetCursorScreenPos( pos.first );
+        ImGui::Text( "%.3f s", (pos.second / 1000000) );
+     }
+   }
+
    ImGui::SetCursorScreenPos( cursBackup );
 
    // static float modifier = 1.0f;

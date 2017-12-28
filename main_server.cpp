@@ -143,11 +143,6 @@ int main()
 
    serv.stop();
 
-   for( auto p : profilers )
-   {
-      delete p;
-   }
-
    SDL_GL_DeleteContext( mainContext );
    SDL_DestroyWindow( window );
    SDL_Quit();
