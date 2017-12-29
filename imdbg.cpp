@@ -486,12 +486,16 @@ void vdbg::ThreadTraces::draw()
       }
    }
 
-   static float millisToDisplay = 5.0f;
-   ImGui::SliderFloat("slider log float", &millisToDisplay, 0.1, 100000.0f, "%.4f", 1.5f);
-   double microsToDisplay = millisToDisplay * 1000;
-
-   const float windowWidthPxl = ImGui::GetWindowWidth();
+   const float extraDrawPadding = 0; //128.0f;
+   const float windowWidthPxl = ImGui::GetWindowWidth() + extraDrawPadding;
    static double stepSize = 1000;
+
+   static float startMillis = 3.0f;
+   ImGui::SliderFloat("Start millis", &startMillis, 0.0, 1000.0f, "%.4f", 1.5f);
+   static float millisToDisplay = 5.0f;
+
+   double startMicros = startMillis * 1000;
+   double microsToDisplay = millisToDisplay * 1000;
 
    size_t stepsCount = microsToDisplay / stepSize;
 
@@ -512,16 +516,66 @@ void vdbg::ThreadTraces::draw()
    }
    printf("%f micros\n", stepSize);
 
-   double stepSizePxl = windowWidthPxl / (microsToDisplay / stepSize);
+   static double oldPos = 0;
+   static double newPos = 0;
+   const float prevMillis = millisToDisplay;
+   if( ImGui::SliderFloat("slider log float", &millisToDisplay, 0.1, 100000.0f, "%.4f", 1.5f) )
+   {
+      const double microsToZoom = 6000;
+      const double prevMicrosPerPxl = windowWidthPxl / (prevMillis*1000.0);
+      double pxlPosition = (microsToZoom - (startMillis*1000.0)) * prevMicrosPerPxl;
+
+      oldPos = pxlPosition;
+
+      const double curMicrosPerPxl = windowWidthPxl / (millisToDisplay*1000.0);
+      const double newPxlPos = (microsToZoom - (startMillis*1000.0)) * curMicrosPerPxl;
+
+      newPos = newPxlPos;
+
+      const auto timeDiff = (newPos - oldPos) / curMicrosPerPxl;
+
+      startMillis += (timeDiff / 1000.0);
+   }
+
+    const double microsPerPxl = windowWidthPxl / microsToDisplay;
+   const double stepSizePxl = microsPerPxl * stepSize;
 
    ImVec2 top = ImGui::GetCursorScreenPos();
+   double modulus = fmod( startMicros, stepSize );
+   top.x -= (modulus * microsPerPxl);
+   if( startMicros * microsPerPxl > extraDrawPadding )
+   {
+      top.x -= extraDrawPadding;
+   }
    ImVec2 bottom = top;
    bottom.y += 10;
    ImDrawList* DrawList = ImGui::GetWindowDrawList();
 
-   int count = 0;
+
+   auto testTop = top;
+   auto testBottom = bottom;
+   testTop.x += oldPos;
+   testBottom.x += oldPos;
+   testBottom.y += 30;
+   DrawList->AddLine( testTop, testBottom, ImGui::GetColorU32( ImGuiCol_ButtonActive ), 4.0f );
+
+   auto testTop2 = top;
+   auto testBottom2 = bottom;
+   testTop2.x += newPos;
+   testBottom2.x += newPos;
+   testBottom2.y += 30;
+   DrawList->AddLine( testTop2, testBottom2, ImGui::GetColorU32( ImGuiCol_HeaderActive ), 4.0f );
+
+   // auto testTop3 = top;
+   // auto testBottom3 = bottom;
+   // testTop3.x += (2600 * microsPerPxl) ;
+   // testBottom3.x += (2600 * microsPerPxl);
+   // testBottom3.y += 30;
+   // DrawList->AddLine( testTop3, testBottom3, ImGui::GetColorU32( ImGuiCol_ButtonActive ), 4.0f );
+
+   int count = (int)startMicros / stepSize;
    std::vector< std::pair< ImVec2, double > > textPos;
-   for( double i = 0.0f; i < windowWidthPxl; i += stepSizePxl, ++count )
+   for( double i = -extraDrawPadding + modulus; i < windowWidthPxl; i += stepSizePxl, ++count )
    {
       if( count % 10 == 0 )
       {
