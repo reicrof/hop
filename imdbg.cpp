@@ -16,6 +16,11 @@
 
 static void saveAsJson( const char* path, const vdbg::DisplayableTraceFrame& frame );
 
+static inline bool EQUALS(float rhs, float lhs, float epsilon = 0.0005f) noexcept
+{
+    return (fabs(rhs - lhs) < epsilon);
+}
+
 namespace
 {
 static std::chrono::time_point<std::chrono::system_clock> g_Time = std::chrono::system_clock::now();
@@ -486,151 +491,160 @@ void vdbg::ThreadTraces::draw()
       }
    }
 
-   const float extraDrawPadding = 0; //128.0f;
-   const float windowWidthPxl = ImGui::GetWindowWidth() + extraDrawPadding;
-   static double stepSize = 1000;
 
-   static float startMillis = 3.0f;
-   ImGui::SliderFloat("Start millis", &startMillis, 0.0, 1000.0f, "%.4f", 1.5f);
-   static float millisToDisplay = 5.0f;
+   ///////////////////////////
+   ///////////////////////////
 
-   double startMicros = startMillis * 1000;
-   double microsToDisplay = millisToDisplay * 1000;
+   _timeline.draw();
 
-   size_t stepsCount = microsToDisplay / stepSize;
+   // const float extraDrawPadding = 0; //128.0f;
+   // const float windowWidthPxl = ImGui::GetWindowWidth() + extraDrawPadding;
+   // static double stepSize = 1000;
 
-   constexpr double minStepSize = 10.0;
-   while( stepsCount > 150 || (stepsCount < 30 && stepSize > minStepSize) )
-   {
-     if( stepsCount > 150 )
-     {
-        if( stepSize == minStepSize ) { stepSize = 8; }
-        stepSize *= 5;
-     }
-     else if( stepsCount < 30 )
-     {
-        stepSize /= 5;
-        stepSize = std::max( stepSize, minStepSize );
-     }
-     stepsCount = microsToDisplay / stepSize;
-   }
-   printf("%f micros\n", stepSize);
+   // static float startMillis = 3.0f;
+   // ImGui::SliderFloat("Start millis", &startMillis, 0.0, 1000.0f, "%.4f", 1.1f);
+   // static float millisToDisplay = 5.0f;
 
-   static double oldPos = 0;
-   static double newPos = 0;
-   const float prevMillis = millisToDisplay;
-   if( ImGui::SliderFloat("slider log float", &millisToDisplay, 0.1, 100000.0f, "%.4f", 1.5f) )
-   {
-      const double microsToZoom = 6000;
-      const double prevMicrosPerPxl = windowWidthPxl / (prevMillis*1000.0);
-      double pxlPosition = (microsToZoom - (startMillis*1000.0)) * prevMicrosPerPxl;
+   // double startMicros = startMillis * 1000;
+   // double microsToDisplay = millisToDisplay * 1000;
 
-      oldPos = pxlPosition;
+   // size_t stepsCount = microsToDisplay / stepSize;
 
-      const double curMicrosPerPxl = windowWidthPxl / (millisToDisplay*1000.0);
-      const double newPxlPos = (microsToZoom - (startMillis*1000.0)) * curMicrosPerPxl;
+   // constexpr double minStepSize = 10.0;
+   // while( stepsCount > 140 || (stepsCount < 20 && stepSize > minStepSize) )
+   // {
+   //   if( stepsCount > 140 )
+   //   {
+   //      if( stepSize == minStepSize ) { stepSize = 8; }
+   //      stepSize *= 5;
+   //   }
+   //   else if( stepsCount < 20 )
+   //   {
+   //      stepSize /= 5;
+   //      stepSize = std::max( stepSize, minStepSize );
+   //   }
+   //   stepsCount = microsToDisplay / stepSize;
+   // }
+   // printf("%f micros\n", stepSize);
 
-      newPos = newPxlPos;
+   // static double oldPos = 0;
+   // static double newPos = 0;
+   // const float prevMillis = millisToDisplay;
+   // if( ImGui::SliderFloat("slider log float", &millisToDisplay, 0.1, 100000.0f, "%.4f", 1.5f) )
+   // {
+   //    const double microsToZoom = 6000;
+   //    const double prevMicrosPerPxl = windowWidthPxl / (prevMillis*1000.0);
+   //    double pxlPosition = (microsToZoom - (startMillis*1000.0)) * prevMicrosPerPxl;
 
-      const auto timeDiff = (newPos - oldPos) / curMicrosPerPxl;
+   //    oldPos = pxlPosition;
 
-      startMillis += (timeDiff / 1000.0);
-   }
+   //    const double curMicrosPerPxl = windowWidthPxl / (millisToDisplay*1000.0);
+   //    const double newPxlPos = (microsToZoom - (startMillis*1000.0)) * curMicrosPerPxl;
 
-    const double microsPerPxl = windowWidthPxl / microsToDisplay;
-   const double stepSizePxl = microsPerPxl * stepSize;
+   //    newPos = newPxlPos;
 
-   ImVec2 top = ImGui::GetCursorScreenPos();
-   double modulus = fmod( startMicros, stepSize );
-   top.x -= (modulus * microsPerPxl);
-   if( startMicros * microsPerPxl > extraDrawPadding )
-   {
-      top.x -= extraDrawPadding;
-   }
-   ImVec2 bottom = top;
-   bottom.y += 10;
-   ImDrawList* DrawList = ImGui::GetWindowDrawList();
+   //    const auto timeDiff = (newPos - oldPos) / curMicrosPerPxl;
+
+   //    startMillis += (timeDiff / 1000.0);
+   // }
+
+   //  const double microsPerPxl = windowWidthPxl / microsToDisplay;
+   // const double stepSizePxl = microsPerPxl * stepSize;
+
+   // ImVec2 top = ImGui::GetCursorScreenPos();
+   // double modulus = fmod( startMicros, stepSize );
+   // top.x -= (modulus * microsPerPxl);
+   // if( startMicros * microsPerPxl > extraDrawPadding )
+   // {
+   //    top.x -= extraDrawPadding;
+   // }
+   // ImVec2 bottom = top;
+   // bottom.y += 10;
+   // ImDrawList* DrawList = ImGui::GetWindowDrawList();
 
 
-   auto testTop = top;
-   auto testBottom = bottom;
-   testTop.x += oldPos;
-   testBottom.x += oldPos;
-   testBottom.y += 30;
-   DrawList->AddLine( testTop, testBottom, ImGui::GetColorU32( ImGuiCol_ButtonActive ), 4.0f );
+   // auto testTop = top;
+   // auto testBottom = bottom;
+   // testTop.x += oldPos;
+   // testBottom.x += oldPos;
+   // testBottom.y += 30;
+   // DrawList->AddLine( testTop, testBottom, ImGui::GetColorU32( ImGuiCol_ButtonActive ), 4.0f );
 
-   auto testTop2 = top;
-   auto testBottom2 = bottom;
-   testTop2.x += newPos;
-   testBottom2.x += newPos;
-   testBottom2.y += 30;
-   DrawList->AddLine( testTop2, testBottom2, ImGui::GetColorU32( ImGuiCol_HeaderActive ), 4.0f );
+   // auto testTop2 = top;
+   // auto testBottom2 = bottom;
+   // testTop2.x += newPos;
+   // testBottom2.x += newPos;
+   // testBottom2.y += 30;
+   // DrawList->AddLine( testTop2, testBottom2, ImGui::GetColorU32( ImGuiCol_HeaderActive ), 4.0f );
 
-   // auto testTop3 = top;
-   // auto testBottom3 = bottom;
-   // testTop3.x += (2600 * microsPerPxl) ;
-   // testBottom3.x += (2600 * microsPerPxl);
-   // testBottom3.y += 30;
-   // DrawList->AddLine( testTop3, testBottom3, ImGui::GetColorU32( ImGuiCol_ButtonActive ), 4.0f );
+   // // auto testTop3 = top;
+   // // auto testBottom3 = bottom;
+   // // testTop3.x += (2600 * microsPerPxl) ;
+   // // testBottom3.x += (2600 * microsPerPxl);
+   // // testBottom3.y += 30;
+   // // DrawList->AddLine( testTop3, testBottom3, ImGui::GetColorU32( ImGuiCol_ButtonActive ), 4.0f );
 
-   int count = (int)startMicros / stepSize;
-   std::vector< std::pair< ImVec2, double > > textPos;
-   for( double i = -extraDrawPadding + modulus; i < windowWidthPxl; i += stepSizePxl, ++count )
-   {
-      if( count % 10 == 0 )
-      {
-         auto startEndLine = bottom;
-         startEndLine.y += 10.0f;
-         DrawList->AddLine( top, startEndLine, ImGui::GetColorU32( ImGuiCol_TextDisabled ), 1.0f );
-         textPos.emplace_back( startEndLine, count * stepSize );
-      }
-      else if( count % 5 == 0 )
-      {
-          auto midLine = bottom;
-          midLine.y += 5.0f;
-          DrawList->AddLine( top, midLine, ImGui::GetColorU32( ImGuiCol_TextDisabled ), 1.0f );
-      }
-      else
-      {
-        DrawList->AddLine( top, bottom, ImGui::GetColorU32( ImGuiCol_TextDisabled ), 1.0f ); 
-      }
+   // int count = (int)startMicros / stepSize;
+   // std::vector< std::pair< ImVec2, double > > textPos;
+   // for( double i = -extraDrawPadding + modulus; i < windowWidthPxl; i += stepSizePxl, ++count )
+   // {
+   //    if( count % 10 == 0 )
+   //    {
+   //       auto startEndLine = bottom;
+   //       startEndLine.y += 10.0f;
+   //       DrawList->AddLine( top, startEndLine, ImGui::GetColorU32( ImGuiCol_TextDisabled ), 1.0f );
+   //       textPos.emplace_back( startEndLine, count * stepSize );
+   //    }
+   //    else if( count % 5 == 0 )
+   //    {
+   //        auto midLine = bottom;
+   //        midLine.y += 5.0f;
+   //        DrawList->AddLine( top, midLine, ImGui::GetColorU32( ImGuiCol_TextDisabled ), 1.0f );
+   //    }
+   //    else
+   //    {
+   //      DrawList->AddLine( top, bottom, ImGui::GetColorU32( ImGuiCol_TextDisabled ), 1.0f ); 
+   //    }
 
-      top.x += stepSizePxl;
-      bottom.x += stepSizePxl;
-   }
+   //    top.x += stepSizePxl;
+   //    bottom.x += stepSizePxl;
+   // }
 
-   const auto cursBackup = ImGui::GetCursorScreenPos();
+   // const auto cursBackup = ImGui::GetCursorScreenPos();
 
-   const size_t total = stepsCount * stepSize;
-   if( total < 1000 )
-   {
-        // print as microsecs
-       for( const auto& pos : textPos )
-       {
-          ImGui::SetCursorScreenPos( pos.first );
-          ImGui::Text( "%d us",  (int)pos.second );
-       }
-   }
-   else if( total < 1000000 )
-   {
-    // print as milliseconds
-     for( const auto& pos : textPos )
-     {
-        ImGui::SetCursorScreenPos( pos.first );
-        ImGui::Text( "%.3f ms", (pos.second / 1000) );
-     }
-   }
-   else if( total < 1000000000 )
-   {
-       // print as seconds
-     for( const auto& pos : textPos )
-     {
-        ImGui::SetCursorScreenPos( pos.first );
-        ImGui::Text( "%.3f s", (pos.second / 1000000) );
-     }
-   }
+   // const size_t total = stepsCount * stepSize;
+   // if( total < 1000 )
+   // {
+   //      // print as microsecs
+   //     for( const auto& pos : textPos )
+   //     {
+   //        ImGui::SetCursorScreenPos( pos.first );
+   //        ImGui::Text( "%d us",  (int)pos.second );
+   //     }
+   // }
+   // else if( total < 1000000 )
+   // {
+   //  // print as milliseconds
+   //   for( const auto& pos : textPos )
+   //   {
+   //      ImGui::SetCursorScreenPos( pos.first );
+   //      ImGui::Text( "%.3f ms", (pos.second / 1000) );
+   //   }
+   // }
+   // else if( total < 1000000000 )
+   // {
+   //     // print as seconds
+   //   for( const auto& pos : textPos )
+   //   {
+   //      ImGui::SetCursorScreenPos( pos.first );
+   //      ImGui::Text( "%.3f s", (pos.second / 1000000) );
+   //   }
+   // }
 
-   ImGui::SetCursorScreenPos( cursBackup );
+   // ImGui::SetCursorScreenPos( cursBackup );
+
+   ///////////////////////////
+   ///////////////////////////
 
    // static float modifier = 1.0f;
    // ImGui::SliderFloat("slider log float", &secondToDisplay, 0.00001, 1000.0f, "%.4f", 2.0f);
@@ -700,10 +714,9 @@ void vdbg::ThreadTraces::draw()
       //top = ImGui::GetCursorScreenPos();
       //top.x += i;
       //bottom.x = top.x;
-   top.y += 40;
-   ImGui::SetCursorScreenPos( top );
-   ImGui::Text("Thread %d", 1);
-         ImGui::Button("Test", ImVec2(50, 20));
+   // top.y += 40;
+   // ImGui::SetCursorScreenPos( top );
+   ImGui::Button("Test", ImVec2(50, 20));
    //ImGui::EndChild();
 
    if( ImGui::DragFloat( "Max value", &_maxFrameTime, 0.005f ) )
@@ -734,4 +747,148 @@ void vdbg::ThreadTraces::draw()
          saveAsJson( pathToSave, _dispTraces[_frameToShow] );
       }
    }
+}
+
+static inline float msToPxl( float windowWidth, float msToDisplay, float ms )
+{
+   const float msPerPxl = msToDisplay / windowWidth;
+   return ms / msPerPxl;
+}
+
+static inline float pxlToMs( float windowWidth, float msToDisplay, int pxl )
+{
+   const float msPerPxl = msToDisplay / windowWidth;
+   return msPerPxl * pxl;
+}
+
+void vdbg::ProfilerTimeline::draw()
+{
+   constexpr float minStepSize = 0.01f;
+   constexpr uint32_t minStepCount = 20;
+   constexpr uint32_t maxStepCount = 140;
+
+   const auto cursBackup = ImGui::GetCursorScreenPos();
+   const float windowWidthPxl = ImGui::GetWindowWidth()-32;
+
+   const float prevMillis = _millisToDisplay;
+   if( ImGui::SliderFloat("slider log float", &_millisToDisplay, 0.1, 100000.0f, "%.4f", 1.5f) )
+   {
+      const float msToZoom = 6.0 - _startMillis;
+      const float prevPxlPos = msToPxl( windowWidthPxl, prevMillis, msToZoom );
+      const float newPxlPos = msToPxl( windowWidthPxl, _millisToDisplay, msToZoom );
+
+      const float pxlDiff = newPxlPos - prevPxlPos;
+      if( ! EQUALS(pxlDiff, 0.0f) )
+      {
+         const float timeDiff = pxlToMs( windowWidthPxl, _millisToDisplay, pxlDiff );
+         printf("%f pxlDiff = %f from %f - %f\n", timeDiff, pxlDiff, newPxlPos, prevPxlPos );
+         _startMillis += timeDiff;
+      }
+   }
+
+   ImGui::SliderFloat("Start millis", &_startMillis, -100.0, 100000.0f, "%.1f" );
+
+   const float stepsCount = [this, minStepSize]()
+   {
+      float stepsCount = _millisToDisplay / _stepSizeInMillis;
+      while( stepsCount > maxStepCount || (stepsCount < minStepCount && _stepSizeInMillis > minStepSize) )
+      {
+        if( stepsCount > maxStepCount )
+        {
+           if( _stepSizeInMillis == minStepSize ) { _stepSizeInMillis = 0.008f; }
+           _stepSizeInMillis *= 5.0f;
+        }
+        else if( stepsCount < minStepCount )
+        {
+           _stepSizeInMillis /= 5.0f;
+           _stepSizeInMillis = std::max( _stepSizeInMillis, minStepSize );
+        }
+        stepsCount = _millisToDisplay / _stepSizeInMillis;
+      }
+      return stepsCount;
+   }();
+
+   // Start drawing the lines on the timeline
+   constexpr float smallLineLength = 10.0f;
+   constexpr float deltaBigLineLength = 12.0f; // The diff between the small line and big one
+   constexpr float deltaMidLineLength = 7.0f; // The diff between the small line and mid one
+   ImDrawList* DrawList = ImGui::GetWindowDrawList();
+
+   const float stepSizePxl = msToPxl( windowWidthPxl, _millisToDisplay, _stepSizeInMillis );
+   const float stepsDone = _startMillis / _stepSizeInMillis;
+   const double remainder = fmod( (double)_startMillis, (double)_stepSizeInMillis );
+   float remainderPxl = 0.0f;
+   if( !EQUALS( remainder, 0.0f ) && !EQUALS( remainder, _stepSizeInMillis ) )
+   {
+      remainderPxl = msToPxl( windowWidthPxl, _millisToDisplay, remainder );
+   }
+
+   // Start drawing one step before the start position to account for partial steps
+   ImVec2 top = ImGui::GetCursorScreenPos();
+   top.x -= (stepSizePxl + remainderPxl) - stepSizePxl ;
+   ImVec2 bottom = top;
+   bottom.y += smallLineLength;
+
+   int count = stepsDone;
+   std::vector< std::pair< ImVec2, double > > textPos;
+   for( double i = top.x; i < (windowWidthPxl + stepSizePxl); i += stepSizePxl, ++count )
+   {
+      // Draw biggest begin/end lines
+      auto test = fmod( stepsDone, _stepSizeInMillis );
+      (void)test;
+      if( count % 10 == 0 )
+      {
+         auto startEndLine = bottom;
+         startEndLine.y += deltaBigLineLength;
+         DrawList->AddLine( top, startEndLine, ImGui::GetColorU32( ImGuiCol_TextDisabled ), 2.0f );
+         textPos.emplace_back( startEndLine, count * _stepSizeInMillis );
+      }
+      // Draw midline
+      else if( count % 5 == 0 )
+      {
+          auto midLine = bottom;
+          midLine.y += deltaMidLineLength;
+          DrawList->AddLine( top, midLine, ImGui::GetColorU32( ImGuiCol_TextDisabled ), 1.5f );
+      }
+      else
+      {
+        DrawList->AddLine( top, bottom, ImGui::GetColorU32( ImGuiCol_TextDisabled ), 1.0f ); 
+      }
+
+      top.x += stepSizePxl;
+      bottom.x += stepSizePxl;
+   }
+
+   const float total = stepsCount * _stepSizeInMillis;
+   if( total < 1.0f )
+   {
+        // print as microsecs
+       for( const auto& pos : textPos )
+       {
+          ImGui::SetCursorScreenPos( pos.first );
+          ImGui::Text( "%d us", (int)(pos.second / 1000) );
+       }
+   }
+   else if( total < 1000.0f )
+   {
+    // print as milliseconds
+     for( const auto& pos : textPos )
+     {
+        ImGui::SetCursorScreenPos( pos.first );
+        ImGui::Text( "%.3f ms", pos.second );
+     }
+   }
+   else if( total < 1000000.0f )
+   {
+       // print as seconds
+     for( const auto& pos : textPos )
+     {
+        ImGui::SetCursorScreenPos( pos.first );
+        ImGui::Text( "%.3f s", (pos.second / 1000) );
+     }
+   }
+
+   auto tmpBkcup = cursBackup;
+   tmpBkcup.y += 80;
+   ImGui::SetCursorScreenPos( tmpBkcup );
 }

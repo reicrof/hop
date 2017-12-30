@@ -11,31 +11,41 @@
 
 namespace vdbg
 {
-   struct DisplayableTrace
-   {
-      double time;
-      float deltaTime;
-      uint32_t flags;
-      char name[64];
-   };
-   struct DisplayableTraceFrame
-   {
-      uint32_t threadId;
-      std::vector< DisplayableTrace > traces;
-   };
-    struct ThreadTraces
-    {
-       void draw();
-       void addTraces( const vdbg::DisplayableTraceFrame& traces );
+struct DisplayableTrace
+{
+   double time;
+   float deltaTime;
+   uint32_t flags;
+   char name[64];
+};
+struct DisplayableTraceFrame
+{
+   uint32_t threadId;
+   std::vector<DisplayableTrace> traces;
+};
 
-       std::vector< vdbg::DisplayableTraceFrame > _dispTraces;
-       int _frameToShow{0};
-       float _maxFrameTime{0.1f};
-       float _allTimeMaxFrameTime{0.1f};
-       size_t _frameCountToShow{50};
-       bool _recording{false};
-       bool _realTime{true};
-    };
+struct ProfilerTimeline
+{
+   void draw();
+   float _startMillis{3.0f};
+   float _millisToDisplay{5.0f};
+   float _stepSizeInMillis{1.0f};
+};
+
+struct ThreadTraces
+{
+   void draw();
+   void addTraces( const vdbg::DisplayableTraceFrame& traces );
+
+   ProfilerTimeline _timeline;
+   std::vector<vdbg::DisplayableTraceFrame> _dispTraces;
+   int _frameToShow{0};
+   float _maxFrameTime{0.1f};
+   float _allTimeMaxFrameTime{0.1f};
+   size_t _frameCountToShow{50};
+   bool _recording{false};
+   bool _realTime{true};
+};
 }
 
 namespace imdbg
