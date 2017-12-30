@@ -27,9 +27,9 @@ struct DisplayableTraceFrame
 struct ProfilerTimeline
 {
    void draw();
-   float _startMillis{3.0f};
-   float _millisToDisplay{5.0f};
-   float _stepSizeInMillis{1.0f};
+   int _startMicros{3000};
+   int _microsToDisplay{5000};
+   int64_t _stepSizeInMicros{1000};
 };
 
 struct ThreadTraces
