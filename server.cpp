@@ -157,7 +157,7 @@ bool Server::handleNewMessage( int clientId, vdbg::MsgType type, uint32_t /*size
          for( const auto& t : traces )
          {
             // TODO: hack! needs to taking into account the precision specified in message.h
-            const float difference = (t.end - t.start) * 0.000001;
+            const float difference = (t.end - t.start) * 0.001;
             const double start =static_cast<double>(t.start);
             const double end = static_cast<double>(t.end);
             traceFrame.traces.push_back( DisplayableTrace{ start, difference, 1, 0 } );

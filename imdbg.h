@@ -13,8 +13,8 @@ namespace vdbg
 {
 struct DisplayableTrace
 {
-   double time;
-   float deltaTime;
+   double time; // in ns
+   float deltaTime; // in us
    uint32_t flags;
    char name[64];
 };
@@ -26,7 +26,10 @@ struct DisplayableTraceFrame
 
 struct ProfilerTimeline
 {
-   void draw();
+   void drawTimeline();
+   void drawTraces( const std::vector<DisplayableTraceFrame>& traces );
+   void handleMouseWheel( const ImVec2& mousePosInCanvas );
+   void zoomOn( int64_t microToZoomOn, float zoomFactor );
    int _startMicros{3000};
    int _microsToDisplay{5000};
    int64_t _stepSizeInMicros{1000};
@@ -36,7 +39,6 @@ struct ThreadTraces
 {
    void draw();
    void addTraces( const vdbg::DisplayableTraceFrame& traces );
-
    ProfilerTimeline _timeline;
    std::vector<vdbg::DisplayableTraceFrame> _dispTraces;
    int _frameToShow{0};

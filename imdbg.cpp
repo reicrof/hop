@@ -216,17 +216,20 @@ void onNewFrame( int width, int height, int mouseX, int mouseY, bool lmbPressed,
 
 void draw()
 {
-   //static const auto preDrawTime = std::chrono::system_clock::now();
+   static double lastTime = 0.0;
+
+   const auto preDrawTime = std::chrono::system_clock::now();
    for ( auto& p : _profilers )
    {
       p.draw();
    }
 
+   ImGui::Text( "Drawing took %f ms", lastTime );
+
    ImGui::Render();
 
-   //static const auto postDrawTime = std::chrono::system_clock::now();
-   //size_t milis = std::chrono::duration_cast<std::chrono::milliseconds>( ( postDrawTime - preDrawTime ) ).count();
-   //printf( "immediate gui draw took : %zu\n", milis );
+   const auto postDrawTime = std::chrono::system_clock::now();
+   lastTime = std::chrono::duration< double, std::milli>( ( postDrawTime - preDrawTime ) ).count();
 }
 
 void init()
@@ -369,7 +372,7 @@ static bool drawDispTrace( const vdbg::DisplayableTraceFrame& frame, size_t& i )
    const auto& trace = frame.traces[i];
    if( !trace.flags ) return false;
 
-   bool isOpen = ImGui::TreeNode( trace.name, "%s :    %f ms", trace.name, trace.deltaTime );
+   bool isOpen = ImGui::TreeNode( trace.name, "%s :    %f us", trace.name, trace.deltaTime );
    if( isOpen )
    {
       ++i;
@@ -486,9 +489,17 @@ void vdbg::ThreadTraces::draw()
       }
    }
 
-   _timeline.draw();
+   {
+      ImGui::BeginGroup();
+      const auto canvasPos = ImGui::GetCursorScreenPos();
+      _timeline.drawTimeline();
+      _timeline.drawTraces( _dispTraces );
+      ImVec2 mousePosInCanvas = ImVec2(ImGui::GetIO().MousePos.x - canvasPos.x, ImGui::GetIO().MousePos.y - canvasPos.y);
+      ImGui::EndGroup();
+      _timeline.handleMouseWheel( mousePosInCanvas );
+   }
 
-   ImGui::Button("Test", ImVec2(50, 20));
+   ImGui::InvisibleButton("padding", ImVec2( 20, 40 ) );
 
    if( ImGui::DragFloat( "Max value", &_maxFrameTime, 0.005f ) )
       _allTimeMaxFrameTime = -1.0f;
@@ -532,31 +543,14 @@ static inline int64_t pxlToMicros( float windowWidth, int64_t usToDisplay, int64
    return usPerPxl * pxl;
 }
 
-void vdbg::ProfilerTimeline::draw()
+void vdbg::ProfilerTimeline::drawTimeline()
 {
    constexpr int64_t minStepSize = 10;
    constexpr int64_t minStepCount = 20;
    constexpr int64_t maxStepCount = 140;
 
-   const auto cursBackup = ImGui::GetCursorScreenPos();
-   const float windowWidthPxl = ImGui::GetWindowWidth()-32;
-
-   const int64_t prevMicros = _microsToDisplay;
-   if( ImGui::SliderInt("Zoom", &_microsToDisplay, 10, 100000 ) )
-   {
-      const size_t microToZoom = 6000 - _startMicros;
-      const int64_t prevPxlPos = microsToPxl( windowWidthPxl, prevMicros, microToZoom );
-      const int64_t newPxlPos = microsToPxl( windowWidthPxl, _microsToDisplay, microToZoom );
-
-      const int64_t pxlDiff = newPxlPos - prevPxlPos;
-      if( pxlDiff != 0 )
-      {
-         const int64_t timeDiff = pxlToMicros( windowWidthPxl, _microsToDisplay, pxlDiff );
-         _startMicros += timeDiff;
-      }
-   }
-
-   ImGui::SliderInt("Start micro", &_startMicros, -1000, 100000 );
+   const auto canvasPos = ImGui::GetCursorScreenPos();
+   const float windowWidthPxl = ImGui::GetWindowWidth();
 
    const size_t stepsCount = [this, minStepSize]()
    {
@@ -599,7 +593,7 @@ void vdbg::ProfilerTimeline::draw()
 
    int count = stepsDone;
    std::vector< std::pair< ImVec2, double > > textPos;
-   for( double i = top.x; i < (windowWidthPxl + stepSizePxl); i += stepSizePxl, ++count )
+   for( double i = top.x; i < (windowWidthPxl + (2 * stepSizePxl) ); i += stepSizePxl, ++count )
    {
       // Draw biggest begin/end lines
       if( count % 10 == 0 )
@@ -654,7 +648,163 @@ void vdbg::ProfilerTimeline::draw()
      }
    }
 
-   auto tmpBkcup = cursBackup;
+   auto tmpBkcup = canvasPos;
    tmpBkcup.y += 80;
    ImGui::SetCursorScreenPos( tmpBkcup );
+}
+
+void vdbg::ProfilerTimeline::handleMouseWheel( const ImVec2& mousePosInCanvas )
+{
+   if ( ImGui::IsItemHovered() )
+   {
+      const float windowWidthPxl = ImGui::GetWindowWidth();
+      ImGuiIO& io = ImGui::GetIO();
+      if ( io.MouseWheel > 0 )
+      {
+         if ( io.KeyCtrl )
+         {
+            zoomOn( pxlToMicros( windowWidthPxl, _microsToDisplay, mousePosInCanvas.x ) + _startMicros, 0.9f );
+         }
+         else
+         {
+             _startMicros += 0.05f * _microsToDisplay;
+         }
+      }
+      else if ( io.MouseWheel < 0 )
+      {
+         if ( io.KeyCtrl )
+         {
+            zoomOn( pxlToMicros( windowWidthPxl, _microsToDisplay, mousePosInCanvas.x ) + _startMicros , 1.1f );
+         }
+         else
+         {
+            _startMicros -= 0.05f * _microsToDisplay;
+         }
+      }
+   }
+}
+
+void vdbg::ProfilerTimeline::zoomOn( int64_t microToZoomOn, float zoomFactor )
+{
+   const float windowWidthPxl = ImGui::GetWindowWidth();
+   const size_t microToZoom = microToZoomOn - _startMicros;
+   const auto prevMicrosToDisplay = _microsToDisplay;
+   _microsToDisplay *= zoomFactor;
+
+   const int64_t prevPxlPos = microsToPxl( windowWidthPxl, prevMicrosToDisplay, microToZoom );
+   const int64_t newPxlPos = microsToPxl( windowWidthPxl, _microsToDisplay, microToZoom );
+
+   const int64_t pxlDiff = newPxlPos - prevPxlPos;
+   if ( pxlDiff != 0 )
+   {
+      const int64_t timeDiff = pxlToMicros( windowWidthPxl, _microsToDisplay, pxlDiff );
+      _startMicros += timeDiff;
+   }
+}
+
+void vdbg::ProfilerTimeline::drawTraces( const std::vector<DisplayableTraceFrame>& frames )
+{
+   size_t relativeStart = 0;
+   if( !frames.empty() )
+   {
+      relativeStart = frames[0].traces[0].time;
+   }
+
+   const float windowWidthPxl = ImGui::GetWindowWidth();
+   const auto canvasPos = ImGui::GetCursorScreenPos();
+   const auto startMicrosAsPxl = microsToPxl( windowWidthPxl, _microsToDisplay, _startMicros );
+
+   std::vector< ImVec2 > pos;
+   std::vector< uint32_t > length;
+   std::vector< const char* > names;
+   int curLevel = -1;
+   int maxLevel = -1;
+   for( const auto& f: frames )
+   {
+      for( const auto& t : f.traces )
+      {
+         if( t.flags )
+         {
+            ++curLevel;
+            maxLevel = std::max( curLevel, maxLevel );
+            const int64_t traceStartInMicros = ((t.time - relativeStart) / 1000.0f) + 0.5f;
+            auto traceStartPxl = microsToPxl( windowWidthPxl, _microsToDisplay, traceStartInMicros );
+            auto traceLengthPxl = std::max( microsToPxl( windowWidthPxl, _microsToDisplay, t.deltaTime ), 1L);
+
+            auto tracePos = canvasPos;
+            tracePos.x -= startMicrosAsPxl;
+            tracePos.x += traceStartPxl;
+            tracePos.y += curLevel * 22.0f;
+
+            pos.push_back( tracePos );
+            length.push_back( traceLengthPxl );
+            names.push_back( &t.name[0] );
+         }
+         else
+         {
+            --curLevel;
+         }
+      }
+   }
+
+   for( size_t i = 0; i < pos.size(); ++i )
+   {
+      ImGui::SetCursorScreenPos( pos[i] );
+      ImGui::Button( names[i], ImVec2(length[i],20) );
+   }
+
+   auto newPos = canvasPos;
+   newPos.y += maxLevel * 22.0f;
+   ImGui::SetCursorScreenPos( newPos );
+
+   // //debug only
+   // bool startFound = true, endFound = true;
+
+   // const size_t startTime = (_startMicros + relativeStart);
+   // size_t startFrame = 0, startTrace = 0;
+   // for( size_t frame = 0; frame < traces.size(); ++frame )
+   // {
+   //    startFound = false;
+   //    // Only search inside this frame if the last trace is after
+   //    // the start time
+   //    if( traces[frame].traces.back().time >= startTime )
+   //    {
+   //       startFrame = frame;
+   //       for( size_t traceIdx = 0; traceIdx < traces[frame].traces.size() - 1; ++ traceIdx )
+   //       {
+   //          if( traces[frame].traces[traceIdx + 1].time >= startTime )
+   //          {
+   //             startTrace = traceIdx;
+   //             startFound = true;
+   //             break;
+   //          }
+   //       }
+   //    }
+   //    if( startFound ) break;
+   // }
+
+   // const size_t endTime = startTime + _microsToDisplay;
+   // size_t endFrame = traces.size(), endTrace = 0;
+   // for( size_t frame = startFrame; frame < traces.size(); ++frame )
+   // {
+   //    endFound = false;
+   //    // Only search inside this frame if the last trace is before
+   //    // the start time
+   //    if( traces[frame].traces.back().time >= endTime )
+   //    {
+   //       endFrame = frame;
+   //       for( size_t traceIdx = 0; traceIdx < traces[frame].traces.size(); ++traceIdx )
+   //       {
+   //          if( traces[frame].traces[traceIdx].time >= startTime )
+   //          {
+   //             endTrace = traceIdx;
+   //             endFound = true;
+   //             break;
+   //          }
+   //       }
+   //    }
+   //    if( endFound ) break;
+   // }
+
+   // assert( startFound && endFound );
 }
