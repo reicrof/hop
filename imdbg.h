@@ -11,83 +11,54 @@
 
 namespace vdbg
 {
+
 struct DisplayableTrace
 {
    double time; // in ns
    float deltaTime; // in us
    uint32_t flags;
-   char name[64];
-};
-struct DisplayableTraceFrame
-{
-   uint32_t threadId;
-   std::vector<DisplayableTrace> traces;
+   // Indexes of the name in the string database
+   uint32_t classNameIndex;
+   uint32_t fctNameIndex;
 };
 
 struct ProfilerTimeline
 {
    void drawTimeline();
-   void drawTraces( const std::vector<DisplayableTraceFrame>& traces );
+   void drawTraces( const std::vector<DisplayableTrace>& traces, const std::vector< char >& strData );
    void handleMouseWheel( const ImVec2& mousePosInCanvas );
+   void moveToTime( int64_t timeInMicro );
    void zoomOn( int64_t microToZoomOn, float zoomFactor );
    int _startMicros{3000};
    int _microsToDisplay{5000};
    int64_t _stepSizeInMicros{1000};
 };
 
-struct ThreadTraces
+struct Profiler
 {
+   Profiler( const std::string& name );
    void draw();
-   void addTraces( const vdbg::DisplayableTraceFrame& traces );
+   void addTraces( const std::vector< DisplayableTrace >& traces, uint32_t threadId );
+   void setStringData( const std::vector< char >& stringData );
+
+   std::string _name;
    ProfilerTimeline _timeline;
-   std::vector<vdbg::DisplayableTraceFrame> _dispTraces;
-   int _frameToShow{0};
-   float _maxFrameTime{0.1f};
-   float _allTimeMaxFrameTime{0.1f};
-   size_t _frameCountToShow{50};
-   bool _recording{false};
-   bool _realTime{true};
+   std::vector< uint32_t > _threadsId;
+   std::vector< std::vector< DisplayableTrace > > _tracesPerThread;
+   std::vector< char > _stringData;
+   bool _recording{ false };
+   bool _realtime{ true };
 };
-}
 
-namespace imdbg
-{
-    // Initialize the imgui framework
-    void init();
-    // Updates the imgui data. Should be called each frame
-    void onNewFrame( int width, int height, int mouseX, int mouseY, bool lmbPressed, bool rmbPressed, float mouseWheel );
-    // Draw the ui
-    void draw();
+// Initialize the imgui framework
+void init();
+// Add new profiler to be drawn
+void addNewProfiler( Profiler* profiler );
+// Updates the imgui data. Should be called each frame
+void onNewFrame( int width, int height, int mouseX, int mouseY, bool lmbPressed, bool rmbPressed, float mouseWheel );
+// Draw the ui
+void draw();
 
-    // New profiler window
-    class Profiler
-    {
-    public:
-       Profiler( Profiler&& ) = default;
-       Profiler( const Profiler& ) = delete;
-       Profiler& operator=( const Profiler& ) = delete;
-       Profiler& operator=( Profiler&& ) = delete;
-
-       void draw();
-       void pushTrace( const char* traceName );
-       void popTrace();
-
-       void addTraces( const vdbg::DisplayableTraceFrame& traces );
-
-
-      private:
-       friend Profiler* newProfiler(const std::string& name );
-       Profiler(const std::string& name );
-
-       std::string _name;
-
-       bool _recording{true};
-       std::vector< uint32_t > _threadsId;
-       std::vector< vdbg::ThreadTraces > _tracesPerThread;
-    };
-
-    // Returns a non-owning pointer of a new profiler.
-    Profiler* newProfiler( const std::string& name );
-}
+} // namespace vdbg
 
 #endif  // IMDBG_H_

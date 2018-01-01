@@ -14,13 +14,13 @@
 #include <algorithm>
 #include <stdio.h>
 
-static void saveAsJson( const char* path, const vdbg::DisplayableTraceFrame& frame );
+//static void saveAsJson( const char* path, const vdbg::DisplayableTrace& frame );
 
 namespace
 {
 static std::chrono::time_point<std::chrono::system_clock> g_Time = std::chrono::system_clock::now();
 static GLuint g_FontTexture = 0;
-std::vector<imdbg::Profiler> _profilers;
+std::vector<vdbg::Profiler*> _profilers;
 
 // This is the main rendering function that you have to implement and provide to ImGui (via setting
 // up 'RenderDrawListsFn' in the ImGuiIO structure)
@@ -166,24 +166,9 @@ void createResources()
    glBindTexture( GL_TEXTURE_2D, last_texture );
 }
 
-// bool ShowHelpMarker(const char* desc)
-// {
-//     ImGui::TextDisabled("(?)");
-//     if (ImGui::IsItemHovered())
-//     {
-//         ImGui::BeginTooltip();
-//         ImGui::PushTextWrapPos(450.0f);
-//         ImGui::TextUnformatted(desc);
-//         ImGui::PopTextWrapPos();
-//         ImGui::EndTooltip();
-//     }
-
-//     return true;
-// }
-
 } // end of anonymous namespace
 
-namespace imdbg
+namespace vdbg
 {
 
 void onNewFrame( int width, int height, int mouseX, int mouseY, bool lmbPressed, bool rmbPressed, float mousewheel )
@@ -219,9 +204,9 @@ void draw()
    static double lastTime = 0.0;
 
    const auto preDrawTime = std::chrono::system_clock::now();
-   for ( auto& p : _profilers )
+   for ( auto p : _profilers )
    {
-      p.draw();
+      p->draw();
    }
 
    ImGui::Text( "Drawing took %f ms", lastTime );
@@ -247,75 +232,77 @@ void init()
    // glfwSetScrollCallback(window, ImGui_ImplGlfw_ScrollCallback);
 }
 
-imdbg::Profiler* newProfiler( const std::string& name )
+void addNewProfiler( Profiler* profiler )
 {
-   static bool first = true;
-   if( first )
-   {
-      _profilers.reserve( 128 );
-      first = false;
-   }
-   imdbg::Profiler prof(name);
-   _profilers.emplace_back( std::move( prof ) );
-   return &_profilers.back();
+   _profilers.push_back( profiler );
 }
 
 Profiler::Profiler( const std::string& name ) : _name( name )
 {
 }
 
-void Profiler::draw()
-{
-   ImGui::SetNextWindowSize(ImVec2(700,500), ImGuiSetCond_FirstUseEver);
-   if ( !ImGui::Begin( _name.c_str() ) )
-   {
-      // Early out
-      ImGui::End();
-      return;
-   }
+// void Profiler::draw()
+// {
+//    ImGui::SetNextWindowSize(ImVec2(700,500), ImGuiSetCond_FirstUseEver);
+//    if ( !ImGui::Begin( _name.c_str() ) )
+//    {
+//       // Early out
+//       ImGui::End();
+//       return;
+//    }
 
-   for( size_t i = 0; i < _threadsId.size(); ++i )
-   {
-      std::string headerName( "Thread " + std::to_string( _threadsId[i] ) );
-      if( ImGui::CollapsingHeader( headerName.c_str() ) )
-      {
-         auto& threadTrace = _tracesPerThread[i];
-         ImGui::PushID( &threadTrace );
-         threadTrace.draw();
-         ImGui::PopID();
-         ImGui::Spacing();
-         ImGui::Spacing();
-         ImGui::Spacing();
-      }
-   }
+//    for( size_t i = 0; i < _threadsId.size(); ++i )
+//    {
+//       std::string headerName( "Thread " + std::to_string( _threadsId[i] ) );
+//       if( ImGui::CollapsingHeader( headerName.c_str() ) )
+//       {
+//          auto& threadTrace = _tracesPerThread[i];
+//          ImGui::PushID( &threadTrace );
+//          //threadTrace.draw();
+//          ImGui::PopID();
+//          ImGui::Spacing();
+//          ImGui::Spacing();
+//          ImGui::Spacing();
+//       }
+//    }
 
-   ImGui::End();
-}
+//    ImGui::End();
+// }
 
-void Profiler::addTraces( const vdbg::DisplayableTraceFrame& traces )
+void Profiler::addTraces( const std::vector< DisplayableTrace >& traces, uint32_t threadId )
 {
    if( _recording )
    {
       size_t i = 0;
       for( ; i < _threadsId.size(); ++i )
       {
-         if( _threadsId[i] == traces.threadId ) break;
+         if( _threadsId[i] == threadId ) break;
       }
       
-      if( i < _threadsId.size() )
+      // Thread id not found so add it
+      if( i == _threadsId.size() )
       {
-         _tracesPerThread[i].addTraces( traces );
+         _threadsId.push_back( threadId );
+         _tracesPerThread.emplace_back();
       }
-      else
-      {
-         _threadsId.push_back( traces.threadId );
-         _tracesPerThread.emplace_back( vdbg::ThreadTraces{});
-         _tracesPerThread.back().addTraces( traces );
-      }
+
+      _tracesPerThread[i].insert( _tracesPerThread[i].end(), traces.begin(), traces.end() );
    }
 }
 
-} // end of namespace imdbg
+void Profiler::setStringData( const std::vector<char>& strData )
+{
+   if( _recording )
+   {
+      auto newStrBegin = strData.begin();
+      std::advance( newStrBegin, _stringData.size() );
+      _stringData.insert( _stringData.end(), newStrBegin, strData.end() );
+
+      assert( _stringData == strData );
+   }
+}
+
+} // end of namespace vdbg
 
 #include <rapidjson/document.h>
 #include <rapidjson/writer.h>
@@ -323,177 +310,182 @@ void Profiler::addTraces( const vdbg::DisplayableTraceFrame& traces )
 #include <rapidjson/stringbuffer.h>
 #include <fstream>
 
-static void saveAsJson( const char* path, const vdbg::DisplayableTraceFrame& frame )
-{
-   using namespace rapidjson;
+// static void saveAsJson( const char* path, const vdbg::DisplayableTraceFrame& frame )
+// {
+//    using namespace rapidjson;
 
-   StringBuffer s;
-   PrettyWriter<StringBuffer> writer(s);
-   printf( "Should save as json\n" );
-   writer.StartObject();
-   writer.Key("traceEvents");
-   writer.StartArray();
-   const auto& traces = frame.traces;
-   const uint32_t threadId = frame.threadId;
-   for( const auto& t : traces )
-   {
-      writer.StartObject();
-      writer.Key("ts");
-      writer.Double( (double)t.time );
-      writer.Key("ph");
-      writer.String( t.flags ? "B" : "E" );
-      writer.Key("pid");
-      writer.Uint(threadId);
-      writer.Key("name");
-      writer.String( t.name );
-      writer.EndObject();
-   }
-   writer.EndArray();
-   writer.Key("displayTimeUnit");
-   writer.String("ms");
-   writer.EndObject();
+//    StringBuffer s;
+//    PrettyWriter<StringBuffer> writer(s);
+//    printf( "Should save as json\n" );
+//    writer.StartObject();
+//    writer.Key("traceEvents");
+//    writer.StartArray();
+//    const auto& traces = frame.traces;
+//    const uint32_t threadId = frame.threadId;
+//    for( const auto& t : traces )
+//    {
+//       writer.StartObject();
+//       writer.Key("ts");
+//       writer.Double( (double)t.time );
+//       writer.Key("ph");
+//       writer.String( t.flags ? "B" : "E" );
+//       writer.Key("pid");
+//       writer.Uint(threadId);
+//       //writer.Key("name");
+//       //writer.String( t.name );
+//       assert( false && "should create name array here" );
+//       writer.EndObject();
+//    }
+//    writer.EndArray();
+//    writer.Key("displayTimeUnit");
+//    writer.String("ms");
+//    writer.EndObject();
 
-   std::ofstream of(path);
-   of << s.GetString();
+//    std::ofstream of(path);
+//    of << s.GetString();
 
-}
+// }
 
-void vdbg::ThreadTraces::addTraces(const vdbg::DisplayableTraceFrame& traces )
-{
-   if( _recording )
-   {
-      _dispTraces.emplace_back( traces );
-   }
-}
+// static bool drawDispTrace( const vdbg::DisplayableTraceFrame& frame, size_t& i )
+// {
+//    const auto& trace = frame.traces[i];
+//    if( !trace.flags ) return false;
 
+//    bool isOpen = false;
+//    // bool isOpen = trace.classNameIndex
+//    //                   ? ImGui::TreeNode( trace.classNameIndex, "%s::%s :    %f us", 0trace.name, trace.deltaTime )
+//    //                   : ImGui::TreeNode( trace.fctNameIndex, "%s :    %f us", trace.name, trace.deltaTime );
 
-static bool drawDispTrace( const vdbg::DisplayableTraceFrame& frame, size_t& i )
-{
-   const auto& trace = frame.traces[i];
-   if( !trace.flags ) return false;
+//    if( isOpen )
+//    {
+//       ++i;
+//       while( frame.traces[i].flags )
+//       {
+//          drawDispTrace( frame, i );
+//       }
+//       ImGui::TreePop();
+//       ++i;
+//    }
+//    else
+//    {
+//       int lvl = 0;
+//       for ( size_t j = i + 1; j < frame.traces.size(); ++j )
+//       {
+//          if ( frame.traces[j].flags )
+//          {
+//             ++lvl;
+//          }
+//          else
+//          {
+//             --lvl;
+//             if ( lvl < 0 )
+//             {
+//                i = std::min( ++j, frame.traces.size()-1);
+//                break;
+//             }
+//          }
+//       }
+//       assert( i < frame.traces.size() );
+//    }
+//    return isOpen;
+// }
 
-   bool isOpen = ImGui::TreeNode( trace.name, "%s :    %f us", trace.name, trace.deltaTime );
-   if( isOpen )
-   {
-      ++i;
-      while( frame.traces[i].flags )
-      {
-         drawDispTrace( frame, i );
-      }
-      ImGui::TreePop();
-      ++i;
-   }
-   else
-   {
-      int lvl = 0;
-      for ( size_t j = i + 1; j < frame.traces.size(); ++j )
-      {
-         if ( frame.traces[j].flags )
-         {
-            ++lvl;
-         }
-         else
-         {
-            --lvl;
-            if ( lvl < 0 )
-            {
-               i = std::min( ++j, frame.traces.size()-1);
-               break;
-            }
-         }
-      }
-      assert( i < frame.traces.size() );
-   }
-   return isOpen;
-}
-
-void vdbg::ThreadTraces::draw()
+void vdbg::Profiler::draw()
 {
    ImGui::Checkbox( "Listening", &_recording );
    ImGui::SameLine();
-   ImGui::Checkbox( "Live", &_realTime );
+   ImGui::Checkbox( "Live", &_realtime );
 
-   if ( _realTime && _recording )
-   {
-      _frameToShow = std::max( ( (int)_dispTraces.size() ) - 1, 0 );
-   }
+   // if ( _realTime && _recording )
+   // {
+   //    _frameToShow = std::max( ( (int)_dispTraces.size() ) - 1, 0 );
+   // }
 
-   ImGui::SliderInt( "Frame to show", &_frameToShow, 0, _dispTraces.size() - 1 );
+   //ImGui::SliderInt( "Frame to show", &_frameToShow, 0, _dispTraces.size() - 1 );
 
-   std::vector<float> values( _frameCountToShow, 0.0f );
-   if ( !_dispTraces.empty() )
-   {
-      int startFrame = std::max( (int)_frameToShow - (int)( _frameCountToShow - 1 ), 0 );
-      int count = 0;
-      for ( int i = startFrame + 1; i <= (int)_frameToShow; ++i, ++count )
-      {
-         values[count] = _dispTraces[i].traces.front().deltaTime;
-      }
-   }
+   // std::vector<float> values( _frameCountToShow, 0.0f );
+   // if ( !_dispTraces.empty() )
+   // {
+   //    int startFrame = std::max( (int)_frameToShow - (int)( _frameCountToShow - 1 ), 0 );
+   //    int count = 0;
+   //    for ( int i = startFrame + 1; i <= (int)_frameToShow; ++i, ++count )
+   //    {
+   //       values[count] = _dispTraces[i].traces.front().deltaTime;
+   //    }
+   // }
 
    // int offset = _frameCountToShow;
    // if( offset > (int)values.size() )
    //    offset = 0;
-   float maxFrameTime = _maxFrameTime;
-   if( _allTimeMaxFrameTime >= 0.0f )
-   {
-      _allTimeMaxFrameTime =
-          std::max( *std::max_element( values.begin(), values.end() ), _allTimeMaxFrameTime );
-      maxFrameTime = _maxFrameTime = _allTimeMaxFrameTime;
-   }
+   // float maxFrameTime = _maxFrameTime;
+   // if( _allTimeMaxFrameTime >= 0.0f )
+   // {
+   //    _allTimeMaxFrameTime =
+   //        std::max( *std::max_element( values.begin(), values.end() ), _allTimeMaxFrameTime );
+   //    maxFrameTime = _maxFrameTime = _allTimeMaxFrameTime;
+   // }
 
-   int pickedFrame = ImGui::PlotHistogram(
-       "",
-       values.data(),
-       values.size(),
-       values.size() - 1,
-       "Frames (ms)",
-       0.001f,
-       maxFrameTime * 1.05f,
-       ImVec2{0, 100},
-       sizeof( float ),
-       values.size() - 1 );
+   // int pickedFrame = ImGui::PlotHistogram(
+   //     "",
+   //     values.data(),
+   //     values.size(),
+   //     values.size() - 1,
+   //     "Frames (ms)",
+   //     0.001f,
+   //     maxFrameTime * 1.05f,
+   //     ImVec2{0, 100},
+   //     sizeof( float ),
+   //     values.size() - 1 );
 
-   if ( pickedFrame != -1 )
-   {
-      _frameToShow -= ( _frameCountToShow - ( pickedFrame + 1 ) );
-   }
+   // if ( pickedFrame != -1 )
+   // {
+   //    _frameToShow -= ( _frameCountToShow - ( pickedFrame + 1 ) );
+   // }
 
    // Handle mousewheel
-   if ( ImGui::IsItemHovered() )
-   {
-      ImGuiIO& io = ImGui::GetIO();
-      if ( io.MouseWheel > 0 )
-      {
-         if ( io.KeyCtrl )
-         {
-            _maxFrameTime *= 0.95f;
-            _allTimeMaxFrameTime = -1.0f;
-         }
-         else
-         {
-            if ( _frameCountToShow > 6 ) _frameCountToShow -= 2;
-         }
-      }
-      else if ( io.MouseWheel < 0 )
-      {
-         if ( io.KeyCtrl )
-         {
-            _maxFrameTime *= 1.05f;
-            _allTimeMaxFrameTime = -1.0f;
-         }
-         else
-         {
-            if ( _frameCountToShow < _dispTraces.size() - 3 ) _frameCountToShow += 2;
-         }
-      }
-   }
+   // if ( ImGui::IsItemHovered() )
+   // {
+   //    ImGuiIO& io = ImGui::GetIO();
+   //    if ( io.MouseWheel > 0 )
+   //    {
+   //       if ( io.KeyCtrl )
+   //       {
+   //          _maxFrameTime *= 0.95f;
+   //          _allTimeMaxFrameTime = -1.0f;
+   //       }
+   //       else
+   //       {
+   //          if ( _frameCountToShow > 6 ) _frameCountToShow -= 2;
+   //       }
+   //    }
+   //    else if ( io.MouseWheel < 0 )
+   //    {
+   //       if ( io.KeyCtrl )
+   //       {
+   //          _maxFrameTime *= 1.05f;
+   //          _allTimeMaxFrameTime = -1.0f;
+   //       }
+   //       else
+   //       {
+   //          if ( _frameCountToShow < _dispTraces.size() - 3 ) _frameCountToShow += 2;
+   //       }
+   //    }
+   // }
 
    {
+      if( _realtime && _recording && !_tracesPerThread.empty() )
+      {
+         const auto relativeStart = _tracesPerThread[0].front().time;
+         _timeline.moveToTime( (_tracesPerThread[0].back().time - relativeStart) / 1000 );
+      }
+
       ImGui::BeginGroup();
       const auto canvasPos = ImGui::GetCursorScreenPos();
       _timeline.drawTimeline();
-      _timeline.drawTraces( _dispTraces );
+
+      if( !_tracesPerThread.empty() )
+         _timeline.drawTraces( _tracesPerThread[0], _stringData );
+
       ImVec2 mousePosInCanvas = ImVec2(ImGui::GetIO().MousePos.x - canvasPos.x, ImGui::GetIO().MousePos.y - canvasPos.y);
       ImGui::EndGroup();
       _timeline.handleMouseWheel( mousePosInCanvas );
@@ -501,21 +493,21 @@ void vdbg::ThreadTraces::draw()
 
    ImGui::InvisibleButton("padding", ImVec2( 20, 40 ) );
 
-   if( ImGui::DragFloat( "Max value", &_maxFrameTime, 0.005f ) )
-      _allTimeMaxFrameTime = -1.0f;
+   // if( ImGui::DragFloat( "Max value", &_maxFrameTime, 0.005f ) )
+   //    _allTimeMaxFrameTime = -1.0f;
 
-   // Draw the traces
-   if ( !_dispTraces.empty() )
-   {
-      const vdbg::DisplayableTraceFrame& frameToDraw = _dispTraces[_frameToShow];
-      for ( size_t i = 0; i < frameToDraw.traces.size(); )
-      {
-         if ( !drawDispTrace( frameToDraw, i ) )
-         {
-            ++i;
-         }
-      }
-   }
+   // // Draw the traces
+   // if ( !_dispTraces.empty() )
+   // {
+   //    const vdbg::DisplayableTraceFrame& frameToDraw = _dispTraces[_frameToShow];
+   //    for ( size_t i = 0; i < frameToDraw.traces.size(); )
+   //    {
+   //       if ( !drawDispTrace( frameToDraw, i ) )
+   //       {
+   //          ++i;
+   //       }
+   //    }
+   // }
 
    ImGui::Spacing();
 
@@ -524,10 +516,10 @@ void vdbg::ThreadTraces::draw()
    ImGui::SameLine();
    if ( ImGui::Button( "Save As" ) )
    {
-      if ( _frameCountToShow < _dispTraces.size() )
-      {
-         saveAsJson( pathToSave, _dispTraces[_frameToShow] );
-      }
+      // if ( _frameCountToShow < _dispTraces.size() )
+      // {
+      //    //saveAsJson( pathToSave, _dispTraces[_frameToShow] );
+      // }
    }
 }
 
@@ -644,7 +636,7 @@ void vdbg::ProfilerTimeline::drawTimeline()
      for( const auto& pos : textPos )
      {
         ImGui::SetCursorScreenPos( pos.first );
-        ImGui::Text( "%.3f s", (float)(pos.second)/1000.0f );
+        ImGui::Text( "%.3f s", (float)(pos.second)/1000000.0f );
      }
    }
 
@@ -684,6 +676,11 @@ void vdbg::ProfilerTimeline::handleMouseWheel( const ImVec2& mousePosInCanvas )
    }
 }
 
+void vdbg::ProfilerTimeline::moveToTime( int64_t timeInMicro )
+{
+   _startMicros = timeInMicro - (_microsToDisplay / 2);
+}
+
 void vdbg::ProfilerTimeline::zoomOn( int64_t microToZoomOn, float zoomFactor )
 {
    const float windowWidthPxl = ImGui::GetWindowWidth();
@@ -702,12 +699,12 @@ void vdbg::ProfilerTimeline::zoomOn( int64_t microToZoomOn, float zoomFactor )
    }
 }
 
-void vdbg::ProfilerTimeline::drawTraces( const std::vector<DisplayableTraceFrame>& frames )
+void vdbg::ProfilerTimeline::drawTraces( const std::vector<DisplayableTrace>& traces, const std::vector< char >& strData )
 {
    size_t relativeStart = 0;
-   if( !frames.empty() )
+   if( !traces.empty() )
    {
-      relativeStart = frames[0].traces[0].time;
+      relativeStart = traces[0].time;
    }
 
    const float windowWidthPxl = ImGui::GetWindowWidth();
@@ -716,41 +713,50 @@ void vdbg::ProfilerTimeline::drawTraces( const std::vector<DisplayableTraceFrame
 
    std::vector< ImVec2 > pos;
    std::vector< uint32_t > length;
-   std::vector< const char* > names;
+   std::vector< uint32_t > fctName;
+   std::vector< uint32_t > className;
    int curLevel = -1;
    int maxLevel = -1;
-   for( const auto& f: frames )
+
+   for( const auto& t : traces )
    {
-      for( const auto& t : f.traces )
+      if( t.flags )
       {
-         if( t.flags )
-         {
-            ++curLevel;
-            maxLevel = std::max( curLevel, maxLevel );
-            const int64_t traceStartInMicros = ((t.time - relativeStart) / 1000.0f) + 0.5f;
-            auto traceStartPxl = microsToPxl( windowWidthPxl, _microsToDisplay, traceStartInMicros );
-            auto traceLengthPxl = std::max( microsToPxl( windowWidthPxl, _microsToDisplay, t.deltaTime ), 1L);
+         ++curLevel;
+         maxLevel = std::max( curLevel, maxLevel );
+         const int64_t traceStartInMicros = ((t.time - relativeStart) / 1000.0f) + 0.5f;
+         auto traceStartPxl = microsToPxl( windowWidthPxl, _microsToDisplay, traceStartInMicros );
+         auto traceLengthPxl = std::max( microsToPxl( windowWidthPxl, _microsToDisplay, t.deltaTime ), 1L);
 
-            auto tracePos = canvasPos;
-            tracePos.x -= startMicrosAsPxl;
-            tracePos.x += traceStartPxl;
-            tracePos.y += curLevel * 22.0f;
+         auto tracePos = canvasPos;
+         tracePos.x -= startMicrosAsPxl;
+         tracePos.x += traceStartPxl;
+         tracePos.y += curLevel * 22.0f;
 
-            pos.push_back( tracePos );
-            length.push_back( traceLengthPxl );
-            names.push_back( &t.name[0] );
-         }
-         else
-         {
-            --curLevel;
-         }
+         pos.push_back( tracePos );
+         length.push_back( traceLengthPxl );
+         fctName.push_back( t.fctNameIndex );
+         className.push_back( t.classNameIndex );
+      }
+      else
+      {
+         --curLevel;
       }
    }
 
+   char curName[ 512 ] = {};
    for( size_t i = 0; i < pos.size(); ++i )
    {
+      if( className[i] > 0 )
+      {
+         strncpy( curName, &strData[ className[i] ], sizeof( curName )-1 );
+         strncat( curName, "::", sizeof( curName ) - strlen( curName ) -1 );
+      }
+      strncat( curName, &strData[ fctName[i] ], sizeof( curName ) - strlen( curName ) -1 );
+
       ImGui::SetCursorScreenPos( pos[i] );
-      ImGui::Button( names[i], ImVec2(length[i],20) );
+      ImGui::Button( curName, ImVec2(length[i],20) );
+      curName[0] = '\0';
    }
 
    auto newPos = canvasPos;

@@ -20,7 +20,10 @@ class Server
    bool start( const char* name, int connections );
    void stop();
 
-   void getProfilingTraces(std::vector< vdbg::DisplayableTraceFrame >& tracesFrame );
+   void getProfilingTraces(
+       std::vector<std::vector<vdbg::DisplayableTrace> >& tracesFrame,
+       std::vector<uint32_t>& threadIds,
+       std::vector<char>& stringData );
 
   private:
    bool handleNewConnection();
@@ -34,7 +37,9 @@ class Server
    bool _running{false};
 
    std::mutex pendingTracesMutex;
-   std::vector< vdbg::DisplayableTraceFrame > pendingTraces;
+   std::vector< std::vector< vdbg::DisplayableTrace > > pendingTraces;
+   std::vector< uint32_t > pendingThreadIds;
+   std::vector< char > pendingStringData;
 };
 
 }  // namespace vdbg

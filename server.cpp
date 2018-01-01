@@ -151,35 +151,36 @@ bool Server::handleNewMessage( int clientId, vdbg::MsgType type, uint32_t /*size
             return false;
 
          //printf( "Profiler Trace from thread %u with %d traces received\n", info.threadId, info.traceCount );
-         vdbg::DisplayableTraceFrame traceFrame;
-         traceFrame.threadId = info.threadId;
-         traceFrame.traces.reserve( info.traceCount * 2 );
+         std::vector< vdbg::DisplayableTrace > dispTrace;
+         dispTrace.reserve( info.traceCount * 2 );
          for( const auto& t : traces )
          {
             // TODO: hack! needs to taking into account the precision specified in message.h
             const float difference = (t.end - t.start) * 0.001;
             const double start =static_cast<double>(t.start);
             const double end = static_cast<double>(t.end);
-            traceFrame.traces.push_back( DisplayableTrace{ start, difference, 1, 0 } );
-            auto& curTrace = traceFrame.traces.back();
-            if( t.classNameIdx > 0 )
-            {
-               strncpy( curTrace.name, &stringData[t.classNameIdx], sizeof( curTrace.name )-1 );
-               strncat( curTrace.name, "::", sizeof( curTrace.name ) - strlen( curTrace.name ) -1 );
-            }
-            strncat( curTrace.name, &stringData[t.fctNameIdx], sizeof( curTrace.name ) - strlen( curTrace.name ) -1 );
-            traceFrame.traces.push_back( DisplayableTrace{ end, 0.0f, 0, 0 } );
+            dispTrace.push_back( DisplayableTrace{ start, difference, 1, t.classNameIdx, t.fctNameIdx } );
+            dispTrace.push_back( DisplayableTrace{ end, 0.0f, 0, 0, 0 } );
          }
 
          std::sort(
-             traceFrame.traces.begin(),
-             traceFrame.traces.end(),
+             dispTrace.begin(),
+             dispTrace.end(),
              []( const DisplayableTrace& a, const DisplayableTrace& b ) -> bool {
                 return a.time < b.time;
              } );
 
          std::lock_guard<std::mutex> guard( pendingTracesMutex );
-         pendingTraces.emplace_back( std::move( traceFrame ) );
+         pendingTraces.emplace_back( std::move( dispTrace ) );
+         pendingThreadIds.push_back( info.threadId );
+         if( stringData.size() > pendingStringData.size() )
+         {
+            auto newStrBegin = stringData.begin();
+            std::advance( newStrBegin, pendingStringData.size() );
+            pendingStringData.insert( pendingStringData.end(), newStrBegin, stringData.end() );
+
+            assert( pendingStringData == stringData );
+         }
          return true;
       }
       default:
@@ -188,11 +189,26 @@ bool Server::handleNewMessage( int clientId, vdbg::MsgType type, uint32_t /*size
 }
 
 void Server::getProfilingTraces(
-    std::vector< vdbg::DisplayableTraceFrame >& tracesFrame )
+    std::vector< std::vector< vdbg::DisplayableTrace > >& tracesFrame,
+    std::vector< uint32_t >& threadIds,
+    std::vector< char >& stringData )
 {
    std::lock_guard<std::mutex> guard( pendingTracesMutex );
    tracesFrame = std::move( pendingTraces );
+   threadIds = std::move( pendingThreadIds );
+
+   if( stringData.size() < pendingStringData.size() )
+   {
+      auto newStrBegin = pendingStringData.begin();
+      std::advance( newStrBegin, stringData.size() );
+      stringData.insert( stringData.end(), newStrBegin, pendingStringData.end() );
+
+      assert( stringData == pendingStringData );
+   }
+
    pendingTraces.clear();
+   threadIds.clear();
+   // The stringData should not be cleared
 }
 
 void Server::stop()

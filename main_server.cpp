@@ -119,7 +119,7 @@ int main()
    SDL_GL_SetAttribute(SDL_GL_DOUBLEBUFFER, 1);
    SDL_GL_SetSwapInterval(1);
 
-   imdbg::init();
+   vdbg::init();
 
    vdbg::Server serv;
    serv.start( vdbg::SERVER_PATH, 10 );
@@ -128,26 +128,32 @@ int main()
 
    bool show_test_window = true;
 
-   std::vector< imdbg::Profiler* > profilers;
-   profilers.push_back( imdbg::newProfiler( "Profiler Test" ) );
+   auto profiler = std::make_unique< vdbg::Profiler >( "Profiler Test" );
+   vdbg::addNewProfiler( profiler.get() );
    std::vector< uint32_t > profTrheadsId;
 
+   std::vector< uint32_t > threadIds;
+   std::vector< std::vector< vdbg::DisplayableTrace > > pendingTraces;
+   std::vector< char > stringData;
    while ( g_run )
    {
       handleInput();
 
-      std::vector< vdbg::DisplayableTraceFrame > pendingTraces;
-      serv.getProfilingTraces( pendingTraces );
-      for ( auto& t : pendingTraces )
+      serv.getProfilingTraces( pendingTraces, threadIds, stringData );
+      for( size_t i = 0; i < pendingTraces.size(); ++i )
       {
-         profilers[0]->addTraces( t );
+         profiler->addTraces( pendingTraces[i], threadIds[i] );
+      }
+      if( profiler->_stringData.size() < stringData.size() )
+      {
+         profiler->setStringData( stringData );
       }
 
       int w, h, x, y;
       SDL_GetWindowSize( window, &w, &h );
       uint32_t buttonState = SDL_GetMouseState( &x, &y );
 
-      imdbg::onNewFrame(
+      vdbg::onNewFrame(
           w,
           h,
           x,
@@ -163,7 +169,7 @@ int main()
       glClearColor( 1.0f, 1.0f, 1.0f, 1.0f );
       glClear( GL_COLOR_BUFFER_BIT );
 
-      imdbg::draw();
+      vdbg::draw();
 
       SDL_GL_SwapWindow( window );
    }

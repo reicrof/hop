@@ -98,15 +98,18 @@ int main()
 
   // std::thread t1( threadFunc );
 
+   static size_t asdf = 0;
    while(true)
    {
       VDBG_PROF_FUNC();
+      ++asdf;
       using namespace std::chrono_literals;
       std::this_thread::sleep_for(10ms);
       // func1();
       // MaClasse a;
       // a.callBuggyFunction();
-      call1(20);
+      if( asdf > 1000 )
+         call1(20);
    }
 
 }
