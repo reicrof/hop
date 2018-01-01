@@ -39,13 +39,13 @@ struct Profiler
    Profiler( const std::string& name );
    void draw();
    void addTraces( const std::vector< DisplayableTrace >& traces, uint32_t threadId );
-   void setStringData( const std::vector< char >& stringData );
+   void setStringData( const std::vector< char >& stringData, uint32_t threadId );
 
    std::string _name;
    ProfilerTimeline _timeline;
    std::vector< uint32_t > _threadsId;
    std::vector< std::vector< DisplayableTrace > > _tracesPerThread;
-   std::vector< char > _stringData;
+   std::vector< std::vector< char > > _stringDataPerThread;
    bool _recording{ false };
    bool _realtime{ true };
 };

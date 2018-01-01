@@ -40,11 +40,11 @@ int bug = -1;
 //    }
 // };
 
-// static void func3()
-// {
-//    VDBG_PROF_FUNC();
-//    std::this_thread::sleep_for(1ms);
-// }
+static void func3()
+{
+   VDBG_PROF_FUNC();
+   std::this_thread::sleep_for(1ms);
+}
 // static void func2()
 // {
 //    VDBG_PROF_FUNC();
@@ -61,18 +61,18 @@ int bug = -1;
 //    printf( "%lu\n", i );
 // }
 
-// static void threadFunc()
-// {
-//    while(true)
-//    {
-//       std::this_thread::sleep_for(1000ms);
-//       func3();
-//       func3();
-//       func3();
-//       func3();
-//       func3();
-//    }
-// }
+static void threadFunc()
+{
+   while(true)
+   {
+      std::this_thread::sleep_for(1000ms);
+      func3();
+      func3();
+      func3();
+      func3();
+      func3();
+   }
+}
 
 static void recCall( int& v )
 {
@@ -96,7 +96,7 @@ int main()
    srand (time(NULL));
    bug = rand() % 100 + 1;
 
-  // std::thread t1( threadFunc );
+   std::thread t1( threadFunc );
 
    static size_t asdf = 0;
    while(true)

@@ -134,19 +134,16 @@ int main()
 
    std::vector< uint32_t > threadIds;
    std::vector< std::vector< vdbg::DisplayableTrace > > pendingTraces;
-   std::vector< char > stringData;
+   std::vector< std::vector< char > > stringData;
    while ( g_run )
    {
       handleInput();
 
-      serv.getProfilingTraces( pendingTraces, threadIds, stringData );
+      serv.getProfilingTraces( pendingTraces, stringData, threadIds );
       for( size_t i = 0; i < pendingTraces.size(); ++i )
       {
          profiler->addTraces( pendingTraces[i], threadIds[i] );
-      }
-      if( profiler->_stringData.size() < stringData.size() )
-      {
-         profiler->setStringData( stringData );
+         profiler->setStringData( stringData[i], threadIds[i] );
       }
 
       int w, h, x, y;

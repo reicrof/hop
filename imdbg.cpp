@@ -284,21 +284,36 @@ void Profiler::addTraces( const std::vector< DisplayableTrace >& traces, uint32_
       {
          _threadsId.push_back( threadId );
          _tracesPerThread.emplace_back();
+         _stringDataPerThread.emplace_back();
       }
 
       _tracesPerThread[i].insert( _tracesPerThread[i].end(), traces.begin(), traces.end() );
    }
 }
 
-void Profiler::setStringData( const std::vector<char>& strData )
+void Profiler::setStringData( const std::vector<char>& strData, uint32_t threadId )
 {
    if( _recording )
    {
-      auto newStrBegin = strData.begin();
-      std::advance( newStrBegin, _stringData.size() );
-      _stringData.insert( _stringData.end(), newStrBegin, strData.end() );
+      size_t i = 0;
+      for( ; i < _threadsId.size(); ++i )
+      {
+         if( _threadsId[i] == threadId ) break;
+      }
+      
+      // Thread id not found so add it
+      if( i == _threadsId.size() )
+      {
+         _threadsId.push_back( threadId );
+         _tracesPerThread.emplace_back();
+         _stringDataPerThread.emplace_back();
+      }
 
-      assert( _stringData == strData );
+      auto newStrBegin = strData.begin();
+      std::advance( newStrBegin, _stringDataPerThread[i].size() );
+      _stringDataPerThread[i].insert( _stringDataPerThread[i].end(), newStrBegin, strData.end() );
+
+      assert( _stringDataPerThread[i] == strData );
    }
 }
 
@@ -483,8 +498,11 @@ void vdbg::Profiler::draw()
       const auto canvasPos = ImGui::GetCursorScreenPos();
       _timeline.drawTimeline();
 
-      if( !_tracesPerThread.empty() )
-         _timeline.drawTraces( _tracesPerThread[0], _stringData );
+      for( size_t i = 0; i < _tracesPerThread.size(); ++i )
+      {
+         _timeline.drawTraces( _tracesPerThread[i], _stringDataPerThread[i] );
+         ImGui::InvisibleButton("trace-padding", ImVec2( 20, 40 ) );
+      }
 
       ImVec2 mousePosInCanvas = ImVec2(ImGui::GetIO().MousePos.x - canvasPos.x, ImGui::GetIO().MousePos.y - canvasPos.y);
       ImGui::EndGroup();

@@ -22,8 +22,8 @@ class Server
 
    void getProfilingTraces(
        std::vector<std::vector<vdbg::DisplayableTrace> >& tracesFrame,
-       std::vector<uint32_t>& threadIds,
-       std::vector<char>& stringData );
+       std::vector<std::vector<char> >& stringData,
+       std::vector<uint32_t>& threadIds );
 
   private:
    bool handleNewConnection();
@@ -38,8 +38,8 @@ class Server
 
    std::mutex pendingTracesMutex;
    std::vector< std::vector< vdbg::DisplayableTrace > > pendingTraces;
+   std::vector< std::vector< char > > pendingStringData;
    std::vector< uint32_t > pendingThreadIds;
-   std::vector< char > pendingStringData;
 };
 
 }  // namespace vdbg

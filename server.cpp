@@ -172,15 +172,8 @@ bool Server::handleNewMessage( int clientId, vdbg::MsgType type, uint32_t /*size
 
          std::lock_guard<std::mutex> guard( pendingTracesMutex );
          pendingTraces.emplace_back( std::move( dispTrace ) );
+         pendingStringData.emplace_back( std::move( stringData ) );
          pendingThreadIds.push_back( info.threadId );
-         if( stringData.size() > pendingStringData.size() )
-         {
-            auto newStrBegin = stringData.begin();
-            std::advance( newStrBegin, pendingStringData.size() );
-            pendingStringData.insert( pendingStringData.end(), newStrBegin, stringData.end() );
-
-            assert( pendingStringData == stringData );
-         }
          return true;
       }
       default:
@@ -190,23 +183,16 @@ bool Server::handleNewMessage( int clientId, vdbg::MsgType type, uint32_t /*size
 
 void Server::getProfilingTraces(
     std::vector< std::vector< vdbg::DisplayableTrace > >& tracesFrame,
-    std::vector< uint32_t >& threadIds,
-    std::vector< char >& stringData )
+    std::vector< std::vector< char > >& stringData,
+    std::vector< uint32_t >& threadIds )
 {
    std::lock_guard<std::mutex> guard( pendingTracesMutex );
    tracesFrame = std::move( pendingTraces );
+   stringData = std::move( pendingStringData );
    threadIds = std::move( pendingThreadIds );
 
-   if( stringData.size() < pendingStringData.size() )
-   {
-      auto newStrBegin = pendingStringData.begin();
-      std::advance( newStrBegin, stringData.size() );
-      stringData.insert( stringData.end(), newStrBegin, pendingStringData.end() );
-
-      assert( stringData == pendingStringData );
-   }
-
    pendingTraces.clear();
+   pendingStringData.clear();
    threadIds.clear();
    // The stringData should not be cleared
 }
