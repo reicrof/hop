@@ -265,6 +265,11 @@ bool Client::send( uint8_t* data, uint32_t size ) VDBG_NOEXCEPT
 {
    if( _state != State::CONNECTED && !connect( false ) ) return false;
 
+   #ifdef __APPLE__
+   // This is not defined on macos. So define it here
+   #define MSG_NOSIGNAL 0x4000
+   #endif
+
    int rc = ::send( _socket, data, size, MSG_NOSIGNAL );
    if ( rc < 0 )
    {

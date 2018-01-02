@@ -744,7 +744,7 @@ void vdbg::ProfilerTimeline::drawTraces( const std::vector<DisplayableTrace>& tr
          maxLevel = std::max( curLevel, maxLevel );
          const int64_t traceStartInMicros = ((t.time - relativeStart) / 1000.0f) + 0.5f;
          auto traceStartPxl = microsToPxl( windowWidthPxl, _microsToDisplay, traceStartInMicros );
-         auto traceLengthPxl = std::max( microsToPxl( windowWidthPxl, _microsToDisplay, t.deltaTime ), 1L);
+         auto traceLengthPxl = std::max( microsToPxl( windowWidthPxl, _microsToDisplay, t.deltaTime ), 1LL);
 
          auto tracePos = canvasPos;
          tracePos.x -= startMicrosAsPxl;
