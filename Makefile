@@ -1,6 +1,7 @@
 UNAME := $(shell uname)
 TARGET_SERVER = multiproc_server
 TARGET_CLIENT = multiproc_client
+TARGET_PTHREAD_WRAP = vdbg_pthread_wrap.so
 
 CXXFLAGS = -std=c++14 -Wall -Wextra -pedantic
 ENABLED_WARNINGS = -Wconversion-null -Wempty-body -Wignored-qualifiers -Wsign-compare -Wtype-limits -Wuninitialized
@@ -9,8 +10,9 @@ DISABLED_WARNINGS = -Wno-missing-braces
 CXXFLAGS += $(ENABLED_WARNINGS) $(DISABLED_WARNINGS)
 IMGUI_SOURCES = $(wildcard imgui/*.cpp)
 SERVER_SOURCES = $(wildcard *server.cpp) imdbg.cpp $(IMGUI_SOURCES)
-#CLIENT_SOURCES = $(wildcard *client.cpp)
 CLIENT_SOURCES = main_client.cpp
+PTHREAD_WRAP_SOURCES = pthread_wrap.cpp
+
 COMMON_INCLUDES = -isystem.
 CLIENT_DEFINE = -DVDBG_ENABLED
 
@@ -37,20 +39,23 @@ $(TARGET_SERVER): $(SERVER_SOURCES)
 $(TARGET_CLIENT): $(CLIENT_SOURCES)
 	$(CXX) $(CXXFLAGS) $(CLIENT_SOURCES) $(INC) $(LDFLAGS) -o $(TARGET_CLIENT) $(CLIENT_DEFINE)
 
+# pthread wrapper library
+$(TARGET_PTHREAD_WRAP): $(PTHREAD_WRAP_SOURCES)
+	$(CXX) -fPIC -shared $(PTHREAD_WRAP_SOURCES) -ldl -o $(TARGET_PTHREAD_WRAP)
+
 .PHONY : clean
 clean:
 	find . -type f -name '*.o' -delete
-	rm $(TARGET_SERVER) $(TARGET_CLIENT)
-
+	rm $(TARGET_SERVER) $(TARGET_CLIENT) $(TARGET_PTHREAD_WRAP)
 
 .PHONY: debug
 debug :  CXXFLAGS += -g -D_DEBUG -Werror -pg
-debug : $(TARGET_SERVER) $(TARGET_CLIENT)
+debug : $(TARGET_SERVER) $(TARGET_CLIENT) $(TARGET_PTHREAD_WRAP)
 
 .PHONY: release
 release :   CXXFLAGS += -O3 -DNDEBUG
-release : $(TARGET_SERVER) $(TARGET_CLIENT)
+release : $(TARGET_SERVER) $(TARGET_CLIENT) $(TARGET_PTHREAD_WRAP)
 
 .PHONY: asan
 asan :  CXXFLAGS += -g -pg -fsanitize=address -fno-omit-frame-pointer 
-asan : $(TARGET_SERVER) $(TARGET_CLIENT)
+asan : $(TARGET_SERVER) $(TARGET_CLIENT) $(TARGET_PTHREAD_WRAP)
