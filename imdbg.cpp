@@ -407,6 +407,14 @@ void Profiler::setStringData( const std::vector<char>& strData, uint32_t threadI
 
 void vdbg::Profiler::draw()
 {
+   ImGui::SetNextWindowSize(ImVec2(700,500), ImGuiSetCond_FirstUseEver);
+   if ( !ImGui::Begin( _name.c_str(), nullptr, ImGuiWindowFlags_NoScrollWithMouse ) )
+   {
+      // Early out
+      ImGui::End();
+      return;
+   }
+
    ImGui::Checkbox( "Listening", &_recording );
    ImGui::SameLine();
    ImGui::Checkbox( "Live", &_realtime );
@@ -539,6 +547,8 @@ void vdbg::Profiler::draw()
       //    //saveAsJson( pathToSave, _dispTraces[_frameToShow] );
       // }
    }
+
+   ImGui::End();
 }
 
 static inline int64_t microsToPxl( float windowWidth, int64_t usToDisplay, int64_t us )
@@ -603,7 +613,8 @@ void vdbg::ProfilerTimeline::drawTimeline()
 
    int count = stepsDone;
    std::vector< std::pair< ImVec2, double > > textPos;
-   for( double i = top.x; i < (windowWidthPxl + (2 * stepSizePxl) ); i += stepSizePxl, ++count )
+   const auto maxPosX = canvasPos.x + windowWidthPxl;
+   for( double i = top.x; i < maxPosX; i += stepSizePxl, ++count )
    {
       // Draw biggest begin/end lines
       if( count % 10 == 0 )
@@ -744,7 +755,7 @@ void vdbg::ProfilerTimeline::drawTraces( const std::vector<DisplayableTrace>& tr
          maxLevel = std::max( curLevel, maxLevel );
          const int64_t traceStartInMicros = ((t.time - relativeStart) / 1000.0f) + 0.5f;
          auto traceStartPxl = microsToPxl( windowWidthPxl, _microsToDisplay, traceStartInMicros );
-         auto traceLengthPxl = std::max( microsToPxl( windowWidthPxl, _microsToDisplay, t.deltaTime ), 1LL);
+         auto traceLengthPxl = std::max( microsToPxl( windowWidthPxl, _microsToDisplay, t.deltaTime ), (int64_t)1);
 
          auto tracePos = canvasPos;
          tracePos.x -= startMicrosAsPxl;
