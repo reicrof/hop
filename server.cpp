@@ -159,16 +159,14 @@ bool Server::handleNewMessage( int clientId, vdbg::MsgType type, uint32_t /*size
             const float difference = (t.end - t.start) * 0.001;
             const double start =static_cast<double>(t.start);
             const double end = static_cast<double>(t.end);
-            dispTrace.push_back( DisplayableTrace{ start, difference, 1, t.classNameIdx, t.fctNameIdx } );
-            dispTrace.push_back( DisplayableTrace{ end, 0.0f, 0, 0, 0 } );
+            dispTrace.push_back( DisplayableTrace{
+                start, difference, DisplayableTrace::START_TRACE, t.classNameIdx, t.fctNameIdx} );
+            dispTrace.push_back( DisplayableTrace{
+                end, difference, DisplayableTrace::END_TRACE, t.classNameIdx, t.fctNameIdx} );
          }
 
-         std::sort(
-             dispTrace.begin(),
-             dispTrace.end(),
-             []( const DisplayableTrace& a, const DisplayableTrace& b ) -> bool {
-                return a.time < b.time;
-             } );
+         // Sort them by time
+         std::sort( dispTrace.begin(), dispTrace.end() );
 
          std::lock_guard<std::mutex> guard( pendingTracesMutex );
          pendingTraces.emplace_back( std::move( dispTrace ) );

@@ -31,6 +31,11 @@ struct DisplayableTrace
    {
       return flags & START_TRACE;
    }
+
+   inline friend bool operator<( const DisplayableTrace& lhs, const DisplayableTrace& rhs )
+   {
+      return lhs.time < rhs.time;
+   }
 };
 
 struct ProfilerTimeline
@@ -40,9 +45,10 @@ struct ProfilerTimeline
    void handleMouseWheel( const ImVec2& mousePosInCanvas );
    void moveToTime( int64_t timeInMicro );
    void zoomOn( int64_t microToZoomOn, float zoomFactor );
-   int _startMicros{3000};
-   int _microsToDisplay{5000};
+   int64_t _startMicros{3000};
+   int64_t _microsToDisplay{5000};
    int64_t _stepSizeInMicros{1000};
+   int _maxTracesDepth{0};
 };
 
 struct Profiler

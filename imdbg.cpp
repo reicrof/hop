@@ -269,25 +269,37 @@ Profiler::Profiler( const std::string& name ) : _name( name )
 //    ImGui::End();
 // }
 
-void Profiler::addTraces( const std::vector< DisplayableTrace >& traces, uint32_t threadId )
+void Profiler::addTraces( const std::vector<DisplayableTrace>& traces, uint32_t threadId )
 {
-   if( _recording )
+   if ( _recording )
    {
+      // The traces should already be sorted.
+      assert( std::is_sorted( traces.begin(), traces.end() ) );
+
       size_t i = 0;
-      for( ; i < _threadsId.size(); ++i )
+      for ( ; i < _threadsId.size(); ++i )
       {
-         if( _threadsId[i] == threadId ) break;
+         if ( _threadsId[i] == threadId ) break;
       }
-      
+
       // Thread id not found so add it
-      if( i == _threadsId.size() )
+      if ( i == _threadsId.size() )
       {
          _threadsId.push_back( threadId );
          _tracesPerThread.emplace_back();
          _stringDataPerThread.emplace_back();
       }
 
+      // Insert the new traces in the list and keep the previous size around
+      const auto prevSize = _tracesPerThread[i].size();
       _tracesPerThread[i].insert( _tracesPerThread[i].end(), traces.begin(), traces.end() );
+
+      // The first trace added has the smallest time (since they are already sorted).
+      // Thus all the traces with a bigger time than that could now be in an unsorted state.
+      // We need to sort all the traces that have a time >= to this trace
+      auto it = std::lower_bound(
+          _tracesPerThread[i].begin(), _tracesPerThread[i].begin() + prevSize, traces.front() );
+      std::sort( it, _tracesPerThread[i].end() );
    }
 }
 
@@ -562,16 +574,18 @@ void vdbg::Profiler::draw()
    ImGui::End();
 }
 
-static inline int64_t microsToPxl( float windowWidth, int64_t usToDisplay, int64_t us )
+template< typename T = uint64_t >
+static inline T microsToPxl( float windowWidth, int64_t usToDisplay, int64_t us )
 {
    const double usPerPxl = usToDisplay / windowWidth;
-   return us / usPerPxl;
+   return static_cast<T>( (double)us / usPerPxl );
 }
 
-static inline int64_t pxlToMicros( float windowWidth, int64_t usToDisplay, int64_t pxl )
+template< typename T = uint64_t >
+static inline T pxlToMicros( float windowWidth, int64_t usToDisplay, int64_t pxl )
 {
    const double usPerPxl = usToDisplay / windowWidth;
-   return usPerPxl * pxl;
+   return static_cast<T>( usPerPxl * (double)pxl );
 }
 
 void vdbg::ProfilerTimeline::drawTimeline()
@@ -741,42 +755,53 @@ void vdbg::ProfilerTimeline::zoomOn( int64_t microToZoomOn, float zoomFactor )
 
 void vdbg::ProfilerTimeline::drawTraces( const std::vector<DisplayableTrace>& traces, const std::vector< char >& strData )
 {
-   size_t relativeStart = 0;
-   if( !traces.empty() )
-   {
-      relativeStart = traces[0].time;
-   }
+   if( traces.empty() ) return;
 
+   const auto relativeStart = traces[0].time;
    const float windowWidthPxl = ImGui::GetWindowWidth();
-   const auto canvasPos = ImGui::GetCursorScreenPos();
    const auto startMicrosAsPxl = microsToPxl( windowWidthPxl, _microsToDisplay, _startMicros );
+   const auto canvasPos = ImGui::GetCursorScreenPos();
 
    std::vector< ImVec2 > pos;
-   std::vector< uint32_t > length;
-   std::vector< uint32_t > fctName;
-   std::vector< uint32_t > className;
-   int curLevel = -1;
-   int maxLevel = -1;
+   std::vector< float > length;
+   std::vector< uint32_t > fctName, className;
+   pos.reserve( 50 );
+   fctName.reserve( 50 );
+   className.reserve( 50 );
 
-   for( const auto& t : traces )
+   const double firstTraceAbsoluteTime = relativeStart + (_startMicros * 1000.0);
+   const double lastTraceAbsoluteTime = firstTraceAbsoluteTime + ( _microsToDisplay * 1000.0 );
+   int curLevel = -1;
+   int maxLevel = 0;
+   for ( const auto& t : traces )
    {
-      if( t.isStartTrace() )
+      if ( t.isStartTrace() )
       {
          ++curLevel;
-         maxLevel = std::max( curLevel, maxLevel );
-         const int64_t traceStartInMicros = ((t.time - relativeStart) / 1000.0f) + 0.5f;
-         auto traceStartPxl = microsToPxl( windowWidthPxl, _microsToDisplay, traceStartInMicros );
-         auto traceLengthPxl = std::max( microsToPxl( windowWidthPxl, _microsToDisplay, t.deltaTime ), (int64_t)1);
+         if ( t.time > firstTraceAbsoluteTime ||
+              t.time + ( t.deltaTime * 1000.0 ) > firstTraceAbsoluteTime )
+         {
+            // The start time is bigger than the maximum time on the timeline. We are done
+            // drawing the traces.
+            if ( t.time > lastTraceAbsoluteTime ) break;
 
-         auto tracePos = canvasPos;
-         tracePos.x -= startMicrosAsPxl;
-         tracePos.x += traceStartPxl;
-         tracePos.y += curLevel * 22.0f;
+            const int64_t traceStartInMicros = ((t.time - relativeStart) / 1000.0f) + 0.5f;
+            maxLevel = std::max( curLevel, maxLevel );
+            const auto traceStartPxl =
+                microsToPxl<float>( windowWidthPxl, _microsToDisplay, traceStartInMicros );
+            const float traceLengthPxl =
+                microsToPxl<float>( windowWidthPxl, _microsToDisplay, t.deltaTime );
 
-         pos.push_back( tracePos );
-         length.push_back( traceLengthPxl );
-         fctName.push_back( t.fctNameIndex );
-         className.push_back( t.classNameIndex );
+            // Skip trace if it is way smaller than treshold
+            if( traceLengthPxl < 0.25f )
+                  continue;
+
+            pos.push_back( ImVec2(
+                canvasPos.x - startMicrosAsPxl + traceStartPxl, canvasPos.y + curLevel * 22.0f ) );
+            length.push_back( traceLengthPxl );
+            fctName.push_back( t.fctNameIndex );
+            className.push_back( t.classNameIndex );
+         }
       }
       else
       {
@@ -802,55 +827,4 @@ void vdbg::ProfilerTimeline::drawTraces( const std::vector<DisplayableTrace>& tr
    auto newPos = canvasPos;
    newPos.y += maxLevel * 22.0f;
    ImGui::SetCursorScreenPos( newPos );
-
-   // //debug only
-   // bool startFound = true, endFound = true;
-
-   // const size_t startTime = (_startMicros + relativeStart);
-   // size_t startFrame = 0, startTrace = 0;
-   // for( size_t frame = 0; frame < traces.size(); ++frame )
-   // {
-   //    startFound = false;
-   //    // Only search inside this frame if the last trace is after
-   //    // the start time
-   //    if( traces[frame].traces.back().time >= startTime )
-   //    {
-   //       startFrame = frame;
-   //       for( size_t traceIdx = 0; traceIdx < traces[frame].traces.size() - 1; ++ traceIdx )
-   //       {
-   //          if( traces[frame].traces[traceIdx + 1].time >= startTime )
-   //          {
-   //             startTrace = traceIdx;
-   //             startFound = true;
-   //             break;
-   //          }
-   //       }
-   //    }
-   //    if( startFound ) break;
-   // }
-
-   // const size_t endTime = startTime + _microsToDisplay;
-   // size_t endFrame = traces.size(), endTrace = 0;
-   // for( size_t frame = startFrame; frame < traces.size(); ++frame )
-   // {
-   //    endFound = false;
-   //    // Only search inside this frame if the last trace is before
-   //    // the start time
-   //    if( traces[frame].traces.back().time >= endTime )
-   //    {
-   //       endFrame = frame;
-   //       for( size_t traceIdx = 0; traceIdx < traces[frame].traces.size(); ++traceIdx )
-   //       {
-   //          if( traces[frame].traces[traceIdx].time >= startTime )
-   //          {
-   //             endTrace = traceIdx;
-   //             endFound = true;
-   //             break;
-   //          }
-   //       }
-   //    }
-   //    if( endFound ) break;
-   // }
-
-   // assert( startFound && endFound );
 }
