@@ -20,7 +20,7 @@ class Server
    bool start( const char* name, int connections );
    void stop();
 
-   void getProfilingTraces(
+   void getPendingProfilingTraces(
        std::vector<std::vector<vdbg::DisplayableTrace> >& tracesFrame,
        std::vector<std::vector<char> >& stringData,
        std::vector<uint32_t>& threadIds );

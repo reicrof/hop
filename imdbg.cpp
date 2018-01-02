@@ -291,9 +291,11 @@ void Profiler::addTraces( const std::vector< DisplayableTrace >& traces, uint32_
    }
 }
 
-void Profiler::setStringData( const std::vector<char>& strData, uint32_t threadId )
+void Profiler::addStringData( const std::vector<char>& strData, uint32_t threadId )
 {
-   if( _recording )
+   // We should read the string data even when not recording since the string data
+   // is sent only once (the first time a function is used)
+   if( !strData.empty() )
    {
       size_t i = 0;
       for( ; i < _threadsId.size(); ++i )
@@ -309,11 +311,7 @@ void Profiler::setStringData( const std::vector<char>& strData, uint32_t threadI
          _stringDataPerThread.emplace_back();
       }
 
-      auto newStrBegin = strData.begin();
-      std::advance( newStrBegin, _stringDataPerThread[i].size() );
-      _stringDataPerThread[i].insert( _stringDataPerThread[i].end(), newStrBegin, strData.end() );
-
-      assert( _stringDataPerThread[i] == strData );
+      _stringDataPerThread[i].insert( _stringDataPerThread[i].end(), strData.begin(), strData.end() );
    }
 }
 
@@ -343,7 +341,7 @@ void Profiler::setStringData( const std::vector<char>& strData, uint32_t threadI
 //       writer.Key("ts");
 //       writer.Double( (double)t.time );
 //       writer.Key("ph");
-//       writer.String( t.flags ? "B" : "E" );
+//       writer.String( t.flags & vdbg::DisplayableTrace::START_TRACE ? "B" : "E" );
 //       writer.Key("pid");
 //       writer.Uint(threadId);
 //       //writer.Key("name");
@@ -496,10 +494,23 @@ void vdbg::Profiler::draw()
    // }
 
    {
-      if( _realtime && _recording && !_tracesPerThread.empty() )
+      // Move timeline to the most recent trace if Live mode is on
+      if( _realtime && _recording )
       {
-         const auto relativeStart = _tracesPerThread[0].front().time;
-         _timeline.moveToTime( (_tracesPerThread[0].back().time - relativeStart) / 1000 );
+         // Only valid if we have at least 1 thread + 1 trace
+         if( !_tracesPerThread.empty() && !_tracesPerThread[0].empty() )
+         {
+            const auto relativeStart = _tracesPerThread[0].front().time;
+            double maxTime = 0.0;
+            for( const auto& t : _tracesPerThread )
+            {
+               if( !t.empty() )
+               {
+                  maxTime = std::max( maxTime, t.back().time );
+               }
+            }
+            _timeline.moveToTime( (maxTime - relativeStart) / 1000 );
+         }
       }
 
       ImGui::BeginGroup();
@@ -749,7 +760,7 @@ void vdbg::ProfilerTimeline::drawTraces( const std::vector<DisplayableTrace>& tr
 
    for( const auto& t : traces )
    {
-      if( t.flags )
+      if( t.isStartTrace() )
       {
          ++curLevel;
          maxLevel = std::max( curLevel, maxLevel );

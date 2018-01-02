@@ -181,20 +181,19 @@ bool Server::handleNewMessage( int clientId, vdbg::MsgType type, uint32_t /*size
    }
 }
 
-void Server::getProfilingTraces(
+void Server::getPendingProfilingTraces(
     std::vector< std::vector< vdbg::DisplayableTrace > >& tracesFrame,
     std::vector< std::vector< char > >& stringData,
     std::vector< uint32_t >& threadIds )
 {
    std::lock_guard<std::mutex> guard( pendingTracesMutex );
-   tracesFrame = std::move( pendingTraces );
-   stringData = std::move( pendingStringData );
-   threadIds = std::move( pendingThreadIds );
+   std::swap( tracesFrame, pendingTraces );
+   std::swap( stringData, pendingStringData );
+   std::swap( threadIds, pendingThreadIds );
 
    pendingTraces.clear();
    pendingStringData.clear();
-   threadIds.clear();
-   // The stringData should not be cleared
+   pendingThreadIds.clear();
 }
 
 void Server::stop()

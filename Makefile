@@ -16,7 +16,7 @@ CLIENT_DEFINE = -DVDBG_ENABLED
 
 PLATFORM_LD_FLAGS = 
 ifeq ($(UNAME), Linux)
-   CXX = clang++
+   CXX = g++7
    PLATFORM_LD_FLAGS = -lGL
 else ifeq ($(UNAME), Darwin)
    CXX = clang++

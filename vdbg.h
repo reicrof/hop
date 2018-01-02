@@ -401,6 +401,7 @@ class ClientProfiler::Impl
          if( !_client.connect( false ) )
          {
             // Cannot connect to server
+            _sentStringDataSize = 0;
             _shallowTraces.clear();
             return;
          }
@@ -421,15 +422,17 @@ class ClientProfiler::Impl
       // stringData  = String Data              - Array with all strings referenced by the traces
       // traceToSend = Traces                   - Array containing all of the traces
       const uint32_t stringDataSize = _nameArrayData.size();
+      assert( stringDataSize >= _sentStringDataSize );
+      const uint32_t stringToSend = stringDataSize - _sentStringDataSize;
       const size_t profilerMsgSize =
-          sizeof( TracesInfo ) + stringDataSize + sizeof( Trace ) * _shallowTraces.size();
-      std::vector< uint8_t > buffer( sizeof( MsgHeader ) + profilerMsgSize, 0 );
+          sizeof( TracesInfo ) + stringToSend + sizeof( Trace ) * _shallowTraces.size();
+      _bufferToSend.resize( sizeof( MsgHeader ) + profilerMsgSize, 0 );
 
-      MsgHeader* msgHeader = (MsgHeader*)buffer.data();
-      TracesInfo* tracesInfo = (TracesInfo*)(buffer.data() + sizeof( MsgHeader ) );
-      char* stringData = (char*)( buffer.data() + sizeof( MsgHeader ) + sizeof( TracesInfo ) );
+      MsgHeader* msgHeader = (MsgHeader*)_bufferToSend.data();
+      TracesInfo* tracesInfo = (TracesInfo*)(_bufferToSend.data() + sizeof( MsgHeader ) );
+      char* stringData = (char*)( _bufferToSend.data() + sizeof( MsgHeader ) + sizeof( TracesInfo ) );
       Trace* traceToSend =
-          (Trace*)( buffer.data() + sizeof( MsgHeader ) + sizeof( TracesInfo ) + stringDataSize );
+          (Trace*)( _bufferToSend.data() + sizeof( MsgHeader ) + sizeof( TracesInfo ) + stringToSend );
 
       // Create the msg header first
       msgHeader->type = MsgType::PROFILER_TRACE;
@@ -437,11 +440,11 @@ class ClientProfiler::Impl
 
       // TODO: Investigate if the truncation from size_t to uint32 is safe .. or not
       tracesInfo->threadId = (uint32_t)_hashedThreadId;
-      tracesInfo->stringDataSize = stringDataSize;
+      tracesInfo->stringDataSize = stringToSend;
       tracesInfo->traceCount = (uint32_t)_shallowTraces.size();
 
       // Copy string data into its array
-      memcpy( stringData, _nameArrayData.data(), stringDataSize );
+      memcpy( stringData, _nameArrayData.data() + _sentStringDataSize, stringToSend );
 
       // Copy trace information into buffer to send
       for( size_t i = 0; i < _shallowTraces.size(); ++i )
@@ -454,17 +457,22 @@ class ClientProfiler::Impl
          t.group = _shallowTraces[i].group;
       }
 
-      _client.send( buffer.data(), sizeof( MsgHeader ) + profilerMsgSize );
+      _client.send( _bufferToSend.data(), sizeof( MsgHeader ) + profilerMsgSize );
 
-      // Free the buffer
+      // Update sent array size
+      _sentStringDataSize = stringDataSize;
+      // Free the buffers
       _shallowTraces.clear();
+      _bufferToSend.clear();
    }
 
    int _pushTraceLevel{0};
    size_t _hashedThreadId{0};
    std::vector< ShallowTrace > _shallowTraces;
+   std::vector< uint8_t > _bufferToSend;
    std::vector< const char* > _nameArrayId;
    std::vector< char > _nameArrayData;
+   uint32_t _sentStringDataSize{0}; // The size of the string array on the server side
    Client _client;
 };
 

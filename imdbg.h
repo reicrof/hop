@@ -20,6 +20,17 @@ struct DisplayableTrace
    // Indexes of the name in the string database
    uint32_t classNameIndex;
    uint32_t fctNameIndex;
+
+   enum Flags
+   {
+      END_TRACE = 0,
+      START_TRACE = 1,
+   };
+
+   inline bool isStartTrace() const noexcept
+   {
+      return flags & START_TRACE;
+   }
 };
 
 struct ProfilerTimeline
@@ -39,7 +50,7 @@ struct Profiler
    Profiler( const std::string& name );
    void draw();
    void addTraces( const std::vector< DisplayableTrace >& traces, uint32_t threadId );
-   void setStringData( const std::vector< char >& stringData, uint32_t threadId );
+   void addStringData( const std::vector< char >& stringData, uint32_t threadId );
 
    std::string _name;
    ProfilerTimeline _timeline;

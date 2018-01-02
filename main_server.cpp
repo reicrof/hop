@@ -139,11 +139,11 @@ int main()
    {
       handleInput();
 
-      serv.getProfilingTraces( pendingTraces, stringData, threadIds );
+      serv.getPendingProfilingTraces( pendingTraces, stringData, threadIds );
       for( size_t i = 0; i < pendingTraces.size(); ++i )
       {
          profiler->addTraces( pendingTraces[i], threadIds[i] );
-         profiler->setStringData( stringData[i], threadIds[i] );
+         profiler->addStringData( stringData[i], threadIds[i] );
       }
 
       int w, h, x, y;
