@@ -1,5 +1,5 @@
 #include <server.h>
-#include <message.h>
+#include <vdbg.h>
 #include <SDL2/SDL.h>
 
 #include <imdbg.h>

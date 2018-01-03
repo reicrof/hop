@@ -1,7 +1,7 @@
 UNAME := $(shell uname)
 TARGET_SERVER = multiproc_server
 TARGET_CLIENT = multiproc_client
-TARGET_PTHREAD_WRAP = vdbg_pthread_wrap.so
+TARGET_PTHREAD_WRAP = vdbg_functions_wrap.so
 
 CXXFLAGS = -std=c++14 -Wall -Wextra -pedantic
 ENABLED_WARNINGS = -Wconversion-null -Wempty-body -Wignored-qualifiers -Wsign-compare -Wtype-limits -Wuninitialized
@@ -11,7 +11,7 @@ CXXFLAGS += $(ENABLED_WARNINGS) $(DISABLED_WARNINGS)
 IMGUI_SOURCES = $(wildcard imgui/*.cpp)
 SERVER_SOURCES = $(wildcard *server.cpp) imdbg.cpp $(IMGUI_SOURCES)
 CLIENT_SOURCES = main_client.cpp
-PTHREAD_WRAP_SOURCES = pthread_wrap.cpp
+PTHREAD_WRAP_SOURCES = vdbg_functions_wrap.cpp
 
 COMMON_INCLUDES = -isystem.
 CLIENT_DEFINE = -DVDBG_ENABLED
@@ -37,11 +37,11 @@ $(TARGET_SERVER): $(SERVER_SOURCES)
 
 # client target
 $(TARGET_CLIENT): $(CLIENT_SOURCES)
-	$(CXX) $(CXXFLAGS) $(CLIENT_SOURCES) $(INC) $(LDFLAGS) -o $(TARGET_CLIENT) $(CLIENT_DEFINE)
+	$(CXX) $(CXXFLAGS) $(CLIENT_SOURCES) $(INC) $(LDFLAGS) -o $(TARGET_CLIENT) $(CLIENT_DEFINE) -rdynamic
 
 # pthread wrapper library
 $(TARGET_PTHREAD_WRAP): $(PTHREAD_WRAP_SOURCES)
-	$(CXX) -fPIC -shared $(PTHREAD_WRAP_SOURCES) -ldl -o $(TARGET_PTHREAD_WRAP)
+	$(CXX) -fPIC -shared $(PTHREAD_WRAP_SOURCES) -ldl $(INC) -DVDBG_ENABLED -o $(TARGET_PTHREAD_WRAP) -g
 
 .PHONY : clean
 clean:

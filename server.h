@@ -1,8 +1,8 @@
 #ifndef VDBG_SERVER_H_
 #define VDBG_SERVER_H_
 
-#include <message.h>
 #include <imdbg.h>
+#include <message.h>
 
 #include <unistd.h>
 #include <sys/types.h>
@@ -21,13 +21,13 @@ class Server
    void stop();
 
    void getPendingProfilingTraces(
-       std::vector<std::vector<vdbg::DisplayableTrace> >& tracesFrame,
+       std::vector<std::vector<DisplayableTrace> >& tracesFrame,
        std::vector<std::vector<char> >& stringData,
        std::vector<uint32_t>& threadIds );
 
   private:
    bool handleNewConnection();
-   bool handleNewMessage( int clientId, vdbg::MsgType type, uint32_t size );
+   bool handleNewMessage( int clientId, MsgType type, uint32_t size );
 
    std::thread _thread;
    std::string _serverName;
@@ -37,7 +37,7 @@ class Server
    bool _running{false};
 
    std::mutex pendingTracesMutex;
-   std::vector< std::vector< vdbg::DisplayableTrace > > pendingTraces;
+   std::vector< std::vector< DisplayableTrace > > pendingTraces;
    std::vector< std::vector< char > > pendingStringData;
    std::vector< uint32_t > pendingThreadIds;
 };

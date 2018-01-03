@@ -174,6 +174,10 @@ bool Server::handleNewMessage( int clientId, vdbg::MsgType type, uint32_t /*size
          pendingThreadIds.push_back( info.threadId );
          return true;
       }
+      case MsgType::PROFILER_WAIT_LOCK:
+      {
+         return true;
+      }
       default:
          return false;
    }

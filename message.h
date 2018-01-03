@@ -13,6 +13,7 @@ static VDBG_CONSTEXPR const char* SERVER_PATH = "/tmp/my_server";
 enum class MsgType : uint32_t
 {
    PROFILER_TRACE,
+   PROFILER_WAIT_LOCK,
    INVALID_MESSAGE,
 };
 

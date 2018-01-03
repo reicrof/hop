@@ -91,12 +91,14 @@ static void call1( int v )
    recCall( v );
 }
 
+#include <mutex>
 int main()
 {
    srand (time(NULL));
    bug = rand() % 100 + 1;
 
    //std::thread t1( threadFunc );
+   std::mutex m;
 
    static size_t asdf = 0;
    while(true)
@@ -108,8 +110,11 @@ int main()
       // func1();
       // MaClasse a;
       // a.callBuggyFunction();
-      if( asdf > 1000 )
+      if( asdf > 10 )
+      {
+         std::lock_guard<std::mutex> g(m);
          call1(20);
+      }
    }
 
 }

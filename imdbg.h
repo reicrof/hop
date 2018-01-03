@@ -2,7 +2,7 @@
 #define IMDBG_H_
 
 #include "imgui/imgui.h"
-#include <message.h>
+#include <vdbg.h>
 #include <array>
 #include <chrono>
 #include <string>

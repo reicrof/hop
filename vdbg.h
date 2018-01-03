@@ -43,7 +43,7 @@
 #define VDBG_CONSTEXPR constexpr
 #define VDBG_NOEXCEPT noexcept
 #define VDBG_STATIC_ASSERT static_assert
-#define VDBG_GET_THREAD_ID() std::this_thread::get_id()
+#define VDBG_GET_THREAD_ID() pthread_self()
 extern char* __progname;
 inline const char* getProgName() VDBG_NOEXCEPT
 {
@@ -59,6 +59,7 @@ namespace details
 enum class MsgType : uint32_t
 {
    PROFILER_TRACE,
+   PROFILER_WAIT_LOCK,
    INVALID_MESSAGE,
 };
 
@@ -109,7 +110,7 @@ class ClientProfiler
 {
   public:
    class Impl;
-   static Impl* Get( std::thread::id tId );
+   static Impl* Get( size_t threadId, bool createIfMissing = true );
    static void StartProfile( Impl* );
    static void EndProfile(
        Impl*,
@@ -118,6 +119,11 @@ class ClientProfiler
        TimeStamp start,
        TimeStamp end,
        uint8_t group );
+   static void EndLockWait(
+      Impl*,
+      void* mutexAddr,
+      TimeStamp start,
+      TimeStamp end );
 
   private:
    static size_t threadsId[MAX_THREAD_NB];
@@ -147,6 +153,25 @@ class ProfGuard
    const char *className, *fctName;
    ClientProfiler::Impl* impl;
    uint8_t group;
+};
+
+struct LockWaitGuard
+{
+   LockWaitGuard( void* mutAddr )
+       : start( getTimeStamp() ),
+         mutexAddr( mutAddr ),
+         impl( ClientProfiler::Get( VDBG_GET_THREAD_ID() ) )
+   {
+   }
+   ~LockWaitGuard()
+   {
+      end = getTimeStamp();
+      ClientProfiler::EndLockWait( impl, mutexAddr, start, end );
+   }
+
+   TimeStamp start, end;
+   void* mutexAddr;
+   ClientProfiler::Impl* impl;
 };
 
 #define VDBG_COMBINE( X, Y ) X##Y
@@ -201,7 +226,6 @@ class Client
 // C++ standard includes
 #include <algorithm>
 #include <cassert>
-#include <mutex>
 #include <vector>
 
 namespace vdbg
@@ -338,10 +362,19 @@ class ClientProfiler::Impl
       uint8_t group;
    };
 
+   struct LockWait
+   {
+      void* mutexAddress;
+      TimeStamp start, end;
+      uint8_t padding[8];
+   };
+   VDBG_STATIC_ASSERT( sizeof(LockWait) == 32 );
+
   public:
-   Impl(size_t id) : _hashedThreadId( id )
+   Impl(size_t id) : _threadId( id )
    {
       _shallowTraces.reserve( 64 );
+      _lockWaits.reserve( 64 );
       _nameArrayId.reserve( 64 );
       _nameArrayData.reserve( 64 * 32 );
 
@@ -360,6 +393,11 @@ class ClientProfiler::Impl
        uint8_t group )
    {
       _shallowTraces.push_back( ShallowTrace{ className, fctName, start, end, group } );
+   }
+
+   void addWaitLockTrace( void* mutexAddr, TimeStamp start, TimeStamp end )
+   {
+      _lockWaits.push_back( LockWait{ mutexAddr, start, end } );
    }
 
    uint32_t findOrAddStringToDb( const char* strId )
@@ -415,49 +453,76 @@ class ClientProfiler::Impl
              findOrAddStringToDb( t.className ), findOrAddStringToDb( t.fctName ) );
       }
 
-      // Allocate raw buffer to send to server. This raw data should be as follow:
-      // =========================================================
-      // msgHeader   = Generic Msg Header       - Generic msg information
-      // tracesInfo  = Profiler specific Header - Information about the profiler specific msg
-      // stringData  = String Data              - Array with all strings referenced by the traces
-      // traceToSend = Traces                   - Array containing all of the traces
+      // Allocate raw buffer to send to server. It should be big enough for all
+      // messages to fit.
+
+      // 1- Get size of profiling traces message
       const uint32_t stringDataSize = _nameArrayData.size();
       assert( stringDataSize >= _sentStringDataSize );
       const uint32_t stringToSend = stringDataSize - _sentStringDataSize;
-      const size_t profilerMsgSize =
-          sizeof( TracesInfo ) + stringToSend + sizeof( Trace ) * _shallowTraces.size();
-      _bufferToSend.resize( sizeof( MsgHeader ) + profilerMsgSize, 0 );
+      const size_t profilerMsgSize = sizeof( MsgHeader ) + sizeof( TracesInfo ) + stringToSend +
+                                     sizeof( Trace ) * _shallowTraces.size();
 
-      MsgHeader* msgHeader = (MsgHeader*)_bufferToSend.data();
-      TracesInfo* tracesInfo = (TracesInfo*)(_bufferToSend.data() + sizeof( MsgHeader ) );
-      char* stringData = (char*)( _bufferToSend.data() + sizeof( MsgHeader ) + sizeof( TracesInfo ) );
-      Trace* traceToSend =
-          (Trace*)( _bufferToSend.data() + sizeof( MsgHeader ) + sizeof( TracesInfo ) + stringToSend );
+      // 2- Get size of lock messages
+      const size_t lockMsgSize = sizeof( MsgHeader ) + _lockWaits.size() * sizeof( LockWait );
 
-      // Create the msg header first
-      msgHeader->type = MsgType::PROFILER_TRACE;
-      msgHeader->size = profilerMsgSize;
+      // Allocate big enough buffer for all messages
+      _bufferToSend.resize( profilerMsgSize + lockMsgSize );
+      uint8_t* bufferPtr = _bufferToSend.data();
 
-      // TODO: Investigate if the truncation from size_t to uint32 is safe .. or not
-      tracesInfo->threadId = (uint32_t)_hashedThreadId;
-      tracesInfo->stringDataSize = stringToSend;
-      tracesInfo->traceCount = (uint32_t)_shallowTraces.size();
-
-      // Copy string data into its array
-      memcpy( stringData, _nameArrayData.data() + _sentStringDataSize, stringToSend );
-
-      // Copy trace information into buffer to send
-      for( size_t i = 0; i < _shallowTraces.size(); ++i )
+      // Fill the buffer with the profiling trace message
       {
-         auto& t = traceToSend[i];
-         t.start = _shallowTraces[i].start;
-         t.end = _shallowTraces[i].end;
-         t.classNameIdx = classFctNamesIdx[i].first;
-         t.fctNameIdx = classFctNamesIdx[i].second;
-         t.group = _shallowTraces[i].group;
+         // The data layout is as follow:
+         // =========================================================
+         // msgHeader   = Generic Msg Header       - Generic msg information
+         // tracesInfo  = Profiler specific Header - Information about the profiler specific msg
+         // stringData  = String Data              - Array with all strings referenced by the traces
+         // traceToSend = Traces                   - Array containing all of the traces
+
+         MsgHeader* msgHeader = (MsgHeader*)bufferPtr;
+         TracesInfo* tracesInfo = (TracesInfo*)( bufferPtr + sizeof( MsgHeader ) );
+         char* stringData =
+             (char*)( bufferPtr + sizeof( MsgHeader ) + sizeof( TracesInfo ) );
+         Trace* traceToSend =
+             (Trace*)( bufferPtr + sizeof( MsgHeader ) + sizeof( TracesInfo ) + stringToSend );
+
+         // Create the msg header first
+         msgHeader->type = MsgType::PROFILER_TRACE;
+         msgHeader->size = profilerMsgSize;
+
+         // TODO: Investigate if the truncation from size_t to uint32 is safe .. or not
+         tracesInfo->threadId = (uint32_t)_threadId;
+         tracesInfo->stringDataSize = stringToSend;
+         tracesInfo->traceCount = (uint32_t)_shallowTraces.size();
+
+         // Copy string data into its array
+         memcpy( stringData, _nameArrayData.data() + _sentStringDataSize, stringToSend );
+
+         // Copy trace information into buffer to send
+         for ( size_t i = 0; i < _shallowTraces.size(); ++i )
+         {
+            auto& t = traceToSend[i];
+            t.start = _shallowTraces[i].start;
+            t.end = _shallowTraces[i].end;
+            t.classNameIdx = classFctNamesIdx[i].first;
+            t.fctNameIdx = classFctNamesIdx[i].second;
+            t.group = _shallowTraces[i].group;
+         }
       }
 
-      _client.send( _bufferToSend.data(), sizeof( MsgHeader ) + profilerMsgSize );
+      // Increment pointer to new pos in buffer
+      bufferPtr += profilerMsgSize;
+
+      // Fill the buffer with the lock message
+      {
+         MsgHeader* msgHeader = (MsgHeader*)bufferPtr;
+         msgHeader->type = MsgType::PROFILER_WAIT_LOCK;
+         msgHeader->size = lockMsgSize - sizeof(MsgHeader);
+         bufferPtr += sizeof( MsgHeader );
+         memcpy( bufferPtr, _lockWaits.data(), lockMsgSize - sizeof(MsgHeader) );
+      }
+
+      _client.send( _bufferToSend.data(), _bufferToSend.size() );
 
       // Update sent array size
       _sentStringDataSize = stringDataSize;
@@ -467,8 +532,9 @@ class ClientProfiler::Impl
    }
 
    int _pushTraceLevel{0};
-   size_t _hashedThreadId{0};
+   size_t _threadId{0};
    std::vector< ShallowTrace > _shallowTraces;
+   std::vector< LockWait > _lockWaits;
    std::vector< uint8_t > _bufferToSend;
    std::vector< const char* > _nameArrayId;
    std::vector< char > _nameArrayData;
@@ -476,30 +542,30 @@ class ClientProfiler::Impl
    Client _client;
 };
 
-ClientProfiler::Impl* ClientProfiler::Get( std::thread::id tId )
+ClientProfiler::Impl* ClientProfiler::Get( size_t threadId, bool createIfMissing /*= true*/ )
 {
-   static std::mutex m;
-   std::lock_guard< std::mutex > guard(m);
-   const size_t threadIdHash = std::hash<std::thread::id>{}( tId );
-
    int tIndex = 0;
    int firstEmptyIdx = -1;
    for ( ; tIndex < MAX_THREAD_NB; ++tIndex )
    {
       // Find existing client profiler for current thread.
-      if ( threadsId[tIndex] == threadIdHash ) break;
+      if ( threadsId[tIndex] == threadId ) break;
       if ( firstEmptyIdx == -1 && threadsId[tIndex] == 0 ) firstEmptyIdx = tIndex;
    }
+
+   // TODO: Hack, there is a potential race condition if 2 threads get the same index and
+   // create a new client. Maybe use something like atomic index?
 
    // If we have not found any existing client profiler for the current thread,
    // lets create one.
    if ( tIndex >= MAX_THREAD_NB )
    {
-      assert( firstEmptyIdx < MAX_THREAD_NB );
-      // TODO: fix leak and fix potential condition race... -_-
+      if( !createIfMissing ) return nullptr;
+
+      assert( firstEmptyIdx < MAX_THREAD_NB ); // Maximum client profiler reached (one per thread) 
       tIndex = firstEmptyIdx;
-      threadsId[tIndex] = threadIdHash;
-      clientProfilers[tIndex] = new ClientProfiler::Impl(threadIdHash);
+      threadsId[tIndex] = threadId;
+      clientProfilers[tIndex] = new ClientProfiler::Impl(threadId);
    }
 
    return clientProfilers[tIndex];
@@ -520,14 +586,47 @@ void ClientProfiler::EndProfile(
 {
    const int remainingPushedTraces = --impl->_pushTraceLevel;
    impl->addProfilingTrace( classStr, name, start, end, group );
-   if( remainingPushedTraces <= 0 )
+   if ( remainingPushedTraces <= 0 )
    {
       impl->flushToServer();
    }
 }
 
+void ClientProfiler::EndLockWait( Impl* impl, void* mutexAddr, TimeStamp start, TimeStamp end )
+{
+   impl->addWaitLockTrace( mutexAddr, start, end );
+}
+
 } // end of namespace details
 } // end of namespace vdbg
+
+// symbols to be acessed from shared library
+
+// void* vdbg_details_start_wait_lock( size_t threadId )
+// {
+//    auto client = vdbg::details::ClientProfiler::Get( threadId, false );
+//    if( client )
+//    {
+//       printf( "increase push trace lvl\n");
+//       ++client->_pushTraceLevel;
+//    }
+//    return (void*) client;
+// }
+
+// void vdbg_details_end_wait_lock(
+//     void* clientProfiler,
+//     void* mutexAddr,
+//     size_t timeStampStart,
+//     size_t timeStampEnd )
+// {
+//    if( clientProfiler )
+//    {
+//       auto client = reinterpret_cast<vdbg::details::ClientProfiler::Impl*>( clientProfiler );
+//       --client->_pushTraceLevel;
+//       client->addWaitLockTrace( mutexAddr, timeStampStart, timeStampEnd );
+//       printf( "decrease push trace lvl\n");
+//    }
+// }
 
 // ------ cdbg_client.cpp------------
 
