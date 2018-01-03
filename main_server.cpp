@@ -122,7 +122,7 @@ int main()
    vdbg::init();
 
    vdbg::Server serv;
-   serv.start( vdbg::SERVER_PATH, 10 );
+   serv.start( VDBG_SERVER_PATH, 10 );
 
    rapidjson::Document doc;
 

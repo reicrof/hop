@@ -43,7 +43,8 @@
 #define VDBG_CONSTEXPR constexpr
 #define VDBG_NOEXCEPT noexcept
 #define VDBG_STATIC_ASSERT static_assert
-#define VDBG_GET_THREAD_ID() pthread_self()
+#define VDBG_GET_THREAD_ID() (size_t)pthread_self()
+#define VDBG_SERVER_PATH "/tmp/my_server"
 extern char* __progname;
 inline const char* getProgName() VDBG_NOEXCEPT
 {
@@ -101,6 +102,14 @@ struct Trace
    uint32_t padding;      // extra dummy padding...
 };
 VDBG_STATIC_ASSERT( sizeof(Trace) == EXPECTED_TRACE_SIZE, "Trace layout has changed unexpectedly" );
+
+struct LockWait
+{
+   void* mutexAddress;
+   TimeStamp start, end;
+   uint8_t padding[8];
+};
+VDBG_STATIC_ASSERT( sizeof(LockWait) == 32 );
 
 // ------ end of message.h ------------
 
@@ -233,8 +242,6 @@ namespace vdbg
 namespace details
 {
 
-static const char* SERVER_PATH = "/tmp/my_server";
-
 // ------ client.cpp ------------
 
 Client::Client() VDBG_NOEXCEPT
@@ -256,7 +263,7 @@ bool Client::connect( bool force ) VDBG_NOEXCEPT
       struct sockaddr_un serveraddr;
       memset( &serveraddr, 0, sizeof( serveraddr ) );
       serveraddr.sun_family = AF_UNIX;
-      strcpy( serveraddr.sun_path, SERVER_PATH );
+      strcpy( serveraddr.sun_path, VDBG_SERVER_PATH );
 
       int rc = ::connect( _socket, (struct sockaddr*)&serveraddr, SUN_LEN( &serveraddr ) );
       if ( rc < 0 )
@@ -361,14 +368,6 @@ class ClientProfiler::Impl
       TimeStamp start, end;
       uint8_t group;
    };
-
-   struct LockWait
-   {
-      void* mutexAddress;
-      TimeStamp start, end;
-      uint8_t padding[8];
-   };
-   VDBG_STATIC_ASSERT( sizeof(LockWait) == 32 );
 
   public:
    Impl(size_t id) : _threadId( id )
@@ -488,7 +487,7 @@ class ClientProfiler::Impl
 
          // Create the msg header first
          msgHeader->type = MsgType::PROFILER_TRACE;
-         msgHeader->size = profilerMsgSize;
+         msgHeader->size = profilerMsgSize - sizeof( MsgHeader );
 
          // TODO: Investigate if the truncation from size_t to uint32 is safe .. or not
          tracesInfo->threadId = (uint32_t)_threadId;
@@ -528,6 +527,7 @@ class ClientProfiler::Impl
       _sentStringDataSize = stringDataSize;
       // Free the buffers
       _shallowTraces.clear();
+      _lockWaits.clear();
       _bufferToSend.clear();
    }
 
@@ -594,7 +594,10 @@ void ClientProfiler::EndProfile(
 
 void ClientProfiler::EndLockWait( Impl* impl, void* mutexAddr, TimeStamp start, TimeStamp end )
 {
-   impl->addWaitLockTrace( mutexAddr, start, end );
+   // Only add lock wait event if the lock is coming from within
+   // measured code
+   if( impl->_pushTraceLevel > 0 )
+      impl->addWaitLockTrace( mutexAddr, start, end );
 }
 
 } // end of namespace details

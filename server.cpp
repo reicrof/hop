@@ -47,6 +47,7 @@ bool Server::start( const char* name, int connections )
    _running = true;
 
    _thread = std::thread( [this]() {
+      using namespace details;
       int max_sd = 0;
       struct timeval timeout = {0, 500000};
       while ( _running )
@@ -83,8 +84,8 @@ bool Server::start( const char* name, int connections )
                {
                   if ( FD_ISSET( i, &_fdSet ) )
                   {
-                     unsigned char buffer[sizeof( vdbg::MsgHeader )];
-                     size_t valread = read( i, buffer, sizeof( vdbg::MsgHeader ) );
+                     unsigned char buffer[sizeof( MsgHeader )];
+                     size_t valread = read( i, buffer, sizeof( MsgHeader ) );
                      if ( valread == 0 )
                      {
                         // Client disconnect
@@ -93,9 +94,8 @@ bool Server::start( const char* name, int connections )
                      }
                      else
                      {
-                        MsgHeader* header = reinterpret_cast<vdbg::MsgHeader*>( buffer );
-                        handleNewMessage(
-                            i, header->type, header->size - sizeof( vdbg::MsgHeader ) );
+                        MsgHeader* header = reinterpret_cast<MsgHeader*>( buffer );
+                        handleNewMessage( i, header->type, header->size );
                      }
                   }
                }
@@ -128,13 +128,13 @@ bool Server::handleNewConnection()
    return false;
 }
 
-bool Server::handleNewMessage( int clientId, vdbg::MsgType type, uint32_t /*size*/ )
+bool Server::handleNewMessage( int clientId, details::MsgType type, uint32_t msgSize )
 {
    switch ( type )
    {
-      case MsgType::PROFILER_TRACE:
+      case details::MsgType::PROFILER_TRACE:
       {
-         vdbg::TracesInfo info;
+         details::TracesInfo info;
          size_t valread = ::read( clientId, (void*)&info, sizeof( info ) );
 
          if( valread != sizeof( info ) )
@@ -145,13 +145,13 @@ bool Server::handleNewMessage( int clientId, vdbg::MsgType type, uint32_t /*size
          if( valread != info.stringDataSize )
             return false;
 
-         std::vector< vdbg::Trace > traces( info.traceCount );
-         valread = ::read( clientId, (void*)traces.data(), sizeof( vdbg::Trace ) * info.traceCount );
-         if( valread != sizeof( vdbg::Trace ) * info.traceCount )
+         std::vector< details::Trace > traces( info.traceCount );
+         valread = ::read( clientId, (void*)traces.data(), sizeof( details::Trace ) * info.traceCount );
+         if( valread != sizeof( details::Trace ) * info.traceCount )
             return false;
 
          //printf( "Profiler Trace from thread %u with %d traces received\n", info.threadId, info.traceCount );
-         std::vector< vdbg::DisplayableTrace > dispTrace;
+         std::vector< DisplayableTrace > dispTrace;
          dispTrace.reserve( info.traceCount * 2 );
          for( const auto& t : traces )
          {
@@ -174,8 +174,14 @@ bool Server::handleNewMessage( int clientId, vdbg::MsgType type, uint32_t /*size
          pendingThreadIds.push_back( info.threadId );
          return true;
       }
-      case MsgType::PROFILER_WAIT_LOCK:
+      case details::MsgType::PROFILER_WAIT_LOCK:
       {
+         std::vector< details::LockWait > lockwaits( msgSize / sizeof( details::LockWait ) );
+         size_t valread = ::read( clientId, (void*)lockwaits.data(), msgSize );
+         if( valread != msgSize )
+            return false;
+
+         //printf("Received %lu wait locks\n", lockwaits.size() );
          return true;
       }
       default:

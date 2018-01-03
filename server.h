@@ -2,7 +2,7 @@
 #define VDBG_SERVER_H_
 
 #include <imdbg.h>
-#include <message.h>
+#include <vdbg.h>
 
 #include <unistd.h>
 #include <sys/types.h>
@@ -13,7 +13,6 @@
 
 namespace vdbg
 {
-enum class MsgType:uint32_t;
 class Server
 {
   public:
@@ -27,7 +26,7 @@ class Server
 
   private:
    bool handleNewConnection();
-   bool handleNewMessage( int clientId, MsgType type, uint32_t size );
+   bool handleNewMessage( int clientId, details::MsgType type, uint32_t size );
 
    std::thread _thread;
    std::string _serverName;
