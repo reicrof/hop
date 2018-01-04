@@ -289,9 +289,12 @@ bool Client::tryCreateSocket() VDBG_NOEXCEPT
       return false;
    }
 
-   // Set option to ignore sigpipe
+   #ifdef __APPLE__
+   // Set option to ignore sigpipe. On Macos, this seems the way to go
+   // to ignore sigpipe
    const int optval = 1;
    setsockopt( _socket, SOL_SOCKET, SO_NOSIGPIPE, &optval, sizeof(int));
+   #endif
 
    return true;
 }
@@ -300,7 +303,13 @@ bool Client::send( uint8_t* data, uint32_t size ) VDBG_NOEXCEPT
 {
    if( _state != State::CONNECTED && !connect( false ) ) return false;
 
-   int rc = ::send( _socket, data, size, 0 );
+   #ifdef __APPLE__
+   // This is not defined on macos. So define it here. It does not seems to
+   // do anything  on Macos. The setsockopt is how to do it on mac
+   #define MSG_NOSIGNAL 0x4000
+   #endif
+
+   int rc = ::send( _socket, data, size, MSG_NOSIGNAL );
    if ( rc < 0 )
    {
       handleError();

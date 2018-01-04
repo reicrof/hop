@@ -329,7 +329,7 @@ void ThreadTraces::addTraces( const std::vector< DisplayableTrace >& traces )
 
    // Check if we have enough space in the chunk to append these traces. If
    // not, create a new chunk
-   if( CHUNK_SIZE - (int)chunks.back().size() < (int)traces.size() )
+   if( chunks.empty() || CHUNK_SIZE - (int)chunks.back().size() < (int)traces.size() )
    {
       // Create new chunk that contains the traces and add the start time
       // of the chunk to our reference list.
