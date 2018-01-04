@@ -59,10 +59,10 @@ bool Server::start( const char* name, int connections )
          FD_SET( _socket, &_fdSet );
          max_sd = _socket;
 
-         for ( auto i : _clients )
+         for ( auto client : _clients )
          {
-            if ( i > 0 ) FD_SET( i, &_fdSet );
-            if ( i > max_sd ) max_sd = i;
+            if ( client > 0 ) FD_SET( client, &_fdSet );
+            if ( client > max_sd ) max_sd = client;
          }
 
          // wait for an activity on one of the sockets with a timeout
@@ -80,24 +80,24 @@ bool Server::start( const char* name, int connections )
             }
             else
             {
-               for ( auto& i : _clients )
+               for ( auto& client : _clients )
                {
-                  if ( FD_ISSET( i, &_fdSet ) )
+                  if ( FD_ISSET( client, &_fdSet ) )
                   {
                      unsigned char buffer[sizeof( MsgHeader )];
-                     size_t valread = read( i, buffer, sizeof( MsgHeader ) );
+                     size_t valread = read( client, buffer, sizeof( MsgHeader ) );
                      if ( valread == 0 )
                      {
                         // Client disconnect
-                        printf( "Client %d has disconnected.\n", i );
-                        i = 0;
+                        printf( "Client %d has disconnected.\n", client );
+                        client = 0;
                      }
                      else
                      {
                         MsgHeader* header = reinterpret_cast<MsgHeader*>( buffer );
-                        for( uint32_t i = 0; i < header->msgCount; ++i )
+                        for( uint32_t msgCount = 0; msgCount < header->msgCount; ++msgCount )
                         {
-                           handleNewMessage( i, header->threadId );
+                           handleNewMessage( client, header->threadId );
                         }
                      }
                   }
@@ -135,13 +135,13 @@ bool Server::handleNewMessage( int clientId, uint32_t threadId )
 {
    using namespace details;
    MsgInfo msgInfo;
-   size_t valread = ::read( clientId, (void*)&msgInfo, sizeof( MsgType ) );
+   size_t valread = ::read( clientId, (void*)&msgInfo, sizeof( MsgInfo ) );
    if( valread != sizeof( MsgInfo ) )
       return false;
 
    switch ( msgInfo.type )
    {
-      case MsgType::PROFILER_TRACE:
+      case MsgInfoType::PROFILER_TRACE:
       {
          std::vector< char > stringData( msgInfo.traces.stringDataSize );
          valread = ::read( clientId, stringData.data(), msgInfo.traces.stringDataSize );
@@ -177,7 +177,7 @@ bool Server::handleNewMessage( int clientId, uint32_t threadId )
          pendingThreadIds.push_back( threadId );
          return true;
       }
-      case MsgType::PROFILER_WAIT_LOCK:
+      case MsgInfoType::PROFILER_WAIT_LOCK:
       {
          std::vector< LockWait > lockwaits( msgInfo.lockwaits.count );
          const size_t bytesToRead = msgInfo.lockwaits.count * sizeof( LockWait );

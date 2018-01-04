@@ -66,13 +66,6 @@ inline decltype( std::chrono::duration_cast<Precision>( Clock::now().time_since_
 }
 using TimeStamp = decltype( getTimeStamp() );
 
-enum class MsgType : uint32_t
-{
-   PROFILER_TRACE,
-   PROFILER_WAIT_LOCK,
-   INVALID_MESSAGE,
-};
-
 VDBG_CONSTEXPR uint32_t EXPECTED_MSG_HEADER_SIZE = 8;
 struct MsgHeader
 {
@@ -84,6 +77,13 @@ struct MsgHeader
 VDBG_STATIC_ASSERT(
     sizeof( MsgHeader ) == EXPECTED_MSG_HEADER_SIZE,
     "MsgHeader layout has changed unexpectedly" );
+
+enum class MsgInfoType : uint32_t
+{
+   PROFILER_TRACE,
+   PROFILER_WAIT_LOCK,
+   INVALID_MESSAGE,
+};
 
 struct TracesMsgInfo
 {
@@ -99,7 +99,7 @@ struct LockWaitsMsgInfo
 VDBG_CONSTEXPR uint32_t EXPECTED_MSG_INFO_SIZE = 16;
 struct MsgInfo
 {
-   MsgType type;
+   MsgInfoType type;
    union {
       TracesMsgInfo traces;
       LockWaitsMsgInfo lockwaits;
@@ -516,7 +516,7 @@ class ClientProfiler::Impl
          char* stringData = (char*)( bufferPtr + sizeof( MsgInfo ) );
          Trace* traceToSend = (Trace*)( bufferPtr + sizeof( MsgInfo ) + stringToSend );
 
-         tracesInfo->type = MsgType::PROFILER_TRACE;
+         tracesInfo->type = MsgInfoType::PROFILER_TRACE;
          tracesInfo->traces.stringDataSize = stringToSend;
          tracesInfo->traces.traceCount = (uint32_t)_shallowTraces.size();
 
@@ -541,7 +541,7 @@ class ClientProfiler::Impl
       // Fill the buffer with the lock message
       {
          MsgInfo* lwInfo = (MsgInfo*)bufferPtr;
-         lwInfo->type = MsgType::PROFILER_WAIT_LOCK;
+         lwInfo->type = MsgInfoType::PROFILER_WAIT_LOCK;
          lwInfo->lockwaits.count = (uint32_t)_lockWaits.size();
          bufferPtr += sizeof( MsgInfo );
          memcpy( bufferPtr, _lockWaits.data(), _lockWaits.size() * sizeof( LockWait ) );

@@ -74,21 +74,21 @@ int bug = -1;
 //    }
 // }
 
-static volatile size_t stamps = 0;
-static void paintStamp()
-{
-   VDBG_PROF_FUNC();
-   stamps++;
-}
+// static volatile size_t stamps = 0;
+// static void paintStamp()
+// {
+//    VDBG_PROF_FUNC();
+//    stamps++;
+// }
 
-static void paint()
-{
-   VDBG_PROF_FUNC();
-   for( size_t i = 0; i < 1000; ++i )
-   {
-      paintStamp();
-   }
-}
+// static void paint()
+// {
+//    VDBG_PROF_FUNC();
+//    for( size_t i = 0; i < 1000; ++i )
+//    {
+//       paintStamp();
+//    }
+// }
 
 static void recCall( int& v )
 {
@@ -99,7 +99,7 @@ static void recCall( int& v )
    {
       recCall( --v );
    }
-   paint();
+   //paint();
 }
 
 static void call1( int v )
