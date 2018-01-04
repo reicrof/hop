@@ -11,7 +11,7 @@ CXXFLAGS += $(ENABLED_WARNINGS) $(DISABLED_WARNINGS)
 IMGUI_SOURCES = $(wildcard imgui/*.cpp)
 SERVER_SOURCES = $(wildcard *server.cpp) imdbg.cpp $(IMGUI_SOURCES)
 CLIENT_SOURCES = main_client.cpp
-PTHREAD_WRAP_SOURCES = vdbg_functions_wrap.cpp
+PTHREAD_WRAP_SOURCES =
 
 COMMON_INCLUDES = -isystem.
 CLIENT_DEFINE = -DVDBG_ENABLED
@@ -20,6 +20,7 @@ PLATFORM_LD_FLAGS =
 ifeq ($(UNAME), Linux)
    CXX = g++7
    PLATFORM_LD_FLAGS = -lGL
+   PTHREAD_WRAP_SOURCES = vdbg_functions_wrap.cpp
 else ifeq ($(UNAME), Darwin)
    CXX = clang++
    PLATFORM_LD_FLAGS = -framework OpenGL -framework Quartz -framework Cocoa -Wl,-undefined,dynamic_lookup
@@ -41,7 +42,7 @@ $(TARGET_CLIENT): $(CLIENT_SOURCES)
 
 # pthread wrapper library
 $(TARGET_PTHREAD_WRAP): $(PTHREAD_WRAP_SOURCES)
-	$(CXX) -fPIC -shared $(PTHREAD_WRAP_SOURCES) -ldl $(INC) -DVDBG_ENABLED -o $(TARGET_PTHREAD_WRAP) -g
+	$(CXX) -std=c++14 -fPIC -shared $(PTHREAD_WRAP_SOURCES) -ldl $(INC) -DVDBG_ENABLED -o $(TARGET_PTHREAD_WRAP) -g
 
 .PHONY : clean
 clean:

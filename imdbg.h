@@ -38,10 +38,20 @@ struct DisplayableTrace
    }
 };
 
+struct ThreadTraces
+{
+   static constexpr int CHUNK_SIZE = 2048;
+   ThreadTraces();
+   void addTraces( const std::vector< DisplayableTrace >& traces );
+   std::vector< double > startTimes;
+   std::vector< double > endTimes;
+   std::vector< std::vector< DisplayableTrace > > chunks;
+};
+
 struct ProfilerTimeline
 {
    void drawTimeline();
-   void drawTraces( const std::vector<DisplayableTrace>& traces, const std::vector< char >& strData );
+   void drawTraces( const ThreadTraces& traces, const std::vector< char >& strData );
    void handleMouseWheel( const ImVec2& mousePosInCanvas );
    void moveToTime( int64_t timeInMicro );
    void zoomOn( int64_t microToZoomOn, float zoomFactor );
@@ -61,7 +71,8 @@ struct Profiler
    std::string _name;
    ProfilerTimeline _timeline;
    std::vector< uint32_t > _threadsId;
-   std::vector< std::vector< DisplayableTrace > > _tracesPerThread;
+   //std::vector< std::vector< DisplayableTrace > > _tracesPerThread;
+   std::vector< ThreadTraces > _tracesPerThread;
    std::vector< std::vector< char > > _stringDataPerThread;
    bool _recording{ false };
    bool _realtime{ true };
