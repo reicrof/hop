@@ -74,6 +74,22 @@ int bug = -1;
 //    }
 // }
 
+static volatile size_t stamps = 0;
+static void paintStamp()
+{
+   VDBG_PROF_FUNC();
+   stamps++;
+}
+
+static void paint()
+{
+   VDBG_PROF_FUNC();
+   for( size_t i = 0; i < 1000; ++i )
+   {
+      paintStamp();
+   }
+}
+
 static void recCall( int& v )
 {
    VDBG_PROF_FUNC();
@@ -83,6 +99,7 @@ static void recCall( int& v )
    {
       recCall( --v );
    }
+   paint();
 }
 
 static void call1( int v )
@@ -113,7 +130,7 @@ int main()
       if( asdf > 10 )
       {
          std::lock_guard<std::mutex> g(m);
-         call1(20);
+         call1(60);
       }
    }
 

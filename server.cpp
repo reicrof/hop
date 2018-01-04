@@ -95,7 +95,10 @@ bool Server::start( const char* name, int connections )
                      else
                      {
                         MsgHeader* header = reinterpret_cast<MsgHeader*>( buffer );
-                        handleNewMessage( i, header->type, header->size );
+                        for( uint32_t i = 0; i < header->msgCount; ++i )
+                        {
+                           handleNewMessage( i, header->threadId );
+                        }
                      }
                   }
                }
@@ -128,31 +131,31 @@ bool Server::handleNewConnection()
    return false;
 }
 
-bool Server::handleNewMessage( int clientId, details::MsgType type, uint32_t msgSize )
+bool Server::handleNewMessage( int clientId, uint32_t threadId )
 {
-   switch ( type )
+   using namespace details;
+   MsgInfo msgInfo;
+   size_t valread = ::read( clientId, (void*)&msgInfo, sizeof( MsgType ) );
+   if( valread != sizeof( MsgInfo ) )
+      return false;
+
+   switch ( msgInfo.type )
    {
-      case details::MsgType::PROFILER_TRACE:
+      case MsgType::PROFILER_TRACE:
       {
-         details::TracesInfo info;
-         size_t valread = ::read( clientId, (void*)&info, sizeof( info ) );
-
-         if( valread != sizeof( info ) )
+         std::vector< char > stringData( msgInfo.traces.stringDataSize );
+         valread = ::read( clientId, stringData.data(), msgInfo.traces.stringDataSize );
+         if( valread != msgInfo.traces.stringDataSize )
             return false;
 
-         std::vector< char > stringData( info.stringDataSize );
-         valread = ::read( clientId, stringData.data(), info.stringDataSize );
-         if( valread != info.stringDataSize )
+         std::vector< Trace > traces( msgInfo.traces.traceCount );
+         valread = ::read( clientId, (void*)traces.data(), sizeof( Trace ) * msgInfo.traces.traceCount );
+         if( valread != sizeof( Trace ) * msgInfo.traces.traceCount )
             return false;
 
-         std::vector< details::Trace > traces( info.traceCount );
-         valread = ::read( clientId, (void*)traces.data(), sizeof( details::Trace ) * info.traceCount );
-         if( valread != sizeof( details::Trace ) * info.traceCount )
-            return false;
-
-         //printf( "Profiler Trace from thread %u with %d traces received\n", info.threadId, info.traceCount );
+         //printf( "Profiler Trace from thread %u with %d traces received\n", threadId, msgInfo.traces.traceCount );
          std::vector< DisplayableTrace > dispTrace;
-         dispTrace.reserve( info.traceCount * 2 );
+         dispTrace.reserve( msgInfo.traces.traceCount * 2 );
          for( const auto& t : traces )
          {
             // TODO: hack! needs to taking into account the precision specified in message.h
@@ -171,14 +174,15 @@ bool Server::handleNewMessage( int clientId, details::MsgType type, uint32_t msg
          std::lock_guard<std::mutex> guard( pendingTracesMutex );
          pendingTraces.emplace_back( std::move( dispTrace ) );
          pendingStringData.emplace_back( std::move( stringData ) );
-         pendingThreadIds.push_back( info.threadId );
+         pendingThreadIds.push_back( threadId );
          return true;
       }
-      case details::MsgType::PROFILER_WAIT_LOCK:
+      case MsgType::PROFILER_WAIT_LOCK:
       {
-         std::vector< details::LockWait > lockwaits( msgSize / sizeof( details::LockWait ) );
-         size_t valread = ::read( clientId, (void*)lockwaits.data(), msgSize );
-         if( valread != msgSize )
+         std::vector< LockWait > lockwaits( msgInfo.lockwaits.count );
+         const size_t bytesToRead = msgInfo.lockwaits.count * sizeof( LockWait );
+         size_t valread = ::read( clientId, (void*)lockwaits.data(), bytesToRead );
+         if( valread != bytesToRead )
             return false;
 
          //printf("Received %lu wait locks\n", lockwaits.size() );

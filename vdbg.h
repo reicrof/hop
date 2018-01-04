@@ -57,20 +57,6 @@ namespace vdbg
 {
 namespace details
 {
-enum class MsgType : uint32_t
-{
-   PROFILER_TRACE,
-   PROFILER_WAIT_LOCK,
-   INVALID_MESSAGE,
-};
-
-struct MsgHeader
-{
-   // Type of the message sent
-   MsgType type;
-   // Size of the message
-   uint32_t size;
-};
 
 using Clock = std::chrono::high_resolution_clock;
 using Precision = std::chrono::nanoseconds;
@@ -80,17 +66,48 @@ inline decltype( std::chrono::duration_cast<Precision>( Clock::now().time_since_
 }
 using TimeStamp = decltype( getTimeStamp() );
 
-VDBG_CONSTEXPR uint32_t EXPECTED_TRACE_INFO_SIZE = 16;
-struct TracesInfo
+enum class MsgType : uint32_t
 {
+   PROFILER_TRACE,
+   PROFILER_WAIT_LOCK,
+   INVALID_MESSAGE,
+};
+
+VDBG_CONSTEXPR uint32_t EXPECTED_MSG_HEADER_SIZE = 8;
+struct MsgHeader
+{
+   // Thread id from which the msg was sent
    uint32_t threadId;
-   uint32_t stringDataSize;
-   uint32_t traceCount;
-   uint32_t padding;
+   // Number of message in this communication
+   uint32_t msgCount;
 };
 VDBG_STATIC_ASSERT(
-    sizeof( TracesInfo ) == EXPECTED_TRACE_INFO_SIZE,
-    "TracesInfo layout has changed unexpectedly" );
+    sizeof( MsgHeader ) == EXPECTED_MSG_HEADER_SIZE,
+    "MsgHeader layout has changed unexpectedly" );
+
+struct TracesMsgInfo
+{
+   uint32_t stringDataSize;
+   uint32_t traceCount;
+};
+
+struct LockWaitsMsgInfo
+{
+   uint32_t count;
+};
+
+VDBG_CONSTEXPR uint32_t EXPECTED_MSG_INFO_SIZE = 16;
+struct MsgInfo
+{
+   MsgType type;
+   union {
+      TracesMsgInfo traces;
+      LockWaitsMsgInfo lockwaits;
+   };
+   uint32_t padding;
+};
+VDBG_STATIC_ASSERT( sizeof(MsgInfo) == EXPECTED_MSG_INFO_SIZE, "MsgInfo layout has changed unexpectedly" );
+
 
 VDBG_CONSTEXPR uint32_t EXPECTED_TRACE_SIZE = 32;
 struct Trace
@@ -103,13 +120,14 @@ struct Trace
 };
 VDBG_STATIC_ASSERT( sizeof(Trace) == EXPECTED_TRACE_SIZE, "Trace layout has changed unexpectedly" );
 
+VDBG_CONSTEXPR uint32_t EXPECTED_LOCK_WAIT_SIZE = 32;
 struct LockWait
 {
    void* mutexAddress;
    TimeStamp start, end;
-   uint8_t padding[8];
+   uint32_t padding;
 };
-VDBG_STATIC_ASSERT( sizeof(LockWait) == 32 );
+VDBG_STATIC_ASSERT( sizeof(LockWait) == EXPECTED_LOCK_WAIT_SIZE, "Lock wait layout has changed unexpectedly" );
 
 // ------ end of message.h ------------
 
@@ -306,7 +324,7 @@ bool Client::send( uint8_t* data, uint32_t size ) VDBG_NOEXCEPT
    #ifdef __APPLE__
    // This is not defined on macos. So define it here. It does not seems to
    // do anything  on Macos. The setsockopt is how to do it on mac
-   #define MSG_NOSIGNAL 0x4000
+   #define MSG_NOSIGNAL 0
    #endif
 
    int rc = ::send( _socket, data, size, MSG_NOSIGNAL );
@@ -467,40 +485,40 @@ class ClientProfiler::Impl
       const uint32_t stringDataSize = _nameArrayData.size();
       assert( stringDataSize >= _sentStringDataSize );
       const uint32_t stringToSend = stringDataSize - _sentStringDataSize;
-      const size_t profilerMsgSize = sizeof( MsgHeader ) + sizeof( TracesInfo ) + stringToSend +
-                                     sizeof( Trace ) * _shallowTraces.size();
+      const size_t profilerMsgSize =
+          sizeof( MsgInfo ) + stringToSend + sizeof( Trace ) * _shallowTraces.size();
 
       // 2- Get size of lock messages
-      const size_t lockMsgSize = sizeof( MsgHeader ) + _lockWaits.size() * sizeof( LockWait );
+      const size_t lockMsgSize = sizeof( MsgInfo ) + _lockWaits.size() * sizeof( LockWait );
 
       // Allocate big enough buffer for all messages
-      _bufferToSend.resize( profilerMsgSize + lockMsgSize );
+      _bufferToSend.resize( sizeof( MsgHeader ) + profilerMsgSize + lockMsgSize );
       uint8_t* bufferPtr = _bufferToSend.data();
+
+      // First fill buffer with header
+      {
+         MsgHeader* msgHeader = (MsgHeader*)bufferPtr;
+         // TODO: Investigate if the truncation from size_t to uint32 is safe .. or not
+         msgHeader->threadId = (uint32_t)_threadId;
+         msgHeader->msgCount = 2;
+      }
+
+      bufferPtr += sizeof( MsgHeader );
 
       // Fill the buffer with the profiling trace message
       {
          // The data layout is as follow:
          // =========================================================
-         // msgHeader   = Generic Msg Header       - Generic msg information
-         // tracesInfo  = Profiler specific Header - Information about the profiler specific msg
+         // tracesInfo  = Profiler specific infos  - Information about the profiling traces sent
          // stringData  = String Data              - Array with all strings referenced by the traces
          // traceToSend = Traces                   - Array containing all of the traces
+         MsgInfo* tracesInfo = (MsgInfo*)bufferPtr;
+         char* stringData = (char*)( bufferPtr + sizeof( MsgInfo ) );
+         Trace* traceToSend = (Trace*)( bufferPtr + sizeof( MsgInfo ) + stringToSend );
 
-         MsgHeader* msgHeader = (MsgHeader*)bufferPtr;
-         TracesInfo* tracesInfo = (TracesInfo*)( bufferPtr + sizeof( MsgHeader ) );
-         char* stringData =
-             (char*)( bufferPtr + sizeof( MsgHeader ) + sizeof( TracesInfo ) );
-         Trace* traceToSend =
-             (Trace*)( bufferPtr + sizeof( MsgHeader ) + sizeof( TracesInfo ) + stringToSend );
-
-         // Create the msg header first
-         msgHeader->type = MsgType::PROFILER_TRACE;
-         msgHeader->size = profilerMsgSize - sizeof( MsgHeader );
-
-         // TODO: Investigate if the truncation from size_t to uint32 is safe .. or not
-         tracesInfo->threadId = (uint32_t)_threadId;
-         tracesInfo->stringDataSize = stringToSend;
-         tracesInfo->traceCount = (uint32_t)_shallowTraces.size();
+         tracesInfo->type = MsgType::PROFILER_TRACE;
+         tracesInfo->traces.stringDataSize = stringToSend;
+         tracesInfo->traces.traceCount = (uint32_t)_shallowTraces.size();
 
          // Copy string data into its array
          memcpy( stringData, _nameArrayData.data() + _sentStringDataSize, stringToSend );
@@ -522,11 +540,11 @@ class ClientProfiler::Impl
 
       // Fill the buffer with the lock message
       {
-         MsgHeader* msgHeader = (MsgHeader*)bufferPtr;
-         msgHeader->type = MsgType::PROFILER_WAIT_LOCK;
-         msgHeader->size = lockMsgSize - sizeof(MsgHeader);
-         bufferPtr += sizeof( MsgHeader );
-         memcpy( bufferPtr, _lockWaits.data(), lockMsgSize - sizeof(MsgHeader) );
+         MsgInfo* lwInfo = (MsgInfo*)bufferPtr;
+         lwInfo->type = MsgType::PROFILER_WAIT_LOCK;
+         lwInfo->lockwaits.count = (uint32_t)_lockWaits.size();
+         bufferPtr += sizeof( MsgInfo );
+         memcpy( bufferPtr, _lockWaits.data(), _lockWaits.size() * sizeof( LockWait ) );
       }
 
       _client.send( _bufferToSend.data(), _bufferToSend.size() );

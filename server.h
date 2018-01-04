@@ -26,7 +26,7 @@ class Server
 
   private:
    bool handleNewConnection();
-   bool handleNewMessage( int clientId, details::MsgType type, uint32_t size );
+   bool handleNewMessage( int clientId, uint32_t threadId );
 
    std::thread _thread;
    std::string _serverName;
