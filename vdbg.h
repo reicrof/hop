@@ -289,6 +289,10 @@ bool Client::tryCreateSocket() VDBG_NOEXCEPT
       return false;
    }
 
+   // Set option to ignore sigpipe
+   const int optval = 1;
+   setsockopt( _socket, SOL_SOCKET, SO_NOSIGPIPE, &optval, sizeof(int));
+
    return true;
 }
 
@@ -296,12 +300,7 @@ bool Client::send( uint8_t* data, uint32_t size ) VDBG_NOEXCEPT
 {
    if( _state != State::CONNECTED && !connect( false ) ) return false;
 
-   #ifdef __APPLE__
-   // This is not defined on macos. So define it here
-   #define MSG_NOSIGNAL 0x4000
-   #endif
-
-   int rc = ::send( _socket, data, size, MSG_NOSIGNAL );
+   int rc = ::send( _socket, data, size, 0 );
    if ( rc < 0 )
    {
       handleError();
