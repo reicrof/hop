@@ -14,8 +14,8 @@ namespace vdbg
 
 struct DisplayableTrace
 {
-   double time; // in ns
-   float deltaTime; // in us
+   TimeStamp time; // in ns
+   uint32_t deltaTime; // in ns
    uint32_t flags;
    // Indexes of the name in the string database
    uint32_t classNameIndex;
@@ -43,8 +43,8 @@ struct ThreadTraces
    static constexpr int CHUNK_SIZE = 2048;
    ThreadTraces();
    void addTraces( const std::vector< DisplayableTrace >& traces );
-   std::vector< double > startTimes;
-   std::vector< double > endTimes;
+   std::vector< TimeStamp > startTimes;
+   std::vector< TimeStamp > endTimes;
    std::vector< std::vector< DisplayableTrace > > chunks;
 };
 

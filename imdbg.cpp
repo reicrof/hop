@@ -517,10 +517,10 @@ void vdbg::Profiler::draw()
          // Only valid if we have at least 1 thread + 1 trace
          if( !_tracesPerThread.empty() )
          {
-            const double relativeStart = _tracesPerThread[0].startTimes.empty()
-                                             ? 0.0
+            const TimeStamp relativeStart = _tracesPerThread[0].startTimes.empty()
+                                             ? 0
                                              : _tracesPerThread[0].startTimes.front();
-            double maxTime = 0.0;
+            TimeStamp maxTime = 0.0;
             for( const auto& t : _tracesPerThread )
             {
                if( !t.endTimes.empty() )
@@ -581,6 +581,7 @@ void vdbg::Profiler::draw()
    ImGui::End();
 }
 
+// TODO template these 2 functions so they can be used with different time ratios
 template< typename T = uint64_t >
 static inline T microsToPxl( float windowWidth, int64_t usToDisplay, int64_t us )
 {
@@ -777,8 +778,8 @@ void vdbg::ProfilerTimeline::drawTraces( const ThreadTraces& traces, const std::
    className.reserve( 128 );
 
    // The time range to draw in absolute time
-   const double firstTraceAbsoluteTime = relativeStart + (_startMicros * 1000.0);
-   const double lastTraceAbsoluteTime = firstTraceAbsoluteTime + ( _microsToDisplay * 1000.0 );
+   const TimeStamp firstTraceAbsoluteTime = relativeStart + (_startMicros * 1000);
+   const TimeStamp lastTraceAbsoluteTime = firstTraceAbsoluteTime + ( _microsToDisplay * 1000 );
 
    const auto it1 = std::lower_bound(
        traces.endTimes.begin(), traces.endTimes.end(), firstTraceAbsoluteTime );
@@ -798,18 +799,18 @@ void vdbg::ProfilerTimeline::drawTraces( const ThreadTraces& traces, const std::
          {
             ++curDepth;
             if ( t.time > firstTraceAbsoluteTime ||
-                 t.time + ( t.deltaTime * 1000.0 ) > firstTraceAbsoluteTime )
+                 t.time + ( t.deltaTime ) > firstTraceAbsoluteTime )
             {
                // The start time is bigger than the maximum time on the timeline. We are done
                // drawing the traces.
                if ( t.time > lastTraceAbsoluteTime ) break;
 
-               const int64_t traceStartInMicros = ((t.time - relativeStart) / 1000.0f) + 0.5f;
+               const int64_t traceStartInMicros = ((t.time - relativeStart) / 1000);
                maxDepth = std::max( curDepth, maxDepth );
                const auto traceStartPxl =
                    microsToPxl<float>( windowWidthPxl, _microsToDisplay, traceStartInMicros );
                const float traceLengthPxl =
-                   microsToPxl<float>( windowWidthPxl, _microsToDisplay, t.deltaTime );
+                   microsToPxl<float>( windowWidthPxl, _microsToDisplay, t.deltaTime / 1000 );
 
                // Skip trace if it is way smaller than treshold
                if( traceLengthPxl < 0.25f )

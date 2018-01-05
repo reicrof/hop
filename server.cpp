@@ -159,13 +159,11 @@ bool Server::handleNewMessage( int clientId, uint32_t threadId )
          for( const auto& t : traces )
          {
             // TODO: hack! needs to taking into account the precision specified in message.h
-            const float difference = (t.end - t.start) * 0.001;
-            const double start =static_cast<double>(t.start);
-            const double end = static_cast<double>(t.end);
+            const uint32_t difference = (t.end - t.start);
             dispTrace.push_back( DisplayableTrace{
-                start, difference, DisplayableTrace::START_TRACE, t.classNameIdx, t.fctNameIdx} );
+                t.start, difference, DisplayableTrace::START_TRACE, t.classNameIdx, t.fctNameIdx} );
             dispTrace.push_back( DisplayableTrace{
-                end, difference, DisplayableTrace::END_TRACE, t.classNameIdx, t.fctNameIdx} );
+                t.end, difference, DisplayableTrace::END_TRACE, t.classNameIdx, t.fctNameIdx} );
          }
 
          // Sort them by time

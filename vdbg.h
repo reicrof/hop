@@ -55,8 +55,6 @@ inline const char* getProgName() VDBG_NOEXCEPT
 // ------ message.h ------------
 namespace vdbg
 {
-namespace details
-{
 
 using Clock = std::chrono::high_resolution_clock;
 using Precision = std::chrono::nanoseconds;
@@ -65,6 +63,9 @@ inline decltype( std::chrono::duration_cast<Precision>( Clock::now().time_since_
    return std::chrono::duration_cast<Precision>( Clock::now().time_since_epoch() ).count();
 }
 using TimeStamp = decltype( getTimeStamp() );
+
+namespace details
+{
 
 VDBG_CONSTEXPR uint32_t EXPECTED_MSG_HEADER_SIZE = 8;
 struct MsgHeader
