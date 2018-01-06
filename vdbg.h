@@ -36,9 +36,11 @@
 /////     EVERYTHING AFTER THIS IS IMPL DETAILS        ////////
 ///////////////////////////////////////////////////////////////
 
-#include <stdint.h>
 #include <chrono>
-#include <thread>
+#include <pthread.h>
+#include <semaphore.h>
+#include <stdint.h>
+#include <stdio.h>
 
 // ------ platform.h ------------
 // This is most things that are potentially non-portable.
@@ -46,13 +48,18 @@
 #define VDBG_NOEXCEPT noexcept
 #define VDBG_STATIC_ASSERT static_assert
 #define VDBG_GET_THREAD_ID() (size_t)pthread_self()
-#define VDBG_SERVER_PATH "/tmp/my_server"
+#define VDBG_SHARED_MEM_NAME "vdbg_shared_mem"
 extern char* __progname;
 inline const char* getProgName() VDBG_NOEXCEPT
 {
    return __progname;
 }
 // -----------------------------
+
+// Forward declarations of type used by ringbuffer as adapted from
+// Mindaugas Rasiukevicius. See below for Copyright/Disclaimer
+typedef struct ringbuf ringbuf_t;
+typedef struct ringbuf_worker ringbuf_worker_t;
 
 // ------ message.h ------------
 namespace vdbg
@@ -134,6 +141,27 @@ VDBG_STATIC_ASSERT( sizeof(LockWait) == EXPECTED_LOCK_WAIT_SIZE, "Lock wait layo
 
 // ------ end of message.h ------------
 
+// ------ SharedMemory.h ------------
+class SharedMemory
+{
+  public:
+
+   bool create( const char* path, size_t size );
+
+   ringbuf_t* ringbuffer() const VDBG_NOEXCEPT;
+   uint8_t* data() const VDBG_NOEXCEPT;
+   ~SharedMemory();
+
+   sem_t* _semaphore{NULL};
+  private:
+   ringbuf_t* _ringbuf;
+   uint8_t* _data;
+   size_t _size{0};
+   const char* _path{NULL};
+   int _sharedMemFd{-1};
+};
+// ------ end of SharedMemory.h ------------
+
 // -------- vdbg_client.h -------------
 static constexpr int MAX_THREAD_NB = 64;
 class ClientProfiler
@@ -156,7 +184,7 @@ class ClientProfiler
       TimeStamp end );
 
   private:
-   static void* sharedMemory;
+   static SharedMemory sharedMemory;
    static size_t threadsId[MAX_THREAD_NB];
    static ClientProfiler::Impl* clientProfilers[MAX_THREAD_NB];
 };
@@ -211,49 +239,59 @@ struct LockWaitGuard
 
 // -------- end of vdbg_client.h -------------
 
-// ------ SharedMemory.h ------------
-class SharedMemory
-{
-public:
-   bool create( const char* path, size_t size );
-   ~SharedMemory();
-   bool ok() const VDBG_NOEXCEPT;
-private:
-   void* _data{NULL};
-   size_t _size{0};
-   const char* _path{NULL};
-   int _sharedMemFd{-1};
-   int _semaphoreId{-1};
-};
-
 }  // namespace details
 }  // namespace vdbg
 
+
+
+/*
+ * Copyright (c) 2016 Mindaugas Rasiukevicius <rmind at noxt eu>
+ * All rights reserved.
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions
+ * are met:
+ * 1. Redistributions of source code must retain the above copyright
+ *    notice, this list of conditions and the following disclaimer.
+ * 2. Redistributions in binary form must reproduce the above copyright
+ *    notice, this list of conditions and the following disclaimer in the
+ *    documentation and/or other materials provided with the distribution.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE AUTHOR AND CONTRIBUTORS ``AS IS'' AND
+ * ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+ * ARE DISCLAIMED.  IN NO EVENT SHALL THE AUTHOR OR CONTRIBUTORS BE LIABLE
+ * FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+ * DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS
+ * OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION)
+ * HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT
+ * LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY
+ * OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
+ * SUCH DAMAGE.
+*/
+#include <unistd.h>
+
+int ringbuf_setup( ringbuf_t*, unsigned, size_t );
+void ringbuf_get_sizes( unsigned, size_t*, size_t* );
+
+ringbuf_worker_t* ringbuf_register( ringbuf_t*, unsigned );
+void ringbuf_unregister( ringbuf_t*, ringbuf_worker_t* );
+
+ssize_t ringbuf_acquire( ringbuf_t*, ringbuf_worker_t*, size_t );
+void ringbuf_produce( ringbuf_t*, ringbuf_worker_t* );
+size_t ringbuf_consume( ringbuf_t*, size_t* );
+void ringbuf_release( ringbuf_t*, size_t );
+
+/* ====================================================================== */
+
 // End of vdbg declarations
 
-// ------------ ringbuf.h by Mindaugas Rasiukevicius ------------
+#if defined(VDBG_IMPLEMENTATION) || defined(VDBG_SERVER_IMPLEMENTATION)
 
-typedef struct ringbuf ringbuf_t;
-typedef struct ringbuf_worker ringbuf_worker_t;
-
-int      ringbuf_setup(ringbuf_t *, unsigned, size_t);
-void     ringbuf_get_sizes(unsigned, size_t *, size_t *);
-
-ringbuf_worker_t *ringbuf_register(ringbuf_t *, unsigned);
-void     ringbuf_unregister(ringbuf_t *, ringbuf_worker_t *);
-
-ssize_t     ringbuf_acquire(ringbuf_t *, ringbuf_worker_t *, size_t);
-void     ringbuf_produce(ringbuf_t *, ringbuf_worker_t *);
-size_t      ringbuf_consume(ringbuf_t *, size_t *);
-void     ringbuf_release(ringbuf_t *, size_t);
-
-// ------------ End of ringbuf.h   ------------
-
-#ifdef VDBG_IMPLEMENTATION
-
-// C sockets include
+// C includes
 #include <errno.h>
-#include <sys/socket.h>
+#include <fcntl.h>
+#include <sys/mman.h>
 #include <sys/un.h>
 #include <unistd.h>
 
@@ -267,51 +305,84 @@ namespace vdbg
 namespace details
 {
 
-// ------ SharedMemory.cpp ------------
-
-bool SharedMemory::create( const char* path, size_t size )
+// ------ SharedMemory.cpp------------
+bool SharedMemory::create( const char* path, size_t requestedSize )
 {
-   // TODO handle signals 
-   //signal( SIGINT, sig_callback_handler );
+   // Get the size needed for the ringbuf struct
+   size_t ringBufSize;
+   ringbuf_get_sizes(MAX_THREAD_NB, &ringBufSize, NULL);
+
+   // TODO handle signals
+   // signal( SIGINT, sig_callback_handler );
    _path = path;
-   _sharedMemFd = shm_open( path, O_CREAT | O_RDWR, S_IRWXU | S_IRWXG );
+   _size = requestedSize;
+   _sharedMemFd = shm_open( path, O_CREAT | O_RDWR, 0666 );
    if ( _sharedMemFd < 0 )
    {
       perror( "Cannot create shared memory" );
+      return false;
    }
 
-   ftruncate( _sharedMemFd, size );
+   const size_t totalSize = ringBufSize + requestedSize;
+   ftruncate( _sharedMemFd, totalSize );
 
    /**
     * Semaphore open
     */
-   _semaphoreId = sem_open( "/mysem", O_CREAT, S_IRUSR | S_IWUSR, 1 );
+   _semaphore = sem_open( "/mysem", O_CREAT, S_IRUSR | S_IWUSR, 1 );
 
-   _data = mmap( NULL, size, PROT_READ | PROT_WRITE, MAP_SHARED, _sharedMemFd, 0 );
-   if ( _data == NULL )
+   uint8_t* sharedMem = (uint8_t*) mmap( NULL, totalSize, PROT_READ | PROT_WRITE, MAP_SHARED, _sharedMemFd, 0 );
+   memset( sharedMem, 'a', totalSize );
+   if ( sharedMem == NULL )
    {
       perror( "Could not map shared memory" );
+      return false;
    }
+
+   _ringbuf = (ringbuf_t*) sharedMem;
+   _data = sharedMem + ringBufSize;
+   if( ringbuf_setup( _ringbuf, MAX_THREAD_NB, requestedSize ) < 0 )
+   {
+      assert( false && "Ring buffer creation failed" );
+   }
+
+   return true;
 }
 
-bool ok() const VDBG_NOEXCEPT
+uint8_t* SharedMemory::data() const VDBG_NOEXCEPT
 {
-   return _data != NULL;
+   return _data;
+}
+
+ringbuf_t* SharedMemory::ringbuffer() const VDBG_NOEXCEPT
+{
+   return _ringbuf;
 }
 
 SharedMemory::~SharedMemory()
 {
-   if( _data )
+   if ( data() )
    {
+      if ( sem_close( _semaphore ) != 0 )
+      {
+         perror( "Could not close semaphore" );
+      }
+
+      if ( sem_unlink("/mysem") < 0 )
+      {
+         perror( "Could not unlink semaphore" );
+      }
+
       if ( shm_unlink( _path ) != 0 )
       {
          perror( "Could not unlink shared memory" );
       }
    }
 }
+// ------ end of SharedMemory.cpp------------
 
-// ------ end of SharedMemory.cpp ------------
-
+// Following is the impelementation specific to client side (not server side)
+#ifndef VDBG_SERVER_IMPLEMENTATION
 
 // ------ cdbg_client.cpp------------
 
@@ -390,9 +461,9 @@ class ClientProfiler::Impl
 
    void flushToServer()
    {
-      if( !ClientProfiler::sharedMemory.ok() )
+      if( !ClientProfiler::sharedMemory.data() )
       {
-            return;
+         return;
       }
 
       std::vector< std::pair< uint32_t, uint32_t > > classFctNamesIdx;
@@ -472,7 +543,19 @@ class ClientProfiler::Impl
          memcpy( bufferPtr, _lockWaits.data(), _lockWaits.size() * sizeof( LockWait ) );
       }
 
-      _client.send( _bufferToSend.data(), _bufferToSend.size() );
+      ringbuf_t* ringbuf = ClientProfiler::sharedMemory.ringbuffer();
+      uint8_t* mem = ClientProfiler::sharedMemory.data();
+      
+      // Get buffer from shared memory
+      static size_t msgCount=0;
+      auto offset = ringbuf_acquire( ringbuf, _worker, sizeof( "Hello world" ) );
+      if( offset != -1 )
+      {
+         memcpy( (void*)&mem[offset], (void*)"Hello world", sizeof("Hello world" ) );
+         ringbuf_produce( ringbuf, _worker);
+         sem_post( ClientProfiler::sharedMemory._semaphore );
+         printf("Message sent!%lu\n", ++msgCount );
+      }
 
       // Update sent array size
       _sentStringDataSize = stringDataSize;
@@ -489,14 +572,15 @@ class ClientProfiler::Impl
    std::vector< uint8_t > _bufferToSend;
    std::vector< const char* > _nameArrayId;
    std::vector< char > _nameArrayData;
+   ringbuf_worker_t* _worker{NULL};
    uint32_t _sentStringDataSize{0}; // The size of the string array on the server side
 };
 
 ClientProfiler::Impl* ClientProfiler::Get( size_t threadId, bool createIfMissing /*= true*/ )
 {
-   if( !ClientProfiler::sharedMemory.ok() )
+   if( !ClientProfiler::sharedMemory.data() )
    {
-      ClientProfiler::sharedMemory.create( "/tmp/vdbg_shared_mem", VDBG_SHARED_MEM_SIZE );
+      ClientProfiler::sharedMemory.create( VDBG_SHARED_MEM_NAME, VDBG_SHARED_MEM_SIZE );
    }
 
    int tIndex = 0;
@@ -521,6 +605,14 @@ ClientProfiler::Impl* ClientProfiler::Get( size_t threadId, bool createIfMissing
       tIndex = firstEmptyIdx;
       threadsId[tIndex] = threadId;
       clientProfilers[tIndex] = new ClientProfiler::Impl(threadId);
+
+      // Register producer in the ringbuffer
+      auto ringBuffer = ClientProfiler::sharedMemory.ringbuffer();
+      clientProfilers[tIndex]->_worker = ringbuf_register( ringBuffer, tIndex );
+      if ( clientProfilers[tIndex]->_worker  == NULL )
+      {
+         assert( false && "ringbuf_register" );
+      } 
    }
 
    return clientProfilers[tIndex];
@@ -555,8 +647,406 @@ void ClientProfiler::EndLockWait( Impl* impl, void* mutexAddr, TimeStamp start, 
       impl->addWaitLockTrace( mutexAddr, start, end );
 }
 
+#endif  // end !VDBG_SERVER_IMPLEMENTATION
+
 } // end of namespace details
 } // end of namespace vdbg
+
+
+#include <stdio.h>
+#include <stdlib.h>
+#include <stddef.h>
+#include <stdbool.h>
+#include <inttypes.h>
+#include <string.h>
+#include <limits.h>
+#include <errno.h>
+#include <assert.h>
+#include <algorithm>
+#include <atomic>
+
+/*  Utils.h */
+
+/*
+ * Branch prediction macros.
+ */
+#ifndef __predict_true
+#define __predict_true( x ) __builtin_expect( ( x ) != 0, 1 )
+#define __predict_false( x ) __builtin_expect( ( x ) != 0, 0 )
+#endif
+
+/*
+ * Exponential back-off for the spinning paths.
+ */
+#define SPINLOCK_BACKOFF_MIN 4
+#define SPINLOCK_BACKOFF_MAX 128
+#if defined( __x86_64__ ) || defined( __i386__ )
+#define SPINLOCK_BACKOFF_HOOK __asm volatile( "pause" ::: "memory" )
+#else
+#define SPINLOCK_BACKOFF_HOOK
+#endif
+#define SPINLOCK_BACKOFF( count )                                     \
+   do                                                                 \
+   {                                                                  \
+      for ( int __i = ( count ); __i != 0; __i-- )                    \
+      {                                                               \
+         SPINLOCK_BACKOFF_HOOK;                                       \
+      }                                                               \
+      if ( ( count ) < SPINLOCK_BACKOFF_MAX ) ( count ) += ( count ); \
+   } while ( /* CONSTCOND */ 0 );
+
+/* end of Utils.h */
+
+/* ringbuf.c */
+#define RBUF_OFF_MASK ( 0x00000000ffffffffUL )
+#define WRAP_LOCK_BIT ( 0x8000000000000000UL )
+#define RBUF_OFF_MAX ( UINT64_MAX & ~WRAP_LOCK_BIT )
+
+#define WRAP_COUNTER ( 0x7fffffff00000000UL )
+#define WRAP_INCR( x ) ( ( ( x ) + 0x100000000UL ) & WRAP_COUNTER )
+
+typedef uint64_t ringbuf_off_t;
+
+struct ringbuf_worker
+{
+   volatile ringbuf_off_t seen_off;
+   int registered;
+};
+
+struct ringbuf
+{
+   /* Ring buffer space. */
+   size_t space;
+
+   /*
+    * The NEXT hand is atomically updated by the producer.
+    * WRAP_LOCK_BIT is set in case of wrap-around; in such case,
+    * the producer can update the 'end' offset.
+    */
+   std::atomic< ringbuf_off_t > next;
+   ringbuf_off_t end;
+
+   /* The following are updated by the consumer. */
+   ringbuf_off_t written;
+   unsigned nworkers;
+   ringbuf_worker_t workers[];
+};
+
+/*
+ * ringbuf_setup: initialise a new ring buffer of a given length.
+ */
+int ringbuf_setup( ringbuf_t* rbuf, unsigned nworkers, size_t length )
+{
+   if ( length >= RBUF_OFF_MASK )
+   {
+      errno = EINVAL;
+      return -1;
+   }
+   memset( rbuf, 0, sizeof( ringbuf_t ) );
+   rbuf->space = length;
+   rbuf->end = RBUF_OFF_MAX;
+   rbuf->nworkers = nworkers;
+   return 0;
+}
+
+/*
+ * ringbuf_get_sizes: return the sizes of the ringbuf_t and ringbuf_worker_t.
+ */
+void ringbuf_get_sizes( const unsigned nworkers, size_t* ringbuf_size, size_t* ringbuf_worker_size )
+{
+   if ( ringbuf_size ) *ringbuf_size = offsetof( ringbuf_t, workers[nworkers] );
+   if ( ringbuf_worker_size ) *ringbuf_worker_size = sizeof( ringbuf_worker_t );
+}
+
+/*
+ * ringbuf_register: register the worker (thread/process) as a producer
+ * and pass the pointer to its local store.
+ */
+ringbuf_worker_t* ringbuf_register( ringbuf_t* rbuf, unsigned i )
+{
+   ringbuf_worker_t* w = &rbuf->workers[i];
+
+   w->seen_off = RBUF_OFF_MAX;
+   std::atomic_thread_fence( std::memory_order_release );
+   w->registered = true;
+   return w;
+}
+
+void ringbuf_unregister( ringbuf_t* rbuf, ringbuf_worker_t* w )
+{
+   w->registered = false;
+   (void)rbuf;
+}
+
+/*
+ * stable_nextoff: capture and return a stable value of the 'next' offset.
+ */
+static inline ringbuf_off_t stable_nextoff( ringbuf_t* rbuf )
+{
+   unsigned count = SPINLOCK_BACKOFF_MIN;
+   ringbuf_off_t next;
+
+   while ( ( next = rbuf->next ) & WRAP_LOCK_BIT )
+   {
+      SPINLOCK_BACKOFF( count );
+   }
+   std::atomic_thread_fence( std::memory_order_acquire );
+   assert( ( next & RBUF_OFF_MASK ) < rbuf->space );
+   return next;
+}
+
+/*
+ * ringbuf_acquire: request a space of a given length in the ring buffer.
+ *
+ * => On success: returns the offset at which the space is available.
+ * => On failure: returns -1.
+ */
+ssize_t ringbuf_acquire( ringbuf_t* rbuf, ringbuf_worker_t* w, size_t len )
+{
+   ringbuf_off_t seen, next, target;
+
+   assert( len > 0 && len <= rbuf->space );
+   assert( w->seen_off == RBUF_OFF_MAX );
+
+   do
+   {
+      ringbuf_off_t written;
+
+      /*
+       * Get the stable 'next' offset.  Save the observed 'next'
+       * value (i.e. the 'seen' offset), but mark the value as
+       * unstable (set WRAP_LOCK_BIT).
+       *
+       * Note: CAS will issue a std::memory_order_release for us and
+       * thus ensures that it reaches global visibility together
+       * with new 'next'.
+       */
+      seen = stable_nextoff( rbuf );
+      next = seen & RBUF_OFF_MASK;
+      assert( next < rbuf->space );
+      w->seen_off = next | WRAP_LOCK_BIT;
+
+      /*
+       * Compute the target offset.  Key invariant: we cannot
+       * go beyond the WRITTEN offset or catch up with it.
+       */
+      target = next + len;
+      written = rbuf->written;
+      if ( __predict_false( next < written && target >= written ) )
+      {
+         /* The producer must wait. */
+         w->seen_off = RBUF_OFF_MAX;
+         return -1;
+      }
+
+      if ( __predict_false( target >= rbuf->space ) )
+      {
+         const bool exceed = target > rbuf->space;
+
+         /*
+          * Wrap-around and start from the beginning.
+          *
+          * If we would exceed the buffer, then attempt to
+          * acquire the WRAP_LOCK_BIT and use the space in
+          * the beginning.  If we used all space exactly to
+          * the end, then reset to 0.
+          *
+          * Check the invariant again.
+          */
+         target = exceed ? ( WRAP_LOCK_BIT | len ) : 0;
+         if ( ( target & RBUF_OFF_MASK ) >= written )
+         {
+            w->seen_off = RBUF_OFF_MAX;
+            return -1;
+         }
+         /* Increment the wrap-around counter. */
+         target |= WRAP_INCR( seen & WRAP_COUNTER );
+      }
+      else
+      {
+         /* Preserve the wrap-around counter. */
+         target |= seen & WRAP_COUNTER;
+      }
+   } while ( !std::atomic_compare_exchange_weak( &rbuf->next, &seen, target ) );
+
+   /*
+    * Acquired the range.  Clear WRAP_LOCK_BIT in the 'seen' value
+    * thus indicating that it is stable now.
+    */
+   w->seen_off &= ~WRAP_LOCK_BIT;
+
+   /*
+    * If we set the WRAP_LOCK_BIT in the 'next' (because we exceed
+    * the remaining space and need to wrap-around), then save the
+    * 'end' offset and release the lock.
+    */
+   if ( __predict_false( target & WRAP_LOCK_BIT ) )
+   {
+      /* Cannot wrap-around again if consumer did not catch-up. */
+      assert( rbuf->written <= next );
+      assert( rbuf->end == RBUF_OFF_MAX );
+      rbuf->end = next;
+      next = 0;
+
+      /*
+       * Unlock: ensure the 'end' offset reaches global
+       * visibility before the lock is released.
+       */
+      std::atomic_thread_fence( std::memory_order_release );
+      rbuf->next = ( target & ~WRAP_LOCK_BIT );
+   }
+   assert( ( target & RBUF_OFF_MASK ) <= rbuf->space );
+   return (ssize_t)next;
+}
+
+/*
+ * ringbuf_produce: indicate the acquired range in the buffer is produced
+ * and is ready to be consumed.
+ */
+void ringbuf_produce( ringbuf_t* rbuf, ringbuf_worker_t* w )
+{
+   (void)rbuf;
+   assert( w->registered );
+   assert( w->seen_off != RBUF_OFF_MAX );
+   std::atomic_thread_fence( std::memory_order_release );
+   w->seen_off = RBUF_OFF_MAX;
+}
+
+/*
+ * ringbuf_consume: get a contiguous range which is ready to be consumed.
+ */
+size_t ringbuf_consume( ringbuf_t* rbuf, size_t* offset )
+{
+   ringbuf_off_t written = rbuf->written, next, ready;
+   size_t towrite;
+retry:
+   /*
+    * Get the stable 'next' offset.  Note: stable_nextoff() issued
+    * a load memory barrier.  The area between the 'written' offset
+    * and the 'next' offset will be the *preliminary* target buffer
+    * area to be consumed.
+    */
+   next = stable_nextoff( rbuf ) & RBUF_OFF_MASK;
+   if ( written == next )
+   {
+      /* If producers did not advance, then nothing to do. */
+      return 0;
+   }
+
+   /*
+    * Observe the 'ready' offset of each producer.
+    *
+    * At this point, some producer might have already triggered the
+    * wrap-around and some (or all) seen 'ready' values might be in
+    * the range between 0 and 'written'.  We have to skip them.
+    */
+   ready = RBUF_OFF_MAX;
+
+   for ( unsigned i = 0; i < rbuf->nworkers; i++ )
+   {
+      ringbuf_worker_t* w = &rbuf->workers[i];
+      unsigned count = SPINLOCK_BACKOFF_MIN;
+      ringbuf_off_t seen_off;
+
+      /* Skip if the worker has not registered. */
+      if ( !w->registered )
+      {
+         continue;
+      }
+
+      /*
+       * Get a stable 'seen' value.  This is necessary since we
+       * want to discard the stale 'seen' values.
+       */
+      while ( ( seen_off = w->seen_off ) & WRAP_LOCK_BIT )
+      {
+         SPINLOCK_BACKOFF( count );
+      }
+
+      /*
+       * Ignore the offsets after the possible wrap-around.
+       * We are interested in the smallest seen offset that is
+       * not behind the 'written' offset.
+       */
+      if ( seen_off >= written )
+      {
+         ready = std::min( seen_off, ready );
+      }
+      assert( ready >= written );
+   }
+
+   /*
+    * Finally, we need to determine whether wrap-around occurred
+    * and deduct the safe 'ready' offset.
+    */
+   if ( next < written )
+   {
+      const ringbuf_off_t end = std::min( rbuf->space, rbuf->end );
+
+      /*
+       * Wrap-around case.  Check for the cut off first.
+       *
+       * Reset the 'written' offset if it reached the end of
+       * the buffer or the 'end' offset (if set by a producer).
+       * However, we must check that the producer is actually
+       * done (the observed 'ready' offsets are clear).
+       */
+      if ( ready == RBUF_OFF_MAX && written == end )
+      {
+         /*
+          * Clear the 'end' offset if was set.
+          */
+         if ( rbuf->end != RBUF_OFF_MAX )
+         {
+            rbuf->end = RBUF_OFF_MAX;
+            std::atomic_thread_fence( std::memory_order_release );
+         }
+         /* Wrap-around the consumer and start from zero. */
+         rbuf->written = written = 0;
+         goto retry;
+      }
+
+      /*
+       * We cannot wrap-around yet; there is data to consume at
+       * the end.  The ready range is smallest of the observed
+       * 'ready' or the 'end' offset.  If neither is set, then
+       * the actual end of the buffer.
+       */
+      assert( ready > next );
+      ready = std::min( ready, end );
+      assert( ready >= written );
+   }
+   else
+   {
+      /*
+       * Regular case.  Up to the observed 'ready' (if set)
+       * or the 'next' offset.
+       */
+      ready = std::min( ready, next );
+   }
+   towrite = ready - written;
+   *offset = written;
+
+   assert( ready >= written );
+   assert( towrite <= rbuf->space );
+   return towrite;
+}
+
+/*
+ * ringbuf_release: indicate that the consumed range can now be released.
+ */
+void ringbuf_release( ringbuf_t* rbuf, size_t nbytes )
+{
+   const size_t nwritten = rbuf->written + nbytes;
+
+   assert( rbuf->written <= rbuf->space );
+   assert( rbuf->written <= rbuf->end );
+   assert( nwritten <= rbuf->space );
+
+   rbuf->written = ( nwritten == rbuf->space ) ? 0 : nwritten;
+}
+
+/* end of ringbuf.c */
 
 // symbols to be acessed from shared library
 
@@ -585,530 +1075,6 @@ void ClientProfiler::EndLockWait( Impl* impl, void* mutexAddr, TimeStamp start, 
 //       printf( "decrease push trace lvl\n");
 //    }
 // }
-
-
-
-/****************************************************************
-                     Third Parties
-****************************************************************/
-
-
-//  Start of ringbuf.c by Mindaugas Rasiukevicius ===================
-/*
- * Copyright (c) 2016-2017 Mindaugas Rasiukevicius <rmind at noxt eu>
- * All rights reserved.
- *
- * Use is subject to license terms, as specified in the LICENSE file.
- */
-
-/*
- * Atomic multi-producer single-consumer ring buffer, which supports
- * contiguous range operations and which can be conveniently used for
- * message passing.
- *
- * There are three offsets -- think of clock hands:
- * - NEXT: marks the beginning of the available space,
- * - WRITTEN: the point up to which the data is actually written.
- * - Observed READY: point up to which data is ready to be written.
- *
- * Producers
- *
- * Observe and save the 'next' offset, then request N bytes from
- * the ring buffer by atomically advancing the 'next' offset.  Once
- * the data is written into the "reserved" buffer space, the thread
- * clears the saved value; these observed values are used to compute
- * the 'ready' offset.
- *
- * Consumer
- *
- * Writes the data between 'written' and 'ready' offsets and updates
- * the 'written' value.  The consumer thread scans for the lowest
- * seen value by the producers.
- *
- * Key invariant
- *
- * Producers cannot go beyond the 'written' offset; producers are
- * also not allowed to catch up with the consumer.  Only the consumer
- * is allowed to catch up with the producer i.e. set the 'written'
- * offset to be equal to the 'next' offset.
- *
- * Wrap-around
- *
- * If the producer cannot acquire the requested length due to little
- * available space at the end of the buffer, then it will wraparound.
- * WRAP_LOCK_BIT in 'next' offset is used to lock the 'end' offset.
- *
- * There is an ABA problem if one producer stalls while a pair of
- * producer and consumer would both successfully wrap-around and set
- * the 'next' offset to the stale value of the first producer, thus
- * letting it to perform a successful CAS violating the invariant.
- * A counter in the 'next' offset (masked by WRAP_COUNTER) is used
- * to prevent from this problem.  It is incremented on wraparounds.
- *
- * The same ABA problem could also cause a stale 'ready' offset,
- * which could be observed by the consumer.  We set WRAP_LOCK_BIT in
- * the 'seen' value before advancing the 'next' and clear this bit
- * after the successful advancing; this ensures that only the stable
- * 'ready' observed by the consumer.
- */
-
-#include <stdio.h>
-#include <stdlib.h>
-#include <stddef.h>
-#include <stdbool.h>
-#include <inttypes.h>
-#include <string.h>
-#include <limits.h>
-#include <errno.h>
-
-
-// =========== Start of Utils.h ===========
-/*
- * Copyright (c) 1991, 1993
- * The Regents of the University of California.  All rights reserved.
- *
- * This code is derived from software contributed to Berkeley by
- * Berkeley Software Design, Inc.
- *
- * Redistribution and use in source and binary forms, with or without
- * modification, are permitted provided that the following conditions
- * are met:
- * 1. Redistributions of source code must retain the above copyright
- *    notice, this list of conditions and the following disclaimer.
- * 2. Redistributions in binary form must reproduce the above copyright
- *    notice, this list of conditions and the following disclaimer in the
- *    documentation and/or other materials provided with the distribution.
- * 3. Neither the name of the University nor the names of its contributors
- *    may be used to endorse or promote products derived from this software
- *    without specific prior written permission.
- *
- * THIS SOFTWARE IS PROVIDED BY THE REGENTS AND CONTRIBUTORS ``AS IS'' AND
- * ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
- * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
- * ARE DISCLAIMED.  IN NO EVENT SHALL THE REGENTS OR CONTRIBUTORS BE LIABLE
- * FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
- * DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS
- * OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION)
- * HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT
- * LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY
- * OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
- * SUCH DAMAGE.
- *
- * @(#)cdefs.h 8.8 (Berkeley) 1/9/95
- */
-
-#ifndef _UTILS_H_
-#define _UTILS_H_
-
-#include <assert.h>
-
-/*
- * A regular assert (debug/diagnostic only).
- */
-#if defined(DEBUG)
-#define  ASSERT      assert
-#else
-#define  ASSERT(x)
-#endif
-
-/*
- * Minimum, maximum and rounding macros.
- */
-
-#ifndef MIN
-#define  MIN(x, y)   ((x) < (y) ? (x) : (y))
-#endif
-
-#ifndef MAX
-#define  MAX(x, y)   ((x) > (y) ? (x) : (y))
-#endif
-
-/*
- * Branch prediction macros.
- */
-#ifndef __predict_true
-#define  __predict_true(x) __builtin_expect((x) != 0, 1)
-#define  __predict_false(x)   __builtin_expect((x) != 0, 0)
-#endif
-
-/*
- * Atomic operations and memory barriers.  If C11 API is not available,
- * then wrap the GCC builtin routines.
- */
-#ifndef atomic_compare_exchange_weak
-#define  atomic_compare_exchange_weak(ptr, expected, desired) \
-    __sync_bool_compare_and_swap(ptr, expected, desired)
-#endif
-
-#ifndef atomic_thread_fence
-#define  memory_order_acquire __ATOMIC_ACQUIRE  // load barrier
-#define  memory_order_release __ATOMIC_RELEASE  // store barrier
-#define  atomic_thread_fence(m)  __atomic_thread_fence(m)
-#endif
-
-/*
- * Exponential back-off for the spinning paths.
- */
-#define  SPINLOCK_BACKOFF_MIN 4
-#define  SPINLOCK_BACKOFF_MAX 128
-#if defined(__x86_64__) || defined(__i386__)
-#define SPINLOCK_BACKOFF_HOOK __asm volatile("pause" ::: "memory")
-#else
-#define SPINLOCK_BACKOFF_HOOK
-#endif
-#define  SPINLOCK_BACKOFF(count)             \
-do {                       \
-   for (int __i = (count); __i != 0; __i--) {      \
-      SPINLOCK_BACKOFF_HOOK;           \
-   }                    \
-   if ((count) < SPINLOCK_BACKOFF_MAX)       \
-      (count) += (count);           \
-} while (/* CONSTCOND */ 0);
-
-#endif
-
-// =========== end of Utils.h ===========
-
-#define  RBUF_OFF_MASK  (0x00000000ffffffffUL)
-#define  WRAP_LOCK_BIT  (0x8000000000000000UL)
-#define  RBUF_OFF_MAX   (UINT64_MAX & ~WRAP_LOCK_BIT)
-
-#define  WRAP_COUNTER   (0x7fffffff00000000UL)
-#define  WRAP_INCR(x)   (((x) + 0x100000000UL) & WRAP_COUNTER)
-
-typedef uint64_t  ringbuf_off_t;
-
-struct ringbuf_worker {
-   volatile ringbuf_off_t  seen_off;
-   int         registered;
-};
-
-struct ringbuf {
-   /* Ring buffer space. */
-   size_t         space;
-
-   /*
-    * The NEXT hand is atomically updated by the producer.
-    * WRAP_LOCK_BIT is set in case of wrap-around; in such case,
-    * the producer can update the 'end' offset.
-    */
-   volatile ringbuf_off_t  next;
-   ringbuf_off_t     end;
-
-   /* The following are updated by the consumer. */
-   ringbuf_off_t     written;
-   unsigned    nworkers;
-   ringbuf_worker_t  workers[];
-};
-
-/*
- * ringbuf_setup: initialise a new ring buffer of a given length.
- */
-int
-ringbuf_setup(ringbuf_t *rbuf, unsigned nworkers, size_t length)
-{
-   if (length >= RBUF_OFF_MASK) {
-      errno = EINVAL;
-      return -1;
-   }
-   memset(rbuf, 0, sizeof(ringbuf_t));
-   rbuf->space = length;
-   rbuf->end = RBUF_OFF_MAX;
-   rbuf->nworkers = nworkers;
-   return 0;
-}
-
-/*
- * ringbuf_get_sizes: return the sizes of the ringbuf_t and ringbuf_worker_t.
- */
-void
-ringbuf_get_sizes(const unsigned nworkers,
-    size_t *ringbuf_size, size_t *ringbuf_worker_size)
-{
-   if (ringbuf_size)
-      *ringbuf_size = offsetof(ringbuf_t, workers[nworkers]);
-   if (ringbuf_worker_size)
-      *ringbuf_worker_size = sizeof(ringbuf_worker_t);
-}
-
-/*
- * ringbuf_register: register the worker (thread/process) as a producer
- * and pass the pointer to its local store.
- */
-ringbuf_worker_t *
-ringbuf_register(ringbuf_t *rbuf, unsigned i)
-{
-   ringbuf_worker_t *w = &rbuf->workers[i];
-
-   w->seen_off = RBUF_OFF_MAX;
-   atomic_thread_fence(memory_order_release);
-   w->registered = true;
-   return w;
-}
-
-void
-ringbuf_unregister(ringbuf_t *rbuf, ringbuf_worker_t *w)
-{
-   w->registered = false;
-   (void)rbuf;
-}
-
-/*
- * stable_nextoff: capture and return a stable value of the 'next' offset.
- */
-static inline ringbuf_off_t
-stable_nextoff(ringbuf_t *rbuf)
-{
-   unsigned count = SPINLOCK_BACKOFF_MIN;
-   ringbuf_off_t next;
-
-   while ((next = rbuf->next) & WRAP_LOCK_BIT) {
-      SPINLOCK_BACKOFF(count);
-   }
-   atomic_thread_fence(memory_order_acquire);
-   ASSERT((next & RBUF_OFF_MASK) < rbuf->space);
-   return next;
-}
-
-/*
- * ringbuf_acquire: request a space of a given length in the ring buffer.
- *
- * => On success: returns the offset at which the space is available.
- * => On failure: returns -1.
- */
-ssize_t
-ringbuf_acquire(ringbuf_t *rbuf, ringbuf_worker_t *w, size_t len)
-{
-   ringbuf_off_t seen, next, target;
-
-   ASSERT(len > 0 && len <= rbuf->space);
-   ASSERT(w->seen_off == RBUF_OFF_MAX);
-
-   do {
-      ringbuf_off_t written;
-
-      /*
-       * Get the stable 'next' offset.  Save the observed 'next'
-       * value (i.e. the 'seen' offset), but mark the value as
-       * unstable (set WRAP_LOCK_BIT).
-       *
-       * Note: CAS will issue a memory_order_release for us and
-       * thus ensures that it reaches global visibility together
-       * with new 'next'.
-       */
-      seen = stable_nextoff(rbuf);
-      next = seen & RBUF_OFF_MASK;
-      ASSERT(next < rbuf->space);
-      w->seen_off = next | WRAP_LOCK_BIT;
-
-      /*
-       * Compute the target offset.  Key invariant: we cannot
-       * go beyond the WRITTEN offset or catch up with it.
-       */
-      target = next + len;
-      written = rbuf->written;
-      if (__predict_false(next < written && target >= written)) {
-         /* The producer must wait. */
-         w->seen_off = RBUF_OFF_MAX;
-         return -1;
-      }
-
-      if (__predict_false(target >= rbuf->space)) {
-         const bool exceed = target > rbuf->space;
-
-         /*
-          * Wrap-around and start from the beginning.
-          *
-          * If we would exceed the buffer, then attempt to
-          * acquire the WRAP_LOCK_BIT and use the space in
-          * the beginning.  If we used all space exactly to
-          * the end, then reset to 0.
-          *
-          * Check the invariant again.
-          */
-         target = exceed ? (WRAP_LOCK_BIT | len) : 0;
-         if ((target & RBUF_OFF_MASK) >= written) {
-            w->seen_off = RBUF_OFF_MAX;
-            return -1;
-         }
-         /* Increment the wrap-around counter. */
-         target |= WRAP_INCR(seen & WRAP_COUNTER);
-      } else {
-         /* Preserve the wrap-around counter. */
-         target |= seen & WRAP_COUNTER;
-      }
-   } while (!atomic_compare_exchange_weak(&rbuf->next, seen, target));
-
-   /*
-    * Acquired the range.  Clear WRAP_LOCK_BIT in the 'seen' value
-    * thus indicating that it is stable now.
-    */
-   w->seen_off &= ~WRAP_LOCK_BIT;
-
-   /*
-    * If we set the WRAP_LOCK_BIT in the 'next' (because we exceed
-    * the remaining space and need to wrap-around), then save the
-    * 'end' offset and release the lock.
-    */
-   if (__predict_false(target & WRAP_LOCK_BIT)) {
-      /* Cannot wrap-around again if consumer did not catch-up. */
-      ASSERT(rbuf->written <= next);
-      ASSERT(rbuf->end == RBUF_OFF_MAX);
-      rbuf->end = next;
-      next = 0;
-
-      /*
-       * Unlock: ensure the 'end' offset reaches global
-       * visibility before the lock is released.
-       */
-      atomic_thread_fence(memory_order_release);
-      rbuf->next = (target & ~WRAP_LOCK_BIT);
-   }
-   ASSERT((target & RBUF_OFF_MASK) <= rbuf->space);
-   return (ssize_t)next;
-}
-
-/*
- * ringbuf_produce: indicate the acquired range in the buffer is produced
- * and is ready to be consumed.
- */
-void
-ringbuf_produce(ringbuf_t *rbuf, ringbuf_worker_t *w)
-{
-   (void)rbuf;
-   ASSERT(w->registered);
-   ASSERT(w->seen_off != RBUF_OFF_MAX);
-   atomic_thread_fence(memory_order_release);
-   w->seen_off = RBUF_OFF_MAX;
-}
-
-/*
- * ringbuf_consume: get a contiguous range which is ready to be consumed.
- */
-size_t
-ringbuf_consume(ringbuf_t *rbuf, size_t *offset)
-{
-   ringbuf_off_t written = rbuf->written, next, ready;
-   size_t towrite;
-retry:
-   /*
-    * Get the stable 'next' offset.  Note: stable_nextoff() issued
-    * a load memory barrier.  The area between the 'written' offset
-    * and the 'next' offset will be the *preliminary* target buffer
-    * area to be consumed.
-    */
-   next = stable_nextoff(rbuf) & RBUF_OFF_MASK;
-   if (written == next) {
-      /* If producers did not advance, then nothing to do. */
-      return 0;
-   }
-
-   /*
-    * Observe the 'ready' offset of each producer.
-    *
-    * At this point, some producer might have already triggered the
-    * wrap-around and some (or all) seen 'ready' values might be in
-    * the range between 0 and 'written'.  We have to skip them.
-    */
-   ready = RBUF_OFF_MAX;
-
-   for (unsigned i = 0; i < rbuf->nworkers; i++) {
-      ringbuf_worker_t *w = &rbuf->workers[i];
-      unsigned count = SPINLOCK_BACKOFF_MIN;
-      ringbuf_off_t seen_off;
-
-      /* Skip if the worker has not registered. */
-      if (!w->registered) {
-         continue;
-      }
-
-      /*
-       * Get a stable 'seen' value.  This is necessary since we
-       * want to discard the stale 'seen' values.
-       */
-      while ((seen_off = w->seen_off) & WRAP_LOCK_BIT) {
-         SPINLOCK_BACKOFF(count);
-      }
-
-      /*
-       * Ignore the offsets after the possible wrap-around.
-       * We are interested in the smallest seen offset that is
-       * not behind the 'written' offset.
-       */
-      if (seen_off >= written) {
-         ready = MIN(seen_off, ready);
-      }
-      ASSERT(ready >= written);
-   }
-
-   /*
-    * Finally, we need to determine whether wrap-around occurred
-    * and deduct the safe 'ready' offset.
-    */
-   if (next < written) {
-      const ringbuf_off_t end = MIN(rbuf->space, rbuf->end);
-
-      /*
-       * Wrap-around case.  Check for the cut off first.
-       *
-       * Reset the 'written' offset if it reached the end of
-       * the buffer or the 'end' offset (if set by a producer).
-       * However, we must check that the producer is actually
-       * done (the observed 'ready' offsets are clear).
-       */
-      if (ready == RBUF_OFF_MAX && written == end) {
-         /*
-          * Clear the 'end' offset if was set.
-          */
-         if (rbuf->end != RBUF_OFF_MAX) {
-            rbuf->end = RBUF_OFF_MAX;
-            atomic_thread_fence(memory_order_release);
-         }
-         /* Wrap-around the consumer and start from zero. */
-         rbuf->written = written = 0;
-         goto retry;
-      }
-
-      /*
-       * We cannot wrap-around yet; there is data to consume at
-       * the end.  The ready range is smallest of the observed
-       * 'ready' or the 'end' offset.  If neither is set, then
-       * the actual end of the buffer.
-       */
-      ASSERT(ready > next);
-      ready = MIN(ready, end);
-      ASSERT(ready >= written);
-   } else {
-      /*
-       * Regular case.  Up to the observed 'ready' (if set)
-       * or the 'next' offset.
-       */
-      ready = MIN(ready, next);
-   }
-   towrite = ready - written;
-   *offset = written;
-
-   ASSERT(ready >= written);
-   ASSERT(towrite <= rbuf->space);
-   return towrite;
-}
-
-/*
- * ringbuf_release: indicate that the consumed range can now be released.
- */
-void
-ringbuf_release(ringbuf_t *rbuf, size_t nbytes)
-{
-   const size_t nwritten = rbuf->written + nbytes;
-
-   ASSERT(rbuf->written <= rbuf->space);
-   ASSERT(rbuf->written <= rbuf->end);
-   ASSERT(nwritten <= rbuf->space);
-
-   rbuf->written = (nwritten == rbuf->space) ? 0 : nwritten;
-}
-
-// End of ringbuf.c by Mindaugas Rasiukevicius ===================
 
 #endif  // end VDBG_IMPLEMENTATION
 

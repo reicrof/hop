@@ -4,9 +4,6 @@
 #include <imdbg.h>
 #include <vdbg.h>
 
-#include <unistd.h>
-#include <sys/types.h>
-#include <string>
 #include <vector>
 #include <thread>
 #include <mutex>
@@ -25,15 +22,11 @@ class Server
        std::vector<uint32_t>& threadIds );
 
   private:
-   bool handleNewConnection();
    bool handleNewMessage( int clientId, uint32_t threadId );
 
    std::thread _thread;
-   std::string _serverName;
-   std::vector<int> _clients;
-   fd_set _fdSet{};
-   int _socket{-1};
    bool _running{false};
+   details::SharedMemory _sharedMemory;
 
    std::mutex pendingTracesMutex;
    std::vector< std::vector< DisplayableTrace > > pendingTraces;

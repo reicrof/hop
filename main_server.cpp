@@ -1,5 +1,6 @@
-#include <server.h>
+#define VDBG_SERVER_IMPLEMENTATION
 #include <vdbg.h>
+#include <server.h>
 #include <SDL2/SDL.h>
 
 #include <imdbg.h>
@@ -122,7 +123,7 @@ int main()
    vdbg::init();
 
    vdbg::Server serv;
-   serv.start( VDBG_SERVER_PATH, 10 );
+   serv.start( VDBG_SHARED_MEM_NAME, 10 );
 
    rapidjson::Document doc;
 
