@@ -22,11 +22,11 @@ class Server
        std::vector<uint32_t>& threadIds );
 
   private:
-   bool handleNewMessage( int clientId, uint32_t threadId );
+   // Returns the number of bytes processed
+   size_t handleNewMessage( uint8_t* data, size_t maxSize );
 
    std::thread _thread;
    bool _running{false};
-   details::SharedMemory _sharedMemory;
 
    std::mutex pendingTracesMutex;
    std::vector< std::vector< DisplayableTrace > > pendingTraces;

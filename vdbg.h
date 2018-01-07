@@ -36,6 +36,8 @@
 /////     EVERYTHING AFTER THIS IS IMPL DETAILS        ////////
 ///////////////////////////////////////////////////////////////
 
+#include <atomic>
+#include <memory>
 #include <chrono>
 #include <pthread.h>
 #include <semaphore.h>
@@ -48,7 +50,7 @@
 #define VDBG_NOEXCEPT noexcept
 #define VDBG_STATIC_ASSERT static_assert
 #define VDBG_GET_THREAD_ID() (size_t)pthread_self()
-#define VDBG_SHARED_MEM_NAME "vdbg_shared_mem"
+#define VDBG_SHARED_MEM_NAME "/vdbg_shared_mem4"
 extern char* __progname;
 inline const char* getProgName() VDBG_NOEXCEPT
 {
@@ -76,19 +78,7 @@ using TimeStamp = decltype( getTimeStamp() );
 namespace details
 {
 
-VDBG_CONSTEXPR uint32_t EXPECTED_MSG_HEADER_SIZE = 8;
-struct MsgHeader
-{
-   // Thread id from which the msg was sent
-   uint32_t threadId;
-   // Number of message in this communication
-   uint32_t msgCount;
-};
-VDBG_STATIC_ASSERT(
-    sizeof( MsgHeader ) == EXPECTED_MSG_HEADER_SIZE,
-    "MsgHeader layout has changed unexpectedly" );
-
-enum class MsgInfoType : uint32_t
+enum class MsgType : uint32_t
 {
    PROFILER_TRACE,
    PROFILER_WAIT_LOCK,
@@ -109,12 +99,14 @@ struct LockWaitsMsgInfo
 VDBG_CONSTEXPR uint32_t EXPECTED_MSG_INFO_SIZE = 16;
 struct MsgInfo
 {
-   MsgInfoType type;
+   MsgType type;
+   // Thread id from which the msg was sent
+   uint32_t threadId;
+   // Specific message data
    union {
       TracesMsgInfo traces;
       LockWaitsMsgInfo lockwaits;
    };
-   uint32_t padding;
 };
 VDBG_STATIC_ASSERT( sizeof(MsgInfo) == EXPECTED_MSG_INFO_SIZE, "MsgInfo layout has changed unexpectedly" );
 
@@ -145,20 +137,34 @@ VDBG_STATIC_ASSERT( sizeof(LockWait) == EXPECTED_LOCK_WAIT_SIZE, "Lock wait layo
 class SharedMemory
 {
   public:
+   bool create( const char* path, size_t size, bool isProducer );
+   void destroy();
 
-   bool create( const char* path, size_t size );
+   struct SharedMetaInfo
+   {
+      std::atomic< int > producerCount;
+      std::atomic< int > consumerCount;
+   };
 
+   int consumerCount() const VDBG_NOEXCEPT;
+   int producerCount() const VDBG_NOEXCEPT;
    ringbuf_t* ringbuffer() const VDBG_NOEXCEPT;
    uint8_t* data() const VDBG_NOEXCEPT;
+   sem_t* semaphore() const VDBG_NOEXCEPT;
+   const SharedMetaInfo* sharedMetaInfo() const VDBG_NOEXCEPT;
    ~SharedMemory();
 
-   sem_t* _semaphore{NULL};
   private:
-   ringbuf_t* _ringbuf;
-   uint8_t* _data;
+   // Pointer into the shared memory
+   SharedMetaInfo* _sharedMetaData{NULL};
+   ringbuf_t* _ringbuf{NULL};
+   uint8_t* _data{NULL};
+   // ----------------
+   sem_t* _semaphore{NULL};
    size_t _size{0};
    const char* _path{NULL};
    int _sharedMemFd{-1};
+   bool _isProducer;
 };
 // ------ end of SharedMemory.h ------------
 
@@ -181,10 +187,11 @@ class ClientManager
       void* mutexAddr,
       TimeStamp start,
       TimeStamp end );
+   static bool HasConnectedServer() VDBG_NOEXCEPT;
 
    static SharedMemory sharedMemory;
    static size_t threadsId[MAX_THREAD_NB];
-   static Client* clients[MAX_THREAD_NB];
+   static std::unique_ptr< Client > clients[MAX_THREAD_NB];
 };
 
 class ProfGuard
@@ -287,6 +294,7 @@ void ringbuf_release( ringbuf_t*, size_t );
 // C includes
 #include <errno.h>
 #include <fcntl.h>
+#include <signal.h>
 #include <sys/mman.h>
 #include <sys/un.h>
 #include <unistd.h>
@@ -302,8 +310,9 @@ namespace details
 {
 
 // ------ SharedMemory.cpp------------
-bool SharedMemory::create( const char* path, size_t requestedSize )
+bool SharedMemory::create( const char* path, size_t requestedSize, bool isProducer )
 {
+   _isProducer = isProducer;
    // Get the size needed for the ringbuf struct
    size_t ringBufSize;
    ringbuf_get_sizes(MAX_THREAD_NB, &ringBufSize, NULL);
@@ -312,37 +321,74 @@ bool SharedMemory::create( const char* path, size_t requestedSize )
    // signal( SIGINT, sig_callback_handler );
    _path = path;
    _size = requestedSize;
-   _sharedMemFd = shm_open( path, O_CREAT | O_RDWR, 0666 );
+
+   const int shmFlags = isProducer ? O_CREAT | O_RDWR | O_EXCL : O_RDWR;
+   _sharedMemFd = shm_open( path, shmFlags, 0666 );
    if ( _sharedMemFd < 0 )
    {
-      perror( "Cannot create shared memory" );
+      if( isProducer )
+      {
+         printf("ERROR!\nCould not create shared memory segment. You may have not enough free space to"
+                " allocate the requested %lu bytes, or might have a previous shared memory segment "
+                "that was not cleared properly from a previous run. \n");
+      }
+      // In the case of a consumer, this simply means that there is no producer to read from.
+
       return false;
    }
 
-   const size_t totalSize = ringBufSize + requestedSize;
+   const size_t totalSize = ringBufSize + requestedSize + sizeof( SharedMetaInfo );
    ftruncate( _sharedMemFd, totalSize );
 
-   /**
-    * Semaphore open
-    */
-   _semaphore = sem_open( "/mysem", O_CREAT, S_IRUSR | S_IWUSR, 1 );
-
    uint8_t* sharedMem = (uint8_t*) mmap( NULL, totalSize, PROT_READ | PROT_WRITE, MAP_SHARED, _sharedMemFd, 0 );
-   memset( sharedMem, 'a', totalSize );
    if ( sharedMem == NULL )
    {
       perror( "Could not map shared memory" );
       return false;
    }
 
-   _ringbuf = (ringbuf_t*) sharedMem;
-   _data = sharedMem + ringBufSize;
+   _sharedMetaData = (SharedMetaInfo*) sharedMem;
+   _ringbuf = (ringbuf_t*) (sharedMem + sizeof( SharedMetaInfo ));
+   _data = sharedMem + sizeof( SharedMetaInfo ) + ringBufSize ;
    if( ringbuf_setup( _ringbuf, MAX_THREAD_NB, requestedSize ) < 0 )
    {
       assert( false && "Ring buffer creation failed" );
    }
 
+   // We can only have one consumer
+   if( _sharedMetaData->consumerCount.load() > 0 )
+   {
+      printf("Cannot have more than one instance of the consumer at a time."
+             " You might be trying to run the consumer application twice or"
+             " have a dangling shared memory segment.\n");
+      shm_unlink( path );
+      return false;
+   }
+
+   // Open semaphore
+   const int semaphoreFlags = isProducer ? O_CREAT : 0;
+   _semaphore = sem_open( "/mysem", semaphoreFlags, S_IRUSR | S_IWUSR, 1 );
+
+   if( isProducer )
+   {
+      ++_sharedMetaData->producerCount;
+   }
+   else
+   {
+      ++_sharedMetaData->consumerCount;
+   }
+
    return true;
+}
+
+int SharedMemory::consumerCount() const VDBG_NOEXCEPT
+{
+   return sharedMetaInfo()->consumerCount.load();
+}
+
+int SharedMemory::producerCount() const VDBG_NOEXCEPT
+{
+   return sharedMetaInfo()->producerCount.load();
 }
 
 uint8_t* SharedMemory::data() const VDBG_NOEXCEPT
@@ -355,7 +401,17 @@ ringbuf_t* SharedMemory::ringbuffer() const VDBG_NOEXCEPT
    return _ringbuf;
 }
 
-SharedMemory::~SharedMemory()
+sem_t* SharedMemory::semaphore() const VDBG_NOEXCEPT
+{
+   return _semaphore;
+}
+
+const SharedMemory::SharedMetaInfo* SharedMemory::sharedMetaInfo() const VDBG_NOEXCEPT
+{
+   return _sharedMetaData;
+}
+
+void SharedMemory::destroy()
 {
    if ( data() )
    {
@@ -369,11 +425,37 @@ SharedMemory::~SharedMemory()
          perror( "Could not unlink semaphore" );
       }
 
+      // Decrease producer/consumer
+      if( _isProducer )
+      {
+         --_sharedMetaData->producerCount;
+      }
+      else
+      {
+         assert( _sharedMetaData->consumerCount == 1 );
+         _sharedMetaData->consumerCount = 0;
+      }
+
+      if( _sharedMetaData->producerCount.load() == 0 &&
+          _sharedMetaData->consumerCount.load() == 0 )
+      {
+         printf( "Shared memory cleanup...\n" );
+      }
+
       if ( shm_unlink( _path ) != 0 )
       {
          perror( "Could not unlink shared memory" );
       }
+
+      _data = NULL;
+      _semaphore = NULL;
+      _ringbuf = NULL;
    }
+}
+
+SharedMemory::~SharedMemory()
+{
+   destroy();
 }
 // ------ end of SharedMemory.cpp------------
 
@@ -384,7 +466,7 @@ SharedMemory::~SharedMemory()
 
 SharedMemory ClientManager::sharedMemory;
 size_t ClientManager::threadsId[MAX_THREAD_NB] = {0};
-Client* ClientManager::clients[MAX_THREAD_NB] = {0};
+std::unique_ptr< Client > ClientManager::clients[MAX_THREAD_NB] = {0};
 
 class Client
 {
@@ -457,11 +539,17 @@ class Client
 
    void flushToServer()
    {
-      if( !ClientManager::sharedMemory.data() )
+      if( !ClientManager::HasConnectedServer() )
       {
+         _shallowTraces.clear();
+         _lockWaits.clear();
+         // Also reset the string data that was sent since we might
+         // have lost the connection with the consumer
+         _sentStringDataSize = 0;
          return;
       }
 
+      // Convert string pointers to index in the string database
       std::vector< std::pair< uint32_t, uint32_t > > classFctNamesIdx;
       classFctNamesIdx.reserve( _shallowTraces.size() );
       for( const auto& t : _shallowTraces  )
@@ -470,9 +558,6 @@ class Client
              findOrAddStringToDb( t.className ), findOrAddStringToDb( t.fctName ) );
       }
 
-      // Allocate raw buffer to send to server. It should be big enough for all
-      // messages to fit.
-
       // 1- Get size of profiling traces message
       const uint32_t stringDataSize = _nameArrayData.size();
       assert( stringDataSize >= _sentStringDataSize );
@@ -480,22 +565,17 @@ class Client
       const size_t profilerMsgSize =
           sizeof( MsgInfo ) + stringToSend + sizeof( Trace ) * _shallowTraces.size();
 
-      // 2- Get size of lock messages
-      const size_t lockMsgSize = sizeof( MsgInfo ) + _lockWaits.size() * sizeof( LockWait );
-
-      // Allocate big enough buffer for all messages
-      _bufferToSend.resize( sizeof( MsgHeader ) + profilerMsgSize + lockMsgSize );
-      uint8_t* bufferPtr = _bufferToSend.data();
-
-      // First fill buffer with header
+      // Allocate big enough buffer from the shared memory
+      ringbuf_t* ringbuf = ClientManager::sharedMemory.ringbuffer();
+      const auto offset = ringbuf_acquire( ringbuf, _worker, profilerMsgSize );
+      if ( offset == -1 )
       {
-         MsgHeader* msgHeader = (MsgHeader*)bufferPtr;
-         // TODO: Investigate if the truncation from size_t to uint32 is safe .. or not
-         msgHeader->threadId = (uint32_t)_threadId;
-         msgHeader->msgCount = 2;
+         printf("Failed to acquire enough shared memory. Consider increasing shared memory size\n");
+         _shallowTraces.clear();
+         return;
       }
 
-      bufferPtr += sizeof( MsgHeader );
+      uint8_t* bufferPtr = &ClientManager::sharedMemory.data()[offset];
 
       // Fill the buffer with the profiling trace message
       {
@@ -508,7 +588,8 @@ class Client
          char* stringData = (char*)( bufferPtr + sizeof( MsgInfo ) );
          Trace* traceToSend = (Trace*)( bufferPtr + sizeof( MsgInfo ) + stringToSend );
 
-         tracesInfo->type = MsgInfoType::PROFILER_TRACE;
+         tracesInfo->type = MsgType::PROFILER_TRACE;
+         tracesInfo->threadId = (uint32_t)_threadId;
          tracesInfo->traces.stringDataSize = stringToSend;
          tracesInfo->traces.traceCount = (uint32_t)_shallowTraces.size();
 
@@ -527,56 +608,68 @@ class Client
          }
       }
 
-      // Increment pointer to new pos in buffer
-      bufferPtr += profilerMsgSize;
-
-      // Fill the buffer with the lock message
-      {
-         MsgInfo* lwInfo = (MsgInfo*)bufferPtr;
-         lwInfo->type = MsgInfoType::PROFILER_WAIT_LOCK;
-         lwInfo->lockwaits.count = (uint32_t)_lockWaits.size();
-         bufferPtr += sizeof( MsgInfo );
-         memcpy( bufferPtr, _lockWaits.data(), _lockWaits.size() * sizeof( LockWait ) );
-      }
-
-      ringbuf_t* ringbuf = ClientManager::sharedMemory.ringbuffer();
-      uint8_t* mem = ClientManager::sharedMemory.data();
-      
-      // Get buffer from shared memory
-      static size_t msgCount=0;
-      auto offset = ringbuf_acquire( ringbuf, _worker, sizeof( "Hello world" ) );
-      if( offset != -1 )
-      {
-         memcpy( (void*)&mem[offset], (void*)"Hello world", sizeof("Hello world" ) );
-         ringbuf_produce( ringbuf, _worker);
-         sem_post( ClientManager::sharedMemory._semaphore );
-         printf("Message sent!%lu\n", ++msgCount );
-      }
+      ringbuf_produce( ringbuf, _worker );
+      sem_post( ClientManager::sharedMemory.semaphore() );
 
       // Update sent array size
       _sentStringDataSize = stringDataSize;
       // Free the buffers
       _shallowTraces.clear();
+
+
+      // // Increment pointer to new pos in buffer
+      // bufferPtr += profilerMsgSize;
+
+      //       // 2- Get size of lock messages
+      // const size_t lockMsgSize = sizeof( MsgInfo ) + _lockWaits.size() * sizeof( LockWait );
+      // // Fill the buffer with the lock message
+      // {
+      //    MsgInfo* lwInfo = (MsgInfo*)bufferPtr;
+      //    lwInfo->type = MsgType::PROFILER_WAIT_LOCK;
+      //    lwInfo->lockwaits.count = (uint32_t)_lockWaits.size();
+      //    bufferPtr += sizeof( MsgInfo );
+      //    memcpy( bufferPtr, _lockWaits.data(), _lockWaits.size() * sizeof( LockWait ) );
+      // }
+
+      // ringbuf_t* ringbuf = ClientManager::sharedMemory.ringbuffer();
+      // uint8_t* mem = ClientManager::sharedMemory.data();
+      
+      // // Get buffer from shared memory
+      // static size_t msgCount=0;
+      // auto offset = ringbuf_acquire( ringbuf, _worker, sizeof( "Hello world" ) );
+      // if( offset != -1 )
+      // {
+      //    memcpy( (void*)&mem[offset], (void*)"Hello world", sizeof("Hello world" ) );
+      //    ringbuf_produce( ringbuf, _worker);
+      //    sem_post( ClientManager::sharedMemory._semaphore );
+      //    printf("Message sent!%lu\n", ++msgCount );
+      // }
+
       _lockWaits.clear();
-      _bufferToSend.clear();
+      //_bufferToSend.clear();
    }
 
    int _pushTraceLevel{0};
    size_t _threadId{0};
    std::vector< ShallowTrace > _shallowTraces;
    std::vector< LockWait > _lockWaits;
-   std::vector< uint8_t > _bufferToSend;
    std::vector< const char* > _nameArrayId;
    std::vector< char > _nameArrayData;
    ringbuf_worker_t* _worker{NULL};
    uint32_t _sentStringDataSize{0}; // The size of the string array on the server side
 };
 
+void intHandler( int dummy )
+{
+   printf("CTRL+C\n");
+}
+
 Client* ClientManager::Get( size_t threadId, bool createIfMissing /*= true*/ )
 {
    if( !ClientManager::sharedMemory.data() )
    {
-      ClientManager::sharedMemory.create( VDBG_SHARED_MEM_NAME, VDBG_SHARED_MEM_SIZE );
+      signal(SIGINT, intHandler);
+      ClientManager::sharedMemory.create( VDBG_SHARED_MEM_NAME, VDBG_SHARED_MEM_SIZE, true );
    }
 
    int tIndex = 0;
@@ -600,7 +693,7 @@ Client* ClientManager::Get( size_t threadId, bool createIfMissing /*= true*/ )
       assert( firstEmptyIdx < MAX_THREAD_NB ); // Maximum client profiler reached (one per thread) 
       tIndex = firstEmptyIdx;
       threadsId[tIndex] = threadId;
-      clients[tIndex] = new Client(threadId);
+      clients[tIndex] = std::unique_ptr< Client >( new Client(threadId) );
 
       // Register producer in the ringbuffer
       auto ringBuffer = ClientManager::sharedMemory.ringbuffer();
@@ -611,7 +704,7 @@ Client* ClientManager::Get( size_t threadId, bool createIfMissing /*= true*/ )
       } 
    }
 
-   return clients[tIndex];
+   return clients[tIndex].get();
 }
 
 void ClientManager::StartProfile( Client* client )
@@ -643,6 +736,12 @@ void ClientManager::EndLockWait( Client* client, void* mutexAddr, TimeStamp star
       client->addWaitLockTrace( mutexAddr, start, end );
 }
 
+bool ClientManager::HasConnectedServer() VDBG_NOEXCEPT
+{
+   return ClientManager::sharedMemory.data() &&
+          ClientManager::sharedMemory.consumerCount() > 0;
+}
+
 #endif  // end !VDBG_SERVER_IMPLEMENTATION
 
 } // end of namespace details
@@ -659,7 +758,6 @@ void ClientManager::EndLockWait( Client* client, void* mutexAddr, TimeStamp star
 #include <errno.h>
 #include <assert.h>
 #include <algorithm>
-#include <atomic>
 
 /*  Utils.h */
 
