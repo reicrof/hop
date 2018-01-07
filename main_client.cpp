@@ -40,11 +40,11 @@ int bug = -1;
 //    }
 // };
 
-// static void func3()
-// {
-//    VDBG_PROF_FUNC();
-//    std::this_thread::sleep_for(1ms);
-// }
+static void func3()
+{
+   VDBG_PROF_FUNC();
+   std::this_thread::sleep_for(1ms);
+}
 // static void func2()
 // {
 //    VDBG_PROF_FUNC();
@@ -61,34 +61,35 @@ int bug = -1;
 //    printf( "%lu\n", i );
 // }
 
-// static void threadFunc()
-// {
-//    while(true)
-//    {
-//       std::this_thread::sleep_for(1000ms);
-//       func3();
-//       func3();
-//       func3();
-//       func3();
-//       func3();
-//    }
-// }
+static void threadFunc()
+{
+   while(true)
+   {
+      std::this_thread::sleep_for(1000ms);
+      func3();
+      func3();
+      func3();
+      func3();
+      func3();
+   }
+}
 
-// static volatile size_t stamps = 0;
-// static void paintStamp()
-// {
-//    VDBG_PROF_FUNC();
-//    stamps++;
-// }
+static volatile size_t stamps = 0;
+static void paintStamp()
+{
+   VDBG_PROF_FUNC();
+   stamps++;
+}
 
-// static void paint()
-// {
-//    VDBG_PROF_FUNC();
-//    for( size_t i = 0; i < 1000; ++i )
-//    {
-//       paintStamp();
-//    }
-// }
+static void paint()
+{
+   for( size_t i = 0; i < 1000; ++i )
+   {
+      VDBG_PROF_FUNC();
+      paintStamp();
+      std::this_thread::sleep_for(0.001ms);
+   }
+}
 
 static void recCall( int& v )
 {
@@ -99,13 +100,13 @@ static void recCall( int& v )
    {
       recCall( --v );
    }
-   //paint();
 }
 
 static void call1( int v )
 {
    VDBG_PROF_FUNC();
    recCall( v );
+   paint();
 }
 
 #include <mutex>
@@ -114,7 +115,7 @@ int main()
    srand (time(NULL));
    bug = rand() % 100 + 1;
 
-   //std::thread t1( threadFunc );
+   //
    std::mutex m;
 
    static size_t asdf = 0;
@@ -132,6 +133,8 @@ int main()
          std::lock_guard<std::mutex> g(m);
          call1(60);
       }
+
+         static std::thread t1( threadFunc );
    }
 
 }

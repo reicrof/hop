@@ -50,7 +50,7 @@
 #define VDBG_NOEXCEPT noexcept
 #define VDBG_STATIC_ASSERT static_assert
 #define VDBG_GET_THREAD_ID() (size_t)pthread_self()
-#define VDBG_SHARED_MEM_NAME "/vdbg_shared_mem4"
+#define VDBG_SHARED_MEM_NAME "/vdbg_shared_mem14"
 extern char* __progname;
 inline const char* getProgName() VDBG_NOEXCEPT
 {
@@ -190,8 +190,6 @@ class ClientManager
    static bool HasConnectedServer() VDBG_NOEXCEPT;
 
    static SharedMemory sharedMemory;
-   static size_t threadsId[MAX_THREAD_NB];
-   static std::unique_ptr< Client > clients[MAX_THREAD_NB];
 };
 
 class ProfGuard
@@ -208,12 +206,11 @@ class ProfGuard
    }
    ~ProfGuard()
    {
-      end = getTimeStamp();
-      ClientManager::EndProfile( client, fctName, className, start, end, group );
+      ClientManager::EndProfile( client, fctName, className, start, getTimeStamp(), group );
    }
 
   private:
-   TimeStamp start, end;
+   TimeStamp start;
    const char *className, *fctName;
    Client* client;
    uint8_t group;
@@ -465,8 +462,6 @@ SharedMemory::~SharedMemory()
 // ------ cdbg_client.cpp------------
 
 SharedMemory ClientManager::sharedMemory;
-size_t ClientManager::threadsId[MAX_THREAD_NB] = {0};
-std::unique_ptr< Client > ClientManager::clients[MAX_THREAD_NB] = {0};
 
 class Client
 {
@@ -659,52 +654,32 @@ class Client
    uint32_t _sentStringDataSize{0}; // The size of the string array on the server side
 };
 
-void intHandler( int dummy )
-{
-   printf("CTRL+C\n");
-}
-
 Client* ClientManager::Get( size_t threadId, bool createIfMissing /*= true*/ )
 {
+   thread_local std::unique_ptr< Client > threadClient;
+
+   if( threadClient.get() ) return threadClient.get();
+
    if( !ClientManager::sharedMemory.data() )
    {
-      signal(SIGINT, intHandler);
-      ClientManager::sharedMemory.create( VDBG_SHARED_MEM_NAME, VDBG_SHARED_MEM_SIZE, true );
+      bool sucess = ClientManager::sharedMemory.create( VDBG_SHARED_MEM_NAME, VDBG_SHARED_MEM_SIZE, true );
+      assert( sucess );
    }
 
-   int tIndex = 0;
-   int firstEmptyIdx = -1;
-   for ( ; tIndex < MAX_THREAD_NB; ++tIndex )
+   static int threadCount = 0;
+   ++threadCount;
+   assert( threadCount <= MAX_THREAD_NB );
+   threadClient.reset( new Client(threadId) );
+
+   // Register producer in the ringbuffer
+   auto ringBuffer = ClientManager::sharedMemory.ringbuffer();
+   threadClient->_worker = ringbuf_register( ringBuffer, threadCount );
+   if ( threadClient->_worker  == NULL )
    {
-      // Find existing client profiler for current thread.
-      if ( threadsId[tIndex] == threadId ) break;
-      if ( firstEmptyIdx == -1 && threadsId[tIndex] == 0 ) firstEmptyIdx = tIndex;
-   }
+      assert( false && "ringbuf_register" );
+   } 
 
-   // TODO: Hack, there is a potential race condition if 2 threads get the same index and
-   // create a new client. Maybe use something like atomic index?
-
-   // If we have not found any existing client profiler for the current thread,
-   // lets create one.
-   if ( tIndex >= MAX_THREAD_NB )
-   {
-      if( !createIfMissing ) return nullptr;
-
-      assert( firstEmptyIdx < MAX_THREAD_NB ); // Maximum client profiler reached (one per thread) 
-      tIndex = firstEmptyIdx;
-      threadsId[tIndex] = threadId;
-      clients[tIndex] = std::unique_ptr< Client >( new Client(threadId) );
-
-      // Register producer in the ringbuffer
-      auto ringBuffer = ClientManager::sharedMemory.ringbuffer();
-      ClientManager::clients[tIndex]->_worker = ringbuf_register( ringBuffer, tIndex );
-      if ( ClientManager::clients[tIndex]->_worker  == NULL )
-      {
-         assert( false && "ringbuf_register" );
-      } 
-   }
-
-   return clients[tIndex].get();
+   return threadClient.get();
 }
 
 void ClientManager::StartProfile( Client* client )
