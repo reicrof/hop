@@ -162,31 +162,29 @@ class SharedMemory
 };
 // ------ end of SharedMemory.h ------------
 
-// -------- vdbg_client.h -------------
 static constexpr int MAX_THREAD_NB = 64;
-class ClientProfiler
+class Client;
+class ClientManager
 {
   public:
-   class Impl;
-   static Impl* Get( size_t threadId, bool createIfMissing = true );
-   static void StartProfile( Impl* );
+   static Client* Get( size_t threadId, bool createIfMissing = true );
+   static void StartProfile( Client* );
    static void EndProfile(
-       Impl*,
+       Client*,
        const char* name,
        const char* classStr,
        TimeStamp start,
        TimeStamp end,
        uint8_t group );
    static void EndLockWait(
-      Impl*,
+      Client*,
       void* mutexAddr,
       TimeStamp start,
       TimeStamp end );
 
-  private:
    static SharedMemory sharedMemory;
    static size_t threadsId[MAX_THREAD_NB];
-   static ClientProfiler::Impl* clientProfilers[MAX_THREAD_NB];
+   static Client* clients[MAX_THREAD_NB];
 };
 
 class ProfGuard
@@ -196,21 +194,21 @@ class ProfGuard
        : start( getTimeStamp() ),
          className( classStr ),
          fctName( name ),
-         impl( ClientProfiler::Get( VDBG_GET_THREAD_ID() ) ),
+         client( ClientManager::Get( VDBG_GET_THREAD_ID() ) ),
          group( groupId )
    {
-      ClientProfiler::StartProfile( impl );
+      ClientManager::StartProfile( client );
    }
    ~ProfGuard()
    {
       end = getTimeStamp();
-      ClientProfiler::EndProfile( impl, fctName, className, start, end, group );
+      ClientManager::EndProfile( client, fctName, className, start, end, group );
    }
 
   private:
    TimeStamp start, end;
    const char *className, *fctName;
-   ClientProfiler::Impl* impl;
+   Client* client;
    uint8_t group;
 };
 
@@ -219,25 +217,23 @@ struct LockWaitGuard
    LockWaitGuard( void* mutAddr )
        : start( getTimeStamp() ),
          mutexAddr( mutAddr ),
-         impl( ClientProfiler::Get( VDBG_GET_THREAD_ID() ) )
+         client( ClientManager::Get( VDBG_GET_THREAD_ID() ) )
    {
    }
    ~LockWaitGuard()
    {
       end = getTimeStamp();
-      ClientProfiler::EndLockWait( impl, mutexAddr, start, end );
+      ClientManager::EndLockWait( client, mutexAddr, start, end );
    }
 
    TimeStamp start, end;
    void* mutexAddr;
-   ClientProfiler::Impl* impl;
+   Client* client;
 };
 
 #define VDBG_COMBINE( X, Y ) X##Y
 #define VDBG_PROF_GUARD_VAR( LINE, ARGS ) \
    vdbg::details::ProfGuard VDBG_COMBINE( vdbgProfGuard, LINE ) ARGS
-
-// -------- end of vdbg_client.h -------------
 
 }  // namespace details
 }  // namespace vdbg
@@ -386,11 +382,11 @@ SharedMemory::~SharedMemory()
 
 // ------ cdbg_client.cpp------------
 
-SharedMemory ClientProfiler::sharedMemory;
-size_t ClientProfiler::threadsId[MAX_THREAD_NB] = {0};
-ClientProfiler::Impl* ClientProfiler::clientProfilers[MAX_THREAD_NB] = {0};
+SharedMemory ClientManager::sharedMemory;
+size_t ClientManager::threadsId[MAX_THREAD_NB] = {0};
+Client* ClientManager::clients[MAX_THREAD_NB] = {0};
 
-class ClientProfiler::Impl
+class Client
 {
    struct ShallowTrace
    {
@@ -400,7 +396,7 @@ class ClientProfiler::Impl
    };
 
   public:
-   Impl(size_t id) : _threadId( id )
+   Client(size_t id) : _threadId( id )
    {
       _shallowTraces.reserve( 64 );
       _lockWaits.reserve( 64 );
@@ -461,7 +457,7 @@ class ClientProfiler::Impl
 
    void flushToServer()
    {
-      if( !ClientProfiler::sharedMemory.data() )
+      if( !ClientManager::sharedMemory.data() )
       {
          return;
       }
@@ -543,8 +539,8 @@ class ClientProfiler::Impl
          memcpy( bufferPtr, _lockWaits.data(), _lockWaits.size() * sizeof( LockWait ) );
       }
 
-      ringbuf_t* ringbuf = ClientProfiler::sharedMemory.ringbuffer();
-      uint8_t* mem = ClientProfiler::sharedMemory.data();
+      ringbuf_t* ringbuf = ClientManager::sharedMemory.ringbuffer();
+      uint8_t* mem = ClientManager::sharedMemory.data();
       
       // Get buffer from shared memory
       static size_t msgCount=0;
@@ -553,7 +549,7 @@ class ClientProfiler::Impl
       {
          memcpy( (void*)&mem[offset], (void*)"Hello world", sizeof("Hello world" ) );
          ringbuf_produce( ringbuf, _worker);
-         sem_post( ClientProfiler::sharedMemory._semaphore );
+         sem_post( ClientManager::sharedMemory._semaphore );
          printf("Message sent!%lu\n", ++msgCount );
       }
 
@@ -576,11 +572,11 @@ class ClientProfiler::Impl
    uint32_t _sentStringDataSize{0}; // The size of the string array on the server side
 };
 
-ClientProfiler::Impl* ClientProfiler::Get( size_t threadId, bool createIfMissing /*= true*/ )
+Client* ClientManager::Get( size_t threadId, bool createIfMissing /*= true*/ )
 {
-   if( !ClientProfiler::sharedMemory.data() )
+   if( !ClientManager::sharedMemory.data() )
    {
-      ClientProfiler::sharedMemory.create( VDBG_SHARED_MEM_NAME, VDBG_SHARED_MEM_SIZE );
+      ClientManager::sharedMemory.create( VDBG_SHARED_MEM_NAME, VDBG_SHARED_MEM_SIZE );
    }
 
    int tIndex = 0;
@@ -604,47 +600,47 @@ ClientProfiler::Impl* ClientProfiler::Get( size_t threadId, bool createIfMissing
       assert( firstEmptyIdx < MAX_THREAD_NB ); // Maximum client profiler reached (one per thread) 
       tIndex = firstEmptyIdx;
       threadsId[tIndex] = threadId;
-      clientProfilers[tIndex] = new ClientProfiler::Impl(threadId);
+      clients[tIndex] = new Client(threadId);
 
       // Register producer in the ringbuffer
-      auto ringBuffer = ClientProfiler::sharedMemory.ringbuffer();
-      clientProfilers[tIndex]->_worker = ringbuf_register( ringBuffer, tIndex );
-      if ( clientProfilers[tIndex]->_worker  == NULL )
+      auto ringBuffer = ClientManager::sharedMemory.ringbuffer();
+      ClientManager::clients[tIndex]->_worker = ringbuf_register( ringBuffer, tIndex );
+      if ( ClientManager::clients[tIndex]->_worker  == NULL )
       {
          assert( false && "ringbuf_register" );
       } 
    }
 
-   return clientProfilers[tIndex];
+   return clients[tIndex];
 }
 
-void ClientProfiler::StartProfile( ClientProfiler::Impl* impl )
+void ClientManager::StartProfile( Client* client )
 {
-   ++impl->_pushTraceLevel;
+   ++client->_pushTraceLevel;
 }
 
-void ClientProfiler::EndProfile(
-    ClientProfiler::Impl* impl,
+void ClientManager::EndProfile(
+    Client* client,
     const char* name,
     const char* classStr,
     TimeStamp start,
     TimeStamp end,
     uint8_t group )
 {
-   const int remainingPushedTraces = --impl->_pushTraceLevel;
-   impl->addProfilingTrace( classStr, name, start, end, group );
+   const int remainingPushedTraces = --client->_pushTraceLevel;
+   client->addProfilingTrace( classStr, name, start, end, group );
    if ( remainingPushedTraces <= 0 )
    {
-      impl->flushToServer();
+      client->flushToServer();
    }
 }
 
-void ClientProfiler::EndLockWait( Impl* impl, void* mutexAddr, TimeStamp start, TimeStamp end )
+void ClientManager::EndLockWait( Client* client, void* mutexAddr, TimeStamp start, TimeStamp end )
 {
    // Only add lock wait event if the lock is coming from within
    // measured code
-   if( impl->_pushTraceLevel > 0 )
-      impl->addWaitLockTrace( mutexAddr, start, end );
+   if( client->_pushTraceLevel > 0 )
+      client->addWaitLockTrace( mutexAddr, start, end );
 }
 
 #endif  // end !VDBG_SERVER_IMPLEMENTATION
