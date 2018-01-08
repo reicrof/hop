@@ -18,7 +18,7 @@ CLIENT_DEFINE = -DVDBG_ENABLED
 
 PLATFORM_LD_FLAGS = 
 ifeq ($(UNAME), Linux)
-   CXX = clang++
+   CXX = g++7
    PLATFORM_LD_FLAGS = -lGL
    PTHREAD_WRAP_SOURCES = vdbg_functions_wrap.cpp
 else ifeq ($(UNAME), Darwin)

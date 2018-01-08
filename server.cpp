@@ -18,14 +18,13 @@ bool Server::start( const char* name, int  )
 
    _thread = std::thread( [this, name]() {
       using namespace details;
-      SharedMemory sharedMem;
       while ( _running )
       {
 
          // Try to get the shared memory
-         if( !sharedMem.data() )
+         if( !_sharedMem.data() )
          {
-            bool success = sharedMem.create( name, VDBG_SHARED_MEM_SIZE, false );
+            bool success = _sharedMem.create( name, VDBG_SHARED_MEM_SIZE, false );
             if( !success )
             {
                continue;
@@ -33,25 +32,17 @@ bool Server::start( const char* name, int  )
             printf("Connection to shared data succesful.\n");
          }
 
-         // If all the producer have left, close our end of the shared memory
-         if( sharedMem.producerCount() <= 0 )
-         {
-            printf("No more producers. Closing up.\n");
-            sharedMem.destroy();
-            continue;
-         }
-
-         sem_wait( sharedMem.semaphore() );
+         sem_wait( _sharedMem.semaphore() );
          size_t offset = 0;
-         const size_t bytesToRead = ringbuf_consume( sharedMem.ringbuffer(), &offset );
+         const size_t bytesToRead = ringbuf_consume( _sharedMem.ringbuffer(), &offset );
          if( bytesToRead > 0 )
          {
             size_t bytesRead = 0;
             while( bytesRead < bytesToRead )
             {
-               bytesRead += handleNewMessage( &sharedMem.data()[offset + bytesRead], bytesToRead - bytesRead );
+               bytesRead += handleNewMessage( &_sharedMem.data()[offset + bytesRead], bytesToRead - bytesRead );
             }
-            ringbuf_release( sharedMem.ringbuffer(), bytesToRead );
+            ringbuf_release( _sharedMem.ringbuffer(), bytesToRead );
          }
       }
    } );
@@ -144,6 +135,8 @@ void Server::getPendingProfilingTraces(
 void Server::stop()
 {
    _running = false;
+   // Wake up semaphore to close properly
+   sem_post( _sharedMem.semaphore() );
    if ( _thread.joinable() ) _thread.join();
 }
 

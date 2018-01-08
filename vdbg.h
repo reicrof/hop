@@ -50,7 +50,8 @@
 #define VDBG_NOEXCEPT noexcept
 #define VDBG_STATIC_ASSERT static_assert
 #define VDBG_GET_THREAD_ID() (size_t)pthread_self()
-#define VDBG_SHARED_MEM_NAME "/vdbg_shared_mem14"
+#define VDBG_SHARED_MEM_MAX_NAME_SIZE 255
+#define VDBG_SHARED_MEM_PREFIX "/vdbg_shared_mem_"
 extern char* __progname;
 inline const char* getProgName() VDBG_NOEXCEPT
 {
@@ -137,17 +138,15 @@ VDBG_STATIC_ASSERT( sizeof(LockWait) == EXPECTED_LOCK_WAIT_SIZE, "Lock wait layo
 class SharedMemory
 {
   public:
-   bool create( const char* path, size_t size, bool isProducer );
+   bool create( const char* path, size_t size, bool isConsumer );
    void destroy();
 
    struct SharedMetaInfo
    {
-      std::atomic< int > producerCount;
       std::atomic< int > consumerCount;
    };
 
    int consumerCount() const VDBG_NOEXCEPT;
-   int producerCount() const VDBG_NOEXCEPT;
    ringbuf_t* ringbuffer() const VDBG_NOEXCEPT;
    uint8_t* data() const VDBG_NOEXCEPT;
    sem_t* semaphore() const VDBG_NOEXCEPT;
@@ -161,10 +160,10 @@ class SharedMemory
    uint8_t* _data{NULL};
    // ----------------
    sem_t* _semaphore{NULL};
+   bool _isConsumer;
    size_t _size{0};
-   const char* _path{NULL};
    int _sharedMemFd{-1};
-   bool _isProducer;
+   char _sharedMemPath[VDBG_SHARED_MEM_MAX_NAME_SIZE];
 };
 // ------ end of SharedMemory.h ------------
 
@@ -307,30 +306,26 @@ namespace details
 {
 
 // ------ SharedMemory.cpp------------
-bool SharedMemory::create( const char* path, size_t requestedSize, bool isProducer )
+bool SharedMemory::create( const char* path, size_t requestedSize, bool isConsumer )
 {
-   _isProducer = isProducer;
+   _isConsumer = isConsumer;
    // Get the size needed for the ringbuf struct
    size_t ringBufSize;
    ringbuf_get_sizes(MAX_THREAD_NB, &ringBufSize, NULL);
 
    // TODO handle signals
    // signal( SIGINT, sig_callback_handler );
-   _path = path;
+   strncpy( _sharedMemPath, path, VDBG_SHARED_MEM_MAX_NAME_SIZE );
    _size = requestedSize;
 
-   const int shmFlags = isProducer ? O_CREAT | O_RDWR | O_EXCL : O_RDWR;
-   _sharedMemFd = shm_open( path, shmFlags, 0666 );
+   _sharedMemFd = shm_open( path, O_CREAT | O_RDWR, 0666 );
    if ( _sharedMemFd < 0 )
    {
-      if( isProducer )
+      if( !isConsumer )
       {
-         printf("ERROR!\nCould not create shared memory segment. You may have not enough free space to"
-                " allocate the requested %lu bytes, or might have a previous shared memory segment "
-                "that was not cleared properly from a previous run. \n");
+         perror( "Could not shm_open shared memory" );
       }
       // In the case of a consumer, this simply means that there is no producer to read from.
-
       return false;
    }
 
@@ -359,18 +354,17 @@ bool SharedMemory::create( const char* path, size_t requestedSize, bool isProduc
              " You might be trying to run the consumer application twice or"
              " have a dangling shared memory segment.\n");
       shm_unlink( path );
+      _sharedMemFd = -1;
+      _data = NULL;
+      _sharedMetaData = NULL;
+      _ringbuf = NULL;
       return false;
    }
 
    // Open semaphore
-   const int semaphoreFlags = isProducer ? O_CREAT : 0;
-   _semaphore = sem_open( "/mysem", semaphoreFlags, S_IRUSR | S_IWUSR, 1 );
+   _semaphore = sem_open( "/mysem", O_CREAT, S_IRUSR | S_IWUSR, 1 );
 
-   if( isProducer )
-   {
-      ++_sharedMetaData->producerCount;
-   }
-   else
+   if( isConsumer )
    {
       ++_sharedMetaData->consumerCount;
    }
@@ -381,11 +375,6 @@ bool SharedMemory::create( const char* path, size_t requestedSize, bool isProduc
 int SharedMemory::consumerCount() const VDBG_NOEXCEPT
 {
    return sharedMetaInfo()->consumerCount.load();
-}
-
-int SharedMemory::producerCount() const VDBG_NOEXCEPT
-{
-   return sharedMetaInfo()->producerCount.load();
 }
 
 uint8_t* SharedMemory::data() const VDBG_NOEXCEPT
@@ -412,34 +401,20 @@ void SharedMemory::destroy()
 {
    if ( data() )
    {
-      if ( sem_close( _semaphore ) != 0 )
+      if ( _semaphore && sem_close( _semaphore ) != 0 )
       {
          perror( "Could not close semaphore" );
       }
 
-      if ( sem_unlink("/mysem") < 0 )
+      if ( _semaphore && sem_unlink("/mysem") < 0 )
       {
          perror( "Could not unlink semaphore" );
       }
 
-      // Decrease producer/consumer
-      if( _isProducer )
-      {
-         --_sharedMetaData->producerCount;
-      }
-      else
-      {
-         assert( _sharedMetaData->consumerCount == 1 );
-         _sharedMetaData->consumerCount = 0;
-      }
+      if( _isConsumer )
+         --_sharedMetaData->consumerCount;
 
-      if( _sharedMetaData->producerCount.load() == 0 &&
-          _sharedMetaData->consumerCount.load() == 0 )
-      {
-         printf( "Shared memory cleanup...\n" );
-      }
-
-      if ( shm_unlink( _path ) != 0 )
+      if ( _sharedMemPath && shm_unlink( _sharedMemPath ) != 0 )
       {
          perror( "Could not unlink shared memory" );
       }
@@ -662,7 +637,11 @@ Client* ClientManager::Get( size_t threadId, bool createIfMissing /*= true*/ )
 
    if( !ClientManager::sharedMemory.data() )
    {
-      bool sucess = ClientManager::sharedMemory.create( VDBG_SHARED_MEM_NAME, VDBG_SHARED_MEM_SIZE, true );
+      char path[VDBG_SHARED_MEM_MAX_NAME_SIZE] = {};
+      strncpy( path, VDBG_SHARED_MEM_PREFIX, sizeof( VDBG_SHARED_MEM_PREFIX ) );
+      strncat(
+          path, __progname, VDBG_SHARED_MEM_MAX_NAME_SIZE - sizeof( VDBG_SHARED_MEM_PREFIX ) - 1 );
+      bool sucess = ClientManager::sharedMemory.create( path, VDBG_SHARED_MEM_SIZE, true );
       assert( sucess );
    }
 

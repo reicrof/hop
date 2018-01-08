@@ -27,6 +27,7 @@ class Server
 
    std::thread _thread;
    bool _running{false};
+   details::SharedMemory _sharedMem;
 
    std::mutex pendingTracesMutex;
    std::vector< std::vector< DisplayableTrace > > pendingTraces;

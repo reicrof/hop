@@ -93,8 +93,14 @@ static void handleInput()
    }
 }
 
-int main()
+int main( int argc, const char* argv[] )
 {
+   if( argc < 2 )
+   {
+      printf("Usage : main_server <name_of_exec_to_profile>\n" );
+      return -1;
+   }
+
    if ( SDL_Init( SDL_INIT_VIDEO ) != 0 )
    {
       printf( "Failed SDL initialization : %s \n", SDL_GetError() );
@@ -122,8 +128,12 @@ int main()
 
    vdbg::init();
 
+   char exeName[VDBG_SHARED_MEM_MAX_NAME_SIZE] = {};
+   strncpy( exeName, VDBG_SHARED_MEM_PREFIX, sizeof( VDBG_SHARED_MEM_PREFIX ) );
+      strncat(
+          exeName, argv[1], VDBG_SHARED_MEM_MAX_NAME_SIZE - sizeof( VDBG_SHARED_MEM_PREFIX ) - 1 );
    vdbg::Server serv;
-   serv.start( VDBG_SHARED_MEM_NAME, 10 );
+   serv.start( exeName, 10 );
 
    rapidjson::Document doc;
 
