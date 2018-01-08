@@ -1,6 +1,9 @@
 #include "imdbg.h"
 #include "imgui/imgui.h"
 
+// Todo : I dont like this dependency
+#include "server.h"
+
 #ifdef __APPLE__
 #include <OpenGL/gl.h>
 #else
@@ -199,14 +202,14 @@ void onNewFrame( int width, int height, int mouseX, int mouseY, bool lmbPressed,
    ImGui::NewFrame();
 }
 
-void draw()
+void draw( Server* server )
 {
    static double lastTime = 0.0;
 
    const auto preDrawTime = std::chrono::system_clock::now();
    for ( auto p : _profilers )
    {
-      p->draw();
+      p->draw( server );
    }
 
    ImGui::Text( "Drawing took %f ms", lastTime );
@@ -447,7 +450,7 @@ void ThreadTraces::addTraces( const std::vector< DisplayableTrace >& traces )
 //    return isOpen;
 // }
 
-void vdbg::Profiler::draw()
+void vdbg::Profiler::draw( vdbg::Server* server )
 {
    ImGui::SetNextWindowSize(ImVec2(700,500), ImGuiSetCond_FirstUseEver);
    if ( !ImGui::Begin( _name.c_str(), nullptr, ImGuiWindowFlags_NoScrollWithMouse ) )
@@ -457,7 +460,10 @@ void vdbg::Profiler::draw()
       return;
    }
 
-   ImGui::Checkbox( "Listening", &_recording );
+   if( ImGui::Checkbox( "Listening", &_recording ) )
+   {
+      server->setRecording( _recording );
+   }
    ImGui::SameLine();
    ImGui::Checkbox( "Live", &_realtime );
 

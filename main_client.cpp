@@ -121,7 +121,7 @@ int main()
    const auto preDrawTime = std::chrono::system_clock::now();
 
    static size_t asdf = 0;
-   while(asdf < 10000)
+   while(asdf < 100000)
    {
       VDBG_PROF_FUNC();
       ++asdf;

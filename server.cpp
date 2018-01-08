@@ -50,6 +50,11 @@ bool Server::start( const char* name, int  )
    return true;
 }
 
+void Server::setRecording( bool recording )
+{
+   _sharedMem.setListeningConsumer( recording );
+}
+
 size_t Server::handleNewMessage( uint8_t* data, size_t maxSize )
 {
    using namespace details;

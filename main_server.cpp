@@ -59,11 +59,13 @@ static void handleInput()
    ImGuiIO& io = ImGui::GetIO();
    while ( g_run && SDL_PollEvent( &event ) )
    {
-      handleMouseWheel( event );
       switch ( event.type )
       {
          case SDL_QUIT:
             g_run = false;
+            break;
+         case SDL_MOUSEWHEEL:
+            handleMouseWheel( event );
             break;
          case SDL_TEXTINPUT:
          {
@@ -177,7 +179,7 @@ int main( int argc, const char* argv[] )
       glClearColor( 1.0f, 1.0f, 1.0f, 1.0f );
       glClear( GL_COLOR_BUFFER_BIT );
 
-      vdbg::draw();
+      vdbg::draw( &serv );
 
       SDL_GL_SwapWindow( window );
    }

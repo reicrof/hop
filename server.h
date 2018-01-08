@@ -14,6 +14,7 @@ class Server
 {
   public:
    bool start( const char* name, int connections );
+   void setRecording( bool recording );
    void stop();
 
    void getPendingProfilingTraces(

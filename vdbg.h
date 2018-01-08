@@ -146,10 +146,18 @@ class SharedMemory
 
    struct SharedMetaInfo
    {
-      std::atomic< int > consumerCount;
+      enum Flags
+      {
+         CONNECTED_CONSUMER = 1 << 0,
+         LISTENING_CONSUMER = 1 << 1,
+      };
+      std::atomic< uint32_t > flags{0};
    };
 
-   int consumerCount() const VDBG_NOEXCEPT;
+   bool hasConnectedConsumer() const VDBG_NOEXCEPT;
+   void setConnectedConsumer( bool ) VDBG_NOEXCEPT;
+   bool hasListeningConsumer() const VDBG_NOEXCEPT;
+   void setListeningConsumer( bool ) VDBG_NOEXCEPT;
    ringbuf_t* ringbuffer() const VDBG_NOEXCEPT;
    uint8_t* data() const VDBG_NOEXCEPT;
    sem_t* semaphore() const VDBG_NOEXCEPT;
@@ -189,7 +197,8 @@ class ClientManager
       void* mutexAddr,
       TimeStamp start,
       TimeStamp end );
-   static bool HasConnectedServer() VDBG_NOEXCEPT;
+   static bool HasConnectedConsumer() VDBG_NOEXCEPT;
+   static bool HasListeningConsumer() VDBG_NOEXCEPT;
 
    static SharedMemory sharedMemory;
 };
@@ -342,16 +351,26 @@ bool SharedMemory::create( const char* path, size_t requestedSize, bool isConsum
       return false;
    }
 
+   // Get pointers inside the shared memoryu
    _sharedMetaData = (SharedMetaInfo*) sharedMem;
    _ringbuf = (ringbuf_t*) (sharedMem + sizeof( SharedMetaInfo ));
    _data = sharedMem + sizeof( SharedMetaInfo ) + ringBufSize ;
+
+   // Reset everything but the metadata if we are a producer. (The metadata
+   // could still be in used  by a server when we get here, if we start
+   // the server first for example)
+   if( !isConsumer )
+   {
+      memset( _ringbuf, 0, totalSize - sizeof( SharedMetaInfo) );
+   }
+
    if( ringbuf_setup( _ringbuf, MAX_THREAD_NB, requestedSize ) < 0 )
    {
       assert( false && "Ring buffer creation failed" );
    }
 
    // We can only have one consumer
-   if( isConsumer && _sharedMetaData->consumerCount.load() > 0 )
+   if( isConsumer && hasConnectedConsumer() )
    {
       printf("Cannot have more than one instance of the consumer at a time."
              " You might be trying to run the consumer application twice or"
@@ -369,15 +388,40 @@ bool SharedMemory::create( const char* path, size_t requestedSize, bool isConsum
 
    if( isConsumer )
    {
-      ++_sharedMetaData->consumerCount;
+      _sharedMetaData->flags |= SharedMetaInfo::CONNECTED_CONSUMER;
    }
 
    return true;
 }
 
-int SharedMemory::consumerCount() const VDBG_NOEXCEPT
+bool SharedMemory::hasConnectedConsumer() const VDBG_NOEXCEPT
 {
-   return sharedMetaInfo()->consumerCount.load();
+   const uint32_t mask = SharedMetaInfo::CONNECTED_CONSUMER;
+   return (sharedMetaInfo()->flags) & mask == mask;
+}
+
+void SharedMemory::setConnectedConsumer( bool connected ) VDBG_NOEXCEPT
+{
+   if( connected )
+      _sharedMetaData->flags |= SharedMetaInfo::CONNECTED_CONSUMER;
+   else
+      _sharedMetaData->flags &= ~SharedMetaInfo::CONNECTED_CONSUMER;
+
+}
+
+bool SharedMemory::hasListeningConsumer() const VDBG_NOEXCEPT
+{
+   const uint32_t mask = SharedMetaInfo::CONNECTED_CONSUMER | SharedMetaInfo::LISTENING_CONSUMER;
+   return (sharedMetaInfo()->flags & mask) == mask;
+}
+
+void SharedMemory::setListeningConsumer( bool listening ) VDBG_NOEXCEPT
+{
+   if(listening)
+      _sharedMetaData->flags |= SharedMetaInfo::LISTENING_CONSUMER;
+   else
+      _sharedMetaData->flags &= ~(SharedMetaInfo::LISTENING_CONSUMER);
+
 }
 
 uint8_t* SharedMemory::data() const VDBG_NOEXCEPT
@@ -415,7 +459,7 @@ void SharedMemory::destroy()
       }
 
       if( _isConsumer )
-         --_sharedMetaData->consumerCount;
+         _sharedMetaData->flags &= ~(SharedMetaInfo::CONNECTED_CONSUMER | SharedMetaInfo::LISTENING_CONSUMER);
 
       if ( _sharedMemPath && shm_unlink( _sharedMemPath ) != 0 )
       {
@@ -515,9 +559,9 @@ class Client
       return charIdx + 1;
    }
 
-   void flushToServer()
+   void flushToConsumer()
    {
-      if( !ClientManager::HasConnectedServer() )
+      if( !ClientManager::HasListeningConsumer() )
       {
          _shallowTraces.clear();
          _lockWaits.clear();
@@ -686,7 +730,7 @@ void ClientManager::EndProfile(
    client->addProfilingTrace( classStr, name, start, end, group );
    if ( remainingPushedTraces <= 0 )
    {
-      client->flushToServer();
+      client->flushToConsumer();
    }
 }
 
@@ -698,10 +742,16 @@ void ClientManager::EndLockWait( Client* client, void* mutexAddr, TimeStamp star
       client->addWaitLockTrace( mutexAddr, start, end );
 }
 
-bool ClientManager::HasConnectedServer() VDBG_NOEXCEPT
+bool ClientManager::HasConnectedConsumer() VDBG_NOEXCEPT
 {
    return ClientManager::sharedMemory.data() &&
-          ClientManager::sharedMemory.consumerCount() > 0;
+          ClientManager::sharedMemory.hasConnectedConsumer();
+}
+
+bool ClientManager::HasListeningConsumer() VDBG_NOEXCEPT
+{
+   return ClientManager::sharedMemory.data() &&
+          ClientManager::sharedMemory.hasListeningConsumer();
 }
 
 #endif  // end !VDBG_SERVER_IMPLEMENTATION

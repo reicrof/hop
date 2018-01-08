@@ -11,7 +11,6 @@
 
 namespace vdbg
 {
-
 struct DisplayableTrace
 {
    TimeStamp time; // in ns
@@ -61,10 +60,11 @@ struct ProfilerTimeline
    int _maxTracesDepth{0};
 };
 
+class Server;
 struct Profiler
 {
    Profiler( const std::string& name );
-   void draw();
+   void draw( Server* server );
    void addTraces( const std::vector< DisplayableTrace >& traces, uint32_t threadId );
    void addStringData( const std::vector< char >& stringData, uint32_t threadId );
 
@@ -85,7 +85,7 @@ void addNewProfiler( Profiler* profiler );
 // Updates the imgui data. Should be called each frame
 void onNewFrame( int width, int height, int mouseX, int mouseY, bool lmbPressed, bool rmbPressed, float mouseWheel );
 // Draw the ui
-void draw();
+void draw( Server* server );
 
 } // namespace vdbg
 
