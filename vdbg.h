@@ -50,8 +50,9 @@
 #define VDBG_NOEXCEPT noexcept
 #define VDBG_STATIC_ASSERT static_assert
 #define VDBG_GET_THREAD_ID() (size_t)pthread_self()
-#define VDBG_SHARED_MEM_MAX_NAME_SIZE 255
-#define VDBG_SHARED_MEM_PREFIX "/vdbg_shared_mem_"
+// On MacOs the max name length seems to be 30...
+#define VDBG_SHARED_MEM_MAX_NAME_SIZE 30
+#define VDBG_SHARED_MEM_PREFIX "/vdbg_"
 extern char* __progname;
 inline const char* getProgName() VDBG_NOEXCEPT
 {
@@ -315,7 +316,7 @@ bool SharedMemory::create( const char* path, size_t requestedSize, bool isConsum
 
    // TODO handle signals
    // signal( SIGINT, sig_callback_handler );
-   strncpy( _sharedMemPath, path, VDBG_SHARED_MEM_MAX_NAME_SIZE );
+   strncpy( _sharedMemPath, path, VDBG_SHARED_MEM_MAX_NAME_SIZE - 1 );
    _size = requestedSize;
 
    _sharedMemFd = shm_open( path, O_CREAT | O_RDWR, 0666 );
@@ -641,7 +642,7 @@ Client* ClientManager::Get( size_t threadId, bool createIfMissing /*= true*/ )
       strncpy( path, VDBG_SHARED_MEM_PREFIX, sizeof( VDBG_SHARED_MEM_PREFIX ) );
       strncat(
           path, __progname, VDBG_SHARED_MEM_MAX_NAME_SIZE - sizeof( VDBG_SHARED_MEM_PREFIX ) - 1 );
-      bool sucess = ClientManager::sharedMemory.create( path, VDBG_SHARED_MEM_SIZE, true );
+      bool sucess = ClientManager::sharedMemory.create( path, VDBG_SHARED_MEM_SIZE, false );
       assert( sucess );
    }
 
@@ -1029,7 +1030,7 @@ retry:
     */
    if ( next < written )
    {
-      const ringbuf_off_t end = std::min( rbuf->space, rbuf->end );
+      const ringbuf_off_t end = std::min( (ringbuf_off_t) rbuf->space, rbuf->end );
 
       /*
        * Wrap-around case.  Check for the cut off first.

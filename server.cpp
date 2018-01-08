@@ -24,7 +24,7 @@ bool Server::start( const char* name, int  )
          // Try to get the shared memory
          if( !_sharedMem.data() )
          {
-            bool success = _sharedMem.create( name, VDBG_SHARED_MEM_SIZE, false );
+            bool success = _sharedMem.create( name, VDBG_SHARED_MEM_SIZE, true );
             if( !success )
             {
                continue;

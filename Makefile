@@ -19,7 +19,7 @@ CLIENT_DEFINE = -DVDBG_ENABLED
 PLATFORM_LD_FLAGS = 
 ifeq ($(UNAME), Linux)
    CXX = g++7
-   PLATFORM_LD_FLAGS = -lGL
+   PLATFORM_LD_FLAGS = -lGL -lrt
    PTHREAD_WRAP_SOURCES = vdbg_functions_wrap.cpp
 else ifeq ($(UNAME), Darwin)
    CXX = clang++
@@ -28,7 +28,7 @@ endif
 
 #includes
 INC = $(COMMON_INCLUDES)
-LDFLAGS = -lpthread -lrt ./SDL2/libSDL2.a -ldl $(PLATFORM_LD_FLAGS)
+LDFLAGS = -lpthread ./SDL2/libSDL2.a -ldl $(PLATFORM_LD_FLAGS)
 
 .PHONY: all
 
