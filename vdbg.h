@@ -351,7 +351,7 @@ bool SharedMemory::create( const char* path, size_t requestedSize, bool isConsum
    }
 
    // We can only have one consumer
-   if( _sharedMetaData->consumerCount.load() > 0 )
+   if( isConsumer && _sharedMetaData->consumerCount.load() > 0 )
    {
       printf("Cannot have more than one instance of the consumer at a time."
              " You might be trying to run the consumer application twice or"
@@ -361,7 +361,7 @@ bool SharedMemory::create( const char* path, size_t requestedSize, bool isConsum
       _data = NULL;
       _sharedMetaData = NULL;
       _ringbuf = NULL;
-      return false;
+      exit(-1);
    }
 
    // Open semaphore
