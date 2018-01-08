@@ -58,6 +58,8 @@ inline const char* getProgName() VDBG_NOEXCEPT
 {
    return __progname;
 }
+#define likely(x)       __builtin_expect((x),1)
+#define unlikely(x)     __builtin_expect((x),0)
 // -----------------------------
 
 // Forward declarations of type used by ringbuffer as adapted from
@@ -437,7 +439,12 @@ SharedMemory::~SharedMemory()
 
 // ------ cdbg_client.cpp------------
 
+// The shared memory that will be created by the client process to communicate
+// with the server
 SharedMemory ClientManager::sharedMemory;
+
+// The call stack depth of the current measured trace. One variable per thread
+thread_local int tl_traceLevel = 0;
 
 class Client
 {
@@ -451,9 +458,9 @@ class Client
   public:
    Client(size_t id) : _threadId( id )
    {
-      _shallowTraces.reserve( 64 );
-      _lockWaits.reserve( 64 );
-      _nameArrayId.reserve( 64 );
+      _shallowTraces.reserve( 256 );
+      _lockWaits.reserve( 256 );
+      _nameArrayId.reserve( 256 );
       _nameArrayData.reserve( 64 * 32 );
 
       // Push back first name as empty string
@@ -620,7 +627,6 @@ class Client
       //_bufferToSend.clear();
    }
 
-   int _pushTraceLevel{0};
    size_t _threadId{0};
    std::vector< ShallowTrace > _shallowTraces;
    std::vector< LockWait > _lockWaits;
@@ -634,8 +640,9 @@ Client* ClientManager::Get( size_t threadId, bool createIfMissing /*= true*/ )
 {
    thread_local std::unique_ptr< Client > threadClient;
 
-   if( threadClient.get() ) return threadClient.get();
+   if( likely( threadClient.get() != NULL ) ) return threadClient.get();
 
+   // If we have not yet created our shared memory segment, do it here
    if( !ClientManager::sharedMemory.data() )
    {
       char path[VDBG_SHARED_MEM_MAX_NAME_SIZE] = {};
@@ -643,7 +650,7 @@ Client* ClientManager::Get( size_t threadId, bool createIfMissing /*= true*/ )
       strncat(
           path, __progname, VDBG_SHARED_MEM_MAX_NAME_SIZE - sizeof( VDBG_SHARED_MEM_PREFIX ) - 1 );
       bool sucess = ClientManager::sharedMemory.create( path, VDBG_SHARED_MEM_SIZE, false );
-      assert( sucess );
+      assert( sucess && "Could not create shared memory" );
    }
 
    static int threadCount = 0;
@@ -664,7 +671,7 @@ Client* ClientManager::Get( size_t threadId, bool createIfMissing /*= true*/ )
 
 void ClientManager::StartProfile( Client* client )
 {
-   ++client->_pushTraceLevel;
+   ++tl_traceLevel;
 }
 
 void ClientManager::EndProfile(
@@ -675,7 +682,7 @@ void ClientManager::EndProfile(
     TimeStamp end,
     uint8_t group )
 {
-   const int remainingPushedTraces = --client->_pushTraceLevel;
+   const int remainingPushedTraces = --tl_traceLevel;
    client->addProfilingTrace( classStr, name, start, end, group );
    if ( remainingPushedTraces <= 0 )
    {
@@ -687,7 +694,7 @@ void ClientManager::EndLockWait( Client* client, void* mutexAddr, TimeStamp star
 {
    // Only add lock wait event if the lock is coming from within
    // measured code
-   if( client->_pushTraceLevel > 0 )
+   if( tl_traceLevel > 0 )
       client->addWaitLockTrace( mutexAddr, start, end );
 }
 
@@ -715,14 +722,6 @@ bool ClientManager::HasConnectedServer() VDBG_NOEXCEPT
 #include <algorithm>
 
 /*  Utils.h */
-
-/*
- * Branch prediction macros.
- */
-#ifndef __predict_true
-#define __predict_true( x ) __builtin_expect( ( x ) != 0, 1 )
-#define __predict_false( x ) __builtin_expect( ( x ) != 0, 0 )
-#endif
 
 /*
  * Exponential back-off for the spinning paths.
@@ -881,14 +880,14 @@ ssize_t ringbuf_acquire( ringbuf_t* rbuf, ringbuf_worker_t* w, size_t len )
        */
       target = next + len;
       written = rbuf->written;
-      if ( __predict_false( next < written && target >= written ) )
+      if ( unlikely( next < written && target >= written ) )
       {
          /* The producer must wait. */
          w->seen_off = RBUF_OFF_MAX;
          return -1;
       }
 
-      if ( __predict_false( target >= rbuf->space ) )
+      if ( unlikely( target >= rbuf->space ) )
       {
          const bool exceed = target > rbuf->space;
 
@@ -929,7 +928,7 @@ ssize_t ringbuf_acquire( ringbuf_t* rbuf, ringbuf_worker_t* w, size_t len )
     * the remaining space and need to wrap-around), then save the
     * 'end' offset and release the lock.
     */
-   if ( __predict_false( target & WRAP_LOCK_BIT ) )
+   if ( unlikely( target & WRAP_LOCK_BIT ) )
    {
       /* Cannot wrap-around again if consumer did not catch-up. */
       assert( rbuf->written <= next );
