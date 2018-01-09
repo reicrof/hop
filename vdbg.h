@@ -183,17 +183,15 @@ class Client;
 class ClientManager
 {
   public:
-   static Client* Get( size_t threadId, bool createIfMissing = true );
-   static void StartProfile( Client* );
+   static Client* Get();
+   static void StartProfile();
    static void EndProfile(
-       Client*,
        const char* name,
        const char* classStr,
        TimeStamp start,
        TimeStamp end,
        uint8_t group );
    static void EndLockWait(
-      Client*,
       void* mutexAddr,
       TimeStamp start,
       TimeStamp end );
@@ -210,20 +208,18 @@ class ProfGuard
        : start( getTimeStamp() ),
          className( classStr ),
          fctName( name ),
-         client( ClientManager::Get( VDBG_GET_THREAD_ID() ) ),
          group( groupId )
    {
-      ClientManager::StartProfile( client );
+      ClientManager::StartProfile();
    }
    ~ProfGuard()
    {
-      ClientManager::EndProfile( client, fctName, className, start, getTimeStamp(), group );
+      ClientManager::EndProfile( fctName, className, start, getTimeStamp(), group );
    }
 
   private:
    TimeStamp start;
    const char *className, *fctName;
-   Client* client;
    uint8_t group;
 };
 
@@ -231,19 +227,16 @@ struct LockWaitGuard
 {
    LockWaitGuard( void* mutAddr )
        : start( getTimeStamp() ),
-         mutexAddr( mutAddr ),
-         client( ClientManager::Get( VDBG_GET_THREAD_ID() ) )
+         mutexAddr( mutAddr )
    {
    }
    ~LockWaitGuard()
    {
-      end = getTimeStamp();
-      ClientManager::EndLockWait( client, mutexAddr, start, end );
+      ClientManager::EndLockWait( mutexAddr, start, getTimeStamp() );
    }
 
-   TimeStamp start, end;
+   TimeStamp start;
    void* mutexAddr;
-   Client* client;
 };
 
 #define VDBG_COMBINE( X, Y ) X##Y
@@ -489,6 +482,7 @@ SharedMemory ClientManager::sharedMemory;
 
 // The call stack depth of the current measured trace. One variable per thread
 thread_local int tl_traceLevel = 0;
+thread_local size_t tl_threadId = 0;
 
 class Client
 {
@@ -500,7 +494,7 @@ class Client
    };
 
   public:
-   Client(size_t id) : _threadId( id )
+   Client()
    {
       _shallowTraces.reserve( 256 );
       _lockWaits.reserve( 256 );
@@ -611,7 +605,7 @@ class Client
          Trace* traceToSend = (Trace*)( bufferPtr + sizeof( MsgInfo ) + stringToSend );
 
          tracesInfo->type = MsgType::PROFILER_TRACE;
-         tracesInfo->threadId = (uint32_t)_threadId;
+         tracesInfo->threadId = (uint32_t)tl_threadId;
          tracesInfo->traces.stringDataSize = stringToSend;
          tracesInfo->traces.traceCount = (uint32_t)_shallowTraces.size();
 
@@ -671,7 +665,6 @@ class Client
       //_bufferToSend.clear();
    }
 
-   size_t _threadId{0};
    std::vector< ShallowTrace > _shallowTraces;
    std::vector< LockWait > _lockWaits;
    std::vector< const char* > _nameArrayId;
@@ -680,7 +673,7 @@ class Client
    uint32_t _sentStringDataSize{0}; // The size of the string array on the server side
 };
 
-Client* ClientManager::Get( size_t threadId, bool createIfMissing /*= true*/ )
+Client* ClientManager::Get()
 {
    thread_local std::unique_ptr< Client > threadClient;
 
@@ -700,7 +693,8 @@ Client* ClientManager::Get( size_t threadId, bool createIfMissing /*= true*/ )
    static int threadCount = 0;
    ++threadCount;
    assert( threadCount <= MAX_THREAD_NB );
-   threadClient.reset( new Client(threadId) );
+   tl_threadId = VDBG_GET_THREAD_ID();
+   threadClient.reset( new Client() );
 
    // Register producer in the ringbuffer
    auto ringBuffer = ClientManager::sharedMemory.ringbuffer();
@@ -713,13 +707,12 @@ Client* ClientManager::Get( size_t threadId, bool createIfMissing /*= true*/ )
    return threadClient.get();
 }
 
-void ClientManager::StartProfile( Client* client )
+void ClientManager::StartProfile()
 {
    ++tl_traceLevel;
 }
 
 void ClientManager::EndProfile(
-    Client* client,
     const char* name,
     const char* classStr,
     TimeStamp start,
@@ -727,6 +720,7 @@ void ClientManager::EndProfile(
     uint8_t group )
 {
    const int remainingPushedTraces = --tl_traceLevel;
+   Client* client = ClientManager::Get();
    client->addProfilingTrace( classStr, name, start, end, group );
    if ( remainingPushedTraces <= 0 )
    {
@@ -734,12 +728,14 @@ void ClientManager::EndProfile(
    }
 }
 
-void ClientManager::EndLockWait( Client* client, void* mutexAddr, TimeStamp start, TimeStamp end )
+void ClientManager::EndLockWait( void* mutexAddr, TimeStamp start, TimeStamp end )
 {
    // Only add lock wait event if the lock is coming from within
    // measured code
    if( tl_traceLevel > 0 )
-      client->addWaitLockTrace( mutexAddr, start, end );
+   {
+      ClientManager::Get()->addWaitLockTrace( mutexAddr, start, end );
+   }
 }
 
 bool ClientManager::HasConnectedConsumer() VDBG_NOEXCEPT
