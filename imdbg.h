@@ -45,12 +45,13 @@ struct ThreadTraces
    std::vector< TimeStamp > startTimes;
    std::vector< TimeStamp > endTimes;
    std::vector< std::vector< DisplayableTrace > > chunks;
+   std::vector< char > stringData;
 };
 
 struct ProfilerTimeline
 {
    void drawTimeline();
-   void drawTraces( const ThreadTraces& traces, const std::vector< char >& strData );
+   void drawTraces( const ThreadTraces& traces );
    void handleMouseWheel( const ImVec2& mousePosInCanvas );
    void moveToTime( int64_t timeInMicro );
    void zoomOn( int64_t microToZoomOn, float zoomFactor );
@@ -68,12 +69,13 @@ struct Profiler
    void addTraces( const std::vector< DisplayableTrace >& traces, uint32_t threadId );
    void addStringData( const std::vector< char >& stringData, uint32_t threadId );
 
+private:
+   void drawMenuBar();
+
    std::string _name;
    ProfilerTimeline _timeline;
    std::vector< uint32_t > _threadsId;
-   //std::vector< std::vector< DisplayableTrace > > _tracesPerThread;
    std::vector< ThreadTraces > _tracesPerThread;
-   std::vector< std::vector< char > > _stringDataPerThread;
    bool _recording{ false };
    bool _realtime{ true };
 };

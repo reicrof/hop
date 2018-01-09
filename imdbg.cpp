@@ -17,7 +17,12 @@
 #include <algorithm>
 #include <stdio.h>
 
-//static void saveAsJson( const char* path, const vdbg::DisplayableTrace& frame );
+// Used to save the traces as json file
+#include <rapidjson/document.h>
+#include <rapidjson/writer.h>
+#include <rapidjson/prettywriter.h>
+#include <rapidjson/stringbuffer.h>
+#include <fstream>
 
 namespace
 {
@@ -169,6 +174,48 @@ void createResources()
    glBindTexture( GL_TEXTURE_2D, last_texture );
 }
 
+bool saveAsJson( const char* path, const std::vector< uint32_t >& threadsId, const std::vector< vdbg::ThreadTraces >& threadTraces )
+{
+   using namespace rapidjson;
+
+   StringBuffer s;
+   PrettyWriter<StringBuffer> writer(s);
+
+   writer.StartObject();
+   writer.Key("traceEvents");
+   writer.StartArray();
+   for( size_t i = 0; i < threadTraces.size(); ++i )
+   {
+      const uint32_t threadId = threadsId[i];
+      const std::vector< char >& strData = threadTraces[i].stringData;
+      for( const auto& chunk : threadTraces[i].chunks )
+      {
+         for( const auto& t : chunk )
+         {
+            writer.StartObject();
+            writer.Key("ts");
+            writer.Uint64( (uint64_t)t.time );
+            writer.Key("ph");
+            writer.String( t.flags & vdbg::DisplayableTrace::START_TRACE ? "B" : "E" );
+            writer.Key("pid");
+            writer.Uint(threadId);
+            writer.Key("name");
+            writer.String( &strData[t.fctNameIndex] );
+            writer.EndObject();
+         }
+      }
+   }
+   writer.EndArray();
+   writer.Key("displayTimeUnit");
+   writer.String("ms");
+   writer.EndObject();
+
+   std::ofstream of(path);
+   of << s.GetString();
+
+   return true;
+}
+
 } // end of anonymous namespace
 
 namespace vdbg
@@ -287,7 +334,6 @@ void Profiler::addTraces( const std::vector<DisplayableTrace>& traces, uint32_t 
       {
          _threadsId.push_back( threadId );
          _tracesPerThread.emplace_back();
-         _stringDataPerThread.emplace_back();
       }
 
       _tracesPerThread[i].addTraces( traces );
@@ -311,10 +357,9 @@ void Profiler::addStringData( const std::vector<char>& strData, uint32_t threadI
       {
          _threadsId.push_back( threadId );
          _tracesPerThread.emplace_back();
-         _stringDataPerThread.emplace_back();
       }
 
-      _stringDataPerThread[i].insert( _stringDataPerThread[i].end(), strData.begin(), strData.end() );
+      _tracesPerThread[i].stringData.insert( _tracesPerThread[i].stringData.end(), strData.begin(), strData.end() );
    }
 }
 
@@ -364,47 +409,6 @@ void ThreadTraces::addTraces( const std::vector< DisplayableTrace >& traces )
 
 } // end of namespace vdbg
 
-#include <rapidjson/document.h>
-#include <rapidjson/writer.h>
-#include <rapidjson/prettywriter.h>
-#include <rapidjson/stringbuffer.h>
-#include <fstream>
-
-// static void saveAsJson( const char* path, const vdbg::DisplayableTraceFrame& frame )
-// {
-//    using namespace rapidjson;
-
-//    StringBuffer s;
-//    PrettyWriter<StringBuffer> writer(s);
-//    printf( "Should save as json\n" );
-//    writer.StartObject();
-//    writer.Key("traceEvents");
-//    writer.StartArray();
-//    const auto& traces = frame.traces;
-//    const uint32_t threadId = frame.threadId;
-//    for( const auto& t : traces )
-//    {
-//       writer.StartObject();
-//       writer.Key("ts");
-//       writer.Double( (double)t.time );
-//       writer.Key("ph");
-//       writer.String( t.flags & vdbg::DisplayableTrace::START_TRACE ? "B" : "E" );
-//       writer.Key("pid");
-//       writer.Uint(threadId);
-//       //writer.Key("name");
-//       //writer.String( t.name );
-//       assert( false && "should create name array here" );
-//       writer.EndObject();
-//    }
-//    writer.EndArray();
-//    writer.Key("displayTimeUnit");
-//    writer.String("ms");
-//    writer.EndObject();
-
-//    std::ofstream of(path);
-//    of << s.GetString();
-
-// }
 
 // static bool drawDispTrace( const vdbg::DisplayableTraceFrame& frame, size_t& i )
 // {
@@ -450,11 +454,6 @@ void ThreadTraces::addTraces( const std::vector< DisplayableTrace >& traces )
 //    return isOpen;
 // }
 
-void saveAsJsonFile()
-{
-
-}
-
 void vdbg::Profiler::draw( vdbg::Server* server )
 {
    ImGui::SetNextWindowSize(ImVec2(700,500), ImGuiSetCond_FirstUseEver);
@@ -465,47 +464,7 @@ void vdbg::Profiler::draw( vdbg::Server* server )
       return;
    }
 
-   const char* const menuSaveAsJason = "json";
-   const char* menuAction = NULL;
-   if ( ImGui::BeginMenuBar() )
-   {
-      if ( ImGui::BeginMenu( "Menu" ) )
-      {
-         if ( ImGui::MenuItem( "Save as JSON", NULL ) )
-         {
-            menuAction = menuSaveAsJason;
-         }
-         ImGui::EndMenu();
-      }
-      ImGui::EndMenuBar();
-   }
-
-   if( menuAction == menuSaveAsJason )
-   {
-      ImGui::OpenPopup("json");
-   }
-
-   if ( ImGui::BeginPopupModal( "json", NULL, ImGuiWindowFlags_AlwaysAutoResize ) )
-   {
-      ImGui::Text(
-          "All those beautiful files will be deleted.\nThis operation cannot be "
-          "undone!\n\n" );
-      ImGui::Separator();
-
-      if ( ImGui::Button( "OK", ImVec2( 120, 0 ) ) )
-      {
-         ImGui::CloseCurrentPopup();
-      }  
-      ImGui::SameLine();
-      if ( ImGui::Button( "Cancel", ImVec2( 120, 0 ) ) )
-      {
-         ImGui::CloseCurrentPopup();
-      }
-      ImGui::EndPopup();
-   }
-
-   ImGui::Spacing();
-
+   drawMenuBar();
 
    if( ImGui::Checkbox( "Listening", &_recording ) )
    {
@@ -591,7 +550,7 @@ void vdbg::Profiler::draw( vdbg::Server* server )
 
       for( size_t i = 0; i < _tracesPerThread.size(); ++i )
       {
-         _timeline.drawTraces( _tracesPerThread[i], _stringDataPerThread[i] );
+         _timeline.drawTraces( _tracesPerThread[i] );
          ImGui::InvisibleButton("trace-padding", ImVec2( 20, 40 ) );
       }
 
@@ -618,20 +577,54 @@ void vdbg::Profiler::draw( vdbg::Server* server )
    //    }
    // }
 
-   ImGui::Spacing();
+   ImGui::End();
+}
 
-   static char pathToSave[256] = "";
-   ImGui::InputText( "", pathToSave, 256 );
-   ImGui::SameLine();
-   if ( ImGui::Button( "Save As" ) )
+void vdbg::Profiler::drawMenuBar()
+{
+   const char* const menuSaveAsJason = "json";
+   const char* menuAction = NULL;
+   if ( ImGui::BeginMenuBar() )
    {
-      // if ( _frameCountToShow < _dispTraces.size() )
-      // {
-      //    //saveAsJson( pathToSave, _dispTraces[_frameToShow] );
-      // }
+      if ( ImGui::BeginMenu( "Menu" ) )
+      {
+         if ( ImGui::MenuItem( "Save as JSON", NULL ) )
+         {
+            menuAction = menuSaveAsJason;
+         }
+         ImGui::EndMenu();
+      }
+      ImGui::EndMenuBar();
    }
 
-   ImGui::End();
+   if ( menuAction == menuSaveAsJason )
+   {
+      ImGui::OpenPopup( "json" );
+   }
+
+   if ( ImGui::BeginPopupModal( "json", NULL, ImGuiWindowFlags_AlwaysAutoResize ) )
+   {
+      static char path[512] = {};
+      ImGui::InputText( "Save to", path, sizeof( path ) );
+      ImGui::Separator();
+
+      if ( ImGui::Button( "Save", ImVec2( 120, 0 ) ) )
+      {
+         saveAsJson( path, _threadsId, _tracesPerThread );
+         ImGui::CloseCurrentPopup();
+      }
+
+      ImGui::SameLine();
+
+      if ( ImGui::Button( "Cancel", ImVec2( 120, 0 ) ) )
+      {
+         ImGui::CloseCurrentPopup();
+      }
+
+      ImGui::EndPopup();
+   }
+
+   ImGui::Spacing();
 }
 
 // TODO template these 2 functions so they can be used with different time ratios
@@ -814,7 +807,7 @@ void vdbg::ProfilerTimeline::zoomOn( int64_t microToZoomOn, float zoomFactor )
    }
 }
 
-void vdbg::ProfilerTimeline::drawTraces( const ThreadTraces& traces, const std::vector< char >& strData )
+void vdbg::ProfilerTimeline::drawTraces( const ThreadTraces& traces )
 {
    if( traces.startTimes.empty() ) return;
 
@@ -888,10 +881,10 @@ void vdbg::ProfilerTimeline::drawTraces( const ThreadTraces& traces, const std::
    {
       if( className[i] > 0 )
       {
-         strncpy( curName, &strData[ className[i] ], sizeof( curName )-1 );
+         strncpy( curName, &traces.stringData[ className[i] ], sizeof( curName )-1 );
          strncat( curName, "::", sizeof( curName ) - strlen( curName ) -1 );
       }
-      strncat( curName, &strData[ fctName[i] ], sizeof( curName ) - strlen( curName ) -1 );
+      strncat( curName, &traces.stringData[ fctName[i] ], sizeof( curName ) - strlen( curName ) -1 );
 
       ImGui::SetCursorScreenPos( pos[i] );
       ImGui::Button( curName, ImVec2(length[i],20) );
