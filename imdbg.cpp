@@ -450,15 +450,62 @@ void ThreadTraces::addTraces( const std::vector< DisplayableTrace >& traces )
 //    return isOpen;
 // }
 
+void saveAsJsonFile()
+{
+
+}
+
 void vdbg::Profiler::draw( vdbg::Server* server )
 {
    ImGui::SetNextWindowSize(ImVec2(700,500), ImGuiSetCond_FirstUseEver);
-   if ( !ImGui::Begin( _name.c_str(), nullptr, ImGuiWindowFlags_NoScrollWithMouse ) )
+   if ( !ImGui::Begin( _name.c_str(), nullptr, ImGuiWindowFlags_NoScrollWithMouse | ImGuiWindowFlags_MenuBar ) )
    {
       // Early out
       ImGui::End();
       return;
    }
+
+   const char* const menuSaveAsJason = "json";
+   const char* menuAction = NULL;
+   if ( ImGui::BeginMenuBar() )
+   {
+      if ( ImGui::BeginMenu( "Menu" ) )
+      {
+         if ( ImGui::MenuItem( "Save as JSON", NULL ) )
+         {
+            menuAction = menuSaveAsJason;
+         }
+         ImGui::EndMenu();
+      }
+      ImGui::EndMenuBar();
+   }
+
+   if( menuAction == menuSaveAsJason )
+   {
+      ImGui::OpenPopup("json");
+   }
+
+   if ( ImGui::BeginPopupModal( "json", NULL, ImGuiWindowFlags_AlwaysAutoResize ) )
+   {
+      ImGui::Text(
+          "All those beautiful files will be deleted.\nThis operation cannot be "
+          "undone!\n\n" );
+      ImGui::Separator();
+
+      if ( ImGui::Button( "OK", ImVec2( 120, 0 ) ) )
+      {
+         ImGui::CloseCurrentPopup();
+      }  
+      ImGui::SameLine();
+      if ( ImGui::Button( "Cancel", ImVec2( 120, 0 ) ) )
+      {
+         ImGui::CloseCurrentPopup();
+      }
+      ImGui::EndPopup();
+   }
+
+   ImGui::Spacing();
+
 
    if( ImGui::Checkbox( "Listening", &_recording ) )
    {
