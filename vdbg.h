@@ -303,6 +303,7 @@ void ringbuf_release( ringbuf_t*, size_t );
 // C++ standard includes
 #include <algorithm>
 #include <cassert>
+#include <unordered_map>
 #include <vector>
 
 namespace vdbg
@@ -498,12 +499,12 @@ class Client
    {
       _shallowTraces.reserve( 256 );
       _lockWaits.reserve( 256 );
-      _nameArrayId.reserve( 256 );
-      _nameArrayData.reserve( 64 * 32 );
+      _stringIndex.reserve( 256 );
+      _stringData.reserve( 256 * 32 );
 
       // Push back first name as empty string
-      _nameArrayData.push_back('\0');
-      _nameArrayId.push_back(NULL);
+      _stringIndex[ NULL ] = 0;
+      _stringData.push_back('\0');
    }
 
    void addProfilingTrace(
@@ -527,30 +528,18 @@ class Client
       // entry
       if( strId == NULL ) return 0;
 
-      auto nameIt = std::find( _nameArrayId.begin(), _nameArrayId.end(), strId );
+      auto& stringIndex = _stringIndex[strId];
       // If the string was not found, add it to the database and return its index
-      if( nameIt == _nameArrayId.end() )
+      if( stringIndex == 0 )
       {
-         _nameArrayId.push_back( strId );
-         const size_t newEntryPos = _nameArrayData.size();
-         _nameArrayData.resize( _nameArrayData.size() + strlen( strId ) + 1 );
-         strcpy( &_nameArrayData[newEntryPos], strId );
+         const size_t newEntryPos = _stringData.size();
+         stringIndex = newEntryPos;
+         _stringData.resize( newEntryPos + strlen( strId ) + 1 );
+         strcpy( &_stringData[newEntryPos], strId );
          return newEntryPos;
       }
-      auto index = std::distance( _nameArrayId.begin(), nameIt );
 
-      size_t nullCount = 0;
-      size_t charIdx = 0;
-      for( ; charIdx < _nameArrayData.size(); ++charIdx )
-      {
-         if( _nameArrayData[ charIdx ] == 0 )
-         {
-            if( ++nullCount == index ) break;
-         }
-      }
-
-      assert( charIdx + 1 < _nameArrayData.size() );
-      return charIdx + 1;
+      return stringIndex;
    }
 
    void flushToConsumer()
@@ -575,7 +564,7 @@ class Client
       }
 
       // 1- Get size of profiling traces message
-      const uint32_t stringDataSize = _nameArrayData.size();
+      const uint32_t stringDataSize = _stringData.size();
       assert( stringDataSize >= _sentStringDataSize );
       const uint32_t stringToSend = stringDataSize - _sentStringDataSize;
       const size_t profilerMsgSize =
@@ -610,7 +599,7 @@ class Client
          tracesInfo->traces.traceCount = (uint32_t)_shallowTraces.size();
 
          // Copy string data into its array
-         memcpy( stringData, _nameArrayData.data() + _sentStringDataSize, stringToSend );
+         memcpy( stringData, _stringData.data() + _sentStringDataSize, stringToSend );
 
          // Copy trace information into buffer to send
          for ( size_t i = 0; i < _shallowTraces.size(); ++i )
@@ -667,8 +656,8 @@ class Client
 
    std::vector< ShallowTrace > _shallowTraces;
    std::vector< LockWait > _lockWaits;
-   std::vector< const char* > _nameArrayId;
-   std::vector< char > _nameArrayData;
+   std::unordered_map< const char*, size_t > _stringIndex;
+   std::vector< char > _stringData;
    ringbuf_worker_t* _worker{NULL};
    uint32_t _sentStringDataSize{0}; // The size of the string array on the server side
 };
