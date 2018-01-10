@@ -368,8 +368,7 @@ bool SharedMemory::create( const char* path, size_t requestedSize, bool isConsum
    {
       printf("Cannot have more than one instance of the consumer at a time."
              " You might be trying to run the consumer application twice or"
-             " have a dangling shared memory segment.\n");
-      shm_unlink( path );
+             " have a dangling shared memory segment.\n");./
       _sharedMemFd = -1;
       _data = NULL;
       _sharedMetaData = NULL;
