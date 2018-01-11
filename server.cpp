@@ -139,10 +139,13 @@ void Server::getPendingProfilingTraces(
 
 void Server::stop()
 {
-   _running = false;
-   // Wake up semaphore to close properly
-   sem_post( _sharedMem.semaphore() );
-   if ( _thread.joinable() ) _thread.join();
+   if( _running )
+   {
+      _running = false;
+      // Wake up semaphore to close properly
+      sem_post( _sharedMem.semaphore() );
+      if ( _thread.joinable() ) _thread.join();
+   }
 }
 
 }  // namespace vdbg

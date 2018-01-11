@@ -58,8 +58,8 @@ inline const char* getProgName() VDBG_NOEXCEPT
 {
    return __progname;
 }
-#define likely(x)       __builtin_expect((x),1)
-#define unlikely(x)     __builtin_expect((x),0)
+#define likely(x)       __builtin_expect(!!(x), 1)
+#define unlikely(x)     __builtin_expect(!!(x), 0)
 // -----------------------------
 
 // Forward declarations of type used by ringbuffer as adapted from
@@ -368,7 +368,7 @@ bool SharedMemory::create( const char* path, size_t requestedSize, bool isConsum
    {
       printf("Cannot have more than one instance of the consumer at a time."
              " You might be trying to run the consumer application twice or"
-             " have a dangling shared memory segment.\n");./
+             " have a dangling shared memory segment.\n");
       _sharedMemFd = -1;
       _data = NULL;
       _sharedMetaData = NULL;
@@ -665,7 +665,7 @@ Client* ClientManager::Get()
 {
    thread_local std::unique_ptr< Client > threadClient;
 
-   if( likely( threadClient.get() != NULL ) ) return threadClient.get();
+   if( likely( threadClient.get() ) ) return threadClient.get();
 
    // If we have not yet created our shared memory segment, do it here
    if( !ClientManager::sharedMemory.data() )
