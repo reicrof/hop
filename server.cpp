@@ -17,7 +17,6 @@ bool Server::start( const char* name, int  )
    _running = true;
 
    _thread = std::thread( [this, name]() {
-      using namespace details;
       while ( _running )
       {
 
@@ -57,8 +56,6 @@ void Server::setRecording( bool recording )
 
 size_t Server::handleNewMessage( uint8_t* data, size_t maxSize )
 {
-   using namespace details;
-
    uint8_t* bufPtr = data;
    const MsgInfo* msgInfo = (const MsgInfo*)bufPtr;
    const MsgType msgType = msgInfo->type;
@@ -88,9 +85,9 @@ size_t Server::handleNewMessage( uint8_t* data, size_t maxSize )
             // TODO: hack! needs to taking into account the precision specified in message.h
             const uint32_t difference = (t.end - t.start);
             dispTrace.push_back( DisplayableTrace{
-                t.start, difference, DisplayableTrace::START_TRACE, t.classNameIdx, t.fctNameIdx} );
+                t.start, difference, DisplayableTrace::START_TRACE, t.fileNameIdx, t.classNameIdx, t.fctNameIdx, t.lineNumber} );
             dispTrace.push_back( DisplayableTrace{
-                t.end, difference, DisplayableTrace::END_TRACE, t.classNameIdx, t.fctNameIdx} );
+                t.end, difference, DisplayableTrace::END_TRACE, t.fileNameIdx, t.classNameIdx, t.fctNameIdx, t.lineNumber} );
          }
 
          bufPtr += ( traceCount * sizeof( Trace ) );

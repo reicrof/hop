@@ -17,8 +17,10 @@ struct DisplayableTrace
    uint32_t deltaTime; // in ns
    uint32_t flags;
    // Indexes of the name in the string database
-   uint32_t classNameIndex;
-   uint32_t fctNameIndex;
+   TStrIdx_t fileNameIdx;
+   TStrIdx_t classNameIdx;
+   TStrIdx_t fctNameIdx;
+   TLineNb_t lineNb;
 
    enum Flags
    {

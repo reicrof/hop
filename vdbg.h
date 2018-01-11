@@ -22,15 +22,15 @@
 #define VDBG_SHARED_MEM_SIZE 32000000
 
 // Create a new profiling trace for a free function
-#define VDBG_PROF_FUNC() VDBG_PROF_GUARD_VAR( __LINE__, ( __func__, NULL, 0 ) )
+#define VDBG_PROF_FUNC() VDBG_PROF_GUARD_VAR( __LINE__, ( __FILE__, __LINE__, NULL, __func__, 0 ) )
 // Create a new profiling trace for a member function
 #define VDBG_PROF_MEMBER_FUNC() \
-   VDBG_PROF_GUARD_VAR( __LINE__, ( __func__, typeid( this ).name(), 0 ) )
+   VDBG_PROF_GUARD_VAR( __LINE__, ( __FILE__, __LINE__, typeid( this ).name(), __func__, 0 ) )
 // Create a new profiling trace for a free function that falls under category x
-#define VDBG_PROF_FUNC_WITH_GROUP( x ) VDBG_PROF_GUARD_VAR(__LINE__,(( __func__, NULL, x ))
+#define VDBG_PROF_FUNC_WITH_GROUP( x ) VDBG_PROF_GUARD_VAR(__LINE__,(( __FILE__, __LINE__, NULL, __func__, x ))
 // Create a new profiling trace for a member function that falls under category x
 #define VDBG_PROF_MEMBER_FUNC_WITH_GROUP( x ) \
-   VDBG_PROF_GUARD_VAR(__LINE__,(( __func__, typeid( this ).name(), x ))
+   VDBG_PROF_GUARD_VAR(__LINE__,(( __FILE__, __LINE__, typeid( this ).name(), __func__, x ))
 
 ///////////////////////////////////////////////////////////////
 /////     EVERYTHING AFTER THIS IS IMPL DETAILS        ////////
@@ -79,9 +79,6 @@ inline decltype( std::chrono::duration_cast<Precision>( Clock::now().time_since_
 }
 using TimeStamp = decltype( getTimeStamp() );
 
-namespace details
-{
-
 enum class MsgType : uint32_t
 {
    PROFILER_TRACE,
@@ -115,14 +112,19 @@ struct MsgInfo
 VDBG_STATIC_ASSERT( sizeof(MsgInfo) == EXPECTED_MSG_INFO_SIZE, "MsgInfo layout has changed unexpectedly" );
 
 
-VDBG_CONSTEXPR uint32_t EXPECTED_TRACE_SIZE = 32;
+using TStrIdx_t = uint32_t;
+using TLineNb_t = uint32_t;
+using TGroup_t = uint16_t;
+VDBG_CONSTEXPR uint32_t EXPECTED_TRACE_SIZE = 64;
 struct Trace
 {
-   TimeStamp start, end;  // Timestamp for start/end of this trace
-   uint32_t classNameIdx; // Index into string array for class name
-   uint32_t fctNameIdx;   // Index into string array for function name
-   uint32_t group;        // Group to which this trace belongs
-   uint32_t padding;      // extra dummy padding...
+   TimeStamp start, end;   // Timestamp for start/end of this trace
+   TStrIdx_t fileNameIdx;  // Index into string array for the file name
+   TStrIdx_t classNameIdx; // Index into string array for the class name
+   TStrIdx_t fctNameIdx;   // Index into string array for the function name
+   TLineNb_t lineNumber;   // Line at which the trace was inserted
+   TGroup_t group;         // Group to which this trace belongs
+   char padding[24];
 };
 VDBG_STATIC_ASSERT( sizeof(Trace) == EXPECTED_TRACE_SIZE, "Trace layout has changed unexpectedly" );
 
@@ -186,11 +188,13 @@ class ClientManager
    static Client* Get();
    static void StartProfile();
    static void EndProfile(
-       const char* name,
-       const char* classStr,
+       const char* fileName,
+       const char* fctName,
+       const char* className,
        TimeStamp start,
        TimeStamp end,
-       uint8_t group );
+       TLineNb_t lineNb,
+       TGroup_t group );
    static void EndLockWait(
       void* mutexAddr,
       TimeStamp start,
@@ -204,23 +208,26 @@ class ClientManager
 class ProfGuard
 {
   public:
-   ProfGuard( const char* name, const char* classStr, uint8_t groupId ) VDBG_NOEXCEPT
-       : start( getTimeStamp() ),
-         className( classStr ),
-         fctName( name ),
-         group( groupId )
+   ProfGuard( const char* fileName, TLineNb_t lineNb, const char* fctName, const char* className, TGroup_t groupId ) VDBG_NOEXCEPT
+       : _start( getTimeStamp() ),
+         _fileName( fileName ),
+         _className( className ),
+         _fctName( fctName ),
+         _lineNb( lineNb ),
+         _group( groupId )
    {
       ClientManager::StartProfile();
    }
    ~ProfGuard()
    {
-      ClientManager::EndProfile( fctName, className, start, getTimeStamp(), group );
+      ClientManager::EndProfile( _fileName, _fctName, _className, _start, getTimeStamp(), _lineNb, _group );
    }
 
   private:
-   TimeStamp start;
-   const char *className, *fctName;
-   uint8_t group;
+   TimeStamp _start;
+   const char *_fileName, *_className, *_fctName;
+   TLineNb_t _lineNb;
+   TGroup_t _group;
 };
 
 struct LockWaitGuard
@@ -241,9 +248,8 @@ struct LockWaitGuard
 
 #define VDBG_COMBINE( X, Y ) X##Y
 #define VDBG_PROF_GUARD_VAR( LINE, ARGS ) \
-   vdbg::details::ProfGuard VDBG_COMBINE( vdbgProfGuard, LINE ) ARGS
+   vdbg::ProfGuard VDBG_COMBINE( vdbgProfGuard, LINE ) ARGS
 
-}  // namespace details
 }  // namespace vdbg
 
 
@@ -308,8 +314,6 @@ void ringbuf_release( ringbuf_t*, size_t );
 
 namespace vdbg
 {
-namespace details
-{
 
 // ------ SharedMemory.cpp------------
 bool SharedMemory::create( const char* path, size_t requestedSize, bool isConsumer )
@@ -369,11 +373,11 @@ bool SharedMemory::create( const char* path, size_t requestedSize, bool isConsum
       printf("Cannot have more than one instance of the consumer at a time."
              " You might be trying to run the consumer application twice or"
              " have a dangling shared memory segment.\n");
-      _sharedMemFd = -1;
-      _data = NULL;
-      _sharedMetaData = NULL;
-      _ringbuf = NULL;
-      exit(-1);
+      // _sharedMemFd = -1;
+      // _data = NULL;
+      // _sharedMetaData = NULL;
+      // _ringbuf = NULL;
+      // exit(-1);
    }
 
    // Open semaphore
@@ -488,9 +492,10 @@ class Client
 {
    struct ShallowTrace
    {
-      const char *className, *fctName;
+      const char *fileName, *className, *fctName;
       TimeStamp start, end;
-      uint8_t group;
+      TLineNb_t lineNumber;
+      TGroup_t group;
    };
 
   public:
@@ -507,13 +512,15 @@ class Client
    }
 
    void addProfilingTrace(
+       const char* fileName,
        const char* className,
        const char* fctName,
        TimeStamp start,
        TimeStamp end,
-       uint8_t group )
+       TLineNb_t lineNb,
+       TGroup_t group )
    {
-      _shallowTraces.push_back( ShallowTrace{ className, fctName, start, end, group } );
+      _shallowTraces.push_back( ShallowTrace{ fileName, className, fctName, start, end, lineNb, group } );
    }
 
    void addWaitLockTrace( void* mutexAddr, TimeStamp start, TimeStamp end )
@@ -531,7 +538,7 @@ class Client
       // If the string was not found, add it to the database and return its index
       if( stringIndex == 0 )
       {
-         const size_t newEntryPos = _stringData.size();
+         const TStrIdx_t newEntryPos = (TStrIdx_t) _stringData.size();
          stringIndex = newEntryPos;
          _stringData.resize( newEntryPos + strlen( strId ) + 1 );
          strcpy( &_stringData[newEntryPos], strId );
@@ -554,12 +561,20 @@ class Client
       }
 
       // Convert string pointers to index in the string database
-      std::vector< std::pair< uint32_t, uint32_t > > classFctNamesIdx;
+      struct StringsIdx
+      {
+         StringsIdx( TStrIdx_t f, TStrIdx_t fct, TStrIdx_t c )
+             : fileName( f ), fctName( fct ), className( c ) {}
+         TStrIdx_t fileName, fctName, className;
+      };
+      std::vector< StringsIdx > classFctNamesIdx;
       classFctNamesIdx.reserve( _shallowTraces.size() );
       for( const auto& t : _shallowTraces  )
       {
          classFctNamesIdx.emplace_back(
-             findOrAddStringToDb( t.className ), findOrAddStringToDb( t.fctName ) );
+             findOrAddStringToDb( t.fileName ),
+             findOrAddStringToDb( t.className ),
+             findOrAddStringToDb( t.fctName ) );
       }
 
       // 1- Get size of profiling traces message
@@ -606,8 +621,10 @@ class Client
             auto& t = traceToSend[i];
             t.start = _shallowTraces[i].start;
             t.end = _shallowTraces[i].end;
-            t.classNameIdx = classFctNamesIdx[i].first;
-            t.fctNameIdx = classFctNamesIdx[i].second;
+            t.fileNameIdx = classFctNamesIdx[i].fileName;
+            t.classNameIdx = classFctNamesIdx[i].className;
+            t.fctNameIdx = classFctNamesIdx[i].fctName;
+            t.lineNumber = _shallowTraces[i].lineNumber;
             t.group = _shallowTraces[i].group;
          }
       }
@@ -655,7 +672,7 @@ class Client
 
    std::vector< ShallowTrace > _shallowTraces;
    std::vector< LockWait > _lockWaits;
-   std::unordered_map< const char*, size_t > _stringIndex;
+   std::unordered_map< const char*, TStrIdx_t > _stringIndex;
    std::vector< char > _stringData;
    ringbuf_worker_t* _worker{NULL};
    uint32_t _sentStringDataSize{0}; // The size of the string array on the server side
@@ -701,15 +718,17 @@ void ClientManager::StartProfile()
 }
 
 void ClientManager::EndProfile(
-    const char* name,
-    const char* classStr,
+    const char* fileName,
+    const char* fctName,
+    const char* className,
     TimeStamp start,
     TimeStamp end,
-    uint8_t group )
+    TLineNb_t lineNb,
+    TGroup_t group )
 {
    const int remainingPushedTraces = --tl_traceLevel;
    Client* client = ClientManager::Get();
-   client->addProfilingTrace( classStr, name, start, end, group );
+   client->addProfilingTrace( fileName, className, fctName, start, end, lineNb, group );
    if ( remainingPushedTraces <= 0 )
    {
       client->flushToConsumer();
@@ -740,7 +759,6 @@ bool ClientManager::HasListeningConsumer() VDBG_NOEXCEPT
 
 #endif  // end !VDBG_SERVER_IMPLEMENTATION
 
-} // end of namespace details
 } // end of namespace vdbg
 
 

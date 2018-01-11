@@ -15,7 +15,7 @@ int pthread_mutex_lock( pthread_mutex_t* mutex )
       real_pthread_mutex_lock =
           (int ( * )( pthread_mutex_t* ))dlsym( RTLD_NEXT, "pthread_mutex_lock" );
 
-   vdbg::details::LockWaitGuard lwGuard( mutex );
+   vdbg::LockWaitGuard lwGuard( mutex );
 
    return real_pthread_mutex_lock( mutex );
 }

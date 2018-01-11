@@ -200,7 +200,7 @@ bool saveAsJson( const char* path, const std::vector< uint32_t >& threadsId, con
             writer.Key("pid");
             writer.Uint(threadId);
             writer.Key("name");
-            writer.String( &strData[t.fctNameIndex] );
+            writer.String( &strData[t.fctNameIdx] );
             writer.EndObject();
          }
       }
@@ -818,10 +818,9 @@ void vdbg::ProfilerTimeline::drawTraces( const ThreadTraces& traces )
 
    std::vector< ImVec2 > pos;
    std::vector< float > length;
-   std::vector< uint32_t > fctName, className;
+   std::vector< const DisplayableTrace* > tracesToDraw;
    pos.reserve( 128 );
-   fctName.reserve( 128 );
-   className.reserve( 128 );
+   tracesToDraw.reserve( 128 );
 
    // The time range to draw in absolute time
    const TimeStamp firstTraceAbsoluteTime = relativeStart + (_startMicros * 1000);
@@ -865,8 +864,7 @@ void vdbg::ProfilerTimeline::drawTraces( const ThreadTraces& traces )
                pos.push_back( ImVec2(
                    canvasPos.x - startMicrosAsPxl + traceStartPxl, canvasPos.y + curDepth * 22.0f ) );
                length.push_back( traceLengthPxl );
-               fctName.push_back( t.fctNameIndex );
-               className.push_back( t.classNameIndex );
+               tracesToDraw.push_back( &t );
             }
          }
          else
@@ -877,18 +875,42 @@ void vdbg::ProfilerTimeline::drawTraces( const ThreadTraces& traces )
    }
 
    char curName[ 512 ] = {};
-   for( size_t i = 0; i < pos.size(); ++i )
+   for( size_t i = 0; i < tracesToDraw.size(); ++i )
    {
-      if( className[i] > 0 )
+      const DisplayableTrace& t = *tracesToDraw[i];
+      if ( t.classNameIdx > 0 )
       {
-         strncpy( curName, &traces.stringData[ className[i] ], sizeof( curName )-1 );
-         strncat( curName, "::", sizeof( curName ) - strlen( curName ) -1 );
+         // We do have a class name. Prepend it to the string
+         snprintf(
+             curName,
+             sizeof( curName ),
+             "%s::%s",
+             &traces.stringData[t.classNameIdx],
+             &traces.stringData[t.fctNameIdx] );
       }
-      strncat( curName, &traces.stringData[ fctName[i] ], sizeof( curName ) - strlen( curName ) -1 );
+      else
+      {
+         // No class name. Ignore it
+         snprintf( curName, sizeof( curName ), "%s", &traces.stringData[t.fctNameIdx] );
+      }
 
       ImGui::SetCursorScreenPos( pos[i] );
       ImGui::Button( curName, ImVec2(length[i],20) );
-      curName[0] = '\0';
+      if ( length[i] > 3 && ImGui::IsItemHovered() )
+      {
+         size_t lastChar = strlen( curName );
+         curName[ lastChar ] = ' ';
+         ImGui::BeginTooltip();
+         snprintf(
+             curName + lastChar,
+             sizeof( curName ) - lastChar,
+             "(%.3f ms) \n   %s:%d ",
+             ( t.deltaTime / 1000000.0f ),
+             &traces.stringData[t.fileNameIdx],
+             t.lineNb );
+         ImGui::TextUnformatted(curName);
+         ImGui::EndTooltip();
+      }
    }
 
    auto newPos = canvasPos;
