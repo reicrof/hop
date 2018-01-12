@@ -548,9 +548,20 @@ void vdbg::Profiler::draw( vdbg::Server* server )
       const auto canvasPos = ImGui::GetCursorScreenPos();
       _timeline.drawTimeline();
 
+      char threadName[128] = "Thread ";
       for( size_t i = 0; i < _tracesPerThread.size(); ++i )
       {
-         _timeline.drawTraces( _tracesPerThread[i] );
+         snprintf( threadName+sizeof("Thread"), sizeof( threadName), "%lu (id=%u)", i, _threadsId[i] );
+         ImGui::PushStyleColor(ImGuiCol_Button, ImColor::HSV(i/7.0f, 0.6f, 0.6f));
+         ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImColor::HSV(i/7.0f, 0.7f, 0.7f));
+         ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImColor::HSV(i/7.0f, 0.8f, 0.8f));
+         ImGui::PushID(i);
+         ImGui::Button(threadName);
+         ImGui::PopStyleColor(3);
+         ImGui::Spacing();
+         ImGui::Separator();
+         _timeline.drawTraces( _tracesPerThread[i] );;
+         ImGui::PopID();
          ImGui::InvisibleButton("trace-padding", ImVec2( 20, 40 ) );
       }
 
@@ -809,6 +820,10 @@ void vdbg::ProfilerTimeline::zoomOn( int64_t microToZoomOn, float zoomFactor )
 
 void vdbg::ProfilerTimeline::drawTraces( const ThreadTraces& traces )
 {
+   static constexpr float MIN_TRACE_LENGTH_PXL = 0.25f;
+   static constexpr float TRACE_HEIGHT = 20.0f;
+   static constexpr float TRACE_VERTICAL_PADDING = 2.0f;
+
    if( traces.startTimes.empty() ) return;
 
    const auto relativeStart = traces.startTimes[0];
@@ -858,11 +873,12 @@ void vdbg::ProfilerTimeline::drawTraces( const ThreadTraces& traces )
                    microsToPxl<float>( windowWidthPxl, _microsToDisplay, t.deltaTime / 1000 );
 
                // Skip trace if it is way smaller than treshold
-               if( traceLengthPxl < 0.25f )
+               if( traceLengthPxl < MIN_TRACE_LENGTH_PXL )
                      continue;
 
                pos.push_back( ImVec2(
-                   canvasPos.x - startMicrosAsPxl + traceStartPxl, canvasPos.y + curDepth * 22.0f ) );
+                   canvasPos.x - startMicrosAsPxl + traceStartPxl,
+                   canvasPos.y + curDepth * ( TRACE_HEIGHT + TRACE_VERTICAL_PADDING ) ) );
                length.push_back( traceLengthPxl );
                tracesToDraw.push_back( &t );
             }
@@ -873,6 +889,8 @@ void vdbg::ProfilerTimeline::drawTraces( const ThreadTraces& traces )
          }
       }
    }
+
+   _maxTracesDepth = std::max( _maxTracesDepth, maxDepth );
 
    char curName[ 512 ] = {};
    for( size_t i = 0; i < tracesToDraw.size(); ++i )
@@ -895,7 +913,7 @@ void vdbg::ProfilerTimeline::drawTraces( const ThreadTraces& traces )
       }
 
       ImGui::SetCursorScreenPos( pos[i] );
-      ImGui::Button( curName, ImVec2(length[i],20) );
+      ImGui::Button( curName, ImVec2(length[i],TRACE_HEIGHT) );
       if ( length[i] > 3 && ImGui::IsItemHovered() )
       {
          size_t lastChar = strlen( curName );
@@ -914,6 +932,6 @@ void vdbg::ProfilerTimeline::drawTraces( const ThreadTraces& traces )
    }
 
    auto newPos = canvasPos;
-   newPos.y += maxDepth * 22.0f;
+   newPos.y += _maxTracesDepth * ( TRACE_HEIGHT + TRACE_VERTICAL_PADDING );
    ImGui::SetCursorScreenPos( newPos );
 }

@@ -375,12 +375,9 @@ bool SharedMemory::create( const char* path, size_t requestedSize, bool isConsum
    {
       printf("Cannot have more than one instance of the consumer at a time."
              " You might be trying to run the consumer application twice or"
-             " have a dangling shared memory segment.\n");
-      // _sharedMemFd = -1;
-      // _data = NULL;
-      // _sharedMetaData = NULL;
-      // _ringbuf = NULL;
-      // exit(-1);
+             " have a dangling shared memory segment. vdbg might be unstable"
+             " in this state. You could consider manually removing the shared"
+             " memory, or restart your client application.\n");
    }
 
    // Open semaphore
@@ -394,8 +391,7 @@ bool SharedMemory::create( const char* path, size_t requestedSize, bool isConsum
 
 bool SharedMemory::hasConnectedProducer() const VDBG_NOEXCEPT
 {
-   const uint32_t mask = SharedMetaInfo::CONNECTED_PRODUCER;
-   return (sharedMetaInfo()->flags.load()) & mask == mask;
+   return (sharedMetaInfo()->flags & SharedMetaInfo::CONNECTED_PRODUCER) > 0;
 }
 
 void SharedMemory::setConnectedProducer( bool connected ) VDBG_NOEXCEPT
@@ -408,8 +404,7 @@ void SharedMemory::setConnectedProducer( bool connected ) VDBG_NOEXCEPT
 
 bool SharedMemory::hasConnectedConsumer() const VDBG_NOEXCEPT
 {
-   const uint32_t mask = SharedMetaInfo::CONNECTED_CONSUMER;
-   return (sharedMetaInfo()->flags.load()) & mask == mask;
+   return (sharedMetaInfo()->flags & SharedMetaInfo::CONNECTED_CONSUMER) > 0;
 }
 
 void SharedMemory::setConnectedConsumer( bool connected ) VDBG_NOEXCEPT
@@ -423,7 +418,7 @@ void SharedMemory::setConnectedConsumer( bool connected ) VDBG_NOEXCEPT
 bool SharedMemory::hasListeningConsumer() const VDBG_NOEXCEPT
 {
    const uint32_t mask = SharedMetaInfo::CONNECTED_CONSUMER | SharedMetaInfo::LISTENING_CONSUMER;
-   return (sharedMetaInfo()->flags.load() & mask) == mask;
+   return (sharedMetaInfo()->flags.load() & mask) > 0;
 }
 
 void SharedMemory::setListeningConsumer( bool listening ) VDBG_NOEXCEPT
