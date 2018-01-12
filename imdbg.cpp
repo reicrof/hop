@@ -277,9 +277,6 @@ void init()
                                            // ImGui::GetDrawData() after ImGui::Render() to get the
                                            // same ImDrawData pointer.
                                            // Clipboard stuff ?
-                                           // Mouse callbacks
-   // glfwSetMouseButtonCallback(window, ImGui_ImplGlfw_MouseButtonCallback);
-   // glfwSetScrollCallback(window, ImGui_ImplGlfw_ScrollCallback);
 }
 
 void addNewProfiler( Profiler* profiler )
@@ -290,34 +287,6 @@ void addNewProfiler( Profiler* profiler )
 Profiler::Profiler( const std::string& name ) : _name( name )
 {
 }
-
-// void Profiler::draw()
-// {
-//    ImGui::SetNextWindowSize(ImVec2(700,500), ImGuiSetCond_FirstUseEver);
-//    if ( !ImGui::Begin( _name.c_str() ) )
-//    {
-//       // Early out
-//       ImGui::End();
-//       return;
-//    }
-
-//    for( size_t i = 0; i < _threadsId.size(); ++i )
-//    {
-//       std::string headerName( "Thread " + std::to_string( _threadsId[i] ) );
-//       if( ImGui::CollapsingHeader( headerName.c_str() ) )
-//       {
-//          auto& threadTrace = _tracesPerThread[i];
-//          ImGui::PushID( &threadTrace );
-//          //threadTrace.draw();
-//          ImGui::PopID();
-//          ImGui::Spacing();
-//          ImGui::Spacing();
-//          ImGui::Spacing();
-//       }
-//    }
-
-//    ImGui::End();
-// }
 
 void Profiler::addTraces( const std::vector<DisplayableTrace>& traces, uint32_t threadId )
 {
@@ -473,55 +442,6 @@ void vdbg::Profiler::draw( vdbg::Server* server )
    ImGui::SameLine();
    ImGui::Checkbox( "Live", &_realtime );
 
-   // if ( _realTime && _recording )
-   // {
-   //    _frameToShow = std::max( ( (int)_dispTraces.size() ) - 1, 0 );
-   // }
-
-   //ImGui::SliderInt( "Frame to show", &_frameToShow, 0, _dispTraces.size() - 1 );
-
-   // std::vector<float> values( _frameCountToShow, 0.0f );
-   // if ( !_dispTraces.empty() )
-   // {
-   //    int startFrame = std::max( (int)_frameToShow - (int)( _frameCountToShow - 1 ), 0 );
-   //    int count = 0;
-   //    for ( int i = startFrame + 1; i <= (int)_frameToShow; ++i, ++count )
-   //    {
-   //       values[count] = _dispTraces[i].traces.front().deltaTime;
-   //    }
-   // }
-
-   // int offset = _frameCountToShow;
-   // if( offset > (int)values.size() )
-   //    offset = 0;
-   // float maxFrameTime = _maxFrameTime;
-   // if( _allTimeMaxFrameTime >= 0.0f )
-   // {
-   //    _allTimeMaxFrameTime =
-   //        std::max( *std::max_element( values.begin(), values.end() ), _allTimeMaxFrameTime );
-   //    maxFrameTime = _maxFrameTime = _allTimeMaxFrameTime;
-   // }
-
-   // int pickedFrame = ImGui::PlotHistogram(
-   //     "",
-   //     values.data(),
-   //     values.size(),
-   //     values.size() - 1,
-   //     "Frames (ms)",
-   //     0.001f,
-   //     maxFrameTime * 1.05f,
-   //     ImVec2{0, 100},
-   //     sizeof( float ),
-   //     values.size() - 1 );
-
-   // if ( pickedFrame != -1 )
-   // {
-   //    _frameToShow -= ( _frameCountToShow - ( pickedFrame + 1 ) );
-   // }
-
-
-
-
    {
       //  Move timeline to the most recent trace if Live mode is on
       if( _realtime && _recording )
@@ -553,15 +473,13 @@ void vdbg::Profiler::draw( vdbg::Server* server )
       {
          snprintf( threadName+sizeof("Thread"), sizeof( threadName), "%lu (id=%u)", i, _threadsId[i] );
          ImGui::PushStyleColor(ImGuiCol_Button, ImColor::HSV(i/7.0f, 0.6f, 0.6f));
-         ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImColor::HSV(i/7.0f, 0.7f, 0.7f));
-         ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImColor::HSV(i/7.0f, 0.8f, 0.8f));
-         ImGui::PushID(i);
+         ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImColor::HSV(i/7.0f, 0.6f, 0.6f));
+         ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImColor::HSV(i/7.0f, 0.6f, 0.6f));
          ImGui::Button(threadName);
          ImGui::PopStyleColor(3);
          ImGui::Spacing();
          ImGui::Separator();
          _timeline.drawTraces( _tracesPerThread[i] );;
-         ImGui::PopID();
          ImGui::InvisibleButton("trace-padding", ImVec2( 20, 40 ) );
       }
 
@@ -571,22 +489,6 @@ void vdbg::Profiler::draw( vdbg::Server* server )
    }
 
    ImGui::InvisibleButton("padding", ImVec2( 20, 40 ) );
-
-   // if( ImGui::DragFloat( "Max value", &_maxFrameTime, 0.005f ) )
-   //    _allTimeMaxFrameTime = -1.0f;
-
-   // // Draw the traces
-   // if ( !_dispTraces.empty() )
-   // {
-   //    const vdbg::DisplayableTraceFrame& frameToDraw = _dispTraces[_frameToShow];
-   //    for ( size_t i = 0; i < frameToDraw.traces.size(); )
-   //    {
-   //       if ( !drawDispTrace( frameToDraw, i ) )
-   //       {
-   //          ++i;
-   //       }
-   //    }
-   // }
 
    ImGui::End();
 }
