@@ -373,11 +373,16 @@ bool SharedMemory::create( const char* path, size_t requestedSize, bool isConsum
    // We can only have one consumer
    if( isConsumer && hasConnectedConsumer() )
    {
-      printf("Cannot have more than one instance of the consumer at a time."
+      printf("/!\\ WARNING /!\\ \n"
+             "Cannot have more than one instance of the consumer at a time."
              " You might be trying to run the consumer application twice or"
              " have a dangling shared memory segment. vdbg might be unstable"
              " in this state. You could consider manually removing the shared"
-             " memory, or restart your client application.\n");
+             " memory, or restart your client application.\n\n");
+      // Force resetting the listening state as this could cause crash. The side
+      // effect would simply be that other consumer would stop listening. Not a
+      // big deal as there should not be any other consumer...
+      _sharedMetaData->flags &= ~(SharedMetaInfo::LISTENING_CONSUMER);
    }
 
    // Open semaphore
@@ -418,7 +423,7 @@ void SharedMemory::setConnectedConsumer( bool connected ) VDBG_NOEXCEPT
 bool SharedMemory::hasListeningConsumer() const VDBG_NOEXCEPT
 {
    const uint32_t mask = SharedMetaInfo::CONNECTED_CONSUMER | SharedMetaInfo::LISTENING_CONSUMER;
-   return (sharedMetaInfo()->flags.load() & mask) > 0;
+   return (sharedMetaInfo()->flags.load() & mask) == mask;
 }
 
 void SharedMemory::setListeningConsumer( bool listening ) VDBG_NOEXCEPT
@@ -468,6 +473,7 @@ void SharedMemory::destroy()
            ( _sharedMetaData->flags &
              ( SharedMetaInfo::CONNECTED_PRODUCER | SharedMetaInfo::CONNECTED_CONSUMER ) ) == 0 )
       {
+         printf("Cleaning up shared resources...\n");
          if ( _semaphore && sem_close( _semaphore ) != 0 )
          {
             perror( "Could not close semaphore" );
