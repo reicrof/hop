@@ -21,6 +21,9 @@ class Server
        std::vector<std::vector<DisplayableTrace> >& tracesFrame,
        std::vector<std::vector<char> >& stringData,
        std::vector<uint32_t>& threadIds );
+   void getPendingLockWaits(
+       std::vector<std::vector<LockWait> >& lockWaits,
+       std::vector<uint32_t>& threadIds );
 
   private:
    // Returns the number of bytes processed
@@ -31,11 +34,15 @@ class Server
    SharedMemory _sharedMem;
 
    std::mutex pendingTracesMutex;
-   std::vector< std::vector< DisplayableTrace > > pendingTraces;
-   std::vector< std::vector< char > > pendingStringData;
-   std::vector< uint32_t > pendingThreadIds;
+   std::vector<std::vector<DisplayableTrace> > pendingTraces;
+   std::vector<std::vector<char> > pendingStringData;
+   std::vector<uint32_t> pendingThreadIds;
+
+   std::mutex pendingLockWaitsMutex;
+   std::vector<uint32_t> pendingLockWaitThreadIds;
+   std::vector<std::vector<LockWait> > pendingLockWaits;
 };
 
 }  // namespace vdbg
 
-#endif // VDBG_SERVER_H_
+#endif  // VDBG_SERVER_H_

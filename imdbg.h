@@ -1,7 +1,6 @@
 #ifndef IMDBG_H_
 #define IMDBG_H_
 
-#include "imgui/imgui.h"
 #include <vdbg.h>
 #include <array>
 #include <chrono>
@@ -44,23 +43,40 @@ struct ThreadTraces
    static constexpr int CHUNK_SIZE = 2048;
    ThreadTraces();
    void addTraces( const std::vector< DisplayableTrace >& traces );
+   void addLockWaits( const std::vector< LockWait >& lockWaits );
    std::vector< TimeStamp > startTimes;
    std::vector< TimeStamp > endTimes;
    std::vector< std::vector< DisplayableTrace > > chunks;
    std::vector< char > stringData;
+   std::vector< LockWait > _lockWaits;
 };
 
-struct ProfilerTimeline
+class ProfilerTimeline
 {
-   void drawTimeline();
-   void drawTraces( const ThreadTraces& traces );
-   void handleMouseWheel( const ImVec2& mousePosInCanvas );
-   void moveToTime( int64_t timeInMicro );
+public:
+ void draw(
+     const std::vector<ThreadTraces>& _tracesPerThread,
+     const std::vector<uint32_t>& threadIds );
+ void moveToTime( int64_t timeInMicro );
+
+private:
+   void drawTimeline( const float posX, const float posY );
+   void drawTraces( const ThreadTraces& traces, const float posX, const float posY );
+   void drawLockWaits( const ThreadTraces& traces, const float posX, const float posY );
+   void handleMouseWheel( float mousePosX, float mousePosY );
    void zoomOn( int64_t microToZoomOn, float zoomFactor );
+
+   static constexpr float TRACE_HEIGHT = 20.0f;
+   static constexpr float TRACE_VERTICAL_PADDING = 2.0f;
+
    int64_t _startMicros{3000};
    int64_t _microsToDisplay{5000};
    int64_t _stepSizeInMicros{1000};
    int _maxTracesDepth{0};
+
+   // Position of drawn widgets
+   float _timelineDrawPos[2];
+   std::vector< std::pair< float, float > > _tracesDrawPos;
 };
 
 class Server;
@@ -70,6 +86,7 @@ struct Profiler
    void draw( Server* server );
    void addTraces( const std::vector< DisplayableTrace >& traces, uint32_t threadId );
    void addStringData( const std::vector< char >& stringData, uint32_t threadId );
+   void addLockWaits( const std::vector< LockWait >& lockWaits, uint32_t threadId );
 
 private:
    void drawMenuBar();

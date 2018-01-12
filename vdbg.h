@@ -570,18 +570,9 @@ class Client
       return stringIndex;
    }
 
-   void flushToConsumer()
-   {
-      if( !ClientManager::HasListeningConsumer() )
-      {
-         _shallowTraces.clear();
-         _lockWaits.clear();
-         // Also reset the string data that was sent since we might
-         // have lost the connection with the consumer
-         _sentStringDataSize = 0;
-         return;
-      }
 
+   bool sendTraces()
+   {
       // Convert string pointers to index in the string database
       struct StringsIdx
       {
@@ -589,6 +580,7 @@ class Client
              : fileName( f ), fctName( fct ), className( c ) {}
          TStrIdx_t fileName, fctName, className;
       };
+
       std::vector< StringsIdx > classFctNamesIdx;
       classFctNamesIdx.reserve( _shallowTraces.size() );
       for( const auto& t : _shallowTraces  )
@@ -613,7 +605,7 @@ class Client
       {
          printf("Failed to acquire enough shared memory. Consider increasing shared memory size\n");
          _shallowTraces.clear();
-         return;
+         return false;
       }
 
       uint8_t* bufferPtr = &ClientManager::sharedMemory.data()[offset];
@@ -659,37 +651,59 @@ class Client
       // Free the buffers
       _shallowTraces.clear();
 
+      return true;
+   }
 
-      // // Increment pointer to new pos in buffer
-      // bufferPtr += profilerMsgSize;
+   bool sendLockWaits()
+   {
+      if( _lockWaits.empty() ) return false;
 
-      //       // 2- Get size of lock messages
-      // const size_t lockMsgSize = sizeof( MsgInfo ) + _lockWaits.size() * sizeof( LockWait );
-      // // Fill the buffer with the lock message
-      // {
-      //    MsgInfo* lwInfo = (MsgInfo*)bufferPtr;
-      //    lwInfo->type = MsgType::PROFILER_WAIT_LOCK;
-      //    lwInfo->lockwaits.count = (uint32_t)_lockWaits.size();
-      //    bufferPtr += sizeof( MsgInfo );
-      //    memcpy( bufferPtr, _lockWaits.data(), _lockWaits.size() * sizeof( LockWait ) );
-      // }
+      const size_t lockMsgSize = sizeof( MsgInfo ) + _lockWaits.size() * sizeof( LockWait );
 
-      // ringbuf_t* ringbuf = ClientManager::sharedMemory.ringbuffer();
-      // uint8_t* mem = ClientManager::sharedMemory.data();
-      
-      // // Get buffer from shared memory
-      // static size_t msgCount=0;
-      // auto offset = ringbuf_acquire( ringbuf, _worker, sizeof( "Hello world" ) );
-      // if( offset != -1 )
-      // {
-      //    memcpy( (void*)&mem[offset], (void*)"Hello world", sizeof("Hello world" ) );
-      //    ringbuf_produce( ringbuf, _worker);
-      //    sem_post( ClientManager::sharedMemory._semaphore );
-      //    printf("Message sent!%lu\n", ++msgCount );
-      // }
+      // Allocate big enough buffer from the shared memory
+      ringbuf_t* ringbuf = ClientManager::sharedMemory.ringbuffer();
+      const auto offset = ringbuf_acquire( ringbuf, _worker, lockMsgSize );
+      if ( offset == -1 )
+      {
+         printf("Failed to acquire enough shared memory. Consider increasing shared memory size\n");
+         _lockWaits.clear();
+         return false;
+      }
+
+      uint8_t* bufferPtr = &ClientManager::sharedMemory.data()[offset];
+
+      // Fill the buffer with the lock message
+      {
+         MsgInfo* lwInfo = (MsgInfo*)bufferPtr;
+         lwInfo->type = MsgType::PROFILER_WAIT_LOCK;
+         lwInfo->threadId = (uint32_t)tl_threadId;
+         lwInfo->lockwaits.count = (uint32_t)_lockWaits.size();
+         bufferPtr += sizeof( MsgInfo );
+         memcpy( bufferPtr, _lockWaits.data(), _lockWaits.size() * sizeof( LockWait ) );
+      }
+
+      ringbuf_produce( ringbuf, _worker );
+      sem_post( ClientManager::sharedMemory.semaphore() );
 
       _lockWaits.clear();
-      //_bufferToSend.clear();
+
+      return true;
+   }
+
+   void flushToConsumer()
+   {
+      if( !ClientManager::HasListeningConsumer() )
+      {
+         _shallowTraces.clear();
+         _lockWaits.clear();
+         // Also reset the string data that was sent since we might
+         // have lost the connection with the consumer
+         _sentStringDataSize = 0;
+         return;
+      }
+
+      sendTraces();
+      sendLockWaits();
    }
 
    std::vector< ShallowTrace > _shallowTraces;
@@ -761,8 +775,8 @@ void ClientManager::EndProfile(
 void ClientManager::EndLockWait( void* mutexAddr, TimeStamp start, TimeStamp end )
 {
    // Only add lock wait event if the lock is coming from within
-   // measured code
-   if( tl_traceLevel > 0 )
+   // measured code and if it has a wait time greater than 500ns
+   if( end - start > 500 && tl_traceLevel > 0 )
    {
       ClientManager::Get()->addWaitLockTrace( mutexAddr, start, end );
    }

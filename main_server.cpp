@@ -1,5 +1,6 @@
 #define VDBG_SERVER_IMPLEMENTATION
 #include <vdbg.h>
+#include "imgui/imgui.h"
 #include <server.h>
 #include <SDL2/SDL.h>
 
@@ -148,6 +149,9 @@ int main( int argc, const char* argv[] )
    std::vector< uint32_t > threadIds;
    std::vector< std::vector< vdbg::DisplayableTrace > > pendingTraces;
    std::vector< std::vector< char > > stringData;
+
+   std::vector< uint32_t > threadIdsLockWaits;
+   std::vector<std::vector< vdbg::LockWait > > pendingLockWaits;
    while ( g_run )
    {
       handleInput();
@@ -157,6 +161,11 @@ int main( int argc, const char* argv[] )
       {
          profiler->addTraces( pendingTraces[i], threadIds[i] );
          profiler->addStringData( stringData[i], threadIds[i] );
+      }
+      serv.getPendingLockWaits( pendingLockWaits, threadIdsLockWaits );
+      for( size_t i = 0; i < pendingLockWaits.size(); ++i )
+      {
+         profiler->addLockWaits( pendingLockWaits[i], threadIdsLockWaits[i] );
       }
 
       int w, h, x, y;

@@ -96,6 +96,7 @@ size_t Server::handleNewMessage( uint8_t* data, size_t maxSize )
          // Sort them by time
          std::sort( dispTrace.begin(), dispTrace.end() );
 
+         // TODO: Could lock later when we received all the messages
          std::lock_guard<std::mutex> guard( pendingTracesMutex );
          pendingTraces.emplace_back( std::move( dispTrace ) );
          pendingStringData.emplace_back( std::move( stringData ) );
@@ -104,13 +105,22 @@ size_t Server::handleNewMessage( uint8_t* data, size_t maxSize )
       }
       case MsgType::PROFILER_WAIT_LOCK:
       {
-         // std::vector< LockWait > lockwaits( msgInfo->lockwaits.count );
-         // const size_t bytesToRead = msgInfo->lockwaits.count * sizeof( LockWait );
-         // size_t valread = ::read( clientId, (void*)lockwaits.data(), bytesToRead );
-         // if( valread != bytesToRead )
-         //    return 0;
+         std::vector< LockWait > lockwaits( msgInfo->lockwaits.count );
+         memcpy( lockwaits.data(), bufPtr, lockwaits.size() * sizeof(LockWait) );
 
-         //printf("Received %lu wait locks\n", lockwaits.size() );
+         bufPtr += lockwaits.size() * sizeof(LockWait);
+         assert( (size_t)(bufPtr - data) <= maxSize );
+
+         std::sort(
+             lockwaits.begin(), lockwaits.end(), []( const LockWait& lhs, const LockWait& rhs ) {
+                return lhs.start < rhs.start;
+             } );
+
+         // TODO: Could lock later when we received all the messages
+         std::lock_guard<std::mutex> guard( pendingLockWaitsMutex );
+         pendingLockWaits.emplace_back( std::move( lockwaits ) );
+         pendingLockWaitThreadIds.push_back( threadId );
+
          return (size_t)(bufPtr - data);
       }
       default:
@@ -132,6 +142,18 @@ void Server::getPendingProfilingTraces(
    pendingTraces.clear();
    pendingStringData.clear();
    pendingThreadIds.clear();
+}
+
+void Server::getPendingLockWaits(
+    std::vector<std::vector<LockWait> >& lockWaits,
+    std::vector<uint32_t>& threadIds )
+{
+   std::lock_guard<std::mutex> guard( pendingLockWaitsMutex );
+   std::swap( lockWaits, pendingLockWaits );
+   std::swap( threadIds, pendingLockWaitThreadIds );
+
+   pendingLockWaits.clear();
+   pendingLockWaitThreadIds.clear();
 }
 
 void Server::stop()

@@ -332,6 +332,27 @@ void Profiler::addStringData( const std::vector<char>& strData, uint32_t threadI
    }
 }
 
+void Profiler::addLockWaits( const std::vector<LockWait>& lockWaits, uint32_t threadId )
+{
+   if ( _recording )
+   {
+      size_t i = 0;
+      for ( ; i < _threadsId.size(); ++i )
+      {
+         if ( _threadsId[i] == threadId ) break;
+      }
+
+      // Thread id not found so add it
+      if ( i == _threadsId.size() )
+      {
+         _threadsId.push_back( threadId );
+         _tracesPerThread.emplace_back();
+      }
+
+      _tracesPerThread[i].addLockWaits( lockWaits );
+   }
+}
+
 ThreadTraces::ThreadTraces()
 {
    chunks.reserve( CHUNK_SIZE );
@@ -374,6 +395,11 @@ void ThreadTraces::addTraces( const std::vector< DisplayableTrace >& traces )
    // The starttime and endtimes should always be sorted, otherwise we need to investigate why it is not...
    assert( std::is_sorted( startTimes.begin(), startTimes.end() ) );
    assert( std::is_sorted( endTimes.begin(), endTimes.end() ) );
+}
+
+void ThreadTraces::addLockWaits( const std::vector< LockWait >& lockWaits )
+{
+   _lockWaits.insert( _lockWaits.end(), lockWaits.begin(), lockWaits.end() );
 }
 
 } // end of namespace vdbg
@@ -464,28 +490,7 @@ void vdbg::Profiler::draw( vdbg::Server* server )
          }
       }
 
-      ImGui::BeginGroup();
-      const auto canvasPos = ImGui::GetCursorScreenPos();
-      _timeline.drawTimeline();
-
-      char threadName[128] = "Thread ";
-      for( size_t i = 0; i < _tracesPerThread.size(); ++i )
-      {
-         snprintf( threadName+sizeof("Thread"), sizeof( threadName), "%lu (id=%u)", i, _threadsId[i] );
-         ImGui::PushStyleColor(ImGuiCol_Button, ImColor::HSV(i/7.0f, 0.6f, 0.6f));
-         ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImColor::HSV(i/7.0f, 0.6f, 0.6f));
-         ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImColor::HSV(i/7.0f, 0.6f, 0.6f));
-         ImGui::Button(threadName);
-         ImGui::PopStyleColor(3);
-         ImGui::Spacing();
-         ImGui::Separator();
-         _timeline.drawTraces( _tracesPerThread[i] );;
-         ImGui::InvisibleButton("trace-padding", ImVec2( 20, 40 ) );
-      }
-
-      ImVec2 mousePosInCanvas = ImVec2(ImGui::GetIO().MousePos.x - canvasPos.x, ImGui::GetIO().MousePos.y - canvasPos.y);
-      ImGui::EndGroup();
-      _timeline.handleMouseWheel( mousePosInCanvas );
+      _timeline.draw( _tracesPerThread, _threadsId );
    }
 
    ImGui::InvisibleButton("padding", ImVec2( 20, 40 ) );
@@ -555,13 +560,48 @@ static inline T pxlToMicros( float windowWidth, int64_t usToDisplay, int64_t pxl
    return static_cast<T>( usPerPxl * (double)pxl );
 }
 
-void vdbg::ProfilerTimeline::drawTimeline()
+void vdbg::ProfilerTimeline::draw(
+    const std::vector<ThreadTraces>& tracesPerThread,
+    const std::vector<uint32_t>& threadIds )
+{
+   const auto startDrawPos = ImGui::GetCursorScreenPos();
+
+   ImGui::BeginGroup();
+   drawTimeline( startDrawPos.x, startDrawPos.y );
+
+   char threadName[128] = "Thread ";
+   for ( size_t i = 0; i < tracesPerThread.size(); ++i )
+   {
+      snprintf(
+          threadName + sizeof( "Thread" ), sizeof( threadName ), "%lu (id=%u)", i, threadIds[i] );
+      ImGui::PushStyleColor( ImGuiCol_Button, ImColor::HSV( i / 7.0f, 0.6f, 0.6f ) );
+      ImGui::PushStyleColor( ImGuiCol_ButtonHovered, ImColor::HSV( i / 7.0f, 0.6f, 0.6f ) );
+      ImGui::PushStyleColor( ImGuiCol_ButtonActive, ImColor::HSV( i / 7.0f, 0.6f, 0.6f ) );
+      ImGui::Button( threadName );
+      ImGui::PopStyleColor( 3 );
+      ImGui::Spacing();
+      ImGui::Separator();
+
+      const auto curPos = ImGui::GetCursorScreenPos();
+      drawTraces( tracesPerThread[i], curPos.x, curPos.y );
+      drawLockWaits( tracesPerThread[i], curPos.x, curPos.y );
+
+      ImGui::InvisibleButton( "trace-padding", ImVec2( 20, 40 ) );
+   }
+
+   ImVec2 mousePosInCanvas =
+       ImVec2( ImGui::GetIO().MousePos.x - startDrawPos.x, ImGui::GetIO().MousePos.y - startDrawPos.y );
+   ImGui::EndGroup();
+
+   handleMouseWheel( mousePosInCanvas.x, mousePosInCanvas.y );
+}
+
+void vdbg::ProfilerTimeline::drawTimeline( const float posX, const float posY )
 {
    constexpr int64_t minStepSize = 10;
    constexpr int64_t minStepCount = 20;
    constexpr int64_t maxStepCount = 140;
 
-   const auto canvasPos = ImGui::GetCursorScreenPos();
    const float windowWidthPxl = ImGui::GetWindowWidth();
 
    const size_t stepsCount = [this, minStepSize]()
@@ -605,7 +645,7 @@ void vdbg::ProfilerTimeline::drawTimeline()
 
    int count = stepsDone;
    std::vector< std::pair< ImVec2, double > > textPos;
-   const auto maxPosX = canvasPos.x + windowWidthPxl;
+   const auto maxPosX = posX + windowWidthPxl;
    for( double i = top.x; i < maxPosX; i += stepSizePxl, ++count )
    {
       // Draw biggest begin/end lines
@@ -661,12 +701,10 @@ void vdbg::ProfilerTimeline::drawTimeline()
      }
    }
 
-   auto tmpBkcup = canvasPos;
-   tmpBkcup.y += 80;
-   ImGui::SetCursorScreenPos( tmpBkcup );
+   ImGui::SetCursorScreenPos( ImVec2{ posX, posY + 80 } );
 }
 
-void vdbg::ProfilerTimeline::handleMouseWheel( const ImVec2& mousePosInCanvas )
+void vdbg::ProfilerTimeline::handleMouseWheel( float mousePosX, float )
 {
    if ( ImGui::IsItemHovered() )
    {
@@ -676,7 +714,7 @@ void vdbg::ProfilerTimeline::handleMouseWheel( const ImVec2& mousePosInCanvas )
       {
          if ( io.KeyCtrl )
          {
-            zoomOn( pxlToMicros( windowWidthPxl, _microsToDisplay, mousePosInCanvas.x ) + _startMicros, 0.9f );
+            zoomOn( pxlToMicros( windowWidthPxl, _microsToDisplay, mousePosX ) + _startMicros, 0.9f );
          }
          else
          {
@@ -687,7 +725,7 @@ void vdbg::ProfilerTimeline::handleMouseWheel( const ImVec2& mousePosInCanvas )
       {
          if ( io.KeyCtrl )
          {
-            zoomOn( pxlToMicros( windowWidthPxl, _microsToDisplay, mousePosInCanvas.x ) + _startMicros , 1.1f );
+            zoomOn( pxlToMicros( windowWidthPxl, _microsToDisplay, mousePosX ) + _startMicros , 1.1f );
          }
          else
          {
@@ -720,18 +758,15 @@ void vdbg::ProfilerTimeline::zoomOn( int64_t microToZoomOn, float zoomFactor )
    }
 }
 
-void vdbg::ProfilerTimeline::drawTraces( const ThreadTraces& traces )
+void vdbg::ProfilerTimeline::drawTraces( const ThreadTraces& traces, const float posX, const float posY )
 {
    static constexpr float MIN_TRACE_LENGTH_PXL = 0.25f;
-   static constexpr float TRACE_HEIGHT = 20.0f;
-   static constexpr float TRACE_VERTICAL_PADDING = 2.0f;
 
    if( traces.startTimes.empty() ) return;
 
    const auto relativeStart = traces.startTimes[0];
    const float windowWidthPxl = ImGui::GetWindowWidth();
    const auto startMicrosAsPxl = microsToPxl( windowWidthPxl, _microsToDisplay, _startMicros );
-   const auto canvasPos = ImGui::GetCursorScreenPos();
 
    std::vector< ImVec2 > pos;
    std::vector< float > length;
@@ -779,8 +814,8 @@ void vdbg::ProfilerTimeline::drawTraces( const ThreadTraces& traces )
                      continue;
 
                pos.push_back( ImVec2(
-                   canvasPos.x - startMicrosAsPxl + traceStartPxl,
-                   canvasPos.y + curDepth * ( TRACE_HEIGHT + TRACE_VERTICAL_PADDING ) ) );
+                   posX - startMicrosAsPxl + traceStartPxl,
+                   posY + curDepth * ( TRACE_HEIGHT + TRACE_VERTICAL_PADDING ) ) );
                length.push_back( traceLengthPxl );
                tracesToDraw.push_back( &t );
             }
@@ -833,7 +868,45 @@ void vdbg::ProfilerTimeline::drawTraces( const ThreadTraces& traces )
       }
    }
 
-   auto newPos = canvasPos;
-   newPos.y += _maxTracesDepth * ( TRACE_HEIGHT + TRACE_VERTICAL_PADDING );
-   ImGui::SetCursorScreenPos( newPos );
+   ImGui::SetCursorScreenPos(
+       ImVec2{posX, posY + _maxTracesDepth * ( TRACE_HEIGHT + TRACE_VERTICAL_PADDING )} );
+}
+
+void vdbg::ProfilerTimeline::drawLockWaits( const ThreadTraces& traces, const float posX, const float posY )
+{
+   if( traces.startTimes.empty() ) return;
+
+   const auto& lockWaits = traces._lockWaits;
+
+   const auto relativeStart = traces.startTimes[0];
+   const float windowWidthPxl = ImGui::GetWindowWidth();
+   const auto startMicrosAsPxl = microsToPxl( windowWidthPxl, _microsToDisplay, _startMicros );
+
+   // The time range to draw in absolute time
+   const TimeStamp firstTraceAbsoluteTime = relativeStart + (_startMicros * 1000);
+   const TimeStamp lastTraceAbsoluteTime = firstTraceAbsoluteTime + ( _microsToDisplay * 1000 );
+
+   ImGui::PushStyleColor(ImGuiCol_Button, ImColor(1, 0, 0));
+   ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImColor(1, 0, 0));
+   ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImColor(1, 0, 0));
+   for( const auto& lw: lockWaits )
+   {
+      if ( lw.end >= firstTraceAbsoluteTime && lw.start <= lastTraceAbsoluteTime )
+      {
+         const int64_t startInMicros = ( ( lw.start - relativeStart ) / 1000 );
+
+         const auto startPxl =
+             microsToPxl<float>( windowWidthPxl, _microsToDisplay, startInMicros );
+         const float lengthPxl =
+             microsToPxl<float>( windowWidthPxl, _microsToDisplay, (lw.end - lw.start) / 1000.0f );
+
+         // Skip if it is way smaller than treshold
+         if ( lengthPxl < 0.25 ) continue;
+
+         ImGui::SetCursorScreenPos(
+             ImVec2( posX - startMicrosAsPxl + startPxl, posY ) );
+         ImGui::Button( "Lock", ImVec2(lengthPxl, 20.f) );
+      }
+   }
+   ImGui::PopStyleColor(3);
 }
