@@ -150,12 +150,15 @@ class SharedMemory
    {
       enum Flags
       {
-         CONNECTED_CONSUMER = 1 << 0,
-         LISTENING_CONSUMER = 1 << 1,
+         CONNECTED_PRODUCER = 1 << 0,
+         CONNECTED_CONSUMER = 1 << 1,
+         LISTENING_CONSUMER = 1 << 2,
       };
       std::atomic< uint32_t > flags{0};
    };
 
+   bool hasConnectedProducer() const VDBG_NOEXCEPT;
+   void setConnectedProducer( bool ) VDBG_NOEXCEPT;
    bool hasConnectedConsumer() const VDBG_NOEXCEPT;
    void setConnectedConsumer( bool ) VDBG_NOEXCEPT;
    bool hasListeningConsumer() const VDBG_NOEXCEPT;
@@ -383,18 +386,30 @@ bool SharedMemory::create( const char* path, size_t requestedSize, bool isConsum
    // Open semaphore
    _semaphore = sem_open( "/mysem", O_CREAT, S_IRUSR | S_IWUSR, 1 );
 
-   if( isConsumer )
-   {
-      _sharedMetaData->flags |= SharedMetaInfo::CONNECTED_CONSUMER;
-   }
+   _sharedMetaData->flags |=
+       isConsumer ? SharedMetaInfo::CONNECTED_CONSUMER : SharedMetaInfo::CONNECTED_PRODUCER;
 
    return true;
+}
+
+bool SharedMemory::hasConnectedProducer() const VDBG_NOEXCEPT
+{
+   const uint32_t mask = SharedMetaInfo::CONNECTED_PRODUCER;
+   return (sharedMetaInfo()->flags.load()) & mask == mask;
+}
+
+void SharedMemory::setConnectedProducer( bool connected ) VDBG_NOEXCEPT
+{
+   if( connected )
+      _sharedMetaData->flags |= SharedMetaInfo::CONNECTED_PRODUCER;
+   else
+      _sharedMetaData->flags &= ~SharedMetaInfo::CONNECTED_PRODUCER;
 }
 
 bool SharedMemory::hasConnectedConsumer() const VDBG_NOEXCEPT
 {
    const uint32_t mask = SharedMetaInfo::CONNECTED_CONSUMER;
-   return (sharedMetaInfo()->flags) & mask == mask;
+   return (sharedMetaInfo()->flags.load()) & mask == mask;
 }
 
 void SharedMemory::setConnectedConsumer( bool connected ) VDBG_NOEXCEPT
@@ -403,13 +418,12 @@ void SharedMemory::setConnectedConsumer( bool connected ) VDBG_NOEXCEPT
       _sharedMetaData->flags |= SharedMetaInfo::CONNECTED_CONSUMER;
    else
       _sharedMetaData->flags &= ~SharedMetaInfo::CONNECTED_CONSUMER;
-
 }
 
 bool SharedMemory::hasListeningConsumer() const VDBG_NOEXCEPT
 {
    const uint32_t mask = SharedMetaInfo::CONNECTED_CONSUMER | SharedMetaInfo::LISTENING_CONSUMER;
-   return (sharedMetaInfo()->flags & mask) == mask;
+   return (sharedMetaInfo()->flags.load() & mask) == mask;
 }
 
 void SharedMemory::setListeningConsumer( bool listening ) VDBG_NOEXCEPT
@@ -418,7 +432,6 @@ void SharedMemory::setListeningConsumer( bool listening ) VDBG_NOEXCEPT
       _sharedMetaData->flags |= SharedMetaInfo::LISTENING_CONSUMER;
    else
       _sharedMetaData->flags &= ~(SharedMetaInfo::LISTENING_CONSUMER);
-
 }
 
 uint8_t* SharedMemory::data() const VDBG_NOEXCEPT
@@ -445,22 +458,31 @@ void SharedMemory::destroy()
 {
    if ( data() )
    {
-      if ( _semaphore && sem_close( _semaphore ) != 0 )
-      {
-         perror( "Could not close semaphore" );
-      }
-
-      if ( _semaphore && sem_unlink("/mysem") < 0 )
-      {
-         perror( "Could not unlink semaphore" );
-      }
-
       if( _isConsumer )
-         _sharedMetaData->flags &= ~(SharedMetaInfo::CONNECTED_CONSUMER | SharedMetaInfo::LISTENING_CONSUMER);
-
-      if ( _sharedMemPath && shm_unlink( _sharedMemPath ) != 0 )
       {
-         perror( "Could not unlink shared memory" );
+         setListeningConsumer( false );
+         setConnectedConsumer( false );
+      }
+      else
+      {
+         setConnectedProducer( false );
+      }
+
+      // If we are the last one accessing the shared memory, clean it.
+      if ( _sharedMemPath &&
+           ( _sharedMetaData->flags &
+             ( SharedMetaInfo::CONNECTED_PRODUCER | SharedMetaInfo::CONNECTED_CONSUMER ) ) == 0 )
+      {
+         if ( _semaphore && sem_close( _semaphore ) != 0 )
+         {
+            perror( "Could not close semaphore" );
+         }
+
+         if ( _semaphore && sem_unlink( "/mysem" ) < 0 )
+         {
+            perror( "Could not unlink semaphore" );
+         }
+         if ( shm_unlink( _sharedMemPath ) != 0 ) perror( "Could not unlink shared memory" );
       }
 
       _data = NULL;
