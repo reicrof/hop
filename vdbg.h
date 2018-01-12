@@ -357,17 +357,16 @@ bool SharedMemory::create( const char* path, size_t requestedSize, bool isConsum
    _ringbuf = (ringbuf_t*) (sharedMem + sizeof( SharedMetaInfo ));
    _data = sharedMem + sizeof( SharedMetaInfo ) + ringBufSize ;
 
-   // Reset everything but the metadata if we are a producer. (The metadata
-   // could still be in used  by a server when we get here, if we start
-   // the server first for example)
-   if( !isConsumer )
+   // If there is neither a consumer nor a producer, clear the shared memory, and create
+   // the shared ring buffer
+   if ( ( _sharedMetaData->flags &
+          ( SharedMetaInfo::CONNECTED_PRODUCER | SharedMetaInfo::CONNECTED_CONSUMER ) ) == 0 )
    {
       memset( _ringbuf, 0, totalSize - sizeof( SharedMetaInfo) );
-   }
-
-   if( ringbuf_setup( _ringbuf, MAX_THREAD_NB, requestedSize ) < 0 )
-   {
-      assert( false && "Ring buffer creation failed" );
+      if ( ringbuf_setup( _ringbuf, MAX_THREAD_NB, requestedSize ) < 0 )
+      {
+         assert( false && "Ring buffer creation failed" );
+      }
    }
 
    // We can only have one consumer
@@ -719,8 +718,6 @@ Client* ClientManager::Get()
    }
 
    static int threadCount = 0;
-   ++threadCount;
-   assert( threadCount <= MAX_THREAD_NB );
    tl_threadId = VDBG_GET_THREAD_ID();
    threadClient.reset( new Client() );
 
@@ -730,7 +727,10 @@ Client* ClientManager::Get()
    if ( threadClient->_worker  == NULL )
    {
       assert( false && "ringbuf_register" );
-   } 
+   }
+
+   ++threadCount;
+   assert( threadCount <= MAX_THREAD_NB );
 
    return threadClient.get();
 }
