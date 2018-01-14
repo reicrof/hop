@@ -788,7 +788,7 @@ void vdbg::ProfilerTimeline::drawTraces( const ThreadTraces& traces, const float
 
    const auto absoluteStart = _absoluteStartTime;
    const float windowWidthPxl = ImGui::GetWindowWidth();
-   const auto startMicrosAsPxl = microsToPxl( windowWidthPxl, _microsToDisplay, _startMicros );
+   const int64_t startMicrosAsPxl = microsToPxl<int64_t>( windowWidthPxl, _microsToDisplay, _startMicros );
 
    std::vector< ImVec2 > pos;
    std::vector< float > length;
@@ -902,7 +902,7 @@ void vdbg::ProfilerTimeline::drawLockWaits( const ThreadTraces& traces, const fl
 
    const auto absoluteStart = _absoluteStartTime;
    const float windowWidthPxl = ImGui::GetWindowWidth();
-   const auto startMicrosAsPxl = microsToPxl( windowWidthPxl, _microsToDisplay, _startMicros );
+   const int64_t startMicrosAsPxl = microsToPxl<int64_t>( windowWidthPxl, _microsToDisplay, _startMicros );
 
    // The time range to draw in absolute time
    const TimeStamp firstTraceAbsoluteTime = absoluteStart + (_startMicros * 1000);
