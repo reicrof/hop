@@ -305,6 +305,14 @@ void Profiler::addTraces( const std::vector<DisplayableTrace>& traces, uint32_t 
          _tracesPerThread.emplace_back();
       }
 
+      const auto startTime = _timeline.absoluteStartTime();
+      if( startTime == 0 || traces[0].time < startTime )
+        _timeline.setAbsoluteStartTime( traces[0].time );
+
+      const auto presentTime = _timeline.absoluteStartTime();
+      if( presentTime == 0 || traces.back().time > presentTime )
+        _timeline.setAbsolutePresentTime( traces.back().time );
+
       _tracesPerThread[i].addTraces( traces );
    }
 }
@@ -472,22 +480,7 @@ void vdbg::Profiler::draw( vdbg::Server* server )
       //  Move timeline to the most recent trace if Live mode is on
       if( _realtime && _recording )
       {
-         // Only valid if we have at least 1 thread + 1 trace
-         if( !_tracesPerThread.empty() )
-         {
-            const TimeStamp relativeStart = _tracesPerThread[0].startTimes.empty()
-                                             ? 0
-                                             : _tracesPerThread[0].startTimes.front();
-            TimeStamp maxTime = 0.0;
-            for( const auto& t : _tracesPerThread )
-            {
-               if( !t.endTimes.empty() )
-               {
-                  maxTime = std::max( maxTime, t.endTimes.back() );
-               }
-            }
-            _timeline.moveToTime( (maxTime - relativeStart) / 1000 );
-         }
+         _timeline.moveToPresentTime();
       }
 
       _timeline.draw( _tracesPerThread, _threadsId );
@@ -573,7 +566,11 @@ void vdbg::ProfilerTimeline::draw(
    for ( size_t i = 0; i < tracesPerThread.size(); ++i )
    {
       snprintf(
-          threadName + sizeof( "Thread" ), sizeof( threadName ), "%lu (id=%u)", i, threadIds[i] );
+          threadName + sizeof( "Thread" ),
+          sizeof( threadName ),
+          "%lu (id=%u)",
+          i,
+          threadIds[i] );
       ImGui::PushStyleColor( ImGuiCol_Button, ImColor::HSV( i / 7.0f, 0.6f, 0.6f ) );
       ImGui::PushStyleColor( ImGuiCol_ButtonHovered, ImColor::HSV( i / 7.0f, 0.6f, 0.6f ) );
       ImGui::PushStyleColor( ImGuiCol_ButtonActive, ImColor::HSV( i / 7.0f, 0.6f, 0.6f ) );
@@ -735,9 +732,34 @@ void vdbg::ProfilerTimeline::handleMouseWheel( float mousePosX, float )
    }
 }
 
-void vdbg::ProfilerTimeline::moveToTime( int64_t timeInMicro )
+vdbg::TimeStamp vdbg::ProfilerTimeline::absoluteStartTime() const noexcept
+{
+   return _absoluteStartTime;
+}
+
+vdbg::TimeStamp vdbg::ProfilerTimeline::absolutePresentTime() const noexcept
+{
+   return _absolutePresentTime;
+}
+
+void vdbg::ProfilerTimeline::setAbsoluteStartTime( TimeStamp time ) noexcept
+{
+   _absoluteStartTime = time;
+}
+
+void vdbg::ProfilerTimeline::setAbsolutePresentTime( TimeStamp time ) noexcept
+{
+   _absolutePresentTime = time;
+}
+
+void vdbg::ProfilerTimeline::moveToTime( int64_t timeInMicro ) noexcept
 {
    _startMicros = timeInMicro - (_microsToDisplay / 2);
+}
+
+void vdbg::ProfilerTimeline::moveToPresentTime() noexcept
+{
+   moveToTime( (_absolutePresentTime - _absoluteStartTime) / 1000 );
 }
 
 void vdbg::ProfilerTimeline::zoomOn( int64_t microToZoomOn, float zoomFactor )
@@ -764,7 +786,7 @@ void vdbg::ProfilerTimeline::drawTraces( const ThreadTraces& traces, const float
 
    if( traces.startTimes.empty() ) return;
 
-   const auto relativeStart = traces.startTimes[0];
+   const auto absoluteStart = _absoluteStartTime;
    const float windowWidthPxl = ImGui::GetWindowWidth();
    const auto startMicrosAsPxl = microsToPxl( windowWidthPxl, _microsToDisplay, _startMicros );
 
@@ -775,7 +797,7 @@ void vdbg::ProfilerTimeline::drawTraces( const ThreadTraces& traces, const float
    tracesToDraw.reserve( 128 );
 
    // The time range to draw in absolute time
-   const TimeStamp firstTraceAbsoluteTime = relativeStart + (_startMicros * 1000);
+   const TimeStamp firstTraceAbsoluteTime = absoluteStart + (_startMicros * 1000);
    const TimeStamp lastTraceAbsoluteTime = firstTraceAbsoluteTime + ( _microsToDisplay * 1000 );
 
    const auto it1 = std::lower_bound(
@@ -802,7 +824,7 @@ void vdbg::ProfilerTimeline::drawTraces( const ThreadTraces& traces, const float
                // drawing the traces.
                if ( t.time > lastTraceAbsoluteTime ) break;
 
-               const int64_t traceStartInMicros = ((t.time - relativeStart) / 1000);
+               const int64_t traceStartInMicros = ((t.time - absoluteStart) / 1000);
                maxDepth = std::max( curDepth, maxDepth );
                const auto traceStartPxl =
                    microsToPxl<float>( windowWidthPxl, _microsToDisplay, traceStartInMicros );
@@ -878,12 +900,12 @@ void vdbg::ProfilerTimeline::drawLockWaits( const ThreadTraces& traces, const fl
 
    const auto& lockWaits = traces._lockWaits;
 
-   const auto relativeStart = traces.startTimes[0];
+   const auto absoluteStart = _absoluteStartTime;
    const float windowWidthPxl = ImGui::GetWindowWidth();
    const auto startMicrosAsPxl = microsToPxl( windowWidthPxl, _microsToDisplay, _startMicros );
 
    // The time range to draw in absolute time
-   const TimeStamp firstTraceAbsoluteTime = relativeStart + (_startMicros * 1000);
+   const TimeStamp firstTraceAbsoluteTime = absoluteStart + (_startMicros * 1000);
    const TimeStamp lastTraceAbsoluteTime = firstTraceAbsoluteTime + ( _microsToDisplay * 1000 );
 
    ImGui::PushStyleColor(ImGuiCol_Button, ImColor(1, 0, 0));
@@ -893,7 +915,7 @@ void vdbg::ProfilerTimeline::drawLockWaits( const ThreadTraces& traces, const fl
    {
       if ( lw.end >= firstTraceAbsoluteTime && lw.start <= lastTraceAbsoluteTime )
       {
-         const int64_t startInMicros = ( ( lw.start - relativeStart ) / 1000 );
+         const int64_t startInMicros = ( ( lw.start - absoluteStart ) / 1000 );
 
          const auto startPxl =
              microsToPxl<float>( windowWidthPxl, _microsToDisplay, startInMicros );

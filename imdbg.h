@@ -54,10 +54,15 @@ struct ThreadTraces
 class ProfilerTimeline
 {
 public:
- void draw(
-     const std::vector<ThreadTraces>& _tracesPerThread,
-     const std::vector<uint32_t>& threadIds );
- void moveToTime( int64_t timeInMicro );
+   void draw(
+       const std::vector<ThreadTraces>& _tracesPerThread,
+       const std::vector<uint32_t>& threadIds );
+   TimeStamp absoluteStartTime() const noexcept;
+   TimeStamp absolutePresentTime() const noexcept;
+   void setAbsoluteStartTime( TimeStamp time ) noexcept;
+   void setAbsolutePresentTime( TimeStamp time ) noexcept;
+   void moveToPresentTime() noexcept;
+   void moveToTime( int64_t timeInMicro ) noexcept;
 
 private:
    void drawTimeline( const float posX, const float posY );
@@ -70,13 +75,12 @@ private:
    static constexpr float TRACE_VERTICAL_PADDING = 2.0f;
 
    int64_t _startMicros{3000};
-   int64_t _microsToDisplay{5000};
+   int64_t _microsToDisplay{50000};
    int64_t _stepSizeInMicros{1000};
+   TimeStamp _absoluteStartTime{};
+   TimeStamp _absolutePresentTime{};
    int _maxTracesDepth{0};
 
-   // Position of drawn widgets
-   float _timelineDrawPos[2];
-   std::vector< std::pair< float, float > > _tracesDrawPos;
 };
 
 class Server;

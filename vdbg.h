@@ -71,7 +71,7 @@ typedef struct ringbuf_worker ringbuf_worker_t;
 namespace vdbg
 {
 
-using Clock = std::chrono::high_resolution_clock;
+using Clock = std::chrono::steady_clock;
 using Precision = std::chrono::nanoseconds;
 inline decltype( std::chrono::duration_cast<Precision>( Clock::now().time_since_epoch() ).count() ) getTimeStamp()
 {
