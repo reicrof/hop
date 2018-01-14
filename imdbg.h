@@ -68,17 +68,19 @@ private:
    void drawTimeline( const float posX, const float posY );
    void drawTraces( const ThreadTraces& traces, const float posX, const float posY );
    void drawLockWaits( const ThreadTraces& traces, const float posX, const float posY );
+   void handleMouseDrag( float mousePosX, float mousePosY );
    void handleMouseWheel( float mousePosX, float mousePosY );
    void zoomOn( int64_t microToZoomOn, float zoomFactor );
 
    static constexpr float TRACE_HEIGHT = 20.0f;
    static constexpr float TRACE_VERTICAL_PADDING = 2.0f;
 
-   int64_t _startMicros{3000};
+   int64_t _startMicros{0};
    int64_t _microsToDisplay{50000};
    int64_t _stepSizeInMicros{1000};
    TimeStamp _absoluteStartTime{};
    TimeStamp _absolutePresentTime{};
+   float _rightClickStartPosInCanvas[2] = {};
    int _maxTracesDepth{0};
 
 };

@@ -559,7 +559,7 @@ void vdbg::ProfilerTimeline::draw(
 {
    const auto startDrawPos = ImGui::GetCursorScreenPos();
 
-   ImGui::BeginGroup();
+   ImGui::BeginChild( "Timeline" );
    drawTimeline( startDrawPos.x, startDrawPos.y );
 
    char threadName[128] = "Thread ";
@@ -586,11 +586,15 @@ void vdbg::ProfilerTimeline::draw(
       ImGui::InvisibleButton( "trace-padding", ImVec2( 20, 40 ) );
    }
 
-   ImVec2 mousePosInCanvas =
-       ImVec2( ImGui::GetIO().MousePos.x - startDrawPos.x, ImGui::GetIO().MousePos.y - startDrawPos.y );
-   ImGui::EndGroup();
+   ImGui::EndChild();
 
-   handleMouseWheel( mousePosInCanvas.x, mousePosInCanvas.y );
+   if ( ImGui::IsItemHoveredRect() )
+   {
+     ImVec2 mousePosInCanvas =
+         ImVec2( ImGui::GetIO().MousePos.x - startDrawPos.x, ImGui::GetIO().MousePos.y - startDrawPos.y );
+     handleMouseDrag( mousePosInCanvas.x, mousePosInCanvas.y );
+     handleMouseWheel( mousePosInCanvas.x, mousePosInCanvas.y );
+   }
 }
 
 void vdbg::ProfilerTimeline::drawTimeline( const float posX, const float posY )
@@ -703,33 +707,63 @@ void vdbg::ProfilerTimeline::drawTimeline( const float posX, const float posY )
 
 void vdbg::ProfilerTimeline::handleMouseWheel( float mousePosX, float )
 {
-   if ( ImGui::IsItemHovered() )
+   const float windowWidthPxl = ImGui::GetWindowWidth();
+   ImGuiIO& io = ImGui::GetIO();
+   if ( io.MouseWheel > 0 )
    {
-      const float windowWidthPxl = ImGui::GetWindowWidth();
-      ImGuiIO& io = ImGui::GetIO();
-      if ( io.MouseWheel > 0 )
-      {
-         if ( io.KeyCtrl )
-         {
-            zoomOn( pxlToMicros( windowWidthPxl, _microsToDisplay, mousePosX ) + _startMicros, 0.9f );
-         }
-         else
-         {
-             _startMicros += 0.05f * _microsToDisplay;
-         }
-      }
-      else if ( io.MouseWheel < 0 )
-      {
-         if ( io.KeyCtrl )
-         {
-            zoomOn( pxlToMicros( windowWidthPxl, _microsToDisplay, mousePosX ) + _startMicros , 1.1f );
-         }
-         else
-         {
-            _startMicros -= 0.05f * _microsToDisplay;
-         }
-      }
+      zoomOn( pxlToMicros( windowWidthPxl, _microsToDisplay, mousePosX ) + _startMicros, 0.9f );
    }
+   else if ( io.MouseWheel < 0 )
+   {
+      zoomOn( pxlToMicros( windowWidthPxl, _microsToDisplay, mousePosX ) + _startMicros, 1.1f );
+   }
+}
+
+void vdbg::ProfilerTimeline::handleMouseDrag( float mouseInCanvasX, float mouseInCanvasY )
+{
+  // Left mouse button dragging
+  if( ImGui::IsMouseDragging( 0 ) )
+  {
+    const float windowWidthPxl = ImGui::GetWindowWidth();
+    const auto delta = ImGui::GetMouseDragDelta();
+    const int64_t deltaXInMicros = pxlToMicros<int64_t>( windowWidthPxl, _microsToDisplay, delta.x );
+    _startMicros -= deltaXInMicros;
+    ImGui::SetScrollY(ImGui::GetScrollY() - delta.y);
+
+    ImGui::ResetMouseDragDelta();
+  }
+  // Right mouse button dragging
+  else if( ImGui::IsMouseDragging( 1 ) )
+  {
+    ImDrawList* DrawList = ImGui::GetWindowDrawList();
+    const auto delta = ImGui::GetMouseDragDelta( 1 );
+
+    const auto curMousePosInScreen = ImGui::GetMousePos();
+    DrawList->AddRectFilled(
+        curMousePosInScreen,
+        ImVec2( curMousePosInScreen.x - delta.x, curMousePosInScreen.y - delta.y ),
+        ImColor( 255, 255, 255, 64 ) );
+  }
+
+  if( ImGui::IsMouseClicked(1) )
+  {
+    _rightClickStartPosInCanvas[0] = mouseInCanvasX;
+    _rightClickStartPosInCanvas[1] = mouseInCanvasY;
+  }
+
+  // Handle right mouse click up. (Finished right click selection zoom)
+  if( ImGui::IsMouseReleased(1) )
+  {
+    const float minX = std::min( _rightClickStartPosInCanvas[0], mouseInCanvasX );
+    const float maxX = std::max( _rightClickStartPosInCanvas[0], mouseInCanvasX );
+    const float windowWidthPxl = ImGui::GetWindowWidth();
+    const int64_t minXinMicros = pxlToMicros<int64_t>( windowWidthPxl, _microsToDisplay, minX );
+    _startMicros += minXinMicros;
+    _microsToDisplay = pxlToMicros<int64_t>( windowWidthPxl, _microsToDisplay, maxX - minX );
+
+    // Reset position
+    _rightClickStartPosInCanvas[0] = _rightClickStartPosInCanvas[1] = 0.0f;
+  }
 }
 
 vdbg::TimeStamp vdbg::ProfilerTimeline::absoluteStartTime() const noexcept
