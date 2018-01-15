@@ -13,7 +13,7 @@ namespace vdbg
 class Server
 {
   public:
-   bool start( const char* name, int connections );
+   bool start( const char* name );
    void setRecording( bool recording );
    void stop();
 

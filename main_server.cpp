@@ -1,7 +1,6 @@
 #define VDBG_SERVER_IMPLEMENTATION
 #include <vdbg.h>
 #include "imgui/imgui.h"
-#include <server.h>
 #include <SDL2/SDL.h>
 
 #include <imdbg.h>
@@ -19,7 +18,6 @@ static float g_mouseWheel = 0.0f;
 
 static void sdlImGuiInit()
 {
-  
   ImGuiIO& io = ImGui::GetIO();
   io.KeyMap[ImGuiKey_Tab] = SDLK_TAB; // Keyboard mapping. ImGui will use those indices to peek into the io.KeyDown[] array.
   io.KeyMap[ImGuiKey_LeftArrow] = SDL_SCANCODE_LEFT;
@@ -131,42 +129,20 @@ int main( int argc, const char* argv[] )
 
    vdbg::init();
 
-   char exeName[VDBG_SHARED_MEM_MAX_NAME_SIZE] = {};
-   strncpy( exeName, VDBG_SHARED_MEM_PREFIX, sizeof( VDBG_SHARED_MEM_PREFIX ) );
-      strncat(
-          exeName, argv[1], VDBG_SHARED_MEM_MAX_NAME_SIZE - sizeof( VDBG_SHARED_MEM_PREFIX ) - 1 );
-   vdbg::Server serv;
-   serv.start( exeName, 10 );
-
-   rapidjson::Document doc;
-
    bool show_test_window = true;
 
-   auto profiler = std::make_unique< vdbg::Profiler >( "Profiler Test" );
+   std::string exeName( VDBG_SHARED_MEM_PREFIX );
+   exeName += argv[1];
+
+   auto profiler = std::make_unique< vdbg::Profiler >( exeName );
    vdbg::addNewProfiler( profiler.get() );
    std::vector< uint32_t > profTrheadsId;
 
-   std::vector< uint32_t > threadIds;
-   std::vector< std::vector< vdbg::DisplayableTrace > > pendingTraces;
-   std::vector< std::vector< char > > stringData;
-
-   std::vector< uint32_t > threadIdsLockWaits;
-   std::vector<std::vector< vdbg::LockWait > > pendingLockWaits;
    while ( g_run )
    {
       handleInput();
 
-      serv.getPendingProfilingTraces( pendingTraces, stringData, threadIds );
-      for( size_t i = 0; i < pendingTraces.size(); ++i )
-      {
-         profiler->addTraces( pendingTraces[i], threadIds[i] );
-         profiler->addStringData( stringData[i], threadIds[i] );
-      }
-      serv.getPendingLockWaits( pendingLockWaits, threadIdsLockWaits );
-      for( size_t i = 0; i < pendingLockWaits.size(); ++i )
-      {
-         profiler->addLockWaits( pendingLockWaits[i], threadIdsLockWaits[i] );
-      }
+      profiler->fetchClientData();
 
       int w, h, x, y;
       SDL_GetWindowSize( window, &w, &h );
@@ -188,12 +164,10 @@ int main( int argc, const char* argv[] )
       glClearColor( 1.0f, 1.0f, 1.0f, 1.0f );
       glClear( GL_COLOR_BUFFER_BIT );
 
-      vdbg::draw( &serv );
+      vdbg::draw();
 
       SDL_GL_SwapWindow( window );
    }
-
-   serv.stop();
 
    SDL_GL_DeleteContext( mainContext );
    SDL_DestroyWindow( window );

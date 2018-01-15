@@ -10,7 +10,7 @@
 
 namespace vdbg
 {
-bool Server::start( const char* name, int  )
+bool Server::start( const char* name )
 {
    assert( name != nullptr );
 

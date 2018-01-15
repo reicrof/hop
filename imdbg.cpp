@@ -1,5 +1,6 @@
 #include "imdbg.h"
 #include "imgui/imgui.h"
+#include <SDL2/SDL_keycode.h>
 
 // Todo : I dont like this dependency
 #include "server.h"
@@ -249,14 +250,14 @@ void onNewFrame( int width, int height, int mouseX, int mouseY, bool lmbPressed,
    ImGui::NewFrame();
 }
 
-void draw( Server* server )
+void draw()
 {
    static double lastTime = 0.0;
 
    const auto preDrawTime = std::chrono::system_clock::now();
    for ( auto p : _profilers )
    {
-      p->draw( server );
+      p->draw();
    }
 
    ImGui::Text( "Drawing took %f ms", lastTime );
@@ -286,6 +287,8 @@ void addNewProfiler( Profiler* profiler )
 
 Profiler::Profiler( const std::string& name ) : _name( name )
 {
+   _server.reset( new Server() );
+   _server->start( _name.c_str() );
 }
 
 void Profiler::addTraces( const std::vector<DisplayableTrace>& traces, uint32_t threadId )
@@ -314,6 +317,22 @@ void Profiler::addTraces( const std::vector<DisplayableTrace>& traces, uint32_t 
         _timeline.setAbsolutePresentTime( traces.back().time );
 
       _tracesPerThread[i].addTraces( traces );
+   }
+}
+
+void Profiler::fetchClientData()
+{
+   // TODO: rethink and redo this part
+   _server->getPendingProfilingTraces( pendingTraces, stringData, threadIds );
+   for( size_t i = 0; i < pendingTraces.size(); ++i )
+   {
+      addTraces( pendingTraces[i], threadIds[i] );
+      addStringData( stringData[i], threadIds[i] );
+   }
+   _server->getPendingLockWaits( pendingLockWaits, threadIdsLockWaits );
+   for( size_t i = 0; i < pendingLockWaits.size(); ++i )
+   {
+      addLockWaits( pendingLockWaits[i], threadIdsLockWaits[i] );
    }
 }
 
@@ -359,6 +378,11 @@ void Profiler::addLockWaits( const std::vector<LockWait>& lockWaits, uint32_t th
 
       _tracesPerThread[i].addLockWaits( lockWaits );
    }
+}
+
+Profiler::~Profiler()
+{
+   _server->stop();
 }
 
 ThreadTraces::ThreadTraces()
@@ -457,7 +481,7 @@ void ThreadTraces::addLockWaits( const std::vector< LockWait >& lockWaits )
 //    return isOpen;
 // }
 
-void vdbg::Profiler::draw( vdbg::Server* server )
+void vdbg::Profiler::draw()
 {
    //ImGui::SetNextWindowSize(ImVec2(700,500), ImGuiSetCond_FirstUseEver);
    ImGui::PushStyleVar( ImGuiStyleVar_WindowMinSize, ImVec2( 100, 100 ) );
@@ -469,24 +493,17 @@ void vdbg::Profiler::draw( vdbg::Server* server )
       return;
    }
 
+   handleHotkey();
+
    drawMenuBar();
 
-   if( ImGui::Checkbox( "Listening", &_recording ) )
+   //  Move timeline to the most recent trace if Live mode is on
+   if( _recording && _timeline.realtime() )
    {
-      server->setRecording( _recording );
+      _timeline.moveToPresentTime();
    }
-   ImGui::SameLine();
-   ImGui::Checkbox( "Live", &_realtime );
 
-   {
-      //  Move timeline to the most recent trace if Live mode is on
-      if( _realtime && _recording )
-      {
-         _timeline.moveToPresentTime();
-      }
-
-      _timeline.draw( _tracesPerThread, _threadsId );
-   }
+   _timeline.draw( _tracesPerThread, _threadsId );
 
    ImGui::End();
    ImGui::PopStyleVar();
@@ -535,8 +552,25 @@ void vdbg::Profiler::drawMenuBar()
 
       ImGui::EndPopup();
    }
+}
 
-   ImGui::Spacing();
+void vdbg::Profiler::handleHotkey()
+{
+   if( ImGui::IsKeyReleased( SDL_SCANCODE_HOME ) )
+   {
+      _timeline.moveToStart();
+   }
+   else if( ImGui::IsKeyReleased( SDL_SCANCODE_END ) )
+   {
+      _timeline.moveToPresentTime();
+      _timeline.setRealtime ( true );
+   }
+   else if( ImGui::IsKeyReleased( 'r' ) )
+   {
+      _recording = !_recording;
+      _server->setRecording( _recording );
+      _timeline.setRealtime ( true );
+   }
 }
 
 // TODO template these 2 functions so they can be used with different time ratios
@@ -707,7 +741,7 @@ void vdbg::ProfilerTimeline::drawTimeline( const float posX, const float posY )
      }
    }
 
-   ImGui::SetCursorScreenPos( ImVec2{ posX, posY + 45.0f } );
+   ImGui::SetCursorScreenPos( ImVec2{ posX, posY + 50.0f } );
 }
 
 void vdbg::ProfilerTimeline::handleMouseWheel( float mousePosX, float )
@@ -740,6 +774,7 @@ void vdbg::ProfilerTimeline::handleMouseDrag( float mouseInCanvasX, float mouseI
     ImGui::EndChild();
 
     ImGui::ResetMouseDragDelta();
+    setRealtime ( false );
   }
   // Right mouse button dragging
   else if( ImGui::IsMouseDragging( 1 ) )
@@ -758,6 +793,7 @@ void vdbg::ProfilerTimeline::handleMouseDrag( float mouseInCanvasX, float mouseI
   {
     _rightClickStartPosInCanvas[0] = mouseInCanvasX;
     _rightClickStartPosInCanvas[1] = mouseInCanvasY;
+    setRealtime ( false );
   }
 
   // Handle right mouse click up. (Finished right click selection zoom)
@@ -773,6 +809,16 @@ void vdbg::ProfilerTimeline::handleMouseDrag( float mouseInCanvasX, float mouseI
     // Reset position
     _rightClickStartPosInCanvas[0] = _rightClickStartPosInCanvas[1] = 0.0f;
   }
+}
+
+bool vdbg::ProfilerTimeline::realtime() const noexcept
+{
+   return _realtime;
+}
+
+void vdbg::ProfilerTimeline::setRealtime( bool isRealtime ) noexcept
+{
+   _realtime = isRealtime;
 }
 
 vdbg::TimeStamp vdbg::ProfilerTimeline::absoluteStartTime() const noexcept
@@ -798,6 +844,12 @@ void vdbg::ProfilerTimeline::setAbsolutePresentTime( TimeStamp time ) noexcept
 void vdbg::ProfilerTimeline::moveToTime( int64_t timeInMicro ) noexcept
 {
    _startMicros = timeInMicro - (_microsToDisplay / 2);
+}
+
+void vdbg::ProfilerTimeline::moveToStart() noexcept
+{
+   moveToTime( _microsToDisplay * 0.5f );
+   setRealtime ( false );
 }
 
 void vdbg::ProfilerTimeline::moveToPresentTime() noexcept

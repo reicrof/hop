@@ -61,8 +61,13 @@ public:
    TimeStamp absolutePresentTime() const noexcept;
    void setAbsoluteStartTime( TimeStamp time ) noexcept;
    void setAbsolutePresentTime( TimeStamp time ) noexcept;
+
+   void moveToStart() noexcept;
    void moveToPresentTime() noexcept;
    void moveToTime( int64_t timeInMicro ) noexcept;
+
+   void setRealtime( bool isRealtime ) noexcept;
+   bool realtime() const noexcept;
 
 private:
    void drawTimeline( const float posX, const float posY );
@@ -82,17 +87,20 @@ private:
    TimeStamp _absolutePresentTime{};
    float _rightClickStartPosInCanvas[2] = {};
    int _maxTraceDepthPerThread[ MAX_THREAD_NB ] = {};
-
+   bool _realtime{true};
 };
 
 class Server;
 struct Profiler
 {
    Profiler( const std::string& name );
-   void draw( Server* server );
+   ~Profiler();
+   void draw();
+   void fetchClientData();
    void addTraces( const std::vector< DisplayableTrace >& traces, uint32_t threadId );
    void addStringData( const std::vector< char >& stringData, uint32_t threadId );
    void addLockWaits( const std::vector< LockWait >& lockWaits, uint32_t threadId );
+   void handleHotkey();
 
 private:
    void drawMenuBar();
@@ -102,7 +110,16 @@ private:
    std::vector< uint32_t > _threadsId;
    std::vector< ThreadTraces > _tracesPerThread;
    bool _recording{ false };
-   bool _realtime{ true };
+
+   // Client/Server data
+   // TODO: rethink and redo this part
+   std::unique_ptr< Server > _server;
+   std::vector< uint32_t > threadIds;
+   std::vector< std::vector< vdbg::DisplayableTrace > > pendingTraces;
+   std::vector< std::vector< char > > stringData;
+
+   std::vector< uint32_t > threadIdsLockWaits;
+   std::vector<std::vector< vdbg::LockWait > > pendingLockWaits;
 };
 
 // Initialize the imgui framework
@@ -112,7 +129,7 @@ void addNewProfiler( Profiler* profiler );
 // Updates the imgui data. Should be called each frame
 void onNewFrame( int width, int height, int mouseX, int mouseY, bool lmbPressed, bool rmbPressed, float mouseWheel );
 // Draw the ui
-void draw( Server* server );
+void draw();
 
 } // namespace vdbg
 
