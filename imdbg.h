@@ -66,7 +66,7 @@ public:
 
 private:
    void drawTimeline( const float posX, const float posY );
-   void drawTraces( const ThreadTraces& traces, const float posX, const float posY );
+   void drawTraces( const ThreadTraces& traces, int threadIndex, const float posX, const float posY );
    void drawLockWaits( const ThreadTraces& traces, const float posX, const float posY );
    void handleMouseDrag( float mousePosX, float mousePosY );
    void handleMouseWheel( float mousePosX, float mousePosY );
@@ -81,7 +81,7 @@ private:
    TimeStamp _absoluteStartTime{};
    TimeStamp _absolutePresentTime{};
    float _rightClickStartPosInCanvas[2] = {};
-   int _maxTracesDepth{0};
+   int _maxTraceDepthPerThread[ MAX_THREAD_NB ] = {};
 
 };
 

@@ -459,11 +459,13 @@ void ThreadTraces::addLockWaits( const std::vector< LockWait >& lockWaits )
 
 void vdbg::Profiler::draw( vdbg::Server* server )
 {
-   ImGui::SetNextWindowSize(ImVec2(700,500), ImGuiSetCond_FirstUseEver);
-   if ( !ImGui::Begin( _name.c_str(), nullptr, ImGuiWindowFlags_NoScrollWithMouse | ImGuiWindowFlags_MenuBar ) )
+   //ImGui::SetNextWindowSize(ImVec2(700,500), ImGuiSetCond_FirstUseEver);
+   ImGui::PushStyleVar( ImGuiStyleVar_WindowMinSize, ImVec2( 100, 100 ) );
+   if ( !ImGui::Begin( _name.c_str(), nullptr, ImGuiWindowFlags_NoScrollWithMouse | ImGuiWindowFlags_MenuBar | ImGuiWindowFlags_NoScrollbar ) )
    {
       // Early out
       ImGui::End();
+      ImGui::PopStyleVar();
       return;
    }
 
@@ -486,9 +488,8 @@ void vdbg::Profiler::draw( vdbg::Server* server )
       _timeline.draw( _tracesPerThread, _threadsId );
    }
 
-   ImGui::InvisibleButton("padding", ImVec2( 20, 40 ) );
-
    ImGui::End();
+   ImGui::PopStyleVar();
 }
 
 void vdbg::Profiler::drawMenuBar()
@@ -559,9 +560,9 @@ void vdbg::ProfilerTimeline::draw(
 {
    const auto startDrawPos = ImGui::GetCursorScreenPos();
 
-   ImGui::BeginChild( "Timeline" );
-   drawTimeline( startDrawPos.x, startDrawPos.y );
+   drawTimeline( startDrawPos.x, startDrawPos.y + 5 );
 
+   ImGui::BeginChild( "Traces", ImVec2(0,0), false, ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse );
    char threadName[128] = "Thread ";
    for ( size_t i = 0; i < tracesPerThread.size(); ++i )
    {
@@ -580,7 +581,7 @@ void vdbg::ProfilerTimeline::draw(
       ImGui::Separator();
 
       const auto curPos = ImGui::GetCursorScreenPos();
-      drawTraces( tracesPerThread[i], curPos.x, curPos.y );
+      drawTraces( tracesPerThread[i], i, curPos.x, curPos.y );
       drawLockWaits( tracesPerThread[i], curPos.x, curPos.y );
 
       ImGui::InvisibleButton( "trace-padding", ImVec2( 20, 40 ) );
@@ -625,11 +626,12 @@ void vdbg::ProfilerTimeline::drawTimeline( const float posX, const float posY )
       return stepsCount;
    }();
 
-   // Start drawing the lines on the timeline
+   ImDrawList* DrawList = ImGui::GetWindowDrawList();
+
+   // Start drawing the vertical lines on the timeline
    constexpr float smallLineLength = 10.0f;
    constexpr float deltaBigLineLength = 12.0f; // The diff between the small line and big one
    constexpr float deltaMidLineLength = 7.0f; // The diff between the small line and mid one
-   ImDrawList* DrawList = ImGui::GetWindowDrawList();
 
    const int64_t stepSizePxl = microsToPxl( windowWidthPxl, _microsToDisplay, _stepSizeInMicros );
    const int64_t stepsDone = _startMicros / _stepSizeInMicros;
@@ -639,7 +641,7 @@ void vdbg::ProfilerTimeline::drawTimeline( const float posX, const float posY )
       remainderPxl = microsToPxl( windowWidthPxl, _microsToDisplay, remainder );
 
    // Start drawing one step before the start position to account for partial steps
-   ImVec2 top = ImGui::GetCursorScreenPos();
+   ImVec2 top( posX, posY );
    top.x -= (stepSizePxl + remainderPxl) - stepSizePxl ;
    ImVec2 bottom = top;
    bottom.y += smallLineLength;
@@ -655,7 +657,7 @@ void vdbg::ProfilerTimeline::drawTimeline( const float posX, const float posY )
          auto startEndLine = bottom;
          startEndLine.y += deltaBigLineLength;
          DrawList->AddLine( top, startEndLine, ImGui::GetColorU32( ImGuiCol_TextDisabled ), 3.0f );
-         textPos.emplace_back( startEndLine, count * _stepSizeInMicros );
+         textPos.emplace_back( ImVec2( startEndLine.x, startEndLine.y + 5.0f ), count * _stepSizeInMicros );
       }
       // Draw midline
       else if( count % 5 == 0 )
@@ -672,6 +674,9 @@ void vdbg::ProfilerTimeline::drawTimeline( const float posX, const float posY )
       top.x += stepSizePxl;
       bottom.x += stepSizePxl;
    }
+
+   // Draw horizontal line
+   DrawList->AddLine( ImVec2( posX, posY ), ImVec2( posX + windowWidthPxl, posY ), ImGui::GetColorU32(ImGuiCol_Border) );
 
    const int64_t total = stepsCount * _stepSizeInMicros;
    if( total < 1000 )
@@ -702,7 +707,7 @@ void vdbg::ProfilerTimeline::drawTimeline( const float posX, const float posY )
      }
    }
 
-   ImGui::SetCursorScreenPos( ImVec2{ posX, posY + 80 } );
+   ImGui::SetCursorScreenPos( ImVec2{ posX, posY + 45.0f } );
 }
 
 void vdbg::ProfilerTimeline::handleMouseWheel( float mousePosX, float )
@@ -728,7 +733,11 @@ void vdbg::ProfilerTimeline::handleMouseDrag( float mouseInCanvasX, float mouseI
     const auto delta = ImGui::GetMouseDragDelta();
     const int64_t deltaXInMicros = pxlToMicros<int64_t>( windowWidthPxl, _microsToDisplay, delta.x );
     _startMicros -= deltaXInMicros;
+
+    // Switch to the traces context to modify the scroll
+    ImGui::BeginChild("Traces");
     ImGui::SetScrollY(ImGui::GetScrollY() - delta.y);
+    ImGui::EndChild();
 
     ImGui::ResetMouseDragDelta();
   }
@@ -740,8 +749,8 @@ void vdbg::ProfilerTimeline::handleMouseDrag( float mouseInCanvasX, float mouseI
 
     const auto curMousePosInScreen = ImGui::GetMousePos();
     DrawList->AddRectFilled(
-        curMousePosInScreen,
-        ImVec2( curMousePosInScreen.x - delta.x, curMousePosInScreen.y - delta.y ),
+        ImVec2( curMousePosInScreen.x, 0 ),
+        ImVec2( curMousePosInScreen.x - delta.x, ImGui::GetWindowHeight() ),
         ImColor( 255, 255, 255, 64 ) );
   }
 
@@ -814,7 +823,7 @@ void vdbg::ProfilerTimeline::zoomOn( int64_t microToZoomOn, float zoomFactor )
    }
 }
 
-void vdbg::ProfilerTimeline::drawTraces( const ThreadTraces& traces, const float posX, const float posY )
+void vdbg::ProfilerTimeline::drawTraces( const ThreadTraces& traces, int threadIndex, const float posX, const float posY )
 {
    static constexpr float MIN_TRACE_LENGTH_PXL = 0.25f;
 
@@ -883,7 +892,7 @@ void vdbg::ProfilerTimeline::drawTraces( const ThreadTraces& traces, const float
       }
    }
 
-   _maxTracesDepth = std::max( _maxTracesDepth, maxDepth );
+   _maxTraceDepthPerThread[ threadIndex ] = std::max( _maxTraceDepthPerThread[ threadIndex ], maxDepth );
 
    char curName[ 512 ] = {};
    for( size_t i = 0; i < tracesToDraw.size(); ++i )
@@ -925,7 +934,7 @@ void vdbg::ProfilerTimeline::drawTraces( const ThreadTraces& traces, const float
    }
 
    ImGui::SetCursorScreenPos(
-       ImVec2{posX, posY + _maxTracesDepth * ( TRACE_HEIGHT + TRACE_VERTICAL_PADDING )} );
+       ImVec2{posX, posY + _maxTraceDepthPerThread[ threadIndex ] * ( TRACE_HEIGHT + TRACE_VERTICAL_PADDING )} );
 }
 
 void vdbg::ProfilerTimeline::drawLockWaits( const ThreadTraces& traces, const float posX, const float posY )

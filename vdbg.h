@@ -19,6 +19,7 @@
 /////    THESE ARE THE MACROS YOU SHOULD USE        ///////////
 ///////////////////////////////////////////////////////////////
 
+#define MAX_THREAD_NB 64
 #define VDBG_SHARED_MEM_SIZE 32000000
 
 // Create a new profiling trace for a free function
@@ -183,7 +184,6 @@ class SharedMemory
 };
 // ------ end of SharedMemory.h ------------
 
-static constexpr int MAX_THREAD_NB = 64;
 class Client;
 class ClientManager
 {

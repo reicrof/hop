@@ -64,13 +64,28 @@ using namespace std::chrono_literals;
 
 std::mutex m;
 
+static void doEvenMoreStuff()
+{
+   VDBG_PROF_FUNC();
+   std::this_thread::sleep_for(3ms);
+}
+
+static void doMoreStuf()
+{
+   VDBG_PROF_FUNC();
+   std::this_thread::sleep_for(5ms);
+   doEvenMoreStuff();
+}
+
 static void takeMutexAndDoStuff()
 {
    VDBG_PROF_FUNC();
    std::lock_guard<std::mutex> g(m);
    {
       VDBG_PROF_FUNC();
-      std::this_thread::sleep_for(10ms);
+      doMoreStuf();
+      std::this_thread::sleep_for(1ms);
+      doMoreStuf();
    }
 }
 
@@ -90,6 +105,13 @@ int main()
    std::this_thread::sleep_for(10ms);
 
    std::thread t1( threadFunc );
+   std::thread t2( threadFunc );
+   std::thread t3( threadFunc );
+   std::thread t4( threadFunc );
+   std::thread t5( threadFunc );
+   std::thread t6( threadFunc );
+   std::thread t7( threadFunc );
+   std::thread t8( threadFunc );
 
    std::this_thread::sleep_for(10ms);
 
