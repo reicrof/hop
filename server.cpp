@@ -26,6 +26,8 @@ bool Server::start( const char* name )
             bool success = _sharedMem.create( name, VDBG_SHARED_MEM_SIZE, true );
             if( !success )
             {
+               using namespace std::chrono_literals;
+               std::this_thread::sleep_for(1s);
                continue;
             }
             printf("Connection to shared data succesful.\n");
@@ -162,8 +164,14 @@ void Server::stop()
    {
       _running = false;
       // Wake up semaphore to close properly
-      sem_post( _sharedMem.semaphore() );
-      if ( _thread.joinable() ) _thread.join();
+      if( _sharedMem.data() && _sharedMem.semaphore() )
+      {
+         sem_post( _sharedMem.semaphore() );
+      }
+      if ( _thread.joinable() )
+      {
+         _thread.join();
+      }
    }
 }
 

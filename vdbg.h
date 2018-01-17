@@ -331,6 +331,14 @@ bool SharedMemory::create( const char* path, size_t requestedSize, bool isConsum
    strncpy( _sharedMemPath, path, VDBG_SHARED_MEM_MAX_NAME_SIZE - 1 );
    _size = requestedSize;
 
+   // First try to open semaphore
+   _semaphore = sem_open( "/mysem", O_CREAT, S_IRUSR | S_IWUSR, 1 );
+   if( _semaphore == SEM_FAILED )
+   {
+      perror( "Could not acquire semaphore" );
+      return false;
+   }
+
    _sharedMemFd = shm_open( path, O_CREAT | O_RDWR, 0666 );
    if ( _sharedMemFd < 0 )
    {
@@ -383,9 +391,6 @@ bool SharedMemory::create( const char* path, size_t requestedSize, bool isConsum
       // big deal as there should not be any other consumer...
       _sharedMetaData->flags &= ~(SharedMetaInfo::LISTENING_CONSUMER);
    }
-
-   // Open semaphore
-   _semaphore = sem_open( "/mysem", O_CREAT, S_IRUSR | S_IWUSR, 1 );
 
    _sharedMetaData->flags |=
        isConsumer ? SharedMetaInfo::CONNECTED_CONSUMER : SharedMetaInfo::CONNECTED_PRODUCER;
