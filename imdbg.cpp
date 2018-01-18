@@ -497,13 +497,26 @@ void vdbg::Profiler::draw()
 
    drawMenuBar();
 
-   //  Move timeline to the most recent trace if Live mode is on
-   if( _recording && _timeline.realtime() )
+   if( _tracesPerThread.empty() )
    {
-      _timeline.moveToPresentTime();
+      const char* record = "To start recording press 'r'";
+      const auto pos = ImGui::GetWindowPos();
+      const float windowWidthPxl = ImGui::GetWindowWidth();
+      const float windowHeightPxl = ImGui::GetWindowHeight();
+      ImDrawList* DrawList = ImGui::GetWindowDrawList();
+      auto size = ImGui::CalcTextSize( record );
+      DrawList->AddText( ImGui::GetIO().Fonts->Fonts[0], 30.0f, ImVec2(pos.x + windowWidthPxl/2 - (size.x), pos.y + windowHeightPxl/2),ImGui::GetColorU32( ImGuiCol_TextDisabled ), record );
    }
+   else
+   {
+      //  Move timeline to the most recent trace if Live mode is on
+      if( _recording && _timeline.realtime() )
+      {
+         _timeline.moveToPresentTime();
+      }
 
-   _timeline.draw( _tracesPerThread, _threadsId );
+      _timeline.draw( _tracesPerThread, _threadsId );
+   }
 
    ImGui::End();
    ImGui::PopStyleVar();
@@ -511,15 +524,24 @@ void vdbg::Profiler::draw()
 
 void vdbg::Profiler::drawMenuBar()
 {
-   const char* const menuSaveAsJason = "json";
+   const char* const menuSaveAsJason = "Save as JSON";
+   const char* const menuHelp = "Help";
    const char* menuAction = NULL;
    if ( ImGui::BeginMenuBar() )
    {
       if ( ImGui::BeginMenu( "Menu" ) )
       {
-         if ( ImGui::MenuItem( "Save as JSON", NULL ) )
+         if ( ImGui::MenuItem( menuSaveAsJason, NULL ) )
          {
             menuAction = menuSaveAsJason;
+         }
+         if( ImGui::MenuItem( menuHelp, NULL ) )
+         {
+            menuAction = menuHelp;
+         }
+         if ( ImGui::MenuItem( "Exit", NULL ) )
+         {
+            exit(0);
          }
          ImGui::EndMenu();
       }
@@ -528,10 +550,14 @@ void vdbg::Profiler::drawMenuBar()
 
    if ( menuAction == menuSaveAsJason )
    {
-      ImGui::OpenPopup( "json" );
+      ImGui::OpenPopup( menuSaveAsJason );
+   }
+   else if( menuAction == menuHelp )
+   {
+      ImGui::OpenPopup( menuHelp );
    }
 
-   if ( ImGui::BeginPopupModal( "json", NULL, ImGuiWindowFlags_AlwaysAutoResize ) )
+   if ( ImGui::BeginPopupModal( menuSaveAsJason, NULL, ImGuiWindowFlags_AlwaysAutoResize ) )
    {
       static char path[512] = {};
       ImGui::InputText( "Save to", path, sizeof( path ) );
@@ -550,6 +576,16 @@ void vdbg::Profiler::drawMenuBar()
          ImGui::CloseCurrentPopup();
       }
 
+      ImGui::EndPopup();
+   }
+
+   if( ImGui::BeginPopupModal( menuHelp, NULL, ImGuiWindowFlags_AlwaysAutoResize ) )
+   {
+      ImGui::Text("This is a help menu\nPretty useful isnt it?\n\n");
+      if ( ImGui::Button( "Yes indeed", ImVec2( 120, 0 ) ) )
+      {
+         ImGui::CloseCurrentPopup();
+      }
       ImGui::EndPopup();
    }
 }
