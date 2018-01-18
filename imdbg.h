@@ -25,7 +25,7 @@ struct DisplayableTraces
 
    void append( const DisplayableTraces& newTraces )
    {
-      starts.insert( starts.end(), newTraces.starts.begin(), newTraces.starts.end() );
+      deltas.insert( deltas.end(), newTraces.deltas.begin(), newTraces.deltas.end() );
       ends.insert( ends.end(), newTraces.ends.begin(), newTraces.ends.end() );
       flags.insert( flags.end(), newTraces.flags.begin(), newTraces.flags.end() );
       fileNameIds.insert( fileNameIds.end(), newTraces.fileNameIds.begin(), newTraces.fileNameIds.end() );
@@ -37,8 +37,8 @@ struct DisplayableTraces
 
    void reserve( size_t size )
    {
-      starts.reserve( size );
       ends.reserve( size );
+      deltas.reserve( size );
       flags.reserve( size );
       fileNameIds.reserve( size );
       classNameIds.reserve( size );
@@ -49,8 +49,8 @@ struct DisplayableTraces
 
    void clear()
    {
-      starts.clear();
       ends.clear();
+      deltas.clear();
       flags.clear();
       fileNameIds.clear();
       classNameIds.clear();
@@ -61,11 +61,7 @@ struct DisplayableTraces
 
    // The ends order specify the order of the traces
    std::vector< TimeStamp > ends; // in ns
-
-   // Since the starts time may not have the same order as
-   // the ends, they have been resorted (for faster lookup)
-   // and also provides the index of the trace they are associated
-   std::vector< std::pair< TimeStamp, size_t > > starts; // in ns
+   std::vector< TimeStamp > deltas; // in ns
 
    //Indexes of the name in the string database
    std::vector< TStrIdx_t > fileNameIds;
@@ -75,22 +71,6 @@ struct DisplayableTraces
    std::vector< TLineNb_t > lineNbs;
    std::vector< TDepth_t > depths;
    std::vector< uint32_t > flags;
-
-   struct StartTimeCompare
-   {
-      bool operator()( const std::pair< TimeStamp, size_t >& lhs, std::pair< TimeStamp, size_t >& rhs ) const
-      {
-         return lhs.first < rhs.first;
-      }
-      bool operator()( const std::pair< TimeStamp, size_t >& lhs, const TimeStamp rhs ) const
-      {
-         return lhs.first < rhs;
-      }
-      bool operator()( const TimeStamp lhs, const std::pair< TimeStamp, size_t >& rhs ) const
-      {
-         return lhs < rhs.first;
-      }
-   };
 };
 
 struct ThreadData
@@ -139,7 +119,7 @@ private:
    TimeStamp _absoluteStartTime{};
    TimeStamp _absolutePresentTime{};
    float _rightClickStartPosInCanvas[2] = {};
-   int _maxTraceDepthPerThread[ MAX_THREAD_NB ] = {};
+   TDepth_t _maxTraceDepthPerThread[ MAX_THREAD_NB ] = {};
    bool _realtime{true};
 };
 

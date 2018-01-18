@@ -309,8 +309,8 @@ void Profiler::addTraces( const DisplayableTraces& traces, uint32_t threadId )
       }
 
       const auto startTime = _timeline.absoluteStartTime();
-      if( startTime == 0 || traces.starts[0].first < startTime )
-        _timeline.setAbsoluteStartTime( traces.starts[0].first );
+      if( startTime == 0 || (traces.ends[0] - traces.deltas[0]) < startTime )
+        _timeline.setAbsoluteStartTime( (traces.ends[0] - traces.deltas[0]) );
 
       const auto presentTime = _timeline.absolutePresentTime();
       if( presentTime == 0 || traces.ends.back() > presentTime )
@@ -395,8 +395,6 @@ void ThreadData::addTraces( const DisplayableTraces& newTraces )
    traces.append( newTraces );
 
    assert( std::is_sorted( traces.ends.begin(), traces.ends.end() ) );
-   std::sort(
-       traces.starts.begin(), traces.starts.end(), DisplayableTraces::StartTimeCompare());
 }
 
 void ThreadData::addLockWaits( const std::vector< LockWait >& lockWaits )
@@ -904,81 +902,79 @@ void vdbg::ProfilerTimeline::drawTraces( const ThreadData& data, int threadIndex
    const auto it1 = std::lower_bound(
        data.traces.ends.begin(), data.traces.ends.end(), firstTraceAbsoluteTime );
    const auto it2 = std::upper_bound(
-       data.traces.starts.begin(), data.traces.starts.end(), lastTraceAbsoluteTime, DisplayableTraces::StartTimeCompare() );
-   const size_t firstTraceId = std::distance( data.traces.ends.begin(), it1 );
-   const size_t lastTraceId = std::distance( data.traces.starts.begin(), it2 );
+       data.traces.ends.begin(), data.traces.ends.end(), lastTraceAbsoluteTime );
 
+   size_t firstTraceId = std::distance( data.traces.ends.begin(), it1 );
+   size_t lastTraceId = std::distance( data.traces.ends.begin(), it2 );
 
-   int maxDepth = 0;
+   // Find the the first trace on the left and right that have a depth of 0. This prevents
+   // traces that have a smaller depth than the one foune previously to vanish.
+   while( firstTraceId > 0 && data.traces.depths[ --firstTraceId ] != 0 ) {}
+   while( lastTraceId < data.traces.depths.size() && data.traces.depths[ ++lastTraceId ] != 0 ) {}
+   if( lastTraceId < data.traces.depths.size() ) { ++lastTraceId; } // We need to go one past the depth 0
+
+   uint16_t maxDepth = 0;
    for( size_t i = firstTraceId; i < lastTraceId; ++i )
    {
-      // if ( t.time > firstTraceAbsoluteTime ||
-      //      t.time + ( t.deltaTime ) > firstTraceAbsoluteTime )
-      // {
-         // The start time is bigger than the maximum time on the timeline. We are done
-         // drawing the traces.
-         //if ( t.time > lastTraceAbsoluteTime ) break;
+      const int64_t traceEndInMicros = (data.traces.ends[i] - absoluteStart) / 1000;
+      const auto traceEndPxl =
+          microsToPxl<float>( windowWidthPxl, _microsToDisplay, traceEndInMicros );
+      const float traceLengthPxl =
+          microsToPxl<float>( windowWidthPxl, _microsToDisplay, data.traces.deltas[i] / 1000 );
 
-         const int64_t traceStartInMicros = ((data.traces.starts[i] - absoluteStart) / 1000);
-         const auto traceStartPxl =
-             microsToPxl<float>( windowWidthPxl, _microsToDisplay, traceStartInMicros );
-         const uint32_t deltaTime = data.traces.ends[i] - data.traces.starts[i];
-         const float traceLengthPxl =
-             microsToPxl<float>( windowWidthPxl, _microsToDisplay, deltaTime / 1000 );
+      // Skip trace if it is way smaller than treshold
+      if( traceLengthPxl < MIN_TRACE_LENGTH_PXL )
+            continue;
 
-         // Skip trace if it is way smaller than treshold
-         if( traceLengthPxl < MIN_TRACE_LENGTH_PXL )
-               continue;
-
-         maxDepth = std::max( data.traces.depths[i], maxDepth );
-         pos.push_back( ImVec2(
-             posX - startMicrosAsPxl + traceStartPxl,
-             posY + curDepth * ( TRACE_HEIGHT + TRACE_VERTICAL_PADDING ) ) );
-         length.push_back( traceLengthPxl );
-         tracesToDraw.push_back( i );
-      //}
+      const auto curDepth = data.traces.depths[i]; 
+      maxDepth = std::max( curDepth, maxDepth );
+      pos.push_back( ImVec2(
+          posX - startMicrosAsPxl + traceEndPxl - traceLengthPxl,
+          posY + curDepth * ( TRACE_HEIGHT + TRACE_VERTICAL_PADDING ) ) );
+      length.push_back( traceLengthPxl );
+      tracesToDraw.push_back( i );
    }
 
-//   _maxTraceDepthPerThread[ threadIndex ] = std::max( _maxTraceDepthPerThread[ threadIndex ], maxDepth );
+   _maxTraceDepthPerThread[ threadIndex ] = std::max( _maxTraceDepthPerThread[ threadIndex ], maxDepth );
 
-   // char curName[ 512 ] = {};
-   // for( size_t i = 0; i < tracesToDraw.size(); ++i )
-   // {
-   //    // const DisplayableTrace& t = *tracesToDraw[i];
-   //    // if ( t.classNameIdx > 0 )
-   //    // {
-   //    //    // We do have a class name. Prepend it to the string
-   //    //    snprintf(
-   //    //        curName,
-   //    //        sizeof( curName ),
-   //    //        "%s::%s",
-   //    //        &traces.stringData[t.classNameIdx],
-   //    //        &traces.stringData[t.fctNameIdx] );
-   //    // }
-   //    // else
-   //    // {
-   //    //    // No class name. Ignore it
-   //    //    snprintf( curName, sizeof( curName ), "%s", &traces.stringData[t.fctNameIdx] );
-   //    // }
+   char curName[ 512 ] = {};
+   for( size_t i = 0; i < tracesToDraw.size(); ++i )
+   {
+      const size_t traceIndex = tracesToDraw[i];
+      if ( data.traces.classNameIds[traceIndex] > 0 )
+      {
+         // We do have a class name. Prepend it to the string
+         snprintf(
+             curName,
+             sizeof( curName ),
+             "%s::%s",
+             &data.stringData[ data.traces.classNameIds[traceIndex] ],
+             &data.stringData[ data.traces.fctNameIds[traceIndex] ] );
+      }
+      else
+      {
+         // No class name. Ignore it
+         snprintf( curName, sizeof( curName ), "%s", &data.stringData[ data.traces.fctNameIds[traceIndex] ] );
+      }
 
-   //    ImGui::SetCursorScreenPos( pos[i] );
-   //    ImGui::Button( curName, ImVec2(length[i],TRACE_HEIGHT) );
-   //    if ( length[i] > 3 && ImGui::IsItemHovered() )
-   //    {
-   //       size_t lastChar = strlen( curName );
-   //       curName[ lastChar ] = ' ';
-   //       ImGui::BeginTooltip();
-   //       snprintf(
-   //           curName + lastChar,
-   //           sizeof( curName ) - lastChar,
-   //           "(%.3f ms) \n   %s:%d ",
-   //           ( t.deltaTime / 1000000.0f ),
-   //           &traces.stringData[t.fileNameIdx],
-   //           t.lineNb );
-   //       ImGui::TextUnformatted(curName);
-   //       ImGui::EndTooltip();
-   //    }
-   // }
+      ImGui::SetCursorScreenPos( pos[i] );
+      ImGui::Button( curName, ImVec2(length[i],TRACE_HEIGHT) );
+      if ( length[i] > 3 && ImGui::IsItemHovered() )
+      {
+         size_t lastChar = strlen( curName );
+         curName[ lastChar ] = ' ';
+         ImGui::BeginTooltip();
+         snprintf(
+             curName + lastChar,
+             sizeof( curName ) - lastChar,
+             "(%.3f ms) \n   %s:%d ",
+             ( data.traces.deltas[traceIndex] / 1000000.0f ),
+             &data.stringData[ data.traces.fileNameIds[traceIndex] ],
+             data.traces.lineNbs[traceIndex] );
+         ImGui::TextUnformatted(curName);
+         ImGui::EndTooltip();
+      }
+   }
 
    ImGui::SetCursorScreenPos(
        ImVec2{posX, posY + _maxTraceDepthPerThread[ threadIndex ] * ( TRACE_HEIGHT + TRACE_VERTICAL_PADDING )} );

@@ -84,8 +84,8 @@ size_t Server::handleNewMessage( uint8_t* data, size_t maxSize )
         for( size_t i = 0; i < traceCount; ++i )
         {
             const auto& t = traces[i];
-            dispTraces.starts.emplace_back( t.start, i );
             dispTraces.ends.push_back( t.end );
+            dispTraces.deltas.push_back( t.end - t.start );
             dispTraces.fileNameIds.push_back( t.fileNameIdx );
             dispTraces.classNameIds.push_back( t.classNameIdx );
             dispTraces.fctNameIds.push_back(  t.fctNameIdx );
@@ -95,11 +95,6 @@ size_t Server::handleNewMessage( uint8_t* data, size_t maxSize )
 
         // The ends time should already be sorted
         assert( std::is_sorted( dispTraces.ends.begin(), dispTraces.ends.end() ) );
-        // Sort the start times since they are not necessarily sorted as opposed to the end times
-        std::sort(
-            dispTraces.starts.begin(),
-            dispTraces.starts.end(),
-            DisplayableTraces::StartTimeCompare() );
 
         bufPtr += ( traceCount * sizeof( Trace ) );
         assert( ( size_t )( bufPtr - data ) <= maxSize );

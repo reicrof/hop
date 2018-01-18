@@ -215,7 +215,7 @@
 			"file": "vdbg.h",
 			"settings":
 			{
-				"buffer_size": 18019,
+				"buffer_size": 37026,
 				"encoding": "UTF-8",
 				"line_ending": "Unix"
 			}
@@ -224,7 +224,7 @@
 			"file": "main_server.cpp",
 			"settings":
 			{
-				"buffer_size": 4842,
+				"buffer_size": 4630,
 				"line_ending": "Unix"
 			}
 		},
@@ -232,7 +232,7 @@
 			"file": "server.cpp",
 			"settings":
 			{
-				"buffer_size": 6274,
+				"buffer_size": 5623,
 				"line_ending": "Unix"
 			}
 		},
@@ -240,7 +240,7 @@
 			"file": "imdbg.cpp",
 			"settings":
 			{
-				"buffer_size": 26941,
+				"buffer_size": 34870,
 				"encoding": "UTF-8",
 				"line_ending": "Unix"
 			}
@@ -249,7 +249,7 @@
 			"file": "imdbg.h",
 			"settings":
 			{
-				"buffer_size": 2322,
+				"buffer_size": 3934,
 				"encoding": "UTF-8",
 				"line_ending": "Unix"
 			}
@@ -258,7 +258,7 @@
 			"file": "vdbg_functions_wrap.cpp",
 			"settings":
 			{
-				"buffer_size": 638,
+				"buffer_size": 629,
 				"encoding": "UTF-8",
 				"line_ending": "Unix"
 			}
@@ -304,7 +304,7 @@
 	},
 	"expanded_folders":
 	[
-		"/Users/landrych/workspaces/experiment/ImDbg"
+		"/home/charles/workspaces/ImDbg"
 	],
 	"file_history":
 	[
@@ -439,7 +439,7 @@
 	],
 	"find":
 	{
-		"height": 39.0
+		"height": 25.0
 	},
 	"find_in_files":
 	{
@@ -493,15 +493,15 @@
 					"semi_transient": false,
 					"settings":
 					{
-						"buffer_size": 18019,
+						"buffer_size": 37026,
 						"regions":
 						{
 						},
 						"selection":
 						[
 							[
-								1981,
-								1981
+								0,
+								0
 							]
 						],
 						"settings":
@@ -521,15 +521,15 @@
 					"semi_transient": false,
 					"settings":
 					{
-						"buffer_size": 4842,
+						"buffer_size": 4630,
 						"regions":
 						{
 						},
 						"selection":
 						[
 							[
-								3753,
-								3766
+								0,
+								0
 							]
 						],
 						"settings":
@@ -549,15 +549,15 @@
 					"semi_transient": false,
 					"settings":
 					{
-						"buffer_size": 6274,
+						"buffer_size": 5623,
 						"regions":
 						{
 						},
 						"selection":
 						[
 							[
-								5346,
-								5346
+								0,
+								0
 							]
 						],
 						"settings":
@@ -577,15 +577,15 @@
 					"semi_transient": false,
 					"settings":
 					{
-						"buffer_size": 26941,
+						"buffer_size": 34870,
 						"regions":
 						{
 						},
 						"selection":
 						[
 							[
-								24194,
-								24194
+								0,
+								0
 							]
 						],
 						"settings":
@@ -605,15 +605,15 @@
 					"semi_transient": false,
 					"settings":
 					{
-						"buffer_size": 2322,
+						"buffer_size": 3934,
 						"regions":
 						{
 						},
 						"selection":
 						[
 							[
-								866,
-								881
+								0,
+								0
 							]
 						],
 						"settings":
@@ -633,15 +633,15 @@
 					"semi_transient": false,
 					"settings":
 					{
-						"buffer_size": 638,
+						"buffer_size": 629,
 						"regions":
 						{
 						},
 						"selection":
 						[
 							[
-								430,
-								430
+								0,
+								0
 							]
 						],
 						"settings":
@@ -660,7 +660,7 @@
 	],
 	"incremental_find":
 	{
-		"height": 23.0
+		"height": 25.0
 	},
 	"input":
 	{
@@ -697,7 +697,7 @@
 	"project": "imdbg.sublime-project",
 	"replace":
 	{
-		"height": 42.0
+		"height": 46.0
 	},
 	"save_all_on_build": true,
 	"select_file":
