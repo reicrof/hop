@@ -90,42 +90,26 @@ size_t Server::handleNewMessage( uint8_t* data, size_t maxSize )
             dispTraces.classNameIds.push_back( t.classNameIdx );
             dispTraces.fctNameIds.push_back(  t.fctNameIdx );
             dispTraces.lineNbs.push_back( t.lineNumber );
+            dispTraces.depths.push_back( t.depth );
         }
 
+        // The ends time should already be sorted
+        assert( std::is_sorted( dispTraces.ends.begin(), dispTraces.ends.end() ) );
         // Sort the start times since they are not necessarily sorted as opposed to the end times
         std::sort(
             dispTraces.starts.begin(),
             dispTraces.starts.end(),
-            []( const auto& lhs, const auto& rhs ) { return lhs.first < rhs.first; } );
+            DisplayableTraces::StartTimeCompare() );
 
-        assert( std::is_sorted( dispTraces.ends.begin(), dispTraces.ends.end() ) );
+        bufPtr += ( traceCount * sizeof( Trace ) );
+        assert( ( size_t )( bufPtr - data ) <= maxSize );
 
-         //printf( "Profiler Trace from thread %u with %d traces received\n", threadId, msgInfo.traces.traceCount );
-         // std::vector< DisplayableTrace > dispTrace;
-         // dispTrace.reserve( traceCount * 2 );
-         // for( size_t i = 0; i < traceCount; ++i )
-         // {
-         //    const Trace& t = traces[i];
-         //    // TODO: hack! needs to taking into account the precision specified in message.h
-         //    const uint32_t difference = (t.end - t.start);
-         //    dispTrace.push_back( DisplayableTrace{
-         //        t.start, difference, DisplayableTrace::START_TRACE, t.fileNameIdx, t.classNameIdx, t.fctNameIdx, t.lineNumber} );
-         //    dispTrace.push_back( DisplayableTrace{
-         //        t.end, difference, DisplayableTrace::END_TRACE, t.fileNameIdx, t.classNameIdx, t.fctNameIdx, t.lineNumber} );
-         // }
-
-         // bufPtr += ( traceCount * sizeof( Trace ) );
-         // assert( (size_t)(bufPtr - data) <= maxSize );
-
-         // // Sort them by time
-         // std::sort( dispTrace.begin(), dispTrace.end() );
-
-         // // TODO: Could lock later when we received all the messages
-         // std::lock_guard<std::mutex> guard( pendingTracesMutex );
-         // pendingTraces.emplace_back( std::move( dispTrace ) );
-         // pendingStringData.emplace_back( std::move( stringData ) );
-         // pendingThreadIds.push_back( threadId );
-         return (size_t)(bufPtr - data);
+        // TODO: Could lock later when we received all the messages
+        std::lock_guard<std::mutex> guard( pendingTracesMutex );
+        pendingTraces.emplace_back( std::move( dispTraces ) );
+        pendingStringData.emplace_back( std::move( stringData ) );
+        pendingThreadIds.push_back( threadId );
+        return ( size_t )( bufPtr - data );
       }
       case MsgType::PROFILER_WAIT_LOCK:
       {

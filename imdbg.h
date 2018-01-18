@@ -12,6 +12,53 @@ namespace vdbg
 {
 struct DisplayableTraces
 {
+   DisplayableTraces() = default;
+   DisplayableTraces(DisplayableTraces&& ) = default;
+   DisplayableTraces(const DisplayableTraces& ) = delete;
+   DisplayableTraces& operator=(const DisplayableTraces& ) = delete;
+
+   enum Flags
+   {
+      END_TRACE = 0,
+      START_TRACE = 1,
+   };
+
+   void append( const DisplayableTraces& newTraces )
+   {
+      starts.insert( starts.end(), newTraces.starts.begin(), newTraces.starts.end() );
+      ends.insert( ends.end(), newTraces.ends.begin(), newTraces.ends.end() );
+      flags.insert( flags.end(), newTraces.flags.begin(), newTraces.flags.end() );
+      fileNameIds.insert( fileNameIds.end(), newTraces.fileNameIds.begin(), newTraces.fileNameIds.end() );
+      classNameIds.insert( classNameIds.end(), newTraces.classNameIds.begin(), newTraces.classNameIds.end() );
+      fctNameIds.insert( fctNameIds.end(), newTraces.fctNameIds.begin(), newTraces.fctNameIds.end() );
+      lineNbs.insert( lineNbs.end(), newTraces.lineNbs.begin(), newTraces.lineNbs.end() );
+      depths.insert( depths.end(), newTraces.depths.begin(), newTraces.depths.end() );
+   }
+
+   void reserve( size_t size )
+   {
+      starts.reserve( size );
+      ends.reserve( size );
+      flags.reserve( size );
+      fileNameIds.reserve( size );
+      classNameIds.reserve( size );
+      fctNameIds.reserve( size );
+      lineNbs.reserve( size );
+      depths.reserve( size );
+   }
+
+   void clear()
+   {
+      starts.clear();
+      ends.clear();
+      flags.clear();
+      fileNameIds.clear();
+      classNameIds.clear();
+      fctNameIds.clear();
+      lineNbs.clear();
+      depths.clear();
+   }
+
    // The ends order specify the order of the traces
    std::vector< TimeStamp > ends; // in ns
 
@@ -24,56 +71,34 @@ struct DisplayableTraces
    std::vector< TStrIdx_t > fileNameIds;
    std::vector< TStrIdx_t > classNameIds;
    std::vector< TStrIdx_t > fctNameIds;
+
    std::vector< TLineNb_t > lineNbs;
+   std::vector< TDepth_t > depths;
    std::vector< uint32_t > flags;
 
-   enum Flags
+   struct StartTimeCompare
    {
-      END_TRACE = 0,
-      START_TRACE = 1,
+      bool operator()( const std::pair< TimeStamp, size_t >& lhs, std::pair< TimeStamp, size_t >& rhs ) const
+      {
+         return lhs.first < rhs.first;
+      }
+      bool operator()( const std::pair< TimeStamp, size_t >& lhs, const TimeStamp rhs ) const
+      {
+         return lhs.first < rhs;
+      }
+      bool operator()( const TimeStamp lhs, const std::pair< TimeStamp, size_t >& rhs ) const
+      {
+         return lhs < rhs.first;
+      }
    };
-
-   void reserve( size_t size )
-   {
-      starts.reserve( size );
-      ends.reserve( size );
-      flags.reserve( size );
-      fileNameIds.reserve( size );
-      classNameIds.reserve( size );
-      fctNameIds.reserve( size );
-      lineNbs.reserve( size );
-   }
-
-   void clear()
-   {
-      starts.clear();
-      ends.clear();
-      flags.clear();
-      fileNameIds.clear();
-      classNameIds.clear();
-      fctNameIds.clear();
-      lineNbs.clear();
-   }
-
-   // inline bool isStartTrace() const noexcept
-   // {
-   //    return flags & START_TRACE;
-   // }
-
-   // inline friend bool operator<( const DisplayableTrace& lhs, const DisplayableTrace& rhs )
-   // {
-   //    return lhs.time < rhs.time;
-   // }
 };
 
-struct ThreadTraces
+struct ThreadData
 {
    static constexpr int CHUNK_SIZE = 2048;
-   ThreadTraces();
+   ThreadData();
    void addTraces( const DisplayableTraces& traces );
    void addLockWaits( const std::vector< LockWait >& lockWaits );
-   std::vector< TimeStamp > startTimes;
-   std::vector< TimeStamp > endTimes;
    DisplayableTraces traces;
    std::vector< char > stringData;
    std::vector< LockWait > _lockWaits;
@@ -83,7 +108,7 @@ class ProfilerTimeline
 {
 public:
    void draw(
-       const std::vector<ThreadTraces>& _tracesPerThread,
+       const std::vector<ThreadData>& _tracesPerThread,
        const std::vector<uint32_t>& threadIds );
    TimeStamp absoluteStartTime() const noexcept;
    TimeStamp absolutePresentTime() const noexcept;
@@ -99,8 +124,8 @@ public:
 
 private:
    void drawTimeline( const float posX, const float posY );
-   void drawTraces( const ThreadTraces& traces, int threadIndex, const float posX, const float posY );
-   void drawLockWaits( const ThreadTraces& traces, const float posX, const float posY );
+   void drawTraces( const ThreadData& traces, int threadIndex, const float posX, const float posY );
+   void drawLockWaits( const ThreadData& traces, const float posX, const float posY );
    void handleMouseDrag( float mousePosX, float mousePosY );
    void handleMouseWheel( float mousePosX, float mousePosY );
    void zoomOn( int64_t microToZoomOn, float zoomFactor );
@@ -136,7 +161,7 @@ private:
    std::string _name;
    ProfilerTimeline _timeline;
    std::vector< uint32_t > _threadsId;
-   std::vector< ThreadTraces > _tracesPerThread;
+   std::vector< ThreadData > _tracesPerThread;
    bool _recording{ false };
 
    // Client/Server data
