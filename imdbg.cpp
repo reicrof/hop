@@ -175,7 +175,7 @@ void createResources()
    glBindTexture( GL_TEXTURE_2D, last_texture );
 }
 
-bool saveAsJson( const char* path, const std::vector< uint32_t >& threadsId, const std::vector< vdbg::ThreadTraces >& threadTraces )
+bool saveAsJson( const char* path, const std::vector< uint32_t >& /*threadsId*/, const std::vector< vdbg::ThreadTraces >& /*threadTraces*/ )
 {
    using namespace rapidjson;
 
@@ -185,27 +185,27 @@ bool saveAsJson( const char* path, const std::vector< uint32_t >& threadsId, con
    writer.StartObject();
    writer.Key("traceEvents");
    writer.StartArray();
-   for( size_t i = 0; i < threadTraces.size(); ++i )
-   {
-      const uint32_t threadId = threadsId[i];
-      const std::vector< char >& strData = threadTraces[i].stringData;
-      for( const auto& chunk : threadTraces[i].chunks )
-      {
-         for( const auto& t : chunk )
-         {
-            writer.StartObject();
-            writer.Key("ts");
-            writer.Uint64( (uint64_t)t.time );
-            writer.Key("ph");
-            writer.String( t.flags & vdbg::DisplayableTrace::START_TRACE ? "B" : "E" );
-            writer.Key("pid");
-            writer.Uint(threadId);
-            writer.Key("name");
-            writer.String( &strData[t.fctNameIdx] );
-            writer.EndObject();
-         }
-      }
-   }
+   // for( size_t i = 0; i < threadTraces.size(); ++i )
+   // {
+   //    const uint32_t threadId = threadsId[i];
+   //    const std::vector< char >& strData = threadTraces[i].stringData;
+   //    for( const auto& chunk : threadTraces[i].chunks )
+   //    {
+   //       for( const auto& t : chunk )
+   //       {
+   //          writer.StartObject();
+   //          writer.Key("ts");
+   //          writer.Uint64( (uint64_t)t.time );
+   //          writer.Key("ph");
+   //          writer.String( t.flags & vdbg::DisplayableTrace::START_TRACE ? "B" : "E" );
+   //          writer.Key("pid");
+   //          writer.Uint(threadId);
+   //          writer.Key("name");
+   //          writer.String( &strData[t.fctNameIdx] );
+   //          writer.EndObject();
+   //       }
+   //    }
+   // }
    writer.EndArray();
    writer.Key("displayTimeUnit");
    writer.String("ms");
@@ -291,7 +291,7 @@ Profiler::Profiler( const std::string& name ) : _name( name )
    _server->start( _name.c_str() );
 }
 
-void Profiler::addTraces( const std::vector<DisplayableTrace>& traces, uint32_t threadId )
+void Profiler::addTraces( const DisplayableTraces& /*traces*/, uint32_t threadId )
 {
    if ( _recording )
    {
@@ -302,21 +302,21 @@ void Profiler::addTraces( const std::vector<DisplayableTrace>& traces, uint32_t 
       }
 
       // Thread id not found so add it
-      if ( i == _threadsId.size() )
-      {
-         _threadsId.push_back( threadId );
-         _tracesPerThread.emplace_back();
-      }
+      // if ( i == _threadsId.size() )
+      // {
+      //    _threadsId.push_back( threadId );
+      //    _tracesPerThread.emplace_back();
+      // }
 
-      const auto startTime = _timeline.absoluteStartTime();
-      if( startTime == 0 || traces[0].time < startTime )
-        _timeline.setAbsoluteStartTime( traces[0].time );
+      // const auto startTime = _timeline.absoluteStartTime();
+      // if( startTime == 0 || traces[0].time < startTime )
+      //   _timeline.setAbsoluteStartTime( traces[0].time );
 
-      const auto presentTime = _timeline.absoluteStartTime();
-      if( presentTime == 0 || traces.back().time > presentTime )
-        _timeline.setAbsolutePresentTime( traces.back().time );
+      // const auto presentTime = _timeline.absoluteStartTime();
+      // if( presentTime == 0 || traces.back().time > presentTime )
+      //   _timeline.setAbsolutePresentTime( traces.back().time );
 
-      _tracesPerThread[i].addTraces( traces );
+      // _tracesPerThread[i].addTraces( traces );
    }
 }
 
@@ -387,46 +387,47 @@ Profiler::~Profiler()
 
 ThreadTraces::ThreadTraces()
 {
-   chunks.reserve( CHUNK_SIZE );
+//   chunks.reserve( CHUNK_SIZE );
    startTimes.reserve( CHUNK_SIZE );
    endTimes.reserve( CHUNK_SIZE );
 }
 
-void ThreadTraces::addTraces( const std::vector< DisplayableTrace >& traces )
+void ThreadTraces::addTraces( const DisplayableTraces& traces )
 {
    // The traces should already be sorted.
-   assert( std::is_sorted( traces.begin(), traces.end() ) );
+   assert( std::is_sorted( traces.starts.begin(), traces.starts.end() ) );
+   assert( std::is_sorted( traces.ends.begin(), traces.ends.end() ) );
 
    // Check if we have enough space in the chunk to append these traces. If
-   // not, create a new chunk
-   if( chunks.empty() || CHUNK_SIZE - (int)chunks.back().size() < (int)traces.size() )
-   {
-      // Create new chunk that contains the traces and add the start time
-      // of the chunk to our reference list.
-      chunks.emplace_back();
-      chunks.back().assign( traces.begin(), traces.end() );
-      startTimes.push_back( traces.front().time );
-      endTimes.push_back( traces.back().time );
-   }
-   else
-   {
-      const auto prevSize = chunks.back().size();
-      chunks.back().insert( chunks.back().end(), traces.begin(), traces.end() );
+   // // not, create a new chunk
+   // if( chunks.empty() || CHUNK_SIZE - (int)chunks.back().size() < (int)traces.size() )
+   // {
+   //    // Create new chunk that contains the traces and add the start time
+   //    // of the chunk to our reference list.
+   //    chunks.emplace_back();
+   //    chunks.back().assign( traces.begin(), traces.end() );
+   //    startTimes.push_back( traces.front().time );
+   //    endTimes.push_back( traces.back().time );
+   // }
+   // else
+   // {
+   //    const auto prevSize = chunks.back().size();
+   //    chunks.back().insert( chunks.back().end(), traces.begin(), traces.end() );
 
-      // The first trace added has the smallest time (since they are already sorted).
-      // Thus all the traces with a bigger time than that could now be in an unsorted state.
-      // We need to sort all the traces that have a time >= to this trace
-      auto it = std::lower_bound(
-          chunks.back().begin(), chunks.back().begin() + prevSize, traces.front() );
-      std::sort( it, chunks.back().end() );
+   //    // The first trace added has the smallest time (since they are already sorted).
+   //    // Thus all the traces with a bigger time than that could now be in an unsorted state.
+   //    // We need to sort all the traces that have a time >= to this trace
+   //    auto it = std::lower_bound(
+   //        chunks.back().begin(), chunks.back().begin() + prevSize, traces.front() );
+   //    std::sort( it, chunks.back().end() );
 
-      // Update the endTime
-      endTimes[ chunks.size()-1 ] = chunks.back().back().time;
-   }
+   //    // Update the endTime
+   //    endTimes[ chunks.size()-1 ] = chunks.back().back().time;
+   // }
 
-   // The starttime and endtimes should always be sorted, otherwise we need to investigate why it is not...
-   assert( std::is_sorted( startTimes.begin(), startTimes.end() ) );
-   assert( std::is_sorted( endTimes.begin(), endTimes.end() ) );
+   // // The starttime and endtimes should always be sorted, otherwise we need to investigate why it is not...
+   // assert( std::is_sorted( startTimes.begin(), startTimes.end() ) );
+   // assert( std::is_sorted( endTimes.begin(), endTimes.end() ) );
 }
 
 void ThreadTraces::addLockWaits( const std::vector< LockWait >& lockWaits )
@@ -921,105 +922,105 @@ void vdbg::ProfilerTimeline::drawTraces( const ThreadTraces& traces, int threadI
    const float windowWidthPxl = ImGui::GetWindowWidth();
    const int64_t startMicrosAsPxl = microsToPxl<int64_t>( windowWidthPxl, _microsToDisplay, _startMicros );
 
-   std::vector< ImVec2 > pos;
-   std::vector< float > length;
-   std::vector< const DisplayableTrace* > tracesToDraw;
-   pos.reserve( 128 );
-   tracesToDraw.reserve( 128 );
+   // std::vector< ImVec2 > pos;
+   // std::vector< float > length;
+   // std::vector< const DisplayableTrace* > tracesToDraw;
+   // pos.reserve( 128 );
+   // tracesToDraw.reserve( 128 );
 
-   // The time range to draw in absolute time
-   const TimeStamp firstTraceAbsoluteTime = absoluteStart + (_startMicros * 1000);
-   const TimeStamp lastTraceAbsoluteTime = firstTraceAbsoluteTime + ( _microsToDisplay * 1000 );
+   // // The time range to draw in absolute time
+   // const TimeStamp firstTraceAbsoluteTime = absoluteStart + (_startMicros * 1000);
+   // const TimeStamp lastTraceAbsoluteTime = firstTraceAbsoluteTime + ( _microsToDisplay * 1000 );
 
-   const auto it1 = std::lower_bound(
-       traces.endTimes.begin(), traces.endTimes.end(), firstTraceAbsoluteTime );
-   const auto it2 = std::upper_bound(
-       traces.startTimes.begin(), traces.startTimes.end(), lastTraceAbsoluteTime );
-   const size_t firstChunkIndex = std::distance( traces.endTimes.begin(), it1 );
-   const size_t lastChunkIndex = std::distance( traces.startTimes.begin(), it2 );
+   // const auto it1 = std::lower_bound(
+   //     traces.endTimes.begin(), traces.endTimes.end(), firstTraceAbsoluteTime );
+   // const auto it2 = std::upper_bound(
+   //     traces.startTimes.begin(), traces.startTimes.end(), lastTraceAbsoluteTime );
+   // const size_t firstChunkIndex = std::distance( traces.endTimes.begin(), it1 );
+   // const size_t lastChunkIndex = std::distance( traces.startTimes.begin(), it2 );
 
-   int curDepth = -1;
-   int maxDepth = 0;
-   for( size_t i = firstChunkIndex; i < lastChunkIndex; ++i )
-   {
-      const auto& chunkTraces = traces.chunks[ i ];
-      for ( const auto& t : chunkTraces )
-      {
-         if ( t.isStartTrace() )
-         {
-            ++curDepth;
-            if ( t.time > firstTraceAbsoluteTime ||
-                 t.time + ( t.deltaTime ) > firstTraceAbsoluteTime )
-            {
-               // The start time is bigger than the maximum time on the timeline. We are done
-               // drawing the traces.
-               if ( t.time > lastTraceAbsoluteTime ) break;
+   // int curDepth = -1;
+   // int maxDepth = 0;
+   // for( size_t i = firstChunkIndex; i < lastChunkIndex; ++i )
+   // {
+   //    const auto& chunkTraces = traces.chunks[ i ];
+   //    for ( const auto& t : chunkTraces )
+   //    {
+   //       if ( t.isStartTrace() )
+   //       {
+   //          ++curDepth;
+   //          if ( t.time > firstTraceAbsoluteTime ||
+   //               t.time + ( t.deltaTime ) > firstTraceAbsoluteTime )
+   //          {
+   //             // The start time is bigger than the maximum time on the timeline. We are done
+   //             // drawing the traces.
+   //             if ( t.time > lastTraceAbsoluteTime ) break;
 
-               const int64_t traceStartInMicros = ((t.time - absoluteStart) / 1000);
-               maxDepth = std::max( curDepth, maxDepth );
-               const auto traceStartPxl =
-                   microsToPxl<float>( windowWidthPxl, _microsToDisplay, traceStartInMicros );
-               const float traceLengthPxl =
-                   microsToPxl<float>( windowWidthPxl, _microsToDisplay, t.deltaTime / 1000 );
+   //             const int64_t traceStartInMicros = ((t.time - absoluteStart) / 1000);
+   //             maxDepth = std::max( curDepth, maxDepth );
+   //             const auto traceStartPxl =
+   //                 microsToPxl<float>( windowWidthPxl, _microsToDisplay, traceStartInMicros );
+   //             const float traceLengthPxl =
+   //                 microsToPxl<float>( windowWidthPxl, _microsToDisplay, t.deltaTime / 1000 );
 
-               // Skip trace if it is way smaller than treshold
-               if( traceLengthPxl < MIN_TRACE_LENGTH_PXL )
-                     continue;
+   //             // Skip trace if it is way smaller than treshold
+   //             if( traceLengthPxl < MIN_TRACE_LENGTH_PXL )
+   //                   continue;
 
-               pos.push_back( ImVec2(
-                   posX - startMicrosAsPxl + traceStartPxl,
-                   posY + curDepth * ( TRACE_HEIGHT + TRACE_VERTICAL_PADDING ) ) );
-               length.push_back( traceLengthPxl );
-               tracesToDraw.push_back( &t );
-            }
-         }
-         else
-         {
-            --curDepth;
-         }
-      }
-   }
+   //             pos.push_back( ImVec2(
+   //                 posX - startMicrosAsPxl + traceStartPxl,
+   //                 posY + curDepth * ( TRACE_HEIGHT + TRACE_VERTICAL_PADDING ) ) );
+   //             length.push_back( traceLengthPxl );
+   //             tracesToDraw.push_back( &t );
+   //          }
+   //       }
+   //       else
+   //       {
+   //          --curDepth;
+   //       }
+   //    }
+   // }
 
-   _maxTraceDepthPerThread[ threadIndex ] = std::max( _maxTraceDepthPerThread[ threadIndex ], maxDepth );
+//   _maxTraceDepthPerThread[ threadIndex ] = std::max( _maxTraceDepthPerThread[ threadIndex ], maxDepth );
 
-   char curName[ 512 ] = {};
-   for( size_t i = 0; i < tracesToDraw.size(); ++i )
-   {
-      const DisplayableTrace& t = *tracesToDraw[i];
-      if ( t.classNameIdx > 0 )
-      {
-         // We do have a class name. Prepend it to the string
-         snprintf(
-             curName,
-             sizeof( curName ),
-             "%s::%s",
-             &traces.stringData[t.classNameIdx],
-             &traces.stringData[t.fctNameIdx] );
-      }
-      else
-      {
-         // No class name. Ignore it
-         snprintf( curName, sizeof( curName ), "%s", &traces.stringData[t.fctNameIdx] );
-      }
+   // char curName[ 512 ] = {};
+   // for( size_t i = 0; i < tracesToDraw.size(); ++i )
+   // {
+   //    // const DisplayableTrace& t = *tracesToDraw[i];
+   //    // if ( t.classNameIdx > 0 )
+   //    // {
+   //    //    // We do have a class name. Prepend it to the string
+   //    //    snprintf(
+   //    //        curName,
+   //    //        sizeof( curName ),
+   //    //        "%s::%s",
+   //    //        &traces.stringData[t.classNameIdx],
+   //    //        &traces.stringData[t.fctNameIdx] );
+   //    // }
+   //    // else
+   //    // {
+   //    //    // No class name. Ignore it
+   //    //    snprintf( curName, sizeof( curName ), "%s", &traces.stringData[t.fctNameIdx] );
+   //    // }
 
-      ImGui::SetCursorScreenPos( pos[i] );
-      ImGui::Button( curName, ImVec2(length[i],TRACE_HEIGHT) );
-      if ( length[i] > 3 && ImGui::IsItemHovered() )
-      {
-         size_t lastChar = strlen( curName );
-         curName[ lastChar ] = ' ';
-         ImGui::BeginTooltip();
-         snprintf(
-             curName + lastChar,
-             sizeof( curName ) - lastChar,
-             "(%.3f ms) \n   %s:%d ",
-             ( t.deltaTime / 1000000.0f ),
-             &traces.stringData[t.fileNameIdx],
-             t.lineNb );
-         ImGui::TextUnformatted(curName);
-         ImGui::EndTooltip();
-      }
-   }
+   //    ImGui::SetCursorScreenPos( pos[i] );
+   //    ImGui::Button( curName, ImVec2(length[i],TRACE_HEIGHT) );
+   //    if ( length[i] > 3 && ImGui::IsItemHovered() )
+   //    {
+   //       size_t lastChar = strlen( curName );
+   //       curName[ lastChar ] = ' ';
+   //       ImGui::BeginTooltip();
+   //       snprintf(
+   //           curName + lastChar,
+   //           sizeof( curName ) - lastChar,
+   //           "(%.3f ms) \n   %s:%d ",
+   //           ( t.deltaTime / 1000000.0f ),
+   //           &traces.stringData[t.fileNameIdx],
+   //           t.lineNb );
+   //       ImGui::TextUnformatted(curName);
+   //       ImGui::EndTooltip();
+   //    }
+   // }
 
    ImGui::SetCursorScreenPos(
        ImVec2{posX, posY + _maxTraceDepthPerThread[ threadIndex ] * ( TRACE_HEIGHT + TRACE_VERTICAL_PADDING )} );

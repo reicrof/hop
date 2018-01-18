@@ -10,16 +10,22 @@
 
 namespace vdbg
 {
-struct DisplayableTrace
+struct DisplayableTraces
 {
-   TimeStamp time; // in ns
-   uint32_t deltaTime; // in ns
-   uint32_t flags;
-   // Indexes of the name in the string database
-   TStrIdx_t fileNameIdx;
-   TStrIdx_t classNameIdx;
-   TStrIdx_t fctNameIdx;
-   TLineNb_t lineNb;
+   // The ends order specify the order of the traces
+   std::vector< TimeStamp > ends; // in ns
+
+   // Since the starts time may not have the same order as
+   // the ends, they have been resorted (for faster lookup)
+   // and also provides the index of the trace they are associated
+   std::vector< std::pair< TimeStamp, size_t > > starts; // in ns
+
+   //Indexes of the name in the string database
+   std::vector< TStrIdx_t > fileNameIds;
+   std::vector< TStrIdx_t > classNameIds;
+   std::vector< TStrIdx_t > fctNameIds;
+   std::vector< TLineNb_t > lineNbs;
+   std::vector< uint32_t > flags;
 
    enum Flags
    {
@@ -27,26 +33,48 @@ struct DisplayableTrace
       START_TRACE = 1,
    };
 
-   inline bool isStartTrace() const noexcept
+   void reserve( size_t size )
    {
-      return flags & START_TRACE;
+      starts.reserve( size );
+      ends.reserve( size );
+      flags.reserve( size );
+      fileNameIds.reserve( size );
+      classNameIds.reserve( size );
+      fctNameIds.reserve( size );
+      lineNbs.reserve( size );
    }
 
-   inline friend bool operator<( const DisplayableTrace& lhs, const DisplayableTrace& rhs )
+   void clear()
    {
-      return lhs.time < rhs.time;
+      starts.clear();
+      ends.clear();
+      flags.clear();
+      fileNameIds.clear();
+      classNameIds.clear();
+      fctNameIds.clear();
+      lineNbs.clear();
    }
+
+   // inline bool isStartTrace() const noexcept
+   // {
+   //    return flags & START_TRACE;
+   // }
+
+   // inline friend bool operator<( const DisplayableTrace& lhs, const DisplayableTrace& rhs )
+   // {
+   //    return lhs.time < rhs.time;
+   // }
 };
 
 struct ThreadTraces
 {
    static constexpr int CHUNK_SIZE = 2048;
    ThreadTraces();
-   void addTraces( const std::vector< DisplayableTrace >& traces );
+   void addTraces( const DisplayableTraces& traces );
    void addLockWaits( const std::vector< LockWait >& lockWaits );
    std::vector< TimeStamp > startTimes;
    std::vector< TimeStamp > endTimes;
-   std::vector< std::vector< DisplayableTrace > > chunks;
+   DisplayableTraces traces;
    std::vector< char > stringData;
    std::vector< LockWait > _lockWaits;
 };
@@ -97,7 +125,7 @@ struct Profiler
    ~Profiler();
    void draw();
    void fetchClientData();
-   void addTraces( const std::vector< DisplayableTrace >& traces, uint32_t threadId );
+   void addTraces( const DisplayableTraces& traces, uint32_t threadId );
    void addStringData( const std::vector< char >& stringData, uint32_t threadId );
    void addLockWaits( const std::vector< LockWait >& lockWaits, uint32_t threadId );
    void handleHotkey();
@@ -115,7 +143,7 @@ private:
    // TODO: rethink and redo this part
    std::unique_ptr< Server > _server;
    std::vector< uint32_t > threadIds;
-   std::vector< std::vector< vdbg::DisplayableTrace > > pendingTraces;
+   std::vector< vdbg::DisplayableTraces > pendingTraces;
    std::vector< std::vector< char > > stringData;
 
    std::vector< uint32_t > threadIdsLockWaits;
