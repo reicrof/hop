@@ -628,6 +628,8 @@ void vdbg::ProfilerTimeline::draw(
     const std::vector<ThreadTraces>& tracesPerThread,
     const std::vector<uint32_t>& threadIds )
 {
+   ImGui::Button( "", ImVec2( 5,20 ) ); ImGui::SameLine(); ImGui::Button( "", ImVec2( 5,20 ) );
+
    const auto startDrawPos = ImGui::GetCursorScreenPos();
 
    drawTimeline( startDrawPos.x, startDrawPos.y + 5 );
