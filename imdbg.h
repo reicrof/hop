@@ -101,6 +101,7 @@ struct Profiler
    void addStringData( const std::vector< char >& stringData, uint32_t threadId );
    void addLockWaits( const std::vector< LockWait >& lockWaits, uint32_t threadId );
    void handleHotkey();
+   void setRecording( bool recording );
 
 private:
    void drawMenuBar();

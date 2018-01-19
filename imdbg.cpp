@@ -480,6 +480,39 @@ void ThreadTraces::addLockWaits( const std::vector< LockWait >& lockWaits )
 //    }
 //    return isOpen;
 // }
+static bool ptInRect( const ImVec2& pt, const ImVec2& a, const ImVec2& b )
+{
+   if( pt.x < a.x || pt.x > b.x ) return false;
+   if( pt.y < a.y || pt.y > b.y ) return false;
+
+   return true;
+}
+
+static bool drawPlayStopButton( bool& isRecording )
+{
+   constexpr float height = 15.0f, width = 15.0f, padding = 5.0f;
+   const auto startDrawPos = ImGui::GetCursorScreenPos();
+   ImDrawList* DrawList = ImGui::GetWindowDrawList();
+
+   const auto& mousePos = ImGui::GetMousePos();
+   const bool hovering = ptInRect( mousePos, startDrawPos, ImVec2( startDrawPos.x + width, startDrawPos.y + height ) );
+
+   if( isRecording )
+   {
+      DrawList->AddRectFilled( startDrawPos, ImVec2( startDrawPos.x + width, startDrawPos.y + height ), hovering ? ImColor(0.9f,0.0f,0.0f) : ImColor(0.7f,0.0f,.0f) );
+   }
+   else
+   {
+      ImVec2 pts[] = {startDrawPos,
+                      ImVec2( startDrawPos.x + width, startDrawPos.y + ( height * 0.5 ) ),
+                      ImVec2( startDrawPos.x, startDrawPos.y + width )};
+      DrawList->AddConvexPolyFilled( pts, 3, hovering ? ImColor( 0.0f, 0.9f, 0.0f ) : ImColor( 0.0f, 0.7f, 0.0f ), true );
+   }
+
+   ImGui::SetCursorScreenPos( ImVec2(startDrawPos.x, startDrawPos.y + height + padding) );
+
+   return hovering && ImGui::IsMouseClicked(0);
+}
 
 void vdbg::Profiler::draw()
 {
@@ -496,6 +529,11 @@ void vdbg::Profiler::draw()
    handleHotkey();
 
    drawMenuBar();
+
+   if( drawPlayStopButton( _recording ) )
+   {
+      setRecording( !_recording );
+   }
 
    if( _tracesPerThread.empty() )
    {
@@ -603,8 +641,16 @@ void vdbg::Profiler::handleHotkey()
    }
    else if( ImGui::IsKeyReleased( 'r' ) )
    {
-      _recording = !_recording;
-      _server->setRecording( _recording );
+      setRecording( !_recording );
+   }
+}
+
+void vdbg::Profiler::setRecording( bool recording )
+{
+   _recording = recording;
+   _server->setRecording( recording );
+   if( recording )
+   {
       _timeline.setRealtime ( true );
    }
 }
@@ -628,10 +674,7 @@ void vdbg::ProfilerTimeline::draw(
     const std::vector<ThreadTraces>& tracesPerThread,
     const std::vector<uint32_t>& threadIds )
 {
-   ImGui::Button( "", ImVec2( 5,20 ) ); ImGui::SameLine(); ImGui::Button( "", ImVec2( 5,20 ) );
-
    const auto startDrawPos = ImGui::GetCursorScreenPos();
-
    drawTimeline( startDrawPos.x, startDrawPos.y + 5 );
 
    ImGui::BeginChild( "Traces", ImVec2(0,0), false, ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse );
