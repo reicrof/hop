@@ -67,13 +67,13 @@ std::mutex m;
 static void doEvenMoreStuff()
 {
    VDBG_PROF_FUNC();
-   std::this_thread::sleep_for(3ms);
+   std::this_thread::sleep_for(30us);
 }
 
 static void doMoreStuf()
 {
    VDBG_PROF_FUNC();
-   std::this_thread::sleep_for(5ms);
+   std::this_thread::sleep_for(50us);
    doEvenMoreStuff();
 }
 
@@ -84,7 +84,7 @@ static void takeMutexAndDoStuff()
    {
       VDBG_PROF_FUNC();
       doMoreStuf();
-      std::this_thread::sleep_for(1ms);
+      std::this_thread::sleep_for(10us);
       doMoreStuf();
    }
 }

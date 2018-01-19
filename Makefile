@@ -5,7 +5,7 @@ TARGET_PTHREAD_WRAP = vdbg_functions_wrap.so
 
 CXXFLAGS = -std=c++14 -Wall -Wextra -pedantic
 ENABLED_WARNINGS = -Wconversion-null -Wempty-body -Wignored-qualifiers -Wsign-compare -Wtype-limits -Wuninitialized
-DISABLED_WARNINGS = -Wno-missing-braces
+DISABLED_WARNINGS = -Wno-missing-braces -Wno-unused-variable
 
 CXXFLAGS += $(ENABLED_WARNINGS) $(DISABLED_WARNINGS)
 IMGUI_SOURCES = $(wildcard imgui/*.cpp)
@@ -18,7 +18,7 @@ CLIENT_DEFINE = -DVDBG_ENABLED
 
 PLATFORM_LD_FLAGS = 
 ifeq ($(UNAME), Linux)
-   CXX = clang++
+   CXX = g++7
    PLATFORM_LD_FLAGS = -lGL -lrt
    PTHREAD_WRAP_SOURCES = vdbg_functions_wrap.cpp
 else ifeq ($(UNAME), Darwin)

@@ -465,7 +465,7 @@ void vdbg::Profiler::draw()
 
    drawMenuBar();
 
-   if( _tracesPerThread.empty() )
+   if( _tracesPerThread.empty() && !_recording )
    {
       const char* record = "To start recording press 'r'";
       const auto pos = ImGui::GetWindowPos();
@@ -877,6 +877,8 @@ void vdbg::ProfilerTimeline::zoomOn( int64_t microToZoomOn, float zoomFactor )
       const int64_t timeDiff = pxlToMicros( windowWidthPxl, _microsToDisplay, pxlDiff );
       _startMicros += timeDiff;
    }
+
+   printf("%ld\n", _microsToDisplay );
 }
 
 void vdbg::ProfilerTimeline::drawTraces( const ThreadData& data, int threadIndex, const float posX, const float posY )
@@ -958,7 +960,24 @@ void vdbg::ProfilerTimeline::drawTraces( const ThreadData& data, int threadIndex
       }
 
       ImGui::SetCursorScreenPos( pos[i] );
+      if( length[i] < 3 )
+      {
+         ImGui::PushStyleColor(ImGuiCol_Button, ImColor(1.0f, 0.0f, 0.0f));
+      }
+      else if( length[i] < 10 ) // could merge
+      {
+         ImGui::PushStyleColor(ImGuiCol_Button, ImColor(1.0f, 1.0f, 0.0f));
+      }
+      else if( length[i] < 15 ) // No text
+      {
+         ImGui::PushStyleColor(ImGuiCol_Button, ImColor(0.0f, 0.0f, 1.0f));
+      }
+      else
+      {
+         ImGui::PushStyleColor(ImGuiCol_Button, ImColor(0.0f, 1.0f, 0.0f));
+      }
       ImGui::Button( curName, ImVec2(length[i],TRACE_HEIGHT) );
+      ImGui::PopStyleColor(1);
       if ( length[i] > 3 && ImGui::IsItemHovered() )
       {
          size_t lastChar = strlen( curName );
