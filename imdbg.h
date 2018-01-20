@@ -59,7 +59,6 @@ struct DisplayableTraces
       depths.clear();
    }
 
-   // The ends order specify the order of the traces
    std::vector< TimeStamp > ends; // in ns
    std::vector< TimeStamp > deltas; // in ns
 
@@ -71,6 +70,14 @@ struct DisplayableTraces
    std::vector< TLineNb_t > lineNbs;
    std::vector< TDepth_t > depths;
    std::vector< uint32_t > flags;
+
+   struct LodInfo
+   {
+      TimeStamp end, delta;
+      bool operator<( const LodInfo& rhs ) const { return end < rhs.end; }
+   };
+
+   std::vector< std::vector< LodInfo > > _lods;
 };
 
 struct ThreadData
@@ -79,6 +86,7 @@ struct ThreadData
    ThreadData();
    void addTraces( const DisplayableTraces& traces );
    void addLockWaits( const std::vector< LockWait >& lockWaits );
+   void addLod( const std::vector< DisplayableTraces::LodInfo >& lods, size_t level );
    DisplayableTraces traces;
    std::vector< char > stringData;
    std::vector< LockWait > _lockWaits;
