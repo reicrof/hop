@@ -66,15 +66,23 @@ std::mutex m;
 
 static void doEvenMoreStuff()
 {
+   static size_t micros = 1;
+   micros*=2;
+   if( micros > 50000 )
+   {
+      micros = 1;
+   }
+   std::chrono::microseconds waittime(micros);
    VDBG_PROF_FUNC();
-   std::this_thread::sleep_for(30us);
+   std::this_thread::sleep_for(waittime);
 }
 
 static void doMoreStuf()
 {
    VDBG_PROF_FUNC();
    std::this_thread::sleep_for(50us);
-   doEvenMoreStuff();
+   for( int i = 0; i < 200; ++i )
+      doEvenMoreStuff();
 }
 
 static void takeMutexAndDoStuff()
@@ -84,7 +92,8 @@ static void takeMutexAndDoStuff()
    {
       VDBG_PROF_FUNC();
       doMoreStuf();
-      std::this_thread::sleep_for(10us);
+      //std::this_thread::sleep_for(10us);
+      std::this_thread::sleep_for(2ms);
       doMoreStuf();
    }
 }

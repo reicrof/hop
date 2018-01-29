@@ -4,16 +4,60 @@
 		"selected_items":
 		[
 			[
+				"line",
+				"lineNumber"
+			],
+			[
+				"Display",
+				"DisplayableTrace"
+			],
+			[
+				"file",
+				"fileName"
+			],
+			[
+				"uin",
+				"uint16_t"
+			],
+			[
+				"save",
+				"saveAsJson"
+			],
+			[
+				"SharedM",
+				"SharedMetaInfo"
+			],
+			[
+				"Shareme",
+				"SharedMetaInfo"
+			],
+			[
+				"has",
+				"hasConnectedConsumer"
+			],
+			[
+				"uint32",
+				"uint32_t"
+			],
+			[
+				"uint",
+				"uint32_t"
+			],
+			[
+				"chunk",
+				"chunksStartTime"
+			],
+			[
+				"firsT",
+				"firstTraceAbsoluteTime"
+			],
+			[
 				"begin",
 				"beginend\t$1.begin(), $1.end()"
 			],
 			[
 				"SHARED_LIB",
 				"SHARED_LIB_CXX_FLAGS"
-			],
-			[
-				"uin",
-				"uint32_t"
 			],
 			[
 				"shader",
@@ -212,35 +256,10 @@
 	"buffers":
 	[
 		{
-			"file": "vdbg.h",
-			"settings":
-			{
-				"buffer_size": 37026,
-				"encoding": "UTF-8",
-				"line_ending": "Unix"
-			}
-		},
-		{
-			"file": "main_server.cpp",
-			"settings":
-			{
-				"buffer_size": 4630,
-				"line_ending": "Unix"
-			}
-		},
-		{
-			"file": "server.cpp",
-			"settings":
-			{
-				"buffer_size": 5623,
-				"line_ending": "Unix"
-			}
-		},
-		{
 			"file": "imdbg.cpp",
 			"settings":
 			{
-				"buffer_size": 34870,
+				"buffer_size": 41515,
 				"encoding": "UTF-8",
 				"line_ending": "Unix"
 			}
@@ -249,17 +268,32 @@
 			"file": "imdbg.h",
 			"settings":
 			{
-				"buffer_size": 3934,
+				"buffer_size": 5640,
+				"line_ending": "Unix"
+			}
+		},
+		{
+			"file": "vdbg.h",
+			"settings":
+			{
+				"buffer_size": 37208,
 				"encoding": "UTF-8",
 				"line_ending": "Unix"
 			}
 		},
 		{
-			"file": "vdbg_functions_wrap.cpp",
+			"file": "imgui/imgui.cpp",
 			"settings":
 			{
-				"buffer_size": 629,
-				"encoding": "UTF-8",
+				"buffer_size": 437237,
+				"line_ending": "Unix"
+			}
+		},
+		{
+			"file": "imgui/imgui.h",
+			"settings":
+			{
+				"buffer_size": 124776,
 				"line_ending": "Unix"
 			}
 		}
@@ -304,19 +338,26 @@
 	},
 	"expanded_folders":
 	[
-		"/home/charles/workspaces/ImDbg"
+		"/Users/landrych/workspaces/experiment/ImDbg"
 	],
 	"file_history":
 	[
-		"/Users/landrych/workspaces/experiment/ImDbg/Makefile",
 		"/Users/landrych/workspaces/experiment/ImDbg/main_client.cpp",
-		"/Users/landrych/workspaces/experiment/ImDbg/vdbg_functions_wrap.cpp",
-		"/Users/landrych/workspaces/experiment/ImDbg/vdbg_wraps_macos.cpp",
-		"/Users/landrych/workspaces/experiment/ImDbg/main_server.cpp",
 		"/Users/landrych/workspaces/experiment/ImDbg/imdbg.h",
+		"/Users/landrych/workspaces/experiment/ImDbg/imdbg.cpp",
+		"/Users/landrych/workspaces/experiment/ImDbg/imgui/imgui.h",
+		"/Users/landrych/workspaces/experiment/ImDbg/vdbg.h",
+		"/Users/landrych/workspaces/experiment/ImDbg/main_server.cpp",
 		"/Users/landrych/workspaces/experiment/ImDbg/server.cpp",
 		"/Users/landrych/workspaces/experiment/ImDbg/server.h",
-		"/Users/landrych/workspaces/experiment/ImDbg/imdbg.cpp",
+		"/Users/landrych/workspaces/experiment/ImDbg/imgui/imgui_demo.cpp",
+		"/Users/landrych/workspaces/experiment/ImDbg/vdbg_functions_wrap.cpp",
+		"/Users/landrych/workspaces/helloworld/main.cpp",
+		"/Users/landrych/workspaces/helloworld/main",
+		"/Users/landrych/workspaces/experiment/ImDbg/imgui/imgui.cpp",
+		"/Users/landrych/workspaces/experiment/ImDbg/Makefile",
+		"/Users/landrych/workspaces/experiment/shm_size/main.cpp",
+		"/Users/landrych/workspaces/experiment/ImDbg/vdbg_wraps_macos.cpp",
 		"/Users/landrych/workspaces/experiment/ImDbg/message.h",
 		"/Users/landrych/workspaces/experiment/vk_cf_render/src/main.cpp",
 		"/Users/landrych/workspaces/experiment/vk_cf_render/src/Makefile",
@@ -428,24 +469,18 @@
 		"/Users/landrych/workspaces/experiment/simple_window/main.mm",
 		"/Users/landrych/workspaces/experiment/simple_window/main.",
 		"/Users/landrych/workspaces/experiment/simple_window/main.cpp",
-		"/Users/landrych/workspaces/experiment/vk_cf_render/src/WindowSystem_linux.cpp",
-		"/Users/landrych/workspaces/experiment/vk_cf_render/src/RenderInterface/RI.cpp",
-		"/Users/landrych/workspaces/experiment/vk_cf_render/src/Metal/RI/RIMtlDevice.h",
-		"/Users/landrych/workspaces/experiment/vk_cf_render/src/Metal/RI/RIMtlDevice.cpp",
-		"/Users/landrych/workspaces/primary/creative-finishing/build.output/intdir/MACOSX_10_13.debug/tmp/thirdParty.xml/thirdParty.python/autodesk.thirdparty.python_2018.3.0.183.tmpdist/opt/Autodesk/python/2018.3.0.183/include/python2.7/py_curses.h",
-		"/Users/landrych/workspaces/primary/creative-finishing/jam/vxf/generated/dna/libDlVtr.jam.orig",
-		"/Users/landrych/workspaces/primary/creative-finishing/jam/vxf/generated/dna/libDlVtrIO.jam",
-		"/Users/landrych/workspaces/primary/creative-finishing/jam/vxf/generated/dna/libDlVIOapi.jam"
+		"/Users/landrych/workspaces/experiment/vk_cf_render/src/WindowSystem_linux.cpp"
 	],
 	"find":
 	{
-		"height": 25.0
+		"height": 39.0
 	},
 	"find_in_files":
 	{
 		"height": 101.0,
 		"where_history":
 		[
+			""
 		]
 	},
 	"find_state":
@@ -453,6 +488,110 @@
 		"case_sensitive": false,
 		"find_history":
 		[
+			"drawtraces",
+			"pause",
+			"mousepos",
+			"intersec",
+			"record",
+			"isreco",
+			"itemadd",
+			"ButtonBehavior",
+			"::draw",
+			"button",
+			"::button",
+			"polygon",
+			"curname",
+			"addProfilingTrace",
+			"endprofile",
+			"linen",
+			"tooltip",
+			"fctnameindex",
+			"details",
+			"details::",
+			"displayabletrace",
+			"classNameIndex",
+			"drawtraces",
+			"addProfilingTrace",
+			"ProfGuard",
+			"VDBG_PROF_GUARD_VAR",
+			"VDBG_COMBINE",
+			"ProfGuard",
+			"classna",
+			"VDBG_PROF_GUARD_VAR",
+			"ProfGuard",
+			"endprofil",
+			"shallowtr",
+			"_stringData",
+			"fctNameIdx",
+			"_sharedMetaData->fl",
+			"nameid",
+			"stringid",
+			"namearra",
+			"_namearrayid",
+			"drawtraces",
+			"stringdata",
+			"_stringDataPerThread",
+			"saveasjson",
+			"menuba",
+			"saveasjson",
+			"input text",
+			"textinput",
+			"menuitem",
+			"endlockwai",
+			"Client*",
+			"VDBG_GET_THREAD_ID",
+			"get(",
+			"(get",
+			"_threadId",
+			"::client",
+			"serv",
+			"_record",
+			"haslis",
+			"_recording",
+			"hasListeningConsumer",
+			"haslisteningconsumer",
+			"flushto",
+			"flushtoser",
+			"& ",
+			"haslisteni",
+			" & ",
+			"consumer",
+			">\n",
+			"HasListeningServer",
+			"HasConnectedServer",
+			"consumercoun",
+			"metadata",
+			"HasConnectedServer",
+			"O3",
+			"mousewheel",
+			"predict",
+			"__predict_false",
+			"__predict_true",
+			"get(",
+			"tl_",
+			"tl_traceLevel",
+			"::sharedm",
+			"static share",
+			"tl_trac",
+			"tl_tr",
+			"tracele",
+			"tracelevel",
+			"_pushTraceLevel",
+			"level",
+			"threadClient",
+			"level",
+			"VDBG_SHARED_MEM_MAX_NAME_SIZE",
+			"create(",
+			"LockWait",
+			"msgheader",
+			"::send",
+			"addtraces",
+			"trycreatesock",
+			"_socket",
+			"realtim",
+			"chunksstartt",
+			"drawtraces",
+			"_tracesPerThread",
 			"drawtrace",
 			"drawTraces",
 			"drawtraces",
@@ -474,6 +613,10 @@
 		"regex": false,
 		"replace_history":
 		[
+			"HasListeningConsumer",
+			"HasConnectedConsumer",
+			"unlikely",
+			"likely"
 		],
 		"reverse": false,
 		"show_context": true,
@@ -489,95 +632,76 @@
 			[
 				{
 					"buffer": 0,
-					"file": "vdbg.h",
+					"file": "imdbg.cpp",
 					"semi_transient": false,
 					"settings":
 					{
-						"buffer_size": 37026,
+						"buffer_size": 41515,
 						"regions":
 						{
 						},
 						"selection":
 						[
 							[
-								0,
-								0
+								11671,
+								11671
 							]
 						],
 						"settings":
 						{
-							"syntax": "Packages/C++/C++.sublime-syntax"
+							"history_list_is_closing": true,
+							"syntax": "Packages/C++/C++.sublime-syntax",
+							"translate_tabs_to_spaces": true
 						},
 						"translation.x": 0.0,
-						"translation.y": 298.0,
+						"translation.y": 4562.0,
 						"zoom_level": 1.0
 					},
 					"stack_index": 0,
 					"type": "text"
-				},
+				}
+			]
+		},
+		{
+			"selected": 4,
+			"sheets":
+			[
 				{
 					"buffer": 1,
-					"file": "main_server.cpp",
+					"file": "imdbg.h",
 					"semi_transient": false,
 					"settings":
 					{
-						"buffer_size": 4630,
+						"buffer_size": 5640,
 						"regions":
 						{
 						},
 						"selection":
 						[
 							[
-								0,
-								0
+								1816,
+								1816
 							]
 						],
 						"settings":
 						{
+							"history_list_is_closing": true,
 							"syntax": "Packages/C++/C++.sublime-syntax"
 						},
 						"translation.x": 0.0,
-						"translation.y": 1791.0,
-						"zoom_level": 1.0
-					},
-					"stack_index": 4,
-					"type": "text"
-				},
-				{
-					"buffer": 2,
-					"file": "server.cpp",
-					"semi_transient": false,
-					"settings":
-					{
-						"buffer_size": 5623,
-						"regions":
-						{
-						},
-						"selection":
-						[
-							[
-								0,
-								0
-							]
-						],
-						"settings":
-						{
-							"syntax": "Packages/C++/C++.sublime-syntax"
-						},
-						"translation.x": 0.0,
-						"translation.y": 2241.0,
+						"translation.y": 553.0,
 						"zoom_level": 1.0
 					},
 					"stack_index": 2,
 					"type": "text"
 				},
 				{
-					"buffer": 3,
-					"file": "imdbg.cpp",
+					"buffer": 2,
+					"file": "vdbg.h",
 					"semi_transient": false,
 					"settings":
 					{
-						"buffer_size": 34870,
+						"buffer_size": 37208,
 						"regions":
 						{
 						},
@@ -590,30 +714,59 @@
 						],
 						"settings":
 						{
+							"syntax": "Packages/C++/C++.sublime-syntax",
+							"translate_tabs_to_spaces": true
+						},
+						"translation.x": 0.0,
+						"translation.y": 6774.0,
+						"zoom_level": 1.0
+					},
+					"stack_index": 5,
+					"type": "text"
+				},
+				{
+					"buffer": 3,
+					"file": "imgui/imgui.cpp",
+					"semi_transient": false,
+					"settings":
+					{
+						"buffer_size": 437237,
+						"regions":
+						{
+						},
+						"selection":
+						[
+							[
+								119912,
+								119912
+							]
+						],
+						"settings":
+						{
 							"syntax": "Packages/C++/C++.sublime-syntax"
 						},
 						"translation.x": 0.0,
-						"translation.y": 10787.0,
+						"translation.y": 34937.0,
 						"zoom_level": 1.0
 					},
-					"stack_index": 1,
+					"stack_index": 4,
 					"type": "text"
 				},
 				{
 					"buffer": 4,
-					"file": "imdbg.h",
+					"file": "imgui/imgui.h",
 					"semi_transient": false,
 					"settings":
 					{
-						"buffer_size": 3934,
+						"buffer_size": 124776,
 						"regions":
 						{
 						},
 						"selection":
 						[
 							[
-								0,
-								0
+								50844,
+								50858
 							]
 						],
 						"settings":
@@ -621,19 +774,49 @@
 							"syntax": "Packages/C++/C++.sublime-syntax"
 						},
 						"translation.x": 0.0,
-						"translation.y": 282.0,
+						"translation.y": 6084.0,
 						"zoom_level": 1.0
 					},
 					"stack_index": 3,
 					"type": "text"
 				},
 				{
-					"buffer": 5,
-					"file": "vdbg_functions_wrap.cpp",
+					"buffer": 0,
+					"file": "imdbg.cpp",
 					"semi_transient": false,
 					"settings":
 					{
-						"buffer_size": 629,
+						"buffer_size": 41515,
+						"regions":
+						{
+						},
+						"selection":
+						[
+							[
+								35596,
+								35596
+							]
+						],
+						"settings":
+						{
+							"history_list_is_closing": true,
+							"syntax": "Packages/C++/C++.sublime-syntax",
+							"translate_tabs_to_spaces": true
+						},
+						"translation.x": 0.0,
+						"translation.y": 15834.0,
+						"zoom_level": 1.0
+					},
+					"stack_index": 1,
+					"type": "text"
+				},
+				{
+					"buffer": 1,
+					"file": "imdbg.h",
+					"semi_transient": false,
+					"settings":
+					{
+						"buffer_size": 5640,
 						"regions":
 						{
 						},
@@ -646,13 +829,14 @@
 						],
 						"settings":
 						{
+							"history_list_is_closing": true,
 							"syntax": "Packages/C++/C++.sublime-syntax"
 						},
 						"translation.x": 0.0,
 						"translation.y": 0.0,
 						"zoom_level": 1.0
 					},
-					"stack_index": 5,
+					"stack_index": 6,
 					"type": "text"
 				}
 			]
@@ -660,7 +844,7 @@
 	],
 	"incremental_find":
 	{
-		"height": 25.0
+		"height": 23.0
 	},
 	"input":
 	{
@@ -675,11 +859,18 @@
 				0,
 				1,
 				1
+			],
+			[
+				1,
+				0,
+				2,
+				1
 			]
 		],
 		"cols":
 		[
 			0.0,
+			0.528482074387,
 			1.0
 		],
 		"rows":
@@ -697,7 +888,7 @@
 	"project": "imdbg.sublime-project",
 	"replace":
 	{
-		"height": 46.0
+		"height": 42.0
 	},
 	"save_all_on_build": true,
 	"select_file":
@@ -707,19 +898,39 @@
 		"selected_items":
 		[
 			[
-				"vdbg.h",
-				"vdbg.h"
-			],
-			[
-				"makefile",
-				"Makefile"
-			],
-			[
-				"mains",
-				"main_server.cpp"
-			],
-			[
 				"imdb",
+				"imdbg.cpp"
+			],
+			[
+				"main_cli",
+				"main_client.cpp"
+			],
+			[
+				"imguih",
+				"imgui/imgui.h"
+			],
+			[
+				"imdbg",
+				"imdbg.cpp"
+			],
+			[
+				"imgui.cpp",
+				"imgui/imgui.cpp"
+			],
+			[
+				"imgui.h",
+				"imgui/imgui.h"
+			],
+			[
+				"main_cl",
+				"main_client.cpp"
+			],
+			[
+				"demo",
+				"imgui/imgui_demo.cpp"
+			],
+			[
+				"imdbg.cpp",
 				"imdbg.cpp"
 			],
 			[
@@ -727,8 +938,80 @@
 				"server.cpp"
 			],
 			[
+				"imdbg.",
+				"imdbg.cpp"
+			],
+			[
+				"main_s",
+				"main_server.cpp"
+			],
+			[
 				"main",
 				"main_client.cpp"
+			],
+			[
+				"serv",
+				"server.cpp"
+			],
+			[
+				"vdbg.h",
+				"vdbg.h"
+			],
+			[
+				"mains",
+				"main_server.cpp"
+			],
+			[
+				"clien",
+				"main_client.cpp"
+			],
+			[
+				"imdbg.h",
+				"imdbg.h"
+			],
+			[
+				"imdbg.cp",
+				"imdbg.cpp"
+			],
+			[
+				"man_s",
+				"main_server.cpp"
+			],
+			[
+				"server.h",
+				"server.h"
+			],
+			[
+				"makefil",
+				"Makefile"
+			],
+			[
+				"main_se",
+				"main_server.cpp"
+			],
+			[
+				"main_",
+				"main_client.cpp"
+			],
+			[
+				"makeifl",
+				"Makefile"
+			],
+			[
+				"cli",
+				"main_client.cpp"
+			],
+			[
+				"vdb",
+				"vdbg.h"
+			],
+			[
+				"client.c",
+				"main_client.cpp"
+			],
+			[
+				"makefile",
+				"Makefile"
 			],
 			[
 				"",
@@ -737,10 +1020,6 @@
 			[
 				"vdbg",
 				"~/workspaces/experiment/ImDbg/vdbg_functions_wrap.cpp"
-			],
-			[
-				"makeifl",
-				"Makefile"
 			],
 			[
 				"main_ser",
@@ -773,10 +1052,6 @@
 			[
 				"make",
 				"Makefile"
-			],
-			[
-				"imdbg",
-				"imdbg.cpp"
 			],
 			[
 				"server.cp",
@@ -921,10 +1196,6 @@
 			[
 				"test.c",
 				"src/Test.cpp"
-			],
-			[
-				"makefil",
-				"src/Makefile"
 			],
 			[
 				"test.",
@@ -1137,86 +1408,6 @@
 			[
 				"rimtltransfer",
 				"src/Mtl/RI/RIMtlTransferCmdList.cpp"
-			],
-			[
-				"rivkdevie",
-				"src/VK/RI/RIVKDevice.h"
-			],
-			[
-				"windowsys",
-				"src/WindowSystem_macos.cpp"
-			],
-			[
-				"command",
-				"src/Mtl/impl/CommandUtils.mm"
-			],
-			[
-				"ritransfercmdlist",
-				"src/RenderInterface/RITransferCmdList.h"
-			],
-			[
-				"mtltransfercmd",
-				"src/Mtl/RI/RIMtlTransferCmdList.cpp"
-			],
-			[
-				"vktransfer",
-				"src/VK/RI/RIVKTransferCmdList.cpp"
-			],
-			[
-				"buid",
-				"src/build.py"
-			],
-			[
-				"devicemm",
-				"src/Mtl/impl/Device.mm"
-			],
-			[
-				"ritrans",
-				"src/Mtl/RI/RIMtlTransferCmdList.cpp"
-			],
-			[
-				"main.cpp",
-				"src/main.cpp"
-			],
-			[
-				"ridv",
-				"src/RenderInterface/RIDevice.h"
-			],
-			[
-				"ridevi",
-				"src/RenderInterface/RIDevice.h"
-			],
-			[
-				"vkdevi",
-				"src/VK/RI/RIVKDevice.h"
-			],
-			[
-				"commandu",
-				"src/Mtl/impl/CommandUtils.h"
-			],
-			[
-				"commandut",
-				"src/Mtl/impl/CommandUtils.h"
-			],
-			[
-				"transfer",
-				"src/RenderInterface/RITransferCmdList.h"
-			],
-			[
-				"dei",
-				"src/Mtl/impl/Device.h"
-			],
-			[
-				"ritransf",
-				"src/RenderInterface/RITransferCmdList.h"
-			],
-			[
-				"rimtldev",
-				"src/Mtl/RI/RIMtlDevice.h"
-			],
-			[
-				"ricomma",
-				"src/RenderInterface/RICommandList.h"
 			]
 		],
 		"width": 0.0
@@ -1224,16 +1415,24 @@
 	"select_project":
 	{
 		"height": 500.0,
-		"last_filter": "pa",
+		"last_filter": "se",
 		"selected_items":
 		[
 			[
-				"pa",
-				"~/workspaces/primary/primary.sublime-project"
+				"se",
+				"~/workspaces/secondary/secondary.sublime-project"
+			],
+			[
+				"secon",
+				"~/workspaces/secondary/secondary.sublime-project"
 			],
 			[
 				"vk",
 				"~/workspaces/experiment/vk_cf_render/vk_cf_render.sublime-project"
+			],
+			[
+				"pa",
+				"~/workspaces/primary/primary.sublime-project"
 			],
 			[
 				"prima",
@@ -1284,10 +1483,6 @@
 				"~/workspaces/secondary/secondary.sublime-project"
 			],
 			[
-				"secon",
-				"~/workspaces/secondary/secondary.sublime-project"
-			],
-			[
 				"",
 				"~/workspaces/secondary/secondary.sublime-project"
 			],
@@ -1306,10 +1501,6 @@
 			[
 				"p",
 				"~/workspaces/primary.sublime-workspace"
-			],
-			[
-				"se",
-				"~/workspaces/secondary.sublime-project"
 			]
 		],
 		"width": 380.0

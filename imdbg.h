@@ -74,6 +74,9 @@ struct DisplayableTraces
    struct LodInfo
    {
       TimeStamp end, delta;
+      TDepth_t depth;
+      size_t traceIndex;
+      bool isLoded;
       bool operator<( const LodInfo& rhs ) const { return end < rhs.end; }
    };
 
@@ -82,7 +85,6 @@ struct DisplayableTraces
 
 struct ThreadData
 {
-   static constexpr int CHUNK_SIZE = 2048;
    ThreadData();
    void addTraces( const DisplayableTraces& traces );
    void addLockWaits( const std::vector< LockWait >& lockWaits );
@@ -102,6 +104,8 @@ public:
    TimeStamp absolutePresentTime() const noexcept;
    void setAbsoluteStartTime( TimeStamp time ) noexcept;
    void setAbsolutePresentTime( TimeStamp time ) noexcept;
+   int64_t microsToDisplay() const noexcept;
+   float windowWidthPxl() const noexcept;
 
    void moveToStart() noexcept;
    void moveToPresentTime() noexcept;
@@ -122,12 +126,13 @@ private:
    static constexpr float TRACE_VERTICAL_PADDING = 2.0f;
 
    int64_t _startMicros{0};
-   int64_t _microsToDisplay{50000};
+   uint64_t _microsToDisplay{50000};
    int64_t _stepSizeInMicros{1000};
    TimeStamp _absoluteStartTime{};
    TimeStamp _absolutePresentTime{};
    float _rightClickStartPosInCanvas[2] = {};
    TDepth_t _maxTraceDepthPerThread[ MAX_THREAD_NB ] = {};
+   float _windowWidthPxl{0};
    bool _realtime{true};
 };
 
