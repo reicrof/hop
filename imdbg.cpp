@@ -222,8 +222,8 @@ bool saveAsJson( const char* path, const std::vector< uint32_t >& /*threadsId*/,
 namespace vdbg
 {
 
-constexpr size_t LOD_MICROS[] = { 10000, 30000, 300000, 600000, 6000000 };
-constexpr size_t LOD_COUNT = sizeof( LOD_MICROS ) / sizeof( LOD_MICROS[0] );
+constexpr size_t LOD_MICROS[] = { 10000, 30000, 300000, 600000, 6000000, 600000000, 60000000000 };
+constexpr int LOD_COUNT = sizeof( LOD_MICROS ) / sizeof( LOD_MICROS[0] );
 
 void onNewFrame( int width, int height, int mouseX, int mouseY, bool lmbPressed, bool rmbPressed, float mousewheel )
 {
@@ -323,8 +323,8 @@ void Profiler::addTraces( const DisplayableTraces& traces, uint32_t threadId )
 
 
       // Compute LODs.
-      constexpr float minTraceSizePct = 0.008; // 0.8% of the total micros
-      constexpr float maxTimeBetweenTracePct = 0.001; // 0.16% of the total micros
+      constexpr float minTraceSizePct = 0.006; // percent of the total micros
+      constexpr float maxTimeBetweenTracePct = 0.0005; // percent of the total micros
 
       TDepth_t maxDepth = *std::max_element( traces.depths.begin(), traces.depths.end() );
       std::vector<std::vector<DisplayableTraces::LodInfo> > lods( maxDepth + 1 );
@@ -1004,38 +1004,53 @@ void vdbg::ProfilerTimeline::drawTraces( const ThreadData& data, int threadIndex
    const float windowWidthPxl = ImGui::GetWindowWidth();
    const int64_t startMicrosAsPxl = microsToPxl<int64_t>( windowWidthPxl, _microsToDisplay, _startMicros );
 
-   static std::vector< ImVec2 > pos;
-   static std::vector< float > length;
-   static std::vector< size_t > tracesToDraw;
-   pos.clear();
-   length.clear();
+   struct DrawingInfo
+   {
+      ImVec2 posPxl;
+      float lengthPxl;
+      size_t traceIndex;
+   };
+
+   static std::vector< DrawingInfo > tracesToDraw, lodTracesToDraw;
    tracesToDraw.clear();
-   pos.reserve( 128 );
-   tracesToDraw.reserve( 128 );
+   lodTracesToDraw.clear();
+
+   // Find the best lodLevel for our current zoom
+   const int lodLevel = [this](){
+      int lodLevel = -1;
+      if( _microsToDisplay >= LOD_MICROS[0] )
+      {
+         while( lodLevel < LOD_COUNT-1 && _microsToDisplay > LOD_MICROS[lodLevel] )
+         {
+            ++lodLevel;
+         }
+      }
+      return lodLevel;
+   }();
 
    // The time range to draw in absolute time
    const TimeStamp firstTraceAbsoluteTime = absoluteStart + (_startMicros * 1000);
    const TimeStamp lastTraceAbsoluteTime = firstTraceAbsoluteTime + ( _microsToDisplay * 1000 );
 
-   const auto it1 = std::lower_bound(
-       data.traces.ends.begin(), data.traces.ends.end(), firstTraceAbsoluteTime );
-   const auto it2 = std::upper_bound(
-       data.traces.ends.begin(), data.traces.ends.end(), lastTraceAbsoluteTime );
-
-   size_t firstTraceId = std::distance( data.traces.ends.begin(), it1 );
-   size_t lastTraceId = std::distance( data.traces.ends.begin(), it2 );
-
-   // Find the the first trace on the left and right that have a depth of 0. This prevents
-   // traces that have a smaller depth than the one foune previously to vanish.
-   while( firstTraceId > 0 && data.traces.depths[ --firstTraceId ] != 0 ) {}
-   while( lastTraceId < data.traces.depths.size() && data.traces.depths[ ++lastTraceId ] != 0 ) {}
-   if( lastTraceId < data.traces.depths.size() ) { ++lastTraceId; } // We need to go one past the depth 0
-
-   uint16_t maxDepth = 0;
-   size_t lodLvl = 0;
-   if( _microsToDisplay < LOD_MICROS[0] )
+   TDepth_t maxDepth = 0;
+   // If we do not use LOD, draw the traces normally.
+   if( lodLevel == -1 )
    {
-       printf("No LOD\n");
+      printf("No LOD\n");
+      const auto it1 = std::lower_bound(
+       data.traces.ends.begin(), data.traces.ends.end(), firstTraceAbsoluteTime );
+      const auto it2 = std::upper_bound(
+          data.traces.ends.begin(), data.traces.ends.end(), lastTraceAbsoluteTime );
+
+      size_t firstTraceId = std::distance( data.traces.ends.begin(), it1 );
+      size_t lastTraceId = std::distance( data.traces.ends.begin(), it2 );
+
+      // Find the the first trace on the left and right that have a depth of 0. This prevents
+      // traces that have a smaller depth than the one foune previously to vanish.
+      while( firstTraceId > 0 && data.traces.depths[ --firstTraceId ] != 0 ) {}
+      while( lastTraceId < data.traces.depths.size() && data.traces.depths[ ++lastTraceId ] != 0 ) {}
+      if( lastTraceId < data.traces.depths.size() ) { ++lastTraceId; } // We need to go one past the depth 0
+
       for( size_t i = firstTraceId; i < lastTraceId; ++i )
       {
          const int64_t traceEndInMicros = (data.traces.ends[i] - absoluteStart) / 1000;
@@ -1044,32 +1059,23 @@ void vdbg::ProfilerTimeline::drawTraces( const ThreadData& data, int threadIndex
          const float traceLengthPxl =
              microsToPxl<float>( windowWidthPxl, _microsToDisplay, data.traces.deltas[i] / 1000 );
 
-         if( i == firstTraceId )
-         {
-            printf("%f\n", traceEndPxl );
-         }
-
          // Skip trace if it is way smaller than treshold
          if( traceLengthPxl < MIN_TRACE_LENGTH_PXL )
-               continue;   
+               continue;
 
-         const auto curDepth = data.traces.depths[i]; 
+         const auto curDepth = data.traces.depths[i];
          maxDepth = std::max( curDepth, maxDepth );
-         pos.push_back( ImVec2(
+         const auto tracePos = ImVec2(
              posX - startMicrosAsPxl + traceEndPxl - traceLengthPxl,
-             posY + curDepth * ( TRACE_HEIGHT + TRACE_VERTICAL_PADDING ) ) );
-         length.push_back( traceLengthPxl );
-         tracesToDraw.push_back( i );
+             posY + curDepth * ( TRACE_HEIGHT + TRACE_VERTICAL_PADDING ) );
+
+         tracesToDraw.push_back( DrawingInfo{ tracePos, traceLengthPxl, i } );
       }
    }
    else
    {
-      while( lodLvl < LOD_COUNT-1 && _microsToDisplay > LOD_MICROS[lodLvl] )
-      {
-         ++lodLvl;
-      }
-      printf("lod[%zu]\n",lodLvl);
-      for( const auto& t : data.traces._lods[lodLvl] )
+      printf( "lod[%d]\n", lodLevel );
+      for( const auto& t : data.traces._lods[lodLevel] )
       {
          const int64_t traceEndInMicros = (t.end - absoluteStart) / 1000;
          const auto traceEndPxl =
@@ -1077,26 +1083,34 @@ void vdbg::ProfilerTimeline::drawTraces( const ThreadData& data, int threadIndex
          const float traceLengthPxl =
             microsToPxl<float>( windowWidthPxl, _microsToDisplay, t.delta / 1000 );
 
-            // ImGui::SetCursorScreenPos( ImVec2(
-            //     posX - startMicrosAsPxl + traceEndPxl - traceLengthPxl,
-            //     posY + t.depth * ( TRACE_HEIGHT + TRACE_VERTICAL_PADDING ) ) );
-            // ImGui::Button( "test", ImVec2(traceLengthPxl,TRACE_HEIGHT) );
-         const auto curDepth = t.depth; 
-         maxDepth = std::max( curDepth, maxDepth );
-         pos.push_back( ImVec2(
+         maxDepth = std::max( t.depth, maxDepth );
+         const auto tracePos = ImVec2(
              posX - startMicrosAsPxl + traceEndPxl - traceLengthPxl,
-             posY + curDepth * ( TRACE_HEIGHT + TRACE_VERTICAL_PADDING ) ) );
-         length.push_back( traceLengthPxl );
-         tracesToDraw.push_back( t.traceIndex );
+             posY + t.depth * ( TRACE_HEIGHT + TRACE_VERTICAL_PADDING ) );
+         if( t.isLoded )
+            lodTracesToDraw.push_back( DrawingInfo{ tracePos, traceLengthPxl, t.traceIndex } );
+         else
+            tracesToDraw.push_back( DrawingInfo{ tracePos, traceLengthPxl, t.traceIndex } );
       }
    }
 
    _maxTraceDepthPerThread[ threadIndex ] = std::max( _maxTraceDepthPerThread[ threadIndex ], maxDepth );
 
-   char curName[ 512 ] = {};
-   for( size_t i = 0; i < tracesToDraw.size(); ++i )
+   // Draw the loded traces
+   for( const auto& t : lodTracesToDraw )
    {
-      const size_t traceIndex = tracesToDraw[i];
+      ImGui::SetCursorScreenPos( t.posPxl );
+
+      ImGui::PushStyleColor(ImGuiCol_Button, ImColor(1.0f, 1.0f, 1.0f));
+      ImGui::Button( "<Multiple Elements>", ImVec2( t.lengthPxl,TRACE_HEIGHT ) );
+      ImGui::PopStyleColor(1);
+   }
+
+   // Draw the non-loded traces
+   char curName[ 512 ] = {};
+   for( const auto& t : tracesToDraw )
+   {
+      const size_t traceIndex = t.traceIndex;
       if ( data.traces.classNameIds[traceIndex] > 0 )
       {
          // We do have a class name. Prepend it to the string
@@ -1115,12 +1129,12 @@ void vdbg::ProfilerTimeline::drawTraces( const ThreadData& data, int threadIndex
 
       constexpr float minTraceSizePct = 0.008; // 0.8% of the total micros
       constexpr float maxTimeBetweenTracePct = 0.001; // 0.16% of the total micros
-      size_t minTraceSize = LOD_MICROS[lodLvl] * minTraceSizePct;
-      size_t maxTimeBetweenTrace = LOD_MICROS[lodLvl] * maxTimeBetweenTracePct;
+      size_t minTraceSize = LOD_MICROS[lodLevel] * minTraceSizePct;
+      size_t maxTimeBetweenTrace = LOD_MICROS[lodLevel] * maxTimeBetweenTracePct;
 
-      ImGui::SetCursorScreenPos( pos[i] );
+      ImGui::SetCursorScreenPos( t.posPxl );
 
-      const auto traceLenghtTime = pxlToMicros( windowWidthPxl, _microsToDisplay, length[i] );
+      const auto traceLenghtTime = pxlToMicros( windowWidthPxl, _microsToDisplay, t.lengthPxl );
       if( traceLenghtTime < maxTimeBetweenTrace )
       {
          ImGui::PushStyleColor(ImGuiCol_Button, ImColor(1.0f, 0.0f, 0.0f));
@@ -1130,9 +1144,9 @@ void vdbg::ProfilerTimeline::drawTraces( const ThreadData& data, int threadIndex
          ImGui::PushStyleColor(ImGuiCol_Button, ImColor(0.0f, 1.0f, 0.0f));
       }
       
-      ImGui::Button( curName, ImVec2(length[i],TRACE_HEIGHT) );
+      ImGui::Button( curName, ImVec2( t.lengthPxl,TRACE_HEIGHT ) );
       ImGui::PopStyleColor(1);
-      if ( length[i] > 3 && ImGui::IsItemHovered() )
+      if ( t.lengthPxl > 3 && ImGui::IsItemHovered() )
       {
          size_t lastChar = strlen( curName );
          curName[ lastChar ] = ' ';
