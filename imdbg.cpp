@@ -223,6 +223,7 @@ namespace vdbg
 {
 
 constexpr size_t LOD_MICROS[] = { 10000, 30000, 300000, 600000, 6000000, 600000000, 60000000000 };
+constexpr float LOD_PCT[] = { 0.004, 0.0, 0.0, 0.0, 0.0, 0.003, 0.5 };
 constexpr int LOD_COUNT = sizeof( LOD_MICROS ) / sizeof( LOD_MICROS[0] );
 
 void onNewFrame( int width, int height, int mouseX, int mouseY, bool lmbPressed, bool rmbPressed, float mousewheel )
@@ -323,7 +324,7 @@ void Profiler::addTraces( const DisplayableTraces& traces, uint32_t threadId )
 
 
       // Compute LODs.
-      constexpr float minTraceSizePct = 0.006; // percent of the total micros
+      constexpr float minTraceSizePct = 0.004; // percent of the total micros
       constexpr float maxTimeBetweenTracePct = 0.0005; // percent of the total micros
 
       TDepth_t maxDepth = *std::max_element( traces.depths.begin(), traces.depths.end() );
@@ -344,9 +345,10 @@ void Profiler::addTraces( const DisplayableTraces& traces, uint32_t threadId )
 
          auto& lastTrace = lods[curDepth].back();
          const auto timeBetweenTrace = ( traces.ends[i] - traces.deltas[i] ) - lastTrace.end;
-         const auto minTraceSize = LOD_MICROS[lodLvl] * 1000 * minTraceSizePct;
+         //const auto minTraceSize = LOD_MICROS[lodLvl] * 1000 * minTraceSizePct;
          const auto maxTimeBetweenTrace = LOD_MICROS[lodLvl] * 1000 * maxTimeBetweenTracePct;
-         if ( traces.deltas[i] < minTraceSize && timeBetweenTrace < maxTimeBetweenTrace )
+         const double minTraceSize = LOD_MICROS[lodLvl] * LOD_PCT[lodLvl] * 1000;
+         if ( lastTrace.delta < minTraceSize && traces.deltas[i] < minTraceSize && timeBetweenTrace < maxTimeBetweenTrace )
          {
             assert( lastTrace.depth == curDepth );
             lastTrace.end = traces.ends[i];
@@ -374,7 +376,7 @@ void Profiler::addTraces( const DisplayableTraces& traces, uint32_t threadId )
       std::vector< DisplayableTraces::LodInfo > lastComputedLod;
       lastComputedLod.reserve( infos.size() );
       std::swap( lastComputedLod, infos );
-      for( size_t lodLvl = 1; lodLvl < LOD_COUNT; ++lodLvl )
+      for( int lodLvl = 1; lodLvl < LOD_COUNT; ++lodLvl )
       {
          for ( const auto& l : lastComputedLod )
          {
@@ -387,9 +389,11 @@ void Profiler::addTraces( const DisplayableTraces& traces, uint32_t threadId )
 
             auto& lastTrace = lods[curDepth].back();
             const auto timeBetweenTrace = ( l.end - l.delta ) - lastTrace.end;
-            const auto minTraceSize = LOD_MICROS[lodLvl] * 1000 * minTraceSizePct;
+            //const auto minTraceSize = LOD_MICROS[lodLvl] * 1000 * minTraceSizePct;
             const auto maxTimeBetweenTrace = LOD_MICROS[lodLvl] * 1000 * maxTimeBetweenTracePct;
-            if ( l.delta < minTraceSize && timeBetweenTrace < maxTimeBetweenTrace )
+            const double minTraceSize = LOD_MICROS[lodLvl] * LOD_PCT[lodLvl] * 1000;
+            printf("Min trace size for lod %d = %f \n", lodLvl, minTraceSize);
+            if ( lastTrace.delta < minTraceSize && l.delta < minTraceSize && timeBetweenTrace < maxTimeBetweenTrace )
             {
                assert( lastTrace.depth == curDepth );
                lastTrace.end = l.end;
@@ -1008,6 +1012,7 @@ void vdbg::ProfilerTimeline::drawTraces( const ThreadData& data, int threadIndex
    {
       ImVec2 posPxl;
       float lengthPxl;
+      float deltaMs;
       size_t traceIndex;
    };
 
@@ -1020,6 +1025,7 @@ void vdbg::ProfilerTimeline::drawTraces( const ThreadData& data, int threadIndex
       int lodLevel = -1;
       if( _microsToDisplay >= LOD_MICROS[0] )
       {
+         lodLevel = 0;
          while( lodLevel < LOD_COUNT-1 && _microsToDisplay > LOD_MICROS[lodLevel] )
          {
             ++lodLevel;
@@ -1036,7 +1042,6 @@ void vdbg::ProfilerTimeline::drawTraces( const ThreadData& data, int threadIndex
    // If we do not use LOD, draw the traces normally.
    if( lodLevel == -1 )
    {
-      printf("No LOD\n");
       const auto it1 = std::lower_bound(
        data.traces.ends.begin(), data.traces.ends.end(), firstTraceAbsoluteTime );
       const auto it2 = std::upper_bound(
@@ -1058,6 +1063,7 @@ void vdbg::ProfilerTimeline::drawTraces( const ThreadData& data, int threadIndex
              microsToPxl<float>( windowWidthPxl, _microsToDisplay, traceEndInMicros );
          const float traceLengthPxl =
              microsToPxl<float>( windowWidthPxl, _microsToDisplay, data.traces.deltas[i] / 1000 );
+         const float traceTimeMs = data.traces.deltas[i] / 1000000.0f;
 
          // Skip trace if it is way smaller than treshold
          if( traceLengthPxl < MIN_TRACE_LENGTH_PXL )
@@ -1069,12 +1075,11 @@ void vdbg::ProfilerTimeline::drawTraces( const ThreadData& data, int threadIndex
              posX - startMicrosAsPxl + traceEndPxl - traceLengthPxl,
              posY + curDepth * ( TRACE_HEIGHT + TRACE_VERTICAL_PADDING ) );
 
-         tracesToDraw.push_back( DrawingInfo{ tracePos, traceLengthPxl, i } );
+         tracesToDraw.push_back( DrawingInfo{ tracePos, traceLengthPxl, traceTimeMs, i } );
       }
    }
    else
    {
-      printf( "lod[%d]\n", lodLevel );
       for( const auto& t : data.traces._lods[lodLevel] )
       {
          const int64_t traceEndInMicros = (t.end - absoluteStart) / 1000;
@@ -1082,32 +1087,46 @@ void vdbg::ProfilerTimeline::drawTraces( const ThreadData& data, int threadIndex
              microsToPxl<float>( windowWidthPxl, _microsToDisplay, traceEndInMicros );
          const float traceLengthPxl =
             microsToPxl<float>( windowWidthPxl, _microsToDisplay, t.delta / 1000 );
+         const float traceTimeMs = t.delta / 1000000.0f;
 
          maxDepth = std::max( t.depth, maxDepth );
          const auto tracePos = ImVec2(
              posX - startMicrosAsPxl + traceEndPxl - traceLengthPxl,
              posY + t.depth * ( TRACE_HEIGHT + TRACE_VERTICAL_PADDING ) );
          if( t.isLoded )
-            lodTracesToDraw.push_back( DrawingInfo{ tracePos, traceLengthPxl, t.traceIndex } );
+            lodTracesToDraw.push_back( DrawingInfo{ tracePos, traceLengthPxl, traceTimeMs, t.traceIndex } );
          else
-            tracesToDraw.push_back( DrawingInfo{ tracePos, traceLengthPxl, t.traceIndex } );
+            tracesToDraw.push_back( DrawingInfo{ tracePos, traceLengthPxl, traceTimeMs, t.traceIndex } );
       }
    }
 
    _maxTraceDepthPerThread[ threadIndex ] = std::max( _maxTraceDepthPerThread[ threadIndex ], maxDepth );
 
    // Draw the loded traces
+   char curName[ 512 ] = {};
    for( const auto& t : lodTracesToDraw )
    {
       ImGui::SetCursorScreenPos( t.posPxl );
 
       ImGui::PushStyleColor(ImGuiCol_Button, ImColor(1.0f, 1.0f, 1.0f));
-      ImGui::Button( "<Multiple Elements>", ImVec2( t.lengthPxl,TRACE_HEIGHT ) );
+      ImGui::Button( "", ImVec2( t.lengthPxl,TRACE_HEIGHT ) );
+      if ( t.lengthPxl > 3 && ImGui::IsItemHovered() )
+      {
+         ImGui::BeginTooltip();
+         snprintf(
+            curName,
+            sizeof( curName ),
+            "<Multiple Elements> (~%.3f ms)\n",
+            t.deltaMs );
+         ImGui::TextUnformatted(curName);
+         ImGui::EndTooltip();
+
+      }
+
       ImGui::PopStyleColor(1);
    }
 
    // Draw the non-loded traces
-   char curName[ 512 ] = {};
    for( const auto& t : tracesToDraw )
    {
       const size_t traceIndex = t.traceIndex;
@@ -1127,9 +1146,9 @@ void vdbg::ProfilerTimeline::drawTraces( const ThreadData& data, int threadIndex
          snprintf( curName, sizeof( curName ), "%s", &data.stringData[ data.traces.fctNameIds[traceIndex] ] );
       }
 
-      constexpr float minTraceSizePct = 0.008; // 0.8% of the total micros
+      constexpr float minTraceSizePct = 0.004; // 0.8% of the total micros
       constexpr float maxTimeBetweenTracePct = 0.001; // 0.16% of the total micros
-      size_t minTraceSize = LOD_MICROS[lodLevel] * minTraceSizePct;
+      const double minTraceSize = LOD_MICROS[lodLevel] * LOD_PCT[lodLevel] * 1000;
       size_t maxTimeBetweenTrace = LOD_MICROS[lodLevel] * maxTimeBetweenTracePct;
 
       ImGui::SetCursorScreenPos( t.posPxl );
@@ -1154,8 +1173,8 @@ void vdbg::ProfilerTimeline::drawTraces( const ThreadData& data, int threadIndex
          snprintf(
              curName + lastChar,
              sizeof( curName ) - lastChar,
-             "(%.3f ms) \n   %s:%d ",
-             ( data.traces.deltas[traceIndex] / 1000000.0f ),
+             "(%.3f ms)\n   %s:%d ",
+             t.deltaMs,
              &data.stringData[ data.traces.fileNameIds[traceIndex] ],
              data.traces.lineNbs[traceIndex] );
          ImGui::TextUnformatted(curName);
