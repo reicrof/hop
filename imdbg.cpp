@@ -1,5 +1,6 @@
 #include "imdbg.h"
 #include "imgui/imgui.h"
+#include "Lod.h"
 #include <SDL2/SDL_keycode.h>
 
 // Todo : I dont like this dependency
@@ -175,7 +176,7 @@ void createResources()
    glBindTexture( GL_TEXTURE_2D, last_texture );
 }
 
-bool saveAsJson( const char* path, const std::vector< uint32_t >& /*threadsId*/, const std::vector< vdbg::ThreadData >& /*threadTraces*/ )
+bool saveAsJson( const char* path, const std::vector< uint32_t >& /*threadsId*/, const std::vector< vdbg::ThreadInfo >& /*threadTraces*/ )
 {
    using namespace rapidjson;
 
@@ -224,10 +225,6 @@ size_t g_minTraceSize = 0;
 
 namespace vdbg
 {
-
-constexpr size_t LOD_MICROS[] = { 30000, 300000, 600000, 6000000, 30000000, 600000000, 50000000000 };
-constexpr long LOD_MIN_SIZE_MICROS[] = { 80, 1200, 2500, 5000, 10000, 700000, 1000000 };
-constexpr int LOD_COUNT = sizeof( LOD_MICROS ) / sizeof( LOD_MICROS[0] );
 constexpr uint64_t MIN_MICROS_TO_DISPLAY = 100;
 
 void onNewFrame( int width, int height, int mouseX, int mouseY, bool lmbPressed, bool rmbPressed, float mousewheel )
@@ -327,97 +324,6 @@ void Profiler::addTraces( const DisplayableTraces& traces, uint32_t threadId )
         _timeline.setAbsolutePresentTime( traces.ends.back() );
 
       _tracesPerThread[threadIndex].addTraces( traces );
-
-
-      // Compute LODs.
-      TDepth_t maxDepth = *std::max_element( traces.depths.begin(), traces.depths.end() );
-      std::vector<std::vector<DisplayableTraces::LodInfo> > lods( maxDepth + 1 );
-      std::vector< DisplayableTraces::LodInfo > infos;
-
-      // Compute first LOD from raw data
-      int lodLvl = 0;
-      for ( size_t i = 0; i < traces.ends.size(); ++i )
-      {
-         const TDepth_t curDepth = traces.depths[i];
-         if ( lods[curDepth].empty() )
-         {
-            lods[curDepth].push_back(
-                DisplayableTraces::LodInfo{traces.ends[i], traces.deltas[i], curDepth, i, false} );
-            continue;
-         }
-
-         auto& lastTrace = lods[curDepth].back();
-         const auto timeBetweenTrace = ( traces.ends[i] - traces.deltas[i] ) - lastTrace.end;
-         const auto minTraceSize = LOD_MIN_SIZE_MICROS[lodLvl] * 1000;
-         const auto maxTimeBetweenTrace = minTraceSize;
-         if ( lastTrace.delta < minTraceSize && traces.deltas[i] < minTraceSize && timeBetweenTrace < maxTimeBetweenTrace )
-         {
-            assert( lastTrace.depth == curDepth );
-            lastTrace.end = traces.ends[i];
-            lastTrace.delta += timeBetweenTrace + traces.deltas[i];
-            lastTrace.isLoded = true;
-         }
-         else
-         {
-            lods[curDepth].push_back(
-                DisplayableTraces::LodInfo{traces.ends[i], traces.deltas[i], curDepth, i, false} );
-         }
-      }
-
-      for ( const auto& l : lods )
-      {
-         infos.insert( infos.end(), l.begin(), l.end() );
-      }
-      std::sort( infos.begin(), infos.end() );
-      _tracesPerThread[threadIndex].addLod( infos, lodLvl );
-      for ( auto& l : lods )
-      {
-         l.clear();
-      }
-
-      std::vector< DisplayableTraces::LodInfo > lastComputedLod;
-      lastComputedLod.reserve( infos.size() );
-      std::swap( lastComputedLod, infos );
-      for( int lodLvl = 1; lodLvl < LOD_COUNT; ++lodLvl )
-      {
-         for ( const auto& l : lastComputedLod )
-         {
-            const TDepth_t curDepth = l.depth;
-            if ( lods[curDepth].empty() )
-            {
-               lods[curDepth].emplace_back( l );
-               continue;
-            }
-
-            auto& lastTrace = lods[curDepth].back();
-            const auto timeBetweenTrace = ( l.end - l.delta ) - lastTrace.end;
-            const auto minTraceSize = LOD_MIN_SIZE_MICROS[lodLvl] * 1000;
-            const auto maxTimeBetweenTrace = 2 * minTraceSize;
-            if ( lastTrace.delta < minTraceSize && l.delta < minTraceSize && timeBetweenTrace < maxTimeBetweenTrace )
-            {
-               assert( lastTrace.depth == curDepth );
-               lastTrace.end = l.end;
-               lastTrace.delta += timeBetweenTrace + l.delta;
-               lastTrace.isLoded = true;
-            }
-            else
-            {
-               lods[curDepth].emplace_back( l );
-            }
-         }
-
-         for( const auto& l : lods )
-         {
-            infos.insert( infos.end(), l.begin(), l.end() );
-         }
-         std::sort( infos.begin(), infos.end() );
-         _tracesPerThread[threadIndex].addLod( infos, lodLvl );
-         for( auto& l : lods )
-            l.clear();
-
-         lastComputedLod.clear();
-         std::swap( lastComputedLod, infos );
-      }
    }
 }
 
@@ -484,34 +390,6 @@ void Profiler::addLockWaits( const std::vector<LockWait>& lockWaits, uint32_t th
 Profiler::~Profiler()
 {
    _server->stop();
-}
-
-ThreadData::ThreadData()
-{
-   traces.reserve( 1024 );
-}
-
-void ThreadData::addTraces( const DisplayableTraces& newTraces )
-{
-   traces.append( newTraces );
-
-   assert( std::is_sorted( traces.ends.begin(), traces.ends.end() ) );
-}
-
-void ThreadData::addLockWaits( const std::vector< LockWait >& lockWaits )
-{
-   _lockWaits.insert( _lockWaits.end(), lockWaits.begin(), lockWaits.end() );
-}
-
-void ThreadData::addLod( const std::vector< DisplayableTraces::LodInfo >& lods, size_t level )
-{
-   if( traces._lods.size() <= level )
-   {
-      traces._lods.resize( level + 1 );
-   }
-
-   traces._lods[ level ].insert( traces._lods[ level ].begin(), lods.begin(), lods.end() );
-   std::sort( traces._lods[level].begin(), traces._lods[level].end() );
 }
 
 } // end of namespace vdbg
@@ -751,7 +629,7 @@ static inline T pxlToMicros( float windowWidth, int64_t usToDisplay, int64_t pxl
 }
 
 void vdbg::ProfilerTimeline::draw(
-    const std::vector<ThreadData>& tracesPerThread,
+    const std::vector<ThreadInfo>& tracesPerThread,
     const std::vector<uint32_t>& threadIds )
 {
    const auto startDrawPos = ImGui::GetCursorScreenPos();
@@ -1049,7 +927,7 @@ void vdbg::ProfilerTimeline::zoomOn( int64_t microToZoomOn, float zoomFactor )
    printf("%lu\n", _microsToDisplay );
 }
 
-void vdbg::ProfilerTimeline::drawTraces( const ThreadData& data, int threadIndex, const float posX, const float posY )
+void vdbg::ProfilerTimeline::drawTraces( const ThreadInfo& data, int threadIndex, const float posX, const float posY )
 {
    static constexpr float MIN_TRACE_LENGTH_PXL = 0.25f;
 
@@ -1134,8 +1012,8 @@ void vdbg::ProfilerTimeline::drawTraces( const ThreadData& data, int threadIndex
    else
    {
       const auto& lods = data.traces._lods[lodLevel];
-      DisplayableTraces::LodInfo firstInfo = { firstTraceAbsoluteTime, 0, 0, 0, false };
-      DisplayableTraces::LodInfo lastInfo = { lastTraceAbsoluteTime, 0, 0, 0, false };
+      LodInfo firstInfo = { firstTraceAbsoluteTime, 0, 0, 0, false };
+      LodInfo lastInfo = { lastTraceAbsoluteTime, 0, 0, 0, false };
       auto it1 = std::lower_bound( lods.begin(), lods.end(), firstInfo );
       auto it2 = std::upper_bound( lods.begin(), lods.end(), lastInfo );
 
@@ -1239,7 +1117,7 @@ void vdbg::ProfilerTimeline::drawTraces( const ThreadData& data, int threadIndex
        ImVec2{posX, posY + _maxTraceDepthPerThread[ threadIndex ] * ( TRACE_HEIGHT + TRACE_VERTICAL_PADDING )} );
 }
 
-void vdbg::ProfilerTimeline::drawLockWaits( const ThreadData& data, const float posX, const float posY )
+void vdbg::ProfilerTimeline::drawLockWaits( const ThreadInfo& data, const float posX, const float posY )
 {
    if( data.traces.ends.empty() ) return;
 

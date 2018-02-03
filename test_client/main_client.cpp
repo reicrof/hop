@@ -141,7 +141,7 @@ int main()
       using namespace std::chrono_literals;
       std::lock_guard<std::mutex> g(m);
       std::this_thread::sleep_for(10ms);
-      //func1();
+      func1();
       // MaClasse a;
       // a.callBuggyFunction();
       ++count;

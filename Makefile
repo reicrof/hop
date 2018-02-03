@@ -9,8 +9,8 @@ DISABLED_WARNINGS = -Wno-missing-braces -Wno-unused-variable
 
 CXXFLAGS += $(ENABLED_WARNINGS) $(DISABLED_WARNINGS)
 IMGUI_SOURCES = $(wildcard imgui/*.cpp)
-SERVER_SOURCES = $(wildcard *server.cpp) imdbg.cpp $(IMGUI_SOURCES)
-CLIENT_SOURCES = main_client.cpp
+SERVER_SOURCES = $(wildcard *.cpp) $(IMGUI_SOURCES)
+CLIENT_SOURCES = $(wildcard test_client/*.cpp)
 PTHREAD_WRAP_SOURCES =
 
 COMMON_INCLUDES = -isystem.

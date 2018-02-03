@@ -1,7 +1,9 @@
 #ifndef IMDBG_H_
 #define IMDBG_H_
 
-#include <vdbg.h>
+#include "vdbg.h"
+#include "ThreadInfo.h"
+
 #include <array>
 #include <chrono>
 #include <string>
@@ -10,95 +12,11 @@
 
 namespace vdbg
 {
-struct DisplayableTraces
-{
-   DisplayableTraces() = default;
-   DisplayableTraces(DisplayableTraces&& ) = default;
-   DisplayableTraces(const DisplayableTraces& ) = delete;
-   DisplayableTraces& operator=(const DisplayableTraces& ) = delete;
-
-   enum Flags
-   {
-      END_TRACE = 0,
-      START_TRACE = 1,
-   };
-
-   void append( const DisplayableTraces& newTraces )
-   {
-      deltas.insert( deltas.end(), newTraces.deltas.begin(), newTraces.deltas.end() );
-      ends.insert( ends.end(), newTraces.ends.begin(), newTraces.ends.end() );
-      flags.insert( flags.end(), newTraces.flags.begin(), newTraces.flags.end() );
-      fileNameIds.insert( fileNameIds.end(), newTraces.fileNameIds.begin(), newTraces.fileNameIds.end() );
-      classNameIds.insert( classNameIds.end(), newTraces.classNameIds.begin(), newTraces.classNameIds.end() );
-      fctNameIds.insert( fctNameIds.end(), newTraces.fctNameIds.begin(), newTraces.fctNameIds.end() );
-      lineNbs.insert( lineNbs.end(), newTraces.lineNbs.begin(), newTraces.lineNbs.end() );
-      depths.insert( depths.end(), newTraces.depths.begin(), newTraces.depths.end() );
-   }
-
-   void reserve( size_t size )
-   {
-      ends.reserve( size );
-      deltas.reserve( size );
-      flags.reserve( size );
-      fileNameIds.reserve( size );
-      classNameIds.reserve( size );
-      fctNameIds.reserve( size );
-      lineNbs.reserve( size );
-      depths.reserve( size );
-   }
-
-   void clear()
-   {
-      ends.clear();
-      deltas.clear();
-      flags.clear();
-      fileNameIds.clear();
-      classNameIds.clear();
-      fctNameIds.clear();
-      lineNbs.clear();
-      depths.clear();
-   }
-
-   std::vector< TimeStamp > ends; // in ns
-   std::vector< TimeStamp > deltas; // in ns
-
-   //Indexes of the name in the string database
-   std::vector< TStrIdx_t > fileNameIds;
-   std::vector< TStrIdx_t > classNameIds;
-   std::vector< TStrIdx_t > fctNameIds;
-
-   std::vector< TLineNb_t > lineNbs;
-   std::vector< TDepth_t > depths;
-   std::vector< uint32_t > flags;
-
-   struct LodInfo
-   {
-      TimeStamp end, delta;
-      TDepth_t depth;
-      size_t traceIndex;
-      bool isLoded;
-      bool operator<( const LodInfo& rhs ) const { return end < rhs.end; }
-   };
-
-   std::vector< std::vector< LodInfo > > _lods;
-};
-
-struct ThreadData
-{
-   ThreadData();
-   void addTraces( const DisplayableTraces& traces );
-   void addLockWaits( const std::vector< LockWait >& lockWaits );
-   void addLod( const std::vector< DisplayableTraces::LodInfo >& lods, size_t level );
-   DisplayableTraces traces;
-   std::vector< char > stringData;
-   std::vector< LockWait > _lockWaits;
-};
-
 class ProfilerTimeline
 {
 public:
    void draw(
-       const std::vector<ThreadData>& _tracesPerThread,
+       const std::vector<ThreadInfo>& _tracesPerThread,
        const std::vector<uint32_t>& threadIds );
    TimeStamp absoluteStartTime() const noexcept;
    TimeStamp absolutePresentTime() const noexcept;
@@ -116,8 +34,8 @@ public:
 
 private:
    void drawTimeline( const float posX, const float posY );
-   void drawTraces( const ThreadData& traces, int threadIndex, const float posX, const float posY );
-   void drawLockWaits( const ThreadData& traces, const float posX, const float posY );
+   void drawTraces( const ThreadInfo& traces, int threadIndex, const float posX, const float posY );
+   void drawLockWaits( const ThreadInfo& traces, const float posX, const float posY );
    void handleMouseDrag( float mousePosX, float mousePosY );
    void handleMouseWheel( float mousePosX, float mousePosY );
    void zoomOn( int64_t microToZoomOn, float zoomFactor );
@@ -155,7 +73,7 @@ private:
    std::string _name;
    ProfilerTimeline _timeline;
    std::vector< uint32_t > _threadsId;
-   std::vector< ThreadData > _tracesPerThread;
+   std::vector< ThreadInfo > _tracesPerThread;
    bool _recording{ false };
 
    // Client/Server data
