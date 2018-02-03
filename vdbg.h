@@ -774,7 +774,10 @@ void ClientManager::EndProfile(
 {
    const int remainingPushedTraces = --tl_traceLevel;
    Client* client = ClientManager::Get();
-   client->addProfilingTrace( fileName, className, fctName, start, end, lineNb, group );
+   if( end - start > 50 ) // Minimum trace time is 50 ns
+   {
+      client->addProfilingTrace( fileName, className, fctName, start, end, lineNb, group );
+   }
    if ( remainingPushedTraces <= 0 )
    {
       client->flushToConsumer();

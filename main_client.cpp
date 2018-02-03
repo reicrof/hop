@@ -14,23 +14,24 @@
 
 using namespace std::chrono_literals;
 
-// int bug = -1;
+int bug = -1;
+size_t count = 0;
 
-// static void stall()
-// {
-//    VDBG_PROF_FUNC();
-//    std::this_thread::sleep_for(10ms);
-// }
+void stall()
+{
+   VDBG_PROF_FUNC();
+   std::this_thread::sleep_for(10ms);
+}
 
-// static void buggyFunction()
-// {
-//    VDBG_PROF_FUNC();
-//    int test = rand() % 100 + 1;
-//    if( test == bug )
-//    {
-//       stall();
-//    }
-// }
+void buggyFunction()
+{
+   VDBG_PROF_FUNC();
+   std::this_thread::sleep_for(500us);
+   if( count % 20 == 0 )
+   {
+      stall();
+   }
+}
 
 // struct MaClasse
 // {
@@ -41,30 +42,30 @@ using namespace std::chrono_literals;
 //    }
 // };
 
-// static void func3()
-// {
-//    VDBG_PROF_FUNC();
-//    std::this_thread::sleep_for(1ms);
-// }
-// static void func2()
-// {
-//    VDBG_PROF_FUNC();
-//    func3();
-//    buggyFunction();
-//    func3();
-// }
-// static void func1()
-// {
-//    static size_t i = 0;
-//    VDBG_PROF_FUNC();
-//    func2();
-//    ++i;
-//    printf( "%lu\n", i );
-// }
+void func3()
+{
+   VDBG_PROF_FUNC();
+   std::this_thread::sleep_for(1ms);
+}
+void func2()
+{
+   VDBG_PROF_FUNC();
+   func3();
+   buggyFunction();
+   func3();
+}
+void func1()
+{
+   static size_t i = 0;
+   VDBG_PROF_FUNC();
+   func2();
+   ++i;
+   printf( "%lu\n", i );
+}
 
 std::mutex m;
 
-static void doEvenMoreStuff()
+void doEvenMoreStuff()
 {
    static size_t micros = 1;
    micros*=2;
@@ -77,7 +78,7 @@ static void doEvenMoreStuff()
    std::this_thread::sleep_for(waittime);
 }
 
-static void doMoreStuf()
+void doMoreStuf()
 {
    VDBG_PROF_FUNC();
    std::this_thread::sleep_for(50us);
@@ -85,7 +86,7 @@ static void doMoreStuf()
       doEvenMoreStuff();
 }
 
-static void takeMutexAndDoStuff()
+void takeMutexAndDoStuff()
 {
    VDBG_PROF_FUNC();
    std::lock_guard<std::mutex> g(m);
@@ -98,7 +99,7 @@ static void takeMutexAndDoStuff()
    }
 }
 
-static void threadFunc()
+void threadFunc()
 {
    while(true)
    {
@@ -106,11 +107,8 @@ static void threadFunc()
    }
 }
 
-int main()
+void LODTest()
 {
-   // srand (time(NULL));
-   // bug = rand() % 100 + 1;
-
    std::this_thread::sleep_for(10ms);
 
    std::thread t1( threadFunc );
@@ -128,19 +126,26 @@ int main()
    {
       takeMutexAndDoStuff();
    }
+}
 
-   // // const auto preDrawTime = std::chrono::system_clock::now();
+int main()
+{
+   // srand (time(NULL));
+   // bug = rand() % 100 + 1;
 
-   // while(true)
-   // {
-   //    VDBG_PROF_FUNC();
-   //    using namespace std::chrono_literals;
-   //    std::lock_guard<std::mutex> g(m);
-   //    std::this_thread::sleep_for(10ms);
-   //    func1();
-   //    MaClasse a;
-   //    a.callBuggyFunction();
-   // }
+   //const auto preDrawTime = std::chrono::system_clock::now();
+
+   while(true)
+   {
+      VDBG_PROF_FUNC();
+      using namespace std::chrono_literals;
+      std::lock_guard<std::mutex> g(m);
+      std::this_thread::sleep_for(10ms);
+      //func1();
+      // MaClasse a;
+      // a.callBuggyFunction();
+      ++count;
+   }
 
    // const auto postDrawTime = std::chrono::system_clock::now();
    // auto lastTime = std::chrono::duration< double, std::milli>( ( postDrawTime - preDrawTime ) ).count();

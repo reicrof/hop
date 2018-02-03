@@ -65,6 +65,7 @@ size_t Server::handleNewMessage( uint8_t* data, size_t maxSize )
 
     bufPtr += sizeof( MsgInfo );
     assert( (size_t)(bufPtr - data) <= maxSize );
+    (void)maxSize; // Avoid unused warning
 
     switch ( msgType )
     {
