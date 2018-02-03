@@ -116,6 +116,7 @@ VDBG_STATIC_ASSERT( sizeof(MsgInfo) == EXPECTED_MSG_INFO_SIZE, "MsgInfo layout h
 using TStrIdx_t = uint32_t;
 using TLineNb_t = uint32_t;
 using TGroup_t = uint16_t;
+using TDepth_t = uint16_t;
 VDBG_CONSTEXPR uint32_t EXPECTED_TRACE_SIZE = 64;
 struct Trace
 {
@@ -125,6 +126,7 @@ struct Trace
    TStrIdx_t fctNameIdx;   // Index into string array for the function name
    TLineNb_t lineNumber;   // Line at which the trace was inserted
    TGroup_t group;         // Group to which this trace belongs
+   TDepth_t depth;         // The depth in the callstack of this trace
    char padding[24];
 };
 VDBG_STATIC_ASSERT( sizeof(Trace) == EXPECTED_TRACE_SIZE, "Trace layout has changed unexpectedly" );
@@ -523,6 +525,7 @@ class Client
       TimeStamp start, end;
       TLineNb_t lineNumber;
       TGroup_t group;
+      TDepth_t depth;
    };
 
   public:
@@ -547,7 +550,7 @@ class Client
        TLineNb_t lineNb,
        TGroup_t group )
    {
-      _shallowTraces.push_back( ShallowTrace{ fileName, className, fctName, start, end, lineNb, group } );
+      _shallowTraces.push_back( ShallowTrace{ fileName, className, fctName, start, end, lineNb, group, tl_traceLevel } );
    }
 
    void addWaitLockTrace( void* mutexAddr, TimeStamp start, TimeStamp end )
@@ -645,6 +648,7 @@ class Client
             t.fctNameIdx = classFctNamesIdx[i].fctName;
             t.lineNumber = _shallowTraces[i].lineNumber;
             t.group = _shallowTraces[i].group;
+            t.depth = _shallowTraces[i].depth;
          }
       }
 
@@ -770,7 +774,10 @@ void ClientManager::EndProfile(
 {
    const int remainingPushedTraces = --tl_traceLevel;
    Client* client = ClientManager::Get();
-   client->addProfilingTrace( fileName, className, fctName, start, end, lineNb, group );
+   if( end - start > 50 ) // Minimum trace time is 50 ns
+   {
+      client->addProfilingTrace( fileName, className, fctName, start, end, lineNb, group );
+   }
    if ( remainingPushedTraces <= 0 )
    {
       client->flushToConsumer();

@@ -18,7 +18,7 @@ class Server
    void stop();
 
    void getPendingProfilingTraces(
-       std::vector<std::vector<DisplayableTrace> >& tracesFrame,
+       std::vector< DisplayableTraces >& tracesFrame,
        std::vector<std::vector<char> >& stringData,
        std::vector<uint32_t>& threadIds );
    void getPendingLockWaits(
@@ -34,7 +34,7 @@ class Server
    SharedMemory _sharedMem;
 
    std::mutex pendingTracesMutex;
-   std::vector<std::vector<DisplayableTrace> > pendingTraces;
+   std::vector< DisplayableTraces > pendingTraces;
    std::vector<std::vector<char> > pendingStringData;
    std::vector<uint32_t> pendingThreadIds;
 

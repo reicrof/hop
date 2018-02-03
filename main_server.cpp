@@ -1,4 +1,4 @@
-#define VDBG_SERVER_IMPLEMENTATION
+#define VDBG_IMPLEMENTATION
 #include <vdbg.h>
 #include "imgui/imgui.h"
 #include <SDL2/SDL.h>
