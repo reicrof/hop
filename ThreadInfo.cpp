@@ -1,5 +1,6 @@
 #include "ThreadInfo.h"
 #include "Lod.h"
+#include "Utils.h"
 
 #include <algorithm>
 #include <cassert>
@@ -12,7 +13,7 @@ void ThreadInfo::addTraces( const DisplayableTraces& newTraces )
 {
    traces.append( newTraces );
 
-   assert( std::is_sorted( traces.ends.begin(), traces.ends.end() ) );
+   assert_is_sorted( traces.ends.begin(), traces.ends.end() );
 }
 
 void ThreadInfo::addLockWaits( const std::vector<LockWait>& lockWaits )

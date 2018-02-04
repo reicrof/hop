@@ -1,4 +1,5 @@
 #include <server.h>
+#include "Utils.h"
 
 #include <stdio.h>
 #include <errno.h>
@@ -95,7 +96,7 @@ size_t Server::handleNewMessage( uint8_t* data, size_t maxSize )
         }
 
         // The ends time should already be sorted
-        assert( std::is_sorted( dispTraces.ends.begin(), dispTraces.ends.end() ) );
+        assert_is_sorted( dispTraces.ends.begin(), dispTraces.ends.end() );
 
         bufPtr += ( traceCount * sizeof( Trace ) );
         assert( ( size_t )( bufPtr - data ) <= maxSize );

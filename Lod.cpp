@@ -1,9 +1,10 @@
 #include "Lod.h"
 
 #include "DisplayableTraces.h"
+#include "Utils.h"
 
 #include <algorithm>
-#include <cassert>
+
 
 static bool canBeLoded(
     int lodLevel,
@@ -113,37 +114,45 @@ LodsArray computeLods( const DisplayableTraces& traces, size_t idOffset )
 void appendLods( LodsArray& dst, const LodsArray& src )
 {
    std::vector< LodInfo > nonLodedInfos;
-   nonLodedInfos.reserve( dst[0].size() );
+   nonLodedInfos.reserve( src[0].size() );
+
+   // Find the deepest depth
+   int deepestDepth = 0;
+   for( auto it = src[LOD_COUNT-1].begin(); it != src[LOD_COUNT-1].end(); ++it )
+   {
+      deepestDepth = std::max( deepestDepth, (int)it->depth );
+   }
 
    // For all LOD levels
    for ( size_t i = 0; i < src.size(); ++i )
    {
+      // First trace to insert
       auto newTraceIt = src[i].cbegin();
+      size_t sortFromIdx = dst[i].size();
+
       // If there is already LOD in the dest, try to merge them
       if( dst[i].size() > 0 )
       {
-         int deepestDepth = 0;
-         for( auto it = src[i].begin(); it != src[i].end(); ++it )
+         // For each depth, we go through existing traces (dst) and see if
+         // we can merge it with the new trace.
+         int depthRemaining = deepestDepth;
+         while( depthRemaining >= 0 )
          {
-            if( it->depth == 0 ) break;
-            deepestDepth = std::max( deepestDepth, (int)it->depth );
-         }
-
-         while( deepestDepth >= 0 )
-         {
-            if( newTraceIt->depth == deepestDepth )
+            if( newTraceIt->depth == depthRemaining )
             {
-               for( auto it = dst[i].rbegin(); it != dst[i].rend(); ++it )
+               for( int64_t dstIndex = dst[i].size() - 1; dstIndex >= 0; --dstIndex )
                {
-                  // We have found the previous trace at our current depth
-                  if( it->depth == deepestDepth )
+                  // Check if we have found the previous trace at our current depth
+                  auto& prevTrace = dst[i][dstIndex];
+                  if( prevTrace.depth == depthRemaining )
                   {
-                     const auto timeBetweenTrace = (newTraceIt->end - newTraceIt->delta) - it->end;
-                     if( canBeLoded( i, timeBetweenTrace, it->delta, newTraceIt->delta ) )
+                     const auto timeBetweenTrace = (newTraceIt->end - newTraceIt->delta) - prevTrace.end;
+                     if( canBeLoded( i, timeBetweenTrace, prevTrace.delta, newTraceIt->delta ) )
                      {
-                        it->end = newTraceIt->end;
-                        it->delta += timeBetweenTrace + newTraceIt->delta;
-                        it->isLoded = true;
+                        prevTrace.end = newTraceIt->end;
+                        prevTrace.delta += timeBetweenTrace + newTraceIt->delta;
+                        prevTrace.isLoded = true;
+                        sortFromIdx = std::min( (size_t)dstIndex, sortFromIdx );
                      }
                      else
                      {
@@ -153,7 +162,7 @@ void appendLods( LodsArray& dst, const LodsArray& src )
                      break;
                   }
                }
-               --deepestDepth;
+               --depthRemaining;
             }
             else
             {
@@ -165,14 +174,14 @@ void appendLods( LodsArray& dst, const LodsArray& src )
          }
       }
 
-      const size_t prevSize = dst[i].size();
       dst[i].insert( dst[i].end(), nonLodedInfos.begin(), nonLodedInfos.end() );
       dst[i].insert( dst[i].end(), newTraceIt, src[i].end() );
 
-      nonLodedInfos.clear();
+      std::sort( dst[i].begin() + sortFromIdx, dst[i].end() );
 
-      std::sort( dst[i].begin(), dst[i].end() );
-      //assert( std::is_sorted( dst[i].begin(), dst[i].end() ) );
+      assert_is_sorted( dst[i].begin(), dst[i].end() );
+
+      nonLodedInfos.clear();
    }
 }
 
