@@ -8,6 +8,8 @@ namespace vdbg
 
 void DisplayableTraces::append( const DisplayableTraces& newTraces )
 {
+   const size_t prevSize = deltas.size();
+
    deltas.insert( deltas.end(), newTraces.deltas.begin(), newTraces.deltas.end() );
    ends.insert( ends.end(), newTraces.ends.begin(), newTraces.ends.end() );
    flags.insert( flags.end(), newTraces.flags.begin(), newTraces.flags.end() );
@@ -19,16 +21,7 @@ void DisplayableTraces::append( const DisplayableTraces& newTraces )
    lineNbs.insert( lineNbs.end(), newTraces.lineNbs.begin(), newTraces.lineNbs.end() );
    depths.insert( depths.end(), newTraces.depths.begin(), newTraces.depths.end() );
 
-   auto lods = computeLods( newTraces );
-   for ( size_t i = 0; i < lods.size(); ++i )
-   {
-      auto it = std::lower_bound( _lods[i].begin(), _lods[i].end(), lods[i].front() );
-      auto sortFromIdx = std::distance( _lods[i].begin(), it );
-      _lods[i].insert( _lods[i].end(), lods[i].begin(), lods[i].end() );
-      std::sort( _lods[i].begin() + sortFromIdx, _lods[i].end() );
-
-      assert( std::is_sorted( _lods[i].begin(), _lods[i].end() ) );
-   }
+   appendLods( _lods, computeLods( newTraces, prevSize ) );
 }
 
 void DisplayableTraces::reserve( size_t size )

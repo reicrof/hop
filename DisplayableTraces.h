@@ -36,7 +36,7 @@ struct DisplayableTraces
    std::vector< TDepth_t > depths;
    std::vector< uint32_t > flags;
 
-   std::array< std::vector< LodInfo >, LOD_COUNT > _lods;
+   LodsArray _lods;
 };
 }
 

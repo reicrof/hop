@@ -24,7 +24,12 @@ struct LodInfo
    bool operator<( const LodInfo& rhs ) const noexcept { return end < rhs.end; }
 };
 
-std::array< std::vector< LodInfo >, LOD_COUNT > computeLods( const DisplayableTraces& traces );
+using LodsArray = std::array< std::vector< LodInfo >, LOD_COUNT >;
+
+// Returns a vector of LodInfo for each LOD level. The lod infos are sorted.
+LodsArray computeLods( const DisplayableTraces& traces, size_t idOffset );
+// Appends lods infos
+void appendLods( LodsArray& dst, const LodsArray& src );
 
 }
 
