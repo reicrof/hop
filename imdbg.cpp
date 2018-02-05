@@ -1,6 +1,7 @@
 #include "imdbg.h"
 #include "imgui/imgui.h"
 #include "Lod.h"
+#include "Stats.h"
 #include <SDL2/SDL_keycode.h>
 
 // Todo : I dont like this dependency
@@ -231,6 +232,12 @@ void onNewFrame( int width, int height, int mouseX, int mouseY, bool lmbPressed,
 {
    if ( !g_FontTexture ) createResources();
 
+   static auto lastFrame = std::chrono::system_clock::now();
+   const auto now = std::chrono::system_clock::now();
+
+   g_stats.frameTimeMs = std::chrono::duration< double, std::milli>( ( now - lastFrame ) ).count();
+   lastFrame = now;
+
    ImGuiIO& io = ImGui::GetIO();
 
    // Setup display size (every frame to accommodate for window resizing)
@@ -265,14 +272,17 @@ void draw()
       p->draw();
    }
 
-   ImGui::Text( "Drawing took %f ms", lastTime );
-   ImGui::Text( "Current LOD : %d", g_lodLvl );
-   ImGui::Text( "Current min trace size %zu ms", g_minTraceSize / 1000 );
-
-   ImGui::Render();
-
    const auto postDrawTime = std::chrono::system_clock::now();
    lastTime = std::chrono::duration< double, std::milli>( ( postDrawTime - preDrawTime ) ).count();
+   g_stats.drawingTimeMs = lastTime;
+
+   vdbg::drawStatsWindow( g_stats );
+
+   // ImGui::Text( "Drawing took %f ms", lastTime );
+   // ImGui::Text( "Current LOD : %d", g_lodLvl );
+   // ImGui::Text( "Current min trace size %zu ms", g_minTraceSize / 1000 );
+
+   ImGui::Render();
 }
 
 void init()
