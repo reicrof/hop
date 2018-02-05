@@ -8,8 +8,11 @@ Stats g_stats = {};
 
 void drawStatsWindow( const Stats& stats )
 {
-   ImGui::Text( "Frame took %f ms", stats.frameTimeMs );
-   ImGui::Text( "Drawing took %f ms", stats.drawingTimeMs );
+   ImGui::Text( "Total Frame time : %f ms\n---------------------", stats.frameTimeMs );
+   ImGui::Text( "   Fetching took %f ms\n"
+                "   Drawing took %f ms\n"
+                "---------------------", stats.fetchTimeMs, stats.drawingTimeMs );
+   ImGui::Text( "Current LOD : %d", stats.currentLOD );
 }
 
 }

@@ -1,5 +1,6 @@
 #define VDBG_IMPLEMENTATION
 #include <vdbg.h>
+#include "Stats.h"
 #include "imgui/imgui.h"
 #include <SDL2/SDL.h>
 
@@ -140,13 +141,20 @@ int main( int argc, const char* argv[] )
 
    while ( g_run )
    {
+      const auto frameStart = std::chrono::system_clock::now();
       handleInput();
 
+      const auto startFetch = std::chrono::system_clock::now();
       profiler->fetchClientData();
+      const auto endFetch = std::chrono::system_clock::now();
+      vdbg::g_stats.fetchTimeMs = std::chrono::duration< double, std::milli>( ( endFetch - startFetch ) ).count();
+
 
       int w, h, x, y;
       SDL_GetWindowSize( window, &w, &h );
       uint32_t buttonState = SDL_GetMouseState( &x, &y );
+
+      const auto drawStart = std::chrono::system_clock::now();
 
       vdbg::onNewFrame(
           w,
@@ -166,7 +174,13 @@ int main( int argc, const char* argv[] )
 
       vdbg::draw();
 
+      const auto drawEnd = std::chrono::system_clock::now();
+      vdbg::g_stats.drawingTimeMs = std::chrono::duration< double, std::milli>( ( drawEnd - drawStart ) ).count();
+
       SDL_GL_SwapWindow( window );
+
+      const auto frameEnd = std::chrono::system_clock::now();
+      vdbg::g_stats.frameTimeMs = std::chrono::duration< double, std::milli>( ( frameEnd - frameStart ) ).count();
    }
 
    SDL_GL_DeleteContext( mainContext );

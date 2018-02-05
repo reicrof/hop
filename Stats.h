@@ -7,6 +7,8 @@ namespace vdbg
    {
       double frameTimeMs;
       double drawingTimeMs;
+      double fetchTimeMs;
+      int currentLOD;
    };
 
    extern Stats g_stats;

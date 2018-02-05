@@ -219,7 +219,6 @@ bool saveAsJson( const char* path, const std::vector< uint32_t >& /*threadsId*/,
    return true;
 }
 
-int g_lodLvl = -1;
 size_t g_minTraceSize = 0;
 
 } // end of anonymous namespace
@@ -231,12 +230,6 @@ constexpr uint64_t MIN_MICROS_TO_DISPLAY = 100;
 void onNewFrame( int width, int height, int mouseX, int mouseY, bool lmbPressed, bool rmbPressed, float mousewheel )
 {
    if ( !g_FontTexture ) createResources();
-
-   static auto lastFrame = std::chrono::system_clock::now();
-   const auto now = std::chrono::system_clock::now();
-
-   g_stats.frameTimeMs = std::chrono::duration< double, std::milli>( ( now - lastFrame ) ).count();
-   lastFrame = now;
 
    ImGuiIO& io = ImGui::GetIO();
 
@@ -264,23 +257,12 @@ void onNewFrame( int width, int height, int mouseX, int mouseY, bool lmbPressed,
 
 void draw()
 {
-   static double lastTime = 0.0;
-
-   const auto preDrawTime = std::chrono::system_clock::now();
    for ( auto p : _profilers )
    {
       p->draw();
    }
 
-   const auto postDrawTime = std::chrono::system_clock::now();
-   lastTime = std::chrono::duration< double, std::milli>( ( postDrawTime - preDrawTime ) ).count();
-   g_stats.drawingTimeMs = lastTime;
-
    vdbg::drawStatsWindow( g_stats );
-
-   // ImGui::Text( "Drawing took %f ms", lastTime );
-   // ImGui::Text( "Current LOD : %d", g_lodLvl );
-   // ImGui::Text( "Current min trace size %zu ms", g_minTraceSize / 1000 );
 
    ImGui::Render();
 }
@@ -934,7 +916,7 @@ void vdbg::ProfilerTimeline::zoomOn( int64_t microToZoomOn, float zoomFactor )
       _startMicros += timeDiff;
    }
 
-   printf("%lu\n", _microsToDisplay );
+   printf("%llu\n", _microsToDisplay );
 }
 
 void vdbg::ProfilerTimeline::drawTraces( const ThreadInfo& data, int threadIndex, const float posX, const float posY )
@@ -971,7 +953,7 @@ void vdbg::ProfilerTimeline::drawTraces( const ThreadInfo& data, int threadIndex
       return lodLevel;
    }();
 
-   g_lodLvl = lodLevel;
+   g_stats.currentLOD = lodLevel;
    g_minTraceSize = LOD_MIN_SIZE_MICROS[lodLevel];
 
    // The time range to draw in absolute time
