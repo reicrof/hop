@@ -935,7 +935,6 @@ void vdbg::ProfilerTimeline::drawTraces( const ThreadInfo& data, int threadIndex
 
    const auto absoluteStart = _absoluteStartTime;
    const float windowWidthPxl = ImGui::GetWindowWidth();
-   const int64_t startMicrosAsPxl = microsToPxl<int64_t>( windowWidthPxl, _microsToDisplay, _startMicros );
 
    struct DrawingInfo
    {
@@ -991,7 +990,7 @@ void vdbg::ProfilerTimeline::drawTraces( const ThreadInfo& data, int threadIndex
       {
          const int64_t traceEndInMicros = (data.traces.ends[i] - absoluteStart) / 1000;
          const auto traceEndPxl =
-             microsToPxl<float>( windowWidthPxl, _microsToDisplay, traceEndInMicros );
+             microsToPxl<float>( windowWidthPxl, _microsToDisplay, traceEndInMicros - _startMicros );
          const float traceLengthPxl =
              microsToPxl<float>( windowWidthPxl, _microsToDisplay, data.traces.deltas[i] / 1000 );
          const float traceTimeMs = data.traces.deltas[i] / 1000000.0f;
@@ -1003,7 +1002,7 @@ void vdbg::ProfilerTimeline::drawTraces( const ThreadInfo& data, int threadIndex
          const auto curDepth = data.traces.depths[i];
          maxDepth = std::max( curDepth, maxDepth );
          const auto tracePos = ImVec2(
-             posX - startMicrosAsPxl + traceEndPxl - traceLengthPxl,
+             posX + traceEndPxl - traceLengthPxl,
              posY + curDepth * ( TRACE_HEIGHT + TRACE_VERTICAL_PADDING ) );
 
          tracesToDraw.push_back( DrawingInfo{ tracePos, traceLengthPxl, traceTimeMs, i } );
@@ -1031,14 +1030,14 @@ void vdbg::ProfilerTimeline::drawTraces( const ThreadInfo& data, int threadIndex
          const auto& t = lods[i];
          const int64_t traceEndInMicros = (t.end - absoluteStart) / 1000;
          const auto traceEndPxl =
-             microsToPxl<float>( windowWidthPxl, _microsToDisplay, traceEndInMicros );
+             microsToPxl<float>( windowWidthPxl, _microsToDisplay, traceEndInMicros - _startMicros );
          const float traceLengthPxl =
             microsToPxl<float>( windowWidthPxl, _microsToDisplay, t.delta / 1000 );
          const float traceTimeMs = t.delta / 1000000.0f;
 
          maxDepth = std::max( t.depth, maxDepth );
          const auto tracePos = ImVec2(
-             posX - startMicrosAsPxl + traceEndPxl - traceLengthPxl,
+             posX + traceEndPxl - traceLengthPxl,
              posY + t.depth * ( TRACE_HEIGHT + TRACE_VERTICAL_PADDING ) );
          if( t.isLoded )
             lodTracesToDraw.push_back( DrawingInfo{ tracePos, traceLengthPxl, traceTimeMs, t.traceIndex } );
