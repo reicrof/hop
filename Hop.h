@@ -16,7 +16,7 @@
 
 
 ///////////////////////////////////////////////////////////////
-/////    THESE ARE THE MACROS YOU SHOULD USE        ///////////
+/////   THESE ARE THE MACROS YOU SHOULD USE/MODIFY  ///////////
 ///////////////////////////////////////////////////////////////
 
 #define MAX_THREAD_NB 64
@@ -28,7 +28,7 @@
 #define HOP_PROF_MEMBER_FUNC() \
    HOP_PROF_GUARD_VAR( __LINE__, ( __FILE__, __LINE__, typeid( this ).name(), __func__, 0 ) )
 // Create a new profiling trace for a free function that falls under category x
-#define HOP_PROF_FUNC_WITH_GROUP( x ) HOP_PROF_GUARD_VAR(__LINE__,(( __FILE__, __LINE__, NULL, __func__, x ))
+#define HOP_PROF_FUNC_WITH_GROUP( x ) HOP_PROF_GUARD_VAR(__LINE__,( __FILE__, __LINE__, NULL, __func__, (x) ) )
 // Create a new profiling trace for a member function that falls under category x
 #define HOP_PROF_MEMBER_FUNC_WITH_GROUP( x ) \
    HOP_PROF_GUARD_VAR(__LINE__,(( __FILE__, __LINE__, typeid( this ).name(), __func__, x ))

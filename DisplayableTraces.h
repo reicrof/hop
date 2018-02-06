@@ -33,6 +33,7 @@ struct DisplayableTraces
    std::vector< TStrIdx_t > fctNameIds;
 
    std::vector< TLineNb_t > lineNbs;
+   std::vector< TGroup_t > groups;
    std::vector< TDepth_t > depths;
    std::vector< uint32_t > flags;
 

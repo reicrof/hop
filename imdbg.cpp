@@ -1042,13 +1042,15 @@ void hop::ProfilerTimeline::drawTraces( const ThreadInfo& data, int threadIndex,
 
    _maxTraceDepthPerThread[ threadIndex ] = std::max( _maxTraceDepthPerThread[ threadIndex ], maxDepth );
 
+   ImGui::PushStyleColor(ImGuiCol_Button, ImColor(0.2f, 0.2f, 0.75f));
+   ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImColor(0.3f, 0.3f, 1.0f));
+   ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImColor(0.2f, 0.2f, 0.5f));
    // Draw the loded traces
    char curName[ 512 ] = {};
    for( const auto& t : lodTracesToDraw )
    {
       ImGui::SetCursorScreenPos( t.posPxl );
 
-      ImGui::PushStyleColor(ImGuiCol_Button, ImColor(1.0f, 1.0f, 1.0f));
       ImGui::Button( "", ImVec2( t.lengthPxl,TRACE_HEIGHT ) );
       if ( t.lengthPxl > 3 && ImGui::IsItemHovered() )
       {
@@ -1062,10 +1064,12 @@ void hop::ProfilerTimeline::drawTraces( const ThreadInfo& data, int threadIndex,
          ImGui::EndTooltip();
 
       }
-
-      ImGui::PopStyleColor(1);
    }
+   ImGui::PopStyleColor(3);
 
+   ImGui::PushStyleColor(ImGuiCol_Button, ImColor(0.2f, 0.2f, 0.8f));
+   ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImColor(0.3f, 0.3f, 1.0f));
+   ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImColor(0.2f, 0.2f, 0.6f));
    // Draw the non-loded traces
    for( const auto& t : tracesToDraw )
    {
@@ -1104,7 +1108,7 @@ void hop::ProfilerTimeline::drawTraces( const ThreadInfo& data, int threadIndex,
          ImGui::EndTooltip();
       }
    }
-
+   ImGui::PopStyleColor(3);
 
    ImGui::SetCursorScreenPos(
        ImVec2{posX, posY + _maxTraceDepthPerThread[ threadIndex ] * ( TRACE_HEIGHT + TRACE_VERTICAL_PADDING )} );

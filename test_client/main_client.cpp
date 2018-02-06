@@ -42,12 +42,12 @@ void buggyFunction()
 
 void func3()
 {
-   HOP_PROF_FUNC();
+   HOP_PROF_FUNC_WITH_GROUP(42);
    std::this_thread::sleep_for(1ms);
 }
 void func2()
 {
-   HOP_PROF_FUNC();
+   HOP_PROF_FUNC_WITH_GROUP(42);
    func3();
    buggyFunction();
    func3();
@@ -55,7 +55,7 @@ void func2()
 void func1()
 {
    static size_t i = 0;
-   HOP_PROF_FUNC();
+   HOP_PROF_FUNC_WITH_GROUP(42);
    func2();
    ++i;
    printf( "%lu\n", i );
@@ -72,13 +72,13 @@ void doEvenMoreStuff()
       micros = 1;
    }
    std::chrono::microseconds waittime(micros);
-   HOP_PROF_FUNC();
+   HOP_PROF_FUNC_WITH_GROUP(42);
    std::this_thread::sleep_for(waittime);
 }
 
 void doMoreStuf()
 {
-   HOP_PROF_FUNC();
+   HOP_PROF_FUNC_WITH_GROUP(42);
    std::this_thread::sleep_for(50us);
    for( int i = 0; i < 200; ++i )
       doEvenMoreStuff();
@@ -86,10 +86,10 @@ void doMoreStuf()
 
 void takeMutexAndDoStuff()
 {
-   HOP_PROF_FUNC();
+   HOP_PROF_FUNC_WITH_GROUP(42);
    std::lock_guard<std::mutex> g(m);
    {
-      HOP_PROF_FUNC();
+      HOP_PROF_FUNC_WITH_GROUP(42);
       doMoreStuf();
       //std::this_thread::sleep_for(10us);
       std::this_thread::sleep_for(2ms);
@@ -135,7 +135,7 @@ int main()
 
    while(true)
    {
-      HOP_PROF_FUNC();
+      HOP_PROF_FUNC_WITH_GROUP(42);
       using namespace std::chrono_literals;
       std::lock_guard<std::mutex> g(m);
       std::this_thread::sleep_for(10ms);

@@ -93,6 +93,7 @@ size_t Server::handleNewMessage( uint8_t* data, size_t maxSize )
             dispTraces.fctNameIds.push_back(  t.fctNameIdx );
             dispTraces.lineNbs.push_back( t.lineNumber );
             dispTraces.depths.push_back( t.depth );
+            dispTraces.groups.push_back( t.group );
         }
 
         // The ends time should already be sorted
