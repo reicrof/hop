@@ -13,7 +13,7 @@ static bool canBeLoded(
     vdbg::TimeStamp newTraceDelta )
 {
    const auto minTraceSize = vdbg::LOD_MIN_SIZE_MICROS[lodLevel] * 1000;
-   const auto maxTimeBetweenTrace = minTraceSize * 2;
+   const auto maxTimeBetweenTrace = minTraceSize * 1.5;
    return lastTraceDelta < minTraceSize && newTraceDelta < minTraceSize &&
         timeBetweenTrace < maxTimeBetweenTrace;
 }
