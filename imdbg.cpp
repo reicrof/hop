@@ -2,6 +2,7 @@
 #include "imgui/imgui.h"
 #include "Lod.h"
 #include "Stats.h"
+#include "Utils.h"
 #include <SDL2/SDL_keycode.h>
 
 // Todo : I dont like this dependency
@@ -226,6 +227,7 @@ size_t g_minTraceSize = 0;
 namespace vdbg
 {
 constexpr uint64_t MIN_MICROS_TO_DISPLAY = 100;
+constexpr uint64_t MAX_MICROS_TO_DISPLAY = 900000000;
 
 void onNewFrame( int width, int height, int mouseX, int mouseY, bool lmbPressed, bool rmbPressed, float mousewheel )
 {
@@ -904,7 +906,7 @@ void vdbg::ProfilerTimeline::zoomOn( int64_t microToZoomOn, float zoomFactor )
    const auto prevMicrosToDisplay = _microsToDisplay;
    _microsToDisplay *= zoomFactor;
 
-   _microsToDisplay = std::max( _microsToDisplay, MIN_MICROS_TO_DISPLAY );
+   _microsToDisplay = vdbg::clamp( _microsToDisplay, MIN_MICROS_TO_DISPLAY, MAX_MICROS_TO_DISPLAY );
 
    const int64_t prevPxlPos = microsToPxl( windowWidthPxl, prevMicrosToDisplay, microToZoom );
    const int64_t newPxlPos = microsToPxl( windowWidthPxl, _microsToDisplay, microToZoom );

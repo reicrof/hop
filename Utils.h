@@ -2,6 +2,7 @@
 #define UTILS_H_
 
 #include <cassert>
+#include <algorithm>
 
 namespace vdbg
 {
@@ -12,6 +13,12 @@ inline void assert_is_sorted( I first, I last )
 #ifdef VDBG_ASSERT_IS_SORTED
    assert( std::is_sorted( first, last ) );
 #endif
+}
+
+template <typename T>
+inline T clamp(const T& val, const T& lower, const T& upper)
+{
+   return std::max( lower, std::min( val, upper ) );
 }
 }
 
