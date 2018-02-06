@@ -609,14 +609,14 @@ void hop::Profiler::setRecording( bool recording )
 
 // TODO template these 2 functions so they can be used with different time ratios
 template< typename T = uint64_t >
-static inline T microsToPxl( float windowWidth, int64_t usToDisplay, int64_t us )
+static inline T microsToPxl( double windowWidth, int64_t usToDisplay, int64_t us )
 {
    const double usPerPxl = usToDisplay / windowWidth;
    return static_cast<T>( (double)us / usPerPxl );
 }
 
 template< typename T = uint64_t >
-static inline T pxlToMicros( float windowWidth, int64_t usToDisplay, int64_t pxl )
+static inline T pxlToMicros( double windowWidth, int64_t usToDisplay, int64_t pxl )
 {
    const double usPerPxl = usToDisplay / windowWidth;
    return static_cast<T>( usPerPxl * (double)pxl );
@@ -1052,17 +1052,27 @@ void hop::ProfilerTimeline::drawTraces( const ThreadInfo& data, int threadIndex,
       ImGui::SetCursorScreenPos( t.posPxl );
 
       ImGui::Button( "", ImVec2( t.lengthPxl,TRACE_HEIGHT ) );
-      if ( t.lengthPxl > 3 && ImGui::IsItemHovered() )
+      if ( ImGui::IsItemHovered() )
       {
-         ImGui::BeginTooltip();
-         snprintf(
-            curName,
-            sizeof( curName ),
-            "<Multiple Elements> (~%.3f ms)\n",
-            t.deltaMs );
-         ImGui::TextUnformatted(curName);
-         ImGui::EndTooltip();
+         if( t.lengthPxl > 3 )
+         {
+            ImGui::BeginTooltip();
+            snprintf(
+               curName,
+               sizeof( curName ),
+               "<Multiple Elements> (~%.3f ms)\n",
+               t.deltaMs );
+            ImGui::TextUnformatted(curName);
+            ImGui::EndTooltip();
+         }
 
+         if( ImGui::IsMouseDoubleClicked(0) )
+         {
+            const auto traceEndMicros = pxlToMicros( windowWidthPxl, _microsToDisplay, t.posPxl.x - posX + t.lengthPxl );
+            const auto deltaUs = (t.deltaMs * 1000);
+            _startMicros += traceEndMicros - deltaUs;
+            _microsToDisplay = deltaUs;
+         }
       }
    }
    ImGui::PopStyleColor(3);
@@ -1092,20 +1102,29 @@ void hop::ProfilerTimeline::drawTraces( const ThreadInfo& data, int threadIndex,
 
       ImGui::SetCursorScreenPos( t.posPxl );
       ImGui::Button( curName, ImVec2( t.lengthPxl,TRACE_HEIGHT ) );
-      if ( t.lengthPxl > 3 && ImGui::IsItemHovered() )
+      if ( ImGui::IsItemHovered() )
       {
-         size_t lastChar = strlen( curName );
-         curName[ lastChar ] = ' ';
-         ImGui::BeginTooltip();
-         snprintf(
-             curName + lastChar,
-             sizeof( curName ) - lastChar,
-             "(%.3f ms)\n   %s:%d ",
-             t.deltaMs,
-             &data.stringData[ data.traces.fileNameIds[traceIndex] ],
-             data.traces.lineNbs[traceIndex] );
-         ImGui::TextUnformatted(curName);
-         ImGui::EndTooltip();
+         if( t.lengthPxl > 3 )
+         {
+            size_t lastChar = strlen( curName );
+            curName[ lastChar ] = ' ';
+            ImGui::BeginTooltip();
+            snprintf(
+                curName + lastChar,
+                sizeof( curName ) - lastChar,
+                "(%.3f ms)\n   %s:%d ",
+                t.deltaMs,
+                &data.stringData[ data.traces.fileNameIds[traceIndex] ],
+                data.traces.lineNbs[traceIndex] );
+            ImGui::TextUnformatted(curName);
+            ImGui::EndTooltip();
+         }
+
+         if( ImGui::IsMouseDoubleClicked(0) )
+         {
+            _microsToDisplay = t.deltaMs * 1000;
+            _startMicros = (data.traces.ends[traceIndex] - data.traces.deltas[traceIndex] - absoluteStart) * 0.001;
+         }
       }
    }
    ImGui::PopStyleColor(3);
