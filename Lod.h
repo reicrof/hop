@@ -1,12 +1,12 @@
 #ifndef LOD_H_
 #define LOD_H_
 
-#include "vdbg.h"
+#include "Hop.h"
 
 #include <array>
 #include <vector>
 
-namespace vdbg
+namespace hop
 {
 
 struct DisplayableTraces;

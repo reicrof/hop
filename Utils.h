@@ -4,13 +4,13 @@
 #include <cassert>
 #include <algorithm>
 
-namespace vdbg
+namespace hop
 {
 template <typename I>
 inline void assert_is_sorted( I first, I last )
 {
 	(void)first;(void)last;
-#ifdef VDBG_ASSERT_IS_SORTED
+#ifdef HOP_ASSERT_IS_SORTED
    assert( std::is_sorted( first, last ) );
 #endif
 }

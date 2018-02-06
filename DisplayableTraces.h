@@ -1,11 +1,11 @@
 #ifndef DISPLAYABLE_TRACE_H_
 #define DISPLAYABLE_TRACE_H_
 
-#include "vdbg.h"
+#include "Hop.h"
 #include "Lod.h"
 #include <vector>
 
-namespace vdbg
+namespace hop
 {
 struct DisplayableTraces
 {

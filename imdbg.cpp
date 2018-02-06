@@ -6,7 +6,7 @@
 #include <SDL2/SDL_keycode.h>
 
 // Todo : I dont like this dependency
-#include "server.h"
+#include "Server.h"
 
 #ifdef __APPLE__
 #include <OpenGL/gl.h>
@@ -32,7 +32,7 @@ namespace
 {
 static std::chrono::time_point<std::chrono::system_clock> g_Time = std::chrono::system_clock::now();
 static GLuint g_FontTexture = 0;
-std::vector<vdbg::Profiler*> _profilers;
+std::vector<hop::Profiler*> _profilers;
 
 // This is the main rendering function that you have to implement and provide to ImGui (via setting
 // up 'RenderDrawListsFn' in the ImGuiIO structure)
@@ -178,7 +178,7 @@ void createResources()
    glBindTexture( GL_TEXTURE_2D, last_texture );
 }
 
-bool saveAsJson( const char* path, const std::vector< uint32_t >& /*threadsId*/, const std::vector< vdbg::ThreadInfo >& /*threadTraces*/ )
+bool saveAsJson( const char* path, const std::vector< uint32_t >& /*threadsId*/, const std::vector< hop::ThreadInfo >& /*threadTraces*/ )
 {
    using namespace rapidjson;
 
@@ -200,7 +200,7 @@ bool saveAsJson( const char* path, const std::vector< uint32_t >& /*threadsId*/,
    //          writer.Key("ts");
    //          writer.Uint64( (uint64_t)t.time );
    //          writer.Key("ph");
-   //          writer.String( t.flags & vdbg::DisplayableTrace::START_TRACE ? "B" : "E" );
+   //          writer.String( t.flags & hop::DisplayableTrace::START_TRACE ? "B" : "E" );
    //          writer.Key("pid");
    //          writer.Uint(threadId);
    //          writer.Key("name");
@@ -224,7 +224,7 @@ size_t g_minTraceSize = 0;
 
 } // end of anonymous namespace
 
-namespace vdbg
+namespace hop
 {
 constexpr uint64_t MIN_MICROS_TO_DISPLAY = 100;
 constexpr uint64_t MAX_MICROS_TO_DISPLAY = 900000000;
@@ -264,7 +264,7 @@ void draw()
       p->draw();
    }
 
-   vdbg::drawStatsWindow( g_stats );
+   hop::drawStatsWindow( g_stats );
 
    ImGui::Render();
 }
@@ -386,10 +386,10 @@ Profiler::~Profiler()
    _server->stop();
 }
 
-} // end of namespace vdbg
+} // end of namespace hop
 
 
-// static bool drawDispTrace( const vdbg::DisplayableTraceFrame& frame, size_t& i )
+// static bool drawDispTrace( const hop::DisplayableTraceFrame& frame, size_t& i )
 // {
 //    const auto& trace = frame.traces[i];
 //    if( !trace.flags ) return false;
@@ -466,7 +466,7 @@ static bool drawPlayStopButton( bool& isRecording )
    return hovering && ImGui::IsMouseClicked(0);
 }
 
-void vdbg::Profiler::draw()
+void hop::Profiler::draw()
 {
    //ImGui::SetNextWindowSize(ImVec2(700,500), ImGuiSetCond_FirstUseEver);
    ImGui::PushStyleVar( ImGuiStyleVar_WindowMinSize, ImVec2( 100, 100 ) );
@@ -512,7 +512,7 @@ void vdbg::Profiler::draw()
    ImGui::PopStyleVar();
 }
 
-void vdbg::Profiler::drawMenuBar()
+void hop::Profiler::drawMenuBar()
 {
    const char* const menuSaveAsJason = "Save as JSON";
    const char* const menuHelp = "Help";
@@ -580,7 +580,7 @@ void vdbg::Profiler::drawMenuBar()
    }
 }
 
-void vdbg::Profiler::handleHotkey()
+void hop::Profiler::handleHotkey()
 {
    if( ImGui::IsKeyReleased( SDL_SCANCODE_HOME ) )
    {
@@ -597,7 +597,7 @@ void vdbg::Profiler::handleHotkey()
    }
 }
 
-void vdbg::Profiler::setRecording( bool recording )
+void hop::Profiler::setRecording( bool recording )
 {
    _recording = recording;
    _server->setRecording( recording );
@@ -622,7 +622,7 @@ static inline T pxlToMicros( float windowWidth, int64_t usToDisplay, int64_t pxl
    return static_cast<T>( usPerPxl * (double)pxl );
 }
 
-void vdbg::ProfilerTimeline::draw(
+void hop::ProfilerTimeline::draw(
     const std::vector<ThreadInfo>& tracesPerThread,
     const std::vector<uint32_t>& threadIds )
 {
@@ -665,7 +665,7 @@ void vdbg::ProfilerTimeline::draw(
    }
 }
 
-void vdbg::ProfilerTimeline::drawTimeline( const float posX, const float posY )
+void hop::ProfilerTimeline::drawTimeline( const float posX, const float posY )
 {
    constexpr int64_t minStepSize = 10;
    constexpr int64_t minStepCount = 20;
@@ -777,7 +777,7 @@ void vdbg::ProfilerTimeline::drawTimeline( const float posX, const float posY )
    ImGui::SetCursorScreenPos( ImVec2{ posX, posY + 50.0f } );
 }
 
-void vdbg::ProfilerTimeline::handleMouseWheel( float mousePosX, float )
+void hop::ProfilerTimeline::handleMouseWheel( float mousePosX, float )
 {
    const float windowWidthPxl = ImGui::GetWindowWidth();
    ImGuiIO& io = ImGui::GetIO();
@@ -791,7 +791,7 @@ void vdbg::ProfilerTimeline::handleMouseWheel( float mousePosX, float )
    }
 }
 
-void vdbg::ProfilerTimeline::handleMouseDrag( float mouseInCanvasX, float mouseInCanvasY )
+void hop::ProfilerTimeline::handleMouseDrag( float mouseInCanvasX, float mouseInCanvasY )
 {
   // Left mouse button dragging
   if( ImGui::IsMouseDragging( 0 ) )
@@ -848,65 +848,65 @@ void vdbg::ProfilerTimeline::handleMouseDrag( float mouseInCanvasX, float mouseI
   }
 }
 
-bool vdbg::ProfilerTimeline::realtime() const noexcept
+bool hop::ProfilerTimeline::realtime() const noexcept
 {
    return _realtime;
 }
 
-void vdbg::ProfilerTimeline::setRealtime( bool isRealtime ) noexcept
+void hop::ProfilerTimeline::setRealtime( bool isRealtime ) noexcept
 {
    _realtime = isRealtime;
 }
 
-vdbg::TimeStamp vdbg::ProfilerTimeline::absoluteStartTime() const noexcept
+hop::TimeStamp hop::ProfilerTimeline::absoluteStartTime() const noexcept
 {
    return _absoluteStartTime;
 }
 
-vdbg::TimeStamp vdbg::ProfilerTimeline::absolutePresentTime() const noexcept
+hop::TimeStamp hop::ProfilerTimeline::absolutePresentTime() const noexcept
 {
    return _absolutePresentTime;
 }
 
-void vdbg::ProfilerTimeline::setAbsoluteStartTime( TimeStamp time ) noexcept
+void hop::ProfilerTimeline::setAbsoluteStartTime( TimeStamp time ) noexcept
 {
    _absoluteStartTime = time;
 }
 
-void vdbg::ProfilerTimeline::setAbsolutePresentTime( TimeStamp time ) noexcept
+void hop::ProfilerTimeline::setAbsolutePresentTime( TimeStamp time ) noexcept
 {
    _absolutePresentTime = time;
 }
 
-int64_t vdbg::ProfilerTimeline::microsToDisplay() const noexcept
+int64_t hop::ProfilerTimeline::microsToDisplay() const noexcept
 {
    return _microsToDisplay;
 }
 
-void vdbg::ProfilerTimeline::moveToTime( int64_t timeInMicro ) noexcept
+void hop::ProfilerTimeline::moveToTime( int64_t timeInMicro ) noexcept
 {
    _startMicros = timeInMicro - (_microsToDisplay / 2);
 }
 
-void vdbg::ProfilerTimeline::moveToStart() noexcept
+void hop::ProfilerTimeline::moveToStart() noexcept
 {
    moveToTime( _microsToDisplay * 0.5f );
    setRealtime ( false );
 }
 
-void vdbg::ProfilerTimeline::moveToPresentTime() noexcept
+void hop::ProfilerTimeline::moveToPresentTime() noexcept
 {
    moveToTime( (_absolutePresentTime - _absoluteStartTime) / 1000 );
 }
 
-void vdbg::ProfilerTimeline::zoomOn( int64_t microToZoomOn, float zoomFactor )
+void hop::ProfilerTimeline::zoomOn( int64_t microToZoomOn, float zoomFactor )
 {
    const float windowWidthPxl = ImGui::GetWindowWidth();
    const size_t microToZoom = microToZoomOn - _startMicros;
    const auto prevMicrosToDisplay = _microsToDisplay;
    _microsToDisplay *= zoomFactor;
 
-   _microsToDisplay = vdbg::clamp( _microsToDisplay, MIN_MICROS_TO_DISPLAY, MAX_MICROS_TO_DISPLAY );
+   _microsToDisplay = hop::clamp( _microsToDisplay, MIN_MICROS_TO_DISPLAY, MAX_MICROS_TO_DISPLAY );
 
    const int64_t prevPxlPos = microsToPxl( windowWidthPxl, prevMicrosToDisplay, microToZoom );
    const int64_t newPxlPos = microsToPxl( windowWidthPxl, _microsToDisplay, microToZoom );
@@ -921,7 +921,7 @@ void vdbg::ProfilerTimeline::zoomOn( int64_t microToZoomOn, float zoomFactor )
    printf("%llu\n", _microsToDisplay );
 }
 
-void vdbg::ProfilerTimeline::drawTraces( const ThreadInfo& data, int threadIndex, const float posX, const float posY )
+void hop::ProfilerTimeline::drawTraces( const ThreadInfo& data, int threadIndex, const float posX, const float posY )
 {
    static constexpr float MIN_TRACE_LENGTH_PXL = 0.25f;
 
@@ -1110,7 +1110,7 @@ void vdbg::ProfilerTimeline::drawTraces( const ThreadInfo& data, int threadIndex
        ImVec2{posX, posY + _maxTraceDepthPerThread[ threadIndex ] * ( TRACE_HEIGHT + TRACE_VERTICAL_PADDING )} );
 }
 
-void vdbg::ProfilerTimeline::drawLockWaits( const ThreadInfo& data, const float posX, const float posY )
+void hop::ProfilerTimeline::drawLockWaits( const ThreadInfo& data, const float posX, const float posY )
 {
    if( data.traces.ends.empty() ) return;
 

@@ -1,5 +1,5 @@
-#define VDBG_IMPLEMENTATION
-#include <vdbg.h>
+#define HOP_IMPLEMENTATION
+#include <Hop.h>
 #include "Stats.h"
 #include "imgui/imgui.h"
 #include <SDL2/SDL.h>
@@ -110,7 +110,7 @@ int main( int argc, const char* argv[] )
    }
 
    SDL_Window* window = SDL_CreateWindow(
-       "vdbg", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, 1600, 1024, SDL_WINDOW_OPENGL );
+       "hop", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, 1600, 1024, SDL_WINDOW_OPENGL );
 
    if ( window == NULL )
    {
@@ -128,15 +128,15 @@ int main( int argc, const char* argv[] )
    SDL_GL_SetAttribute(SDL_GL_DOUBLEBUFFER, 1);
    SDL_GL_SetSwapInterval(1);
 
-   vdbg::init();
+   hop::init();
 
    bool show_test_window = true;
 
-   std::string exeName( VDBG_SHARED_MEM_PREFIX );
+   std::string exeName( HOP_SHARED_MEM_PREFIX );
    exeName += argv[1];
 
-   auto profiler = std::make_unique< vdbg::Profiler >( exeName );
-   vdbg::addNewProfiler( profiler.get() );
+   auto profiler = std::make_unique< hop::Profiler >( exeName );
+   hop::addNewProfiler( profiler.get() );
    std::vector< uint32_t > profTrheadsId;
 
    while ( g_run )
@@ -147,7 +147,7 @@ int main( int argc, const char* argv[] )
       const auto startFetch = std::chrono::system_clock::now();
       profiler->fetchClientData();
       const auto endFetch = std::chrono::system_clock::now();
-      vdbg::g_stats.fetchTimeMs = std::chrono::duration< double, std::milli>( ( endFetch - startFetch ) ).count();
+      hop::g_stats.fetchTimeMs = std::chrono::duration< double, std::milli>( ( endFetch - startFetch ) ).count();
 
 
       int w, h, x, y;
@@ -156,7 +156,7 @@ int main( int argc, const char* argv[] )
 
       const auto drawStart = std::chrono::system_clock::now();
 
-      vdbg::onNewFrame(
+      hop::onNewFrame(
           w,
           h,
           x,
@@ -172,15 +172,15 @@ int main( int argc, const char* argv[] )
       glClearColor( 1.0f, 1.0f, 1.0f, 1.0f );
       glClear( GL_COLOR_BUFFER_BIT );
 
-      vdbg::draw();
+      hop::draw();
 
       const auto drawEnd = std::chrono::system_clock::now();
-      vdbg::g_stats.drawingTimeMs = std::chrono::duration< double, std::milli>( ( drawEnd - drawStart ) ).count();
+      hop::g_stats.drawingTimeMs = std::chrono::duration< double, std::milli>( ( drawEnd - drawStart ) ).count();
 
       SDL_GL_SwapWindow( window );
 
       const auto frameEnd = std::chrono::system_clock::now();
-      vdbg::g_stats.frameTimeMs = std::chrono::duration< double, std::milli>( ( frameEnd - frameStart ) ).count();
+      hop::g_stats.frameTimeMs = std::chrono::duration< double, std::milli>( ( frameEnd - frameStart ) ).count();
    }
 
    SDL_GL_DeleteContext( mainContext );

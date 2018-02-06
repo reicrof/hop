@@ -1,7 +1,7 @@
 #include "Stats.h"
 #include "imgui/imgui.h"
 
-namespace vdbg
+namespace hop
 {
 
 Stats g_stats = {};

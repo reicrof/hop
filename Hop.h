@@ -1,16 +1,16 @@
-#ifndef VDBG_H_
-#define VDBG_H_
+#ifndef HOP_H_
+#define HOP_H_
 
-// You can disable completly vdbg by setting this variable
+// You can disable completly HOP by setting this variable
 // to false
-#if !defined( VDBG_ENABLED )
+#if !defined( HOP_ENABLED )
 
 // Stubbing all profiling macros so they are disabled
-// when VDBG_ENABLED is false
-#define VDBG_PROF_FUNC()
-#define VDBG_PROF_MEMBER_FUNC()
-#define VDBG_PROF_FUNC_WITH_GROUP( x )
-#define VDBG_PROF_MEMBER_FUNC_WITH_GROUP( x )
+// when HOP_ENABLED is false
+#define HOP_PROF_FUNC()
+#define HOP_PROF_MEMBER_FUNC()
+#define HOP_PROF_FUNC_WITH_GROUP( x )
+#define HOP_PROF_MEMBER_FUNC_WITH_GROUP( x )
 
 #else  // We do want to profile
 
@@ -20,18 +20,18 @@
 ///////////////////////////////////////////////////////////////
 
 #define MAX_THREAD_NB 64
-#define VDBG_SHARED_MEM_SIZE 32000000
+#define HOP_SHARED_MEM_SIZE 32000000
 
 // Create a new profiling trace for a free function
-#define VDBG_PROF_FUNC() VDBG_PROF_GUARD_VAR( __LINE__, ( __FILE__, __LINE__, NULL, __func__, 0 ) )
+#define HOP_PROF_FUNC() HOP_PROF_GUARD_VAR( __LINE__, ( __FILE__, __LINE__, NULL, __func__, 0 ) )
 // Create a new profiling trace for a member function
-#define VDBG_PROF_MEMBER_FUNC() \
-   VDBG_PROF_GUARD_VAR( __LINE__, ( __FILE__, __LINE__, typeid( this ).name(), __func__, 0 ) )
+#define HOP_PROF_MEMBER_FUNC() \
+   HOP_PROF_GUARD_VAR( __LINE__, ( __FILE__, __LINE__, typeid( this ).name(), __func__, 0 ) )
 // Create a new profiling trace for a free function that falls under category x
-#define VDBG_PROF_FUNC_WITH_GROUP( x ) VDBG_PROF_GUARD_VAR(__LINE__,(( __FILE__, __LINE__, NULL, __func__, x ))
+#define HOP_PROF_FUNC_WITH_GROUP( x ) HOP_PROF_GUARD_VAR(__LINE__,(( __FILE__, __LINE__, NULL, __func__, x ))
 // Create a new profiling trace for a member function that falls under category x
-#define VDBG_PROF_MEMBER_FUNC_WITH_GROUP( x ) \
-   VDBG_PROF_GUARD_VAR(__LINE__,(( __FILE__, __LINE__, typeid( this ).name(), __func__, x ))
+#define HOP_PROF_MEMBER_FUNC_WITH_GROUP( x ) \
+   HOP_PROF_GUARD_VAR(__LINE__,(( __FILE__, __LINE__, typeid( this ).name(), __func__, x ))
 
 ///////////////////////////////////////////////////////////////
 /////     EVERYTHING AFTER THIS IS IMPL DETAILS        ////////
@@ -47,15 +47,15 @@
 
 // ------ platform.h ------------
 // This is most things that are potentially non-portable.
-#define VDBG_CONSTEXPR constexpr
-#define VDBG_NOEXCEPT noexcept
-#define VDBG_STATIC_ASSERT static_assert
-#define VDBG_GET_THREAD_ID() (size_t)pthread_self()
+#define HOP_CONSTEXPR constexpr
+#define HOP_NOEXCEPT noexcept
+#define HOP_STATIC_ASSERT static_assert
+#define HOP_GET_THREAD_ID() (size_t)pthread_self()
 // On MacOs the max name length seems to be 30...
-#define VDBG_SHARED_MEM_MAX_NAME_SIZE 30
-#define VDBG_SHARED_MEM_PREFIX "/vdbg_"
+#define HOP_SHARED_MEM_MAX_NAME_SIZE 30
+#define HOP_SHARED_MEM_PREFIX "/hop_"
 extern char* __progname;
-inline const char* getProgName() VDBG_NOEXCEPT
+inline const char* getProgName() HOP_NOEXCEPT
 {
    return __progname;
 }
@@ -69,7 +69,7 @@ typedef struct ringbuf ringbuf_t;
 typedef struct ringbuf_worker ringbuf_worker_t;
 
 // ------ message.h ------------
-namespace vdbg
+namespace hop
 {
 
 using Clock = std::chrono::steady_clock;
@@ -98,7 +98,7 @@ struct LockWaitsMsgInfo
    uint32_t count;
 };
 
-VDBG_CONSTEXPR uint32_t EXPECTED_MSG_INFO_SIZE = 16;
+HOP_CONSTEXPR uint32_t EXPECTED_MSG_INFO_SIZE = 16;
 struct MsgInfo
 {
    MsgType type;
@@ -110,14 +110,14 @@ struct MsgInfo
       LockWaitsMsgInfo lockwaits;
    };
 };
-VDBG_STATIC_ASSERT( sizeof(MsgInfo) == EXPECTED_MSG_INFO_SIZE, "MsgInfo layout has changed unexpectedly" );
+HOP_STATIC_ASSERT( sizeof(MsgInfo) == EXPECTED_MSG_INFO_SIZE, "MsgInfo layout has changed unexpectedly" );
 
 
 using TStrIdx_t = uint32_t;
 using TLineNb_t = uint32_t;
 using TGroup_t = uint16_t;
 using TDepth_t = uint16_t;
-VDBG_CONSTEXPR uint32_t EXPECTED_TRACE_SIZE = 64;
+HOP_CONSTEXPR uint32_t EXPECTED_TRACE_SIZE = 64;
 struct Trace
 {
    TimeStamp start, end;   // Timestamp for start/end of this trace
@@ -129,16 +129,16 @@ struct Trace
    TDepth_t depth;         // The depth in the callstack of this trace
    char padding[24];
 };
-VDBG_STATIC_ASSERT( sizeof(Trace) == EXPECTED_TRACE_SIZE, "Trace layout has changed unexpectedly" );
+HOP_STATIC_ASSERT( sizeof(Trace) == EXPECTED_TRACE_SIZE, "Trace layout has changed unexpectedly" );
 
-VDBG_CONSTEXPR uint32_t EXPECTED_LOCK_WAIT_SIZE = 32;
+HOP_CONSTEXPR uint32_t EXPECTED_LOCK_WAIT_SIZE = 32;
 struct LockWait
 {
    void* mutexAddress;
    TimeStamp start, end;
    uint32_t padding;
 };
-VDBG_STATIC_ASSERT( sizeof(LockWait) == EXPECTED_LOCK_WAIT_SIZE, "Lock wait layout has changed unexpectedly" );
+HOP_STATIC_ASSERT( sizeof(LockWait) == EXPECTED_LOCK_WAIT_SIZE, "Lock wait layout has changed unexpectedly" );
 
 // ------ end of message.h ------------
 
@@ -160,16 +160,16 @@ class SharedMemory
       std::atomic< uint32_t > flags{0};
    };
 
-   bool hasConnectedProducer() const VDBG_NOEXCEPT;
-   void setConnectedProducer( bool ) VDBG_NOEXCEPT;
-   bool hasConnectedConsumer() const VDBG_NOEXCEPT;
-   void setConnectedConsumer( bool ) VDBG_NOEXCEPT;
-   bool hasListeningConsumer() const VDBG_NOEXCEPT;
-   void setListeningConsumer( bool ) VDBG_NOEXCEPT;
-   ringbuf_t* ringbuffer() const VDBG_NOEXCEPT;
-   uint8_t* data() const VDBG_NOEXCEPT;
-   sem_t* semaphore() const VDBG_NOEXCEPT;
-   const SharedMetaInfo* sharedMetaInfo() const VDBG_NOEXCEPT;
+   bool hasConnectedProducer() const HOP_NOEXCEPT;
+   void setConnectedProducer( bool ) HOP_NOEXCEPT;
+   bool hasConnectedConsumer() const HOP_NOEXCEPT;
+   void setConnectedConsumer( bool ) HOP_NOEXCEPT;
+   bool hasListeningConsumer() const HOP_NOEXCEPT;
+   void setListeningConsumer( bool ) HOP_NOEXCEPT;
+   ringbuf_t* ringbuffer() const HOP_NOEXCEPT;
+   uint8_t* data() const HOP_NOEXCEPT;
+   sem_t* semaphore() const HOP_NOEXCEPT;
+   const SharedMetaInfo* sharedMetaInfo() const HOP_NOEXCEPT;
    ~SharedMemory();
 
   private:
@@ -182,7 +182,7 @@ class SharedMemory
    bool _isConsumer;
    size_t _size{0};
    int _sharedMemFd{-1};
-   char _sharedMemPath[VDBG_SHARED_MEM_MAX_NAME_SIZE];
+   char _sharedMemPath[HOP_SHARED_MEM_MAX_NAME_SIZE];
 };
 // ------ end of SharedMemory.h ------------
 
@@ -204,8 +204,8 @@ class ClientManager
       void* mutexAddr,
       TimeStamp start,
       TimeStamp end );
-   static bool HasConnectedConsumer() VDBG_NOEXCEPT;
-   static bool HasListeningConsumer() VDBG_NOEXCEPT;
+   static bool HasConnectedConsumer() HOP_NOEXCEPT;
+   static bool HasListeningConsumer() HOP_NOEXCEPT;
 
    static SharedMemory sharedMemory;
 };
@@ -213,7 +213,7 @@ class ClientManager
 class ProfGuard
 {
   public:
-   ProfGuard( const char* fileName, TLineNb_t lineNb, const char* fctName, const char* className, TGroup_t groupId ) VDBG_NOEXCEPT
+   ProfGuard( const char* fileName, TLineNb_t lineNb, const char* fctName, const char* className, TGroup_t groupId ) HOP_NOEXCEPT
        : _start( getTimeStamp() ),
          _fileName( fileName ),
          _className( className ),
@@ -251,11 +251,11 @@ struct LockWaitGuard
    void* mutexAddr;
 };
 
-#define VDBG_COMBINE( X, Y ) X##Y
-#define VDBG_PROF_GUARD_VAR( LINE, ARGS ) \
-   vdbg::ProfGuard VDBG_COMBINE( vdbgProfGuard, LINE ) ARGS
+#define HOP_COMBINE( X, Y ) X##Y
+#define HOP_PROF_GUARD_VAR( LINE, ARGS ) \
+   hop::ProfGuard HOP_COMBINE( hopProfGuard, LINE ) ARGS
 
-}  // namespace vdbg
+}  // namespace hop
 
 
 
@@ -299,9 +299,9 @@ void ringbuf_release( ringbuf_t*, size_t );
 
 /* ====================================================================== */
 
-// End of vdbg declarations
+// End of hop declarations
 
-#if defined(VDBG_IMPLEMENTATION) || defined(VDBG_SERVER_IMPLEMENTATION)
+#if defined(HOP_IMPLEMENTATION) || defined(HOP_SERVER_IMPLEMENTATION)
 
 // C includes
 #include <errno.h>
@@ -317,7 +317,7 @@ void ringbuf_release( ringbuf_t*, size_t );
 #include <unordered_map>
 #include <vector>
 
-namespace vdbg
+namespace hop
 {
 
 // ------ SharedMemory.cpp------------
@@ -330,7 +330,7 @@ bool SharedMemory::create( const char* path, size_t requestedSize, bool isConsum
 
    // TODO handle signals
    // signal( SIGINT, sig_callback_handler );
-   strncpy( _sharedMemPath, path, VDBG_SHARED_MEM_MAX_NAME_SIZE - 1 );
+   strncpy( _sharedMemPath, path, HOP_SHARED_MEM_MAX_NAME_SIZE - 1 );
    _size = requestedSize;
 
    // First try to open semaphore
@@ -385,7 +385,7 @@ bool SharedMemory::create( const char* path, size_t requestedSize, bool isConsum
       printf("/!\\ WARNING /!\\ \n"
              "Cannot have more than one instance of the consumer at a time."
              " You might be trying to run the consumer application twice or"
-             " have a dangling shared memory segment. vdbg might be unstable"
+             " have a dangling shared memory segment. hop might be unstable"
              " in this state. You could consider manually removing the shared"
              " memory, or restart your client application.\n\n");
       // Force resetting the listening state as this could cause crash. The side
@@ -400,12 +400,12 @@ bool SharedMemory::create( const char* path, size_t requestedSize, bool isConsum
    return true;
 }
 
-bool SharedMemory::hasConnectedProducer() const VDBG_NOEXCEPT
+bool SharedMemory::hasConnectedProducer() const HOP_NOEXCEPT
 {
    return (sharedMetaInfo()->flags & SharedMetaInfo::CONNECTED_PRODUCER) > 0;
 }
 
-void SharedMemory::setConnectedProducer( bool connected ) VDBG_NOEXCEPT
+void SharedMemory::setConnectedProducer( bool connected ) HOP_NOEXCEPT
 {
    if( connected )
       _sharedMetaData->flags |= SharedMetaInfo::CONNECTED_PRODUCER;
@@ -413,12 +413,12 @@ void SharedMemory::setConnectedProducer( bool connected ) VDBG_NOEXCEPT
       _sharedMetaData->flags &= ~SharedMetaInfo::CONNECTED_PRODUCER;
 }
 
-bool SharedMemory::hasConnectedConsumer() const VDBG_NOEXCEPT
+bool SharedMemory::hasConnectedConsumer() const HOP_NOEXCEPT
 {
    return (sharedMetaInfo()->flags & SharedMetaInfo::CONNECTED_CONSUMER) > 0;
 }
 
-void SharedMemory::setConnectedConsumer( bool connected ) VDBG_NOEXCEPT
+void SharedMemory::setConnectedConsumer( bool connected ) HOP_NOEXCEPT
 {
    if( connected )
       _sharedMetaData->flags |= SharedMetaInfo::CONNECTED_CONSUMER;
@@ -426,13 +426,13 @@ void SharedMemory::setConnectedConsumer( bool connected ) VDBG_NOEXCEPT
       _sharedMetaData->flags &= ~SharedMetaInfo::CONNECTED_CONSUMER;
 }
 
-bool SharedMemory::hasListeningConsumer() const VDBG_NOEXCEPT
+bool SharedMemory::hasListeningConsumer() const HOP_NOEXCEPT
 {
    const uint32_t mask = SharedMetaInfo::CONNECTED_CONSUMER | SharedMetaInfo::LISTENING_CONSUMER;
    return (sharedMetaInfo()->flags.load() & mask) == mask;
 }
 
-void SharedMemory::setListeningConsumer( bool listening ) VDBG_NOEXCEPT
+void SharedMemory::setListeningConsumer( bool listening ) HOP_NOEXCEPT
 {
    if(listening)
       _sharedMetaData->flags |= SharedMetaInfo::LISTENING_CONSUMER;
@@ -440,22 +440,22 @@ void SharedMemory::setListeningConsumer( bool listening ) VDBG_NOEXCEPT
       _sharedMetaData->flags &= ~(SharedMetaInfo::LISTENING_CONSUMER);
 }
 
-uint8_t* SharedMemory::data() const VDBG_NOEXCEPT
+uint8_t* SharedMemory::data() const HOP_NOEXCEPT
 {
    return _data;
 }
 
-ringbuf_t* SharedMemory::ringbuffer() const VDBG_NOEXCEPT
+ringbuf_t* SharedMemory::ringbuffer() const HOP_NOEXCEPT
 {
    return _ringbuf;
 }
 
-sem_t* SharedMemory::semaphore() const VDBG_NOEXCEPT
+sem_t* SharedMemory::semaphore() const HOP_NOEXCEPT
 {
    return _semaphore;
 }
 
-const SharedMemory::SharedMetaInfo* SharedMemory::sharedMetaInfo() const VDBG_NOEXCEPT
+const SharedMemory::SharedMetaInfo* SharedMemory::sharedMetaInfo() const HOP_NOEXCEPT
 {
    return _sharedMetaData;
 }
@@ -505,7 +505,7 @@ SharedMemory::~SharedMemory()
 // ------ end of SharedMemory.cpp------------
 
 // Following is the impelementation specific to client side (not server side)
-#ifndef VDBG_SERVER_IMPLEMENTATION
+#ifndef HOP_SERVER_IMPLEMENTATION
 
 // ------ cdbg_client.cpp------------
 
@@ -732,16 +732,16 @@ Client* ClientManager::Get()
    // If we have not yet created our shared memory segment, do it here
    if( !ClientManager::sharedMemory.data() )
    {
-      char path[VDBG_SHARED_MEM_MAX_NAME_SIZE] = {};
-      strncpy( path, VDBG_SHARED_MEM_PREFIX, sizeof( VDBG_SHARED_MEM_PREFIX ) );
+      char path[HOP_SHARED_MEM_MAX_NAME_SIZE] = {};
+      strncpy( path, HOP_SHARED_MEM_PREFIX, sizeof( HOP_SHARED_MEM_PREFIX ) );
       strncat(
-          path, __progname, VDBG_SHARED_MEM_MAX_NAME_SIZE - sizeof( VDBG_SHARED_MEM_PREFIX ) - 1 );
-      bool sucess = ClientManager::sharedMemory.create( path, VDBG_SHARED_MEM_SIZE, false );
+          path, __progname, HOP_SHARED_MEM_MAX_NAME_SIZE - sizeof( HOP_SHARED_MEM_PREFIX ) - 1 );
+      bool sucess = ClientManager::sharedMemory.create( path, HOP_SHARED_MEM_SIZE, false );
       assert( sucess && "Could not create shared memory" );
    }
 
    static int threadCount = 0;
-   tl_threadId = VDBG_GET_THREAD_ID();
+   tl_threadId = HOP_GET_THREAD_ID();
    threadClient.reset( new Client() );
 
    // Register producer in the ringbuffer
@@ -794,21 +794,21 @@ void ClientManager::EndLockWait( void* mutexAddr, TimeStamp start, TimeStamp end
    }
 }
 
-bool ClientManager::HasConnectedConsumer() VDBG_NOEXCEPT
+bool ClientManager::HasConnectedConsumer() HOP_NOEXCEPT
 {
    return ClientManager::sharedMemory.data() &&
           ClientManager::sharedMemory.hasConnectedConsumer();
 }
 
-bool ClientManager::HasListeningConsumer() VDBG_NOEXCEPT
+bool ClientManager::HasListeningConsumer() HOP_NOEXCEPT
 {
    return ClientManager::sharedMemory.data() &&
           ClientManager::sharedMemory.hasListeningConsumer();
 }
 
-#endif  // end !VDBG_SERVER_IMPLEMENTATION
+#endif  // end !HOP_SERVER_IMPLEMENTATION
 
-} // end of namespace vdbg
+} // end of namespace hop
 
 
 #include <stdio.h>
@@ -1201,7 +1201,7 @@ void ringbuf_release( ringbuf_t* rbuf, size_t nbytes )
 
 // void* vdbg_details_start_wait_lock( size_t threadId )
 // {
-//    auto client = vdbg::details::ClientProfiler::Get( threadId, false );
+//    auto client = hop::details::ClientProfiler::Get( threadId, false );
 //    if( client )
 //    {
 //       printf( "increase push trace lvl\n");
@@ -1218,15 +1218,15 @@ void ringbuf_release( ringbuf_t* rbuf, size_t nbytes )
 // {
 //    if( clientProfiler )
 //    {
-//       auto client = reinterpret_cast<vdbg::details::ClientProfiler::Impl*>( clientProfiler );
+//       auto client = reinterpret_cast<hop::details::ClientProfiler::Impl*>( clientProfiler );
 //       --client->_pushTraceLevel;
 //       client->addWaitLockTrace( mutexAddr, timeStampStart, timeStampEnd );
 //       printf( "decrease push trace lvl\n");
 //    }
 // }
 
-#endif  // end VDBG_IMPLEMENTATION
+#endif  // end HOP_IMPLEMENTATION
 
-#endif  // !defined(VDBG_ENABLED)
+#endif  // !defined(HOP_ENABLED)
 
-#endif  // VDBG_H_
+#endif  // HOP_H_

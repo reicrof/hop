@@ -1,6 +1,4 @@
-//#include <client.h>
 #include <cstring>
-//#include <vdbg_client.h>
 #include <chrono>
 #include <thread>
 
@@ -9,8 +7,8 @@
 #include <mutex>
 #include <time.h>
 
-#define VDBG_IMPLEMENTATION
-#include <vdbg.h>
+#define HOP_IMPLEMENTATION
+#include <Hop.h>
 
 using namespace std::chrono_literals;
 
@@ -19,13 +17,13 @@ size_t count = 0;
 
 void stall()
 {
-   VDBG_PROF_FUNC();
+   HOP_PROF_FUNC();
    std::this_thread::sleep_for(10ms);
 }
 
 void buggyFunction()
 {
-   VDBG_PROF_FUNC();
+   HOP_PROF_FUNC();
    std::this_thread::sleep_for(500us);
    if( count % 20 == 0 )
    {
@@ -37,19 +35,19 @@ void buggyFunction()
 // {
 //    void callBuggyFunction()
 //    {
-//       VDBG_PROF_MEMBER_FUNC();
+//       HOP_PROF_MEMBER_FUNC();
 //       buggyFunction();
 //    }
 // };
 
 void func3()
 {
-   VDBG_PROF_FUNC();
+   HOP_PROF_FUNC();
    std::this_thread::sleep_for(1ms);
 }
 void func2()
 {
-   VDBG_PROF_FUNC();
+   HOP_PROF_FUNC();
    func3();
    buggyFunction();
    func3();
@@ -57,7 +55,7 @@ void func2()
 void func1()
 {
    static size_t i = 0;
-   VDBG_PROF_FUNC();
+   HOP_PROF_FUNC();
    func2();
    ++i;
    printf( "%lu\n", i );
@@ -74,13 +72,13 @@ void doEvenMoreStuff()
       micros = 1;
    }
    std::chrono::microseconds waittime(micros);
-   VDBG_PROF_FUNC();
+   HOP_PROF_FUNC();
    std::this_thread::sleep_for(waittime);
 }
 
 void doMoreStuf()
 {
-   VDBG_PROF_FUNC();
+   HOP_PROF_FUNC();
    std::this_thread::sleep_for(50us);
    for( int i = 0; i < 200; ++i )
       doEvenMoreStuff();
@@ -88,10 +86,10 @@ void doMoreStuf()
 
 void takeMutexAndDoStuff()
 {
-   VDBG_PROF_FUNC();
+   HOP_PROF_FUNC();
    std::lock_guard<std::mutex> g(m);
    {
-      VDBG_PROF_FUNC();
+      HOP_PROF_FUNC();
       doMoreStuf();
       //std::this_thread::sleep_for(10us);
       std::this_thread::sleep_for(2ms);
@@ -137,7 +135,7 @@ int main()
 
    while(true)
    {
-      VDBG_PROF_FUNC();
+      HOP_PROF_FUNC();
       using namespace std::chrono_literals;
       std::lock_guard<std::mutex> g(m);
       std::this_thread::sleep_for(10ms);

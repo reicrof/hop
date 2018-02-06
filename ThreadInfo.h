@@ -1,12 +1,12 @@
 #ifndef THREAD_INFO_H_
 #define THREAD_INFO_H_
 
-#include "vdbg.h"
+#include "Hop.h"
 #include "DisplayableTraces.h"
 
 #include <vector>
 
-namespace vdbg
+namespace hop
 {
 struct ThreadInfo
 {

@@ -1,7 +1,7 @@
 UNAME := $(shell uname)
 TARGET_SERVER = multiproc_server
 TARGET_CLIENT = multiproc_client
-TARGET_PTHREAD_WRAP = vdbg_functions_wrap.so
+TARGET_PTHREAD_WRAP = hop_wrap.so
 
 CXXFLAGS = -std=c++14 -Wall -Wextra -pedantic
 ENABLED_WARNINGS = -Wconversion-null -Wempty-body -Wignored-qualifiers -Wsign-compare -Wtype-limits -Wuninitialized
@@ -14,13 +14,13 @@ CLIENT_SOURCES = $(wildcard test_client/*.cpp)
 PTHREAD_WRAP_SOURCES =
 
 COMMON_INCLUDES = -isystem.
-CLIENT_DEFINE = -DVDBG_ENABLED
+CLIENT_DEFINE = -DHOP_ENABLED
 
 PLATFORM_LD_FLAGS = 
 ifeq ($(UNAME), Linux)
    CXX = clang++
    PLATFORM_LD_FLAGS = -lGL -lrt
-   PTHREAD_WRAP_SOURCES = vdbg_functions_wrap.cpp
+   PTHREAD_WRAP_SOURCES = hop_wrap.cpp
 else ifeq ($(UNAME), Darwin)
    CXX = clang++
    PLATFORM_LD_FLAGS = -framework OpenGL -framework Quartz -framework Cocoa -Wl,-undefined,dynamic_lookup
@@ -34,7 +34,7 @@ LDFLAGS = -lpthread ./SDL2/libSDL2.a -ldl $(PLATFORM_LD_FLAGS)
 
 # server target
 $(TARGET_SERVER): $(SERVER_SOURCES)
-	$(CXX) $(CXXFLAGS) $(SERVER_SOURCES) $(INC) $(LDFLAGS) -o $(TARGET_SERVER) -ffast-math -DVDBG_ENABLED
+	$(CXX) $(CXXFLAGS) $(SERVER_SOURCES) $(INC) $(LDFLAGS) -o $(TARGET_SERVER) -ffast-math -DHOP_ENABLED
 
 # client target
 $(TARGET_CLIENT): $(CLIENT_SOURCES)
@@ -42,7 +42,7 @@ $(TARGET_CLIENT): $(CLIENT_SOURCES)
 
 # pthread wrapper library
 $(TARGET_PTHREAD_WRAP): $(PTHREAD_WRAP_SOURCES)
-	$(CXX) -std=c++14 -fPIC -shared $(PTHREAD_WRAP_SOURCES) -ldl $(INC) -DVDBG_ENABLED -o $(TARGET_PTHREAD_WRAP) -g
+	$(CXX) -std=c++14 -fPIC -shared $(PTHREAD_WRAP_SOURCES) -ldl $(INC) -DHOP_ENABLED -o $(TARGET_PTHREAD_WRAP) -g
 
 .PHONY : clean
 clean:

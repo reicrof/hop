@@ -1,14 +1,14 @@
-#ifndef VDBG_SERVER_H_
-#define VDBG_SERVER_H_
+#ifndef HOP_SERVER_H_
+#define HOP_SERVER_H_
 
 #include <imdbg.h>
-#include <vdbg.h>
+#include <Hop.h>
 
 #include <vector>
 #include <thread>
 #include <mutex>
 
-namespace vdbg
+namespace hop
 {
 class Server
 {
@@ -43,6 +43,6 @@ class Server
    std::vector<std::vector<LockWait> > pendingLockWaits;
 };
 
-}  // namespace vdbg
+}  // namespace hop
 
-#endif  // VDBG_SERVER_H_
+#endif  // HOP_SERVER_H_

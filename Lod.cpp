@@ -8,17 +8,17 @@
 
 static bool canBeLoded(
     int lodLevel,
-    vdbg::TimeStamp timeBetweenTrace,
-    vdbg::TimeStamp lastTraceDelta,
-    vdbg::TimeStamp newTraceDelta )
+    hop::TimeStamp timeBetweenTrace,
+    hop::TimeStamp lastTraceDelta,
+    hop::TimeStamp newTraceDelta )
 {
-   const auto minTraceSize = vdbg::LOD_MIN_SIZE_MICROS[lodLevel] * 1000;
+   const auto minTraceSize = hop::LOD_MIN_SIZE_MICROS[lodLevel] * 1000;
    const auto maxTimeBetweenTrace = minTraceSize * 1.5;
    return lastTraceDelta < minTraceSize && newTraceDelta < minTraceSize &&
         timeBetweenTrace < maxTimeBetweenTrace;
 }
 
-namespace vdbg
+namespace hop
 {
 LodsArray computeLods( const DisplayableTraces& traces, size_t idOffset )
 {
@@ -185,4 +185,4 @@ void appendLods( LodsArray& dst, const LodsArray& src )
    }
 }
 
-} // vdbg
+} // namespace hop

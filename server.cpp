@@ -1,4 +1,4 @@
-#include <server.h>
+#include "Server.h"
 #include "Utils.h"
 
 #include <stdio.h>
@@ -9,7 +9,7 @@
 #include <algorithm>
 #include <chrono>
 
-namespace vdbg
+namespace hop
 {
 bool Server::start( const char* name )
 {
@@ -24,7 +24,7 @@ bool Server::start( const char* name )
          // Try to get the shared memory
          if( !_sharedMem.data() )
          {
-            bool success = _sharedMem.create( name, VDBG_SHARED_MEM_SIZE, true );
+            bool success = _sharedMem.create( name, HOP_SHARED_MEM_SIZE, true );
             if( !success )
             {
                using namespace std::chrono_literals;
@@ -135,7 +135,7 @@ size_t Server::handleNewMessage( uint8_t* data, size_t maxSize )
 }
 
 void Server::getPendingProfilingTraces(
-    std::vector< vdbg::DisplayableTraces >& tracesFrame,
+    std::vector< hop::DisplayableTraces >& tracesFrame,
     std::vector< std::vector< char > >& stringData,
     std::vector< uint32_t >& threadIds )
 {
@@ -178,4 +178,4 @@ void Server::stop()
    }
 }
 
-}  // namespace vdbg
+}  // namespace hop

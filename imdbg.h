@@ -1,7 +1,7 @@
 #ifndef IMDBG_H_
 #define IMDBG_H_
 
-#include "vdbg.h"
+#include "Hop.h"
 #include "ThreadInfo.h"
 
 #include <array>
@@ -10,7 +10,7 @@
 #include <vector>
 #include <memory>
 
-namespace vdbg
+namespace hop
 {
 class ProfilerTimeline
 {
@@ -80,11 +80,11 @@ private:
    // TODO: rethink and redo this part
    std::unique_ptr< Server > _server;
    std::vector< uint32_t > threadIds;
-   std::vector< vdbg::DisplayableTraces > pendingTraces;
+   std::vector< hop::DisplayableTraces > pendingTraces;
    std::vector< std::vector< char > > stringData;
 
    std::vector< uint32_t > threadIdsLockWaits;
-   std::vector<std::vector< vdbg::LockWait > > pendingLockWaits;
+   std::vector<std::vector< hop::LockWait > > pendingLockWaits;
 };
 
 // Initialize the imgui framework
@@ -96,6 +96,6 @@ void onNewFrame( int width, int height, int mouseX, int mouseY, bool lmbPressed,
 // Draw the ui
 void draw();
 
-} // namespace vdbg
+} // namespace hop
 
 #endif  // IMDBG_H_

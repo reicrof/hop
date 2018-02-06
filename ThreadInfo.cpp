@@ -5,7 +5,7 @@
 #include <algorithm>
 #include <cassert>
 
-namespace vdbg
+namespace hop
 {
 ThreadInfo::ThreadInfo() { traces.reserve( 1024 ); }
 

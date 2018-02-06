@@ -3,7 +3,7 @@
 #include <algorithm>
 #include <cassert>
 
-namespace vdbg
+namespace hop
 {
 
 void DisplayableTraces::append( const DisplayableTraces& newTraces )
