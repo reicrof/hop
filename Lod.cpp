@@ -138,36 +138,35 @@ void appendLods( LodsArray& dst, const LodsArray& src )
          int depthRemaining = deepestDepth;
          while( depthRemaining >= 0 )
          {
+            bool wasLoded = false;
             if( newTraceIt->depth == depthRemaining )
             {
-               for( int64_t dstIndex = dst[i].size() - 1; dstIndex >= 0; --dstIndex )
+               // Find the last trace that has the same depth as the processed one
+               const auto sameDepthIt = std::find_if( dst[i].rbegin(), dst[i].rend(), [=]( const LodInfo& o )
                {
-                  // Check if we have found the previous trace at our current depth
-                  auto& prevTrace = dst[i][dstIndex];
-                  if( prevTrace.depth == depthRemaining )
-                  {
-                     const auto timeBetweenTrace = (newTraceIt->end - newTraceIt->delta) - prevTrace.end;
-                     if( canBeLoded( i, timeBetweenTrace, prevTrace.delta, newTraceIt->delta ) )
-                     {
-                        prevTrace.end = newTraceIt->end;
-                        prevTrace.delta += timeBetweenTrace + newTraceIt->delta;
-                        prevTrace.isLoded = true;
-                        sortFromIdx = std::min( (size_t)dstIndex, sortFromIdx );
-                     }
-                     else
-                     {
-                        nonLodedInfos.push_back( *newTraceIt );
-                     }
+                  return o.depth == depthRemaining;
+               } );
 
-                     break;
+               // Check if we can merge it if the previous one at the same depth
+               if( sameDepthIt != dst[i].rend() )
+               {
+                  const auto timeBetweenTrace = (newTraceIt->end - newTraceIt->delta) - sameDepthIt->end;
+                  wasLoded = canBeLoded( i, timeBetweenTrace, sameDepthIt->delta, newTraceIt->delta );
+                  if( wasLoded )
+                  {
+                     sameDepthIt->end = newTraceIt->end;
+                     sameDepthIt->delta += timeBetweenTrace + newTraceIt->delta;
+                     sameDepthIt->isLoded = true;
+                     const size_t dist = (size_t)std::distance( dst[i].rend(), sameDepthIt);
+                     sortFromIdx = std::min( dist, sortFromIdx );
                   }
                }
+
                --depthRemaining;
             }
-            else
-            {
+
+            if( !wasLoded )
                nonLodedInfos.push_back( *newTraceIt );
-            }
 
             // Continue inserting
             ++newTraceIt;
