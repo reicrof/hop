@@ -213,7 +213,7 @@ class ClientManager
 class ProfGuard
 {
   public:
-   ProfGuard( const char* fileName, TLineNb_t lineNb, const char* fctName, const char* className, TGroup_t groupId ) HOP_NOEXCEPT
+   ProfGuard( const char* fileName, TLineNb_t lineNb, const char* className, const char* fctName, TGroup_t groupId ) HOP_NOEXCEPT
        : _start( getTimeStamp() ),
          _fileName( fileName ),
          _className( className ),
@@ -225,7 +225,7 @@ class ProfGuard
    }
    ~ProfGuard()
    {
-      ClientManager::EndProfile( _fileName, _fctName, _className, _start, getTimeStamp(), _lineNb, _group );
+      ClientManager::EndProfile( _fileName, _className, _fctName, _start, getTimeStamp(), _lineNb, _group );
    }
 
   private:
@@ -584,9 +584,9 @@ class Client
       // Convert string pointers to index in the string database
       struct StringsIdx
       {
-         StringsIdx( TStrIdx_t f, TStrIdx_t fct, TStrIdx_t c )
-             : fileName( f ), fctName( fct ), className( c ) {}
-         TStrIdx_t fileName, fctName, className;
+         StringsIdx( TStrIdx_t f, TStrIdx_t c, TStrIdx_t fct )
+             : fileName( f ), className( c ), fctName( fct ) {}
+         TStrIdx_t fileName, className, fctName;
       };
 
       std::vector< StringsIdx > classFctNamesIdx;
@@ -765,8 +765,8 @@ void ClientManager::StartProfile()
 
 void ClientManager::EndProfile(
     const char* fileName,
-    const char* fctName,
     const char* className,
+    const char* fctName,
     TimeStamp start,
     TimeStamp end,
     TLineNb_t lineNb,

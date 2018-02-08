@@ -9,6 +9,7 @@ namespace hop
       double drawingTimeMs;
       double fetchTimeMs;
       int currentLOD;
+      long long selectedTrace;
    };
 
    extern Stats g_stats;

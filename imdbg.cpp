@@ -591,6 +591,22 @@ void hop::Profiler::handleHotkey()
    {
       setRecording( !_recording );
    }
+   else if( ImGui::IsKeyPressed( SDL_SCANCODE_LEFT ) )
+   {
+      printf("Left arrow\n");
+   }
+   else if( ImGui::IsKeyPressed( SDL_SCANCODE_RIGHT ) )
+   {
+      printf("Right arrow\n");
+   }
+   else if( ImGui::IsKeyPressed( SDL_SCANCODE_UP ) )
+   {
+      printf("Up arrow\n");
+   }
+   else if( ImGui::IsKeyPressed( SDL_SCANCODE_DOWN ) )
+   {
+      printf("Down arrow\n");
+   }
 }
 
 void hop::Profiler::setRecording( bool recording )

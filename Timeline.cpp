@@ -334,6 +334,7 @@ void Timeline::drawTraces(
    };
 
    static std::vector<DrawingInfo> tracesToDraw, lodTracesToDraw;
+   DrawingInfo selTraceDrawingInfo{};
    tracesToDraw.clear();
    lodTracesToDraw.clear();
 
@@ -369,11 +370,13 @@ void Timeline::drawTraces(
 
       // Find the the first trace on the left and right that have a depth of 0. This prevents
       // traces that have a smaller depth than the one foune previously to vanish.
-      while ( firstTraceId > 0 && data.traces.depths[--firstTraceId] != 0 )
+      while ( firstTraceId > 0 && data.traces.depths[firstTraceId] != 0 )
       {
+         --firstTraceId;
       }
-      while ( lastTraceId < data.traces.depths.size() && data.traces.depths[++lastTraceId] != 0 )
+      while ( lastTraceId < data.traces.depths.size() && data.traces.depths[lastTraceId] != 0 )
       {
+         ++lastTraceId;
       }
       if ( lastTraceId < data.traces.depths.size() )
       {
@@ -399,6 +402,11 @@ void Timeline::drawTraces(
              posY + curDepth * ( TRACE_HEIGHT + TRACE_VERTICAL_PADDING ) );
 
          tracesToDraw.push_back( DrawingInfo{tracePos, traceLengthPxl, traceTimeMs, i} );
+
+         if( i == _selection.id )
+         {
+            selTraceDrawingInfo = DrawingInfo{tracePos, traceLengthPxl, traceTimeMs, i};
+         }
       }
    }
    else
@@ -447,11 +455,19 @@ void Timeline::drawTraces(
          else
             tracesToDraw.push_back(
                 DrawingInfo{tracePos, traceLengthPxl, traceTimeMs, t.traceIndex} );
+
+         if( i == _selection.lodIds[lodLevel] )
+         {
+            selTraceDrawingInfo = DrawingInfo{tracePos, traceLengthPxl, traceTimeMs, i};
+         }
       }
    }
 
    _maxTraceDepthPerThread[threadIndex] =
        std::max( _maxTraceDepthPerThread[threadIndex], maxDepth );
+
+   const bool leftMouseClicked = ImGui::IsMouseClicked( 0 );
+   const bool leftMouseDblClicked = ImGui::IsMouseDoubleClicked( 0 );
 
    ImGui::PushStyleColor( ImGuiCol_Button, ImColor( 0.2f, 0.2f, 0.75f ) );
    ImGui::PushStyleColor( ImGuiCol_ButtonHovered, ImColor( 0.3f, 0.3f, 1.0f ) );
@@ -473,13 +489,29 @@ void Timeline::drawTraces(
             ImGui::EndTooltip();
          }
 
-         if ( ImGui::IsMouseDoubleClicked( 0 ) )
+         if ( leftMouseDblClicked )
          {
             const auto traceEndMicros =
                 pxlToMicros( windowWidthPxl, _microsToDisplay, t.posPxl.x - posX + t.lengthPxl );
             const auto deltaUs = ( t.deltaMs * 1000 );
             _startMicros += traceEndMicros - deltaUs;
             _microsToDisplay = deltaUs;
+         }
+         else if( leftMouseClicked )
+         {
+            // Find the non-loded trace that is the closest to the cursor and at the right depth
+            const auto& mousePos = ImGui::GetMousePos();
+            const TimeStamp mouseInAbsoluteTime =
+               firstTraceAbsoluteTime + pxlToMicros( windowWidthPxl, _microsToDisplay, mousePos.x - posX ) * 1000;
+            const auto it = std::lower_bound(
+               data.traces.ends.begin(), data.traces.ends.end(), mouseInAbsoluteTime );
+            const int depth = (t.posPxl.y - posY) / ( TRACE_HEIGHT + TRACE_VERTICAL_PADDING );
+            size_t traceIndex = std::distance( data.traces.ends.begin(), it );
+            while( traceIndex < data.traces.depths.size() && data.traces.depths[ traceIndex ] != depth )
+            {
+               ++traceIndex;
+            }
+            selectTrace( data, threadIndex, traceIndex );
          }
       }
    }
@@ -532,16 +564,31 @@ void Timeline::drawTraces(
             ImGui::EndTooltip();
          }
 
-         if ( ImGui::IsMouseDoubleClicked( 0 ) )
+         if ( leftMouseDblClicked )
          {
             _microsToDisplay = t.deltaMs * 1000;
             _startMicros =
                 ( data.traces.ends[traceIndex] - data.traces.deltas[traceIndex] - absoluteStart ) *
                 0.001;
          }
+         else if( leftMouseClicked )
+         {
+            selectTrace( data, threadIndex, traceIndex );
+         }
       }
    }
    ImGui::PopStyleColor( 3 );
+
+   // Draw selected trace
+   if( _selection.id != Timeline::Selection::NONE )
+   {
+      ImGui::PushStyleColor( ImGuiCol_Button, ImColor( 1.0f, 1.0f, 1.0f, 0.5f ) );
+      ImGui::PushStyleColor( ImGuiCol_ButtonHovered, ImColor( 1.0f, 1.0f, 1.0f, 0.4f ) );
+      ImGui::PushStyleColor( ImGuiCol_ButtonActive, ImColor( 1.0f, 1.0f, 1.0f, 0.4f ) );
+      ImGui::SetCursorScreenPos( selTraceDrawingInfo.posPxl );
+      ImGui::Button( "", ImVec2( selTraceDrawingInfo.lengthPxl, TRACE_HEIGHT ) );
+      ImGui::PopStyleColor( 3 );
+   }
 
    ImGui::SetCursorScreenPos( ImVec2{
        posX,
@@ -588,6 +635,26 @@ void Timeline::drawLockWaits(
       }
    }
    ImGui::PopStyleColor( 3 );
+}
+
+void Timeline::selectTrace( const ThreadInfo& data, uint32_t threadIndex, size_t traceIndex )
+{
+   _selection.threadIndex = threadIndex;
+   _selection.id = traceIndex;
+   int wantedDepth = data.traces.depths[ traceIndex ];
+   for ( int i = 0; i < LOD_COUNT; ++i )
+   {
+      const auto& lods = data.traces._lods[i];
+      auto lodIt = std::lower_bound(
+          lods.begin(), lods.end(), LodInfo{data.traces.ends[traceIndex], 0, 0, 0, false} );
+      while( lodIt != lods.end() && lodIt->depth != wantedDepth )
+      {
+         ++lodIt;
+      }
+      _selection.lodIds[i] = std::distance( lods.begin(), lodIt );
+   }
+
+   g_stats.selectedTrace = traceIndex;
 }
 
 } // namespace hop

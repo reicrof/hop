@@ -7,7 +7,7 @@
 
 namespace hop
 {
-ThreadInfo::ThreadInfo() { traces.reserve( 1024 ); }
+ThreadInfo::ThreadInfo() { traces.reserve( 2048 ); }
 
 void ThreadInfo::addTraces( const DisplayableTraces& newTraces )
 {

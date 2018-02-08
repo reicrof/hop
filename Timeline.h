@@ -2,6 +2,7 @@
 #define TIMELINE_H_
 
 #include "Hop.h"
+#include "Lod.h"
 
 #include <vector>
 
@@ -35,6 +36,15 @@ class Timeline
    void handleMouseDrag( float mousePosX, float mousePosY );
    void handleMouseWheel( float mousePosX, float mousePosY );
    void zoomOn( int64_t microToZoomOn, float zoomFactor );
+   void selectTrace( const ThreadInfo& data, uint32_t threadIndex, size_t traceIndex );
+
+   struct Selection
+   {
+      static constexpr size_t NONE = -1;
+      uint32_t threadIndex;
+      size_t id{NONE};
+      size_t lodIds[ LOD_COUNT ];
+   } _selection;
 
    int64_t _startMicros{0};
    uint64_t _microsToDisplay{50000};

@@ -13,6 +13,7 @@ void drawStatsWindow( const Stats& stats )
                 "   Drawing took %f ms\n"
                 "---------------------", stats.fetchTimeMs, stats.drawingTimeMs );
    ImGui::Text( "Current LOD : %d", stats.currentLOD );
+   ImGui::Text( "Selected trace : %lld", stats.selectedTrace );
 }
 
 }
