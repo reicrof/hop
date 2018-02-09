@@ -57,7 +57,7 @@ class Timeline
    struct Selection
    {
       static constexpr size_t NONE = -1;
-      uint32_t threadIndex;
+      int threadIndex;
       size_t id{NONE};
       size_t lodIds[ LOD_COUNT ];
    } _selection;

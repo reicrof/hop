@@ -614,7 +614,7 @@ void Timeline::drawTraces(
    ImGui::PopStyleColor( 3 );
 
    // Draw selected trace
-   if( _selection.id != Timeline::Selection::NONE )
+   if( _selection.id != Timeline::Selection::NONE && _selection.threadIndex == threadIndex )
    {
       ImGui::PushStyleColor( ImGuiCol_Button, ImColor( 1.0f, 1.0f, 1.0f, 0.5f ) );
       ImGui::PushStyleColor( ImGuiCol_ButtonHovered, ImColor( 1.0f, 1.0f, 1.0f, 0.4f ) );

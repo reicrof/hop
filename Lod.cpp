@@ -13,7 +13,7 @@ static bool canBeLoded(
     hop::TimeStamp newTraceDelta )
 {
    const auto minTraceSize = hop::LOD_MIN_SIZE_MICROS[lodLevel] * 1000;
-   const auto maxTimeBetweenTrace = minTraceSize * 1.5;
+   const auto maxTimeBetweenTrace = minTraceSize;
    return lastTraceDelta < minTraceSize && newTraceDelta < minTraceSize &&
         timeBetweenTrace < maxTimeBetweenTrace;
 }
