@@ -478,7 +478,7 @@ static bool drawPlayStopButton( bool& isRecording )
 
 void hop::Profiler::draw()
 {
-   //ImGui::SetNextWindowSize(ImVec2(700,500), ImGuiSetCond_FirstUseEver);
+   ImGui::SetNextWindowSize(ImVec2(1000,500), ImGuiSetCond_FirstUseEver);
    ImGui::PushStyleVar( ImGuiStyleVar_WindowMinSize, ImVec2( 100, 100 ) );
    if ( !ImGui::Begin( _name.c_str(), nullptr, ImGuiWindowFlags_NoScrollWithMouse | ImGuiWindowFlags_MenuBar | ImGuiWindowFlags_NoScrollbar ) )
    {

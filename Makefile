@@ -18,7 +18,7 @@ CLIENT_DEFINE = -DHOP_ENABLED
 
 PLATFORM_LD_FLAGS = 
 ifeq ($(UNAME), Linux)
-   CXX = clang++
+   CXX = g++7
    PLATFORM_LD_FLAGS = -lGL -lrt
    PTHREAD_WRAP_SOURCES = hop_wrap.cpp
 else ifeq ($(UNAME), Darwin)

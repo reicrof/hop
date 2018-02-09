@@ -342,8 +342,6 @@ void Timeline::zoomOn( int64_t microToZoomOn, float zoomFactor )
       const int64_t timeDiff = pxlToMicros( windowWidthPxl, _microsToDisplay, pxlDiff );
       setStartMicro( _startMicros + timeDiff, false );
    }
-
-   printf( "%llu\n", _microsToDisplay );
 }
 
 void Timeline::drawTraces(

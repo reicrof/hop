@@ -116,7 +116,7 @@ int main( int argc, const char* argv[] )
    }
 
    SDL_Window* window = SDL_CreateWindow(
-       "hop", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, 1600, 1024, SDL_WINDOW_OPENGL );
+       "hop", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, 1600, 1024, SDL_WINDOW_OPENGL | SDL_WINDOW_RESIZABLE );
 
    if ( window == NULL )
    {
@@ -126,7 +126,6 @@ int main( int argc, const char* argv[] )
 
    sdlImGuiInit();
 
-   SDL_SetWindowResizable( window, SDL_TRUE );
    SDL_GLContext mainContext = SDL_GL_CreateContext( window );
    SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_CORE);
    SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 3);
