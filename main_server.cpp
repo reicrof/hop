@@ -1,10 +1,9 @@
 #define HOP_IMPLEMENTATION
 #include <Hop.h>
+#include "Profiler.h"
 #include "Stats.h"
 #include "imgui/imgui.h"
 #include <SDL2/SDL.h>
-
-#include <imdbg.h>
 
 #include <rapidjson/document.h>
 

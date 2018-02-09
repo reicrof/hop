@@ -1,5 +1,5 @@
-#ifndef IMDBG_H_
-#define IMDBG_H_
+#ifndef PROFILER_H_
+#define PROFILER_H_
 
 #include "Hop.h"
 #include "Timeline.h"
@@ -59,4 +59,4 @@ void draw();
 
 } // namespace hop
 
-#endif  // IMDBG_H_
+#endif  // PROFILER_H_
