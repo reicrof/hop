@@ -654,6 +654,8 @@ void Timeline::selectTrace( const ThreadInfo& data, uint32_t threadIndex, size_t
       _selection.lodIds[i] = std::distance( lods.begin(), lodIt );
    }
 
+   setRealtime( false );
+
    g_stats.selectedTrace = traceIndex;
 }
 
