@@ -12,6 +12,7 @@ struct ThreadInfo;
 class Timeline
 {
   public:
+   void update( float deltaTimeMs ) noexcept;
    void draw(
        const std::vector<ThreadInfo>& _tracesPerThread,
        const std::vector<uint32_t>& threadIds );
@@ -22,10 +23,13 @@ class Timeline
    int64_t microsToDisplay() const noexcept;
    float windowWidthPxl() const noexcept;
 
-   void moveToStart() noexcept;
-   void moveToPresentTime() noexcept;
-   void moveToTime( int64_t timeInMicro ) noexcept;
-
+   // Move to first trace
+   void moveToStart( bool animate = true ) noexcept;
+   // Move to latest time
+   void moveToPresentTime( bool animate = true ) noexcept;
+   // Move timeline so the specified time is in the middle
+   void moveToTime( int64_t timeInMicro, bool animate = true ) noexcept;
+   // Update timeline to always display last race
    void setRealtime( bool isRealtime ) noexcept;
    bool realtime() const noexcept;
 
@@ -37,14 +41,8 @@ class Timeline
    void handleMouseWheel( float mousePosX, float mousePosY );
    void zoomOn( int64_t microToZoomOn, float zoomFactor );
    void selectTrace( const ThreadInfo& data, uint32_t threadIndex, size_t traceIndex );
-
-   struct Selection
-   {
-      static constexpr size_t NONE = -1;
-      uint32_t threadIndex;
-      size_t id{NONE};
-      size_t lodIds[ LOD_COUNT ];
-   } _selection;
+   void setStartMicro( int64_t timeInMicro, bool withAnimation = true ) noexcept;
+   void setZoom( uint64_t microsToDisplay, bool withAnimation = true );
 
    int64_t _startMicros{0};
    uint64_t _microsToDisplay{50000};
@@ -55,6 +53,20 @@ class Timeline
    TDepth_t _maxTraceDepthPerThread[MAX_THREAD_NB] = {};
    float _windowWidthPxl{0};
    bool _realtime{true};
+
+   struct Selection
+   {
+      static constexpr size_t NONE = -1;
+      uint32_t threadIndex;
+      size_t id{NONE};
+      size_t lodIds[ LOD_COUNT ];
+   } _selection;
+
+   struct AnimationState
+   {
+      int64_t targetStartMicros{0};
+      uint64_t targetMicrosToDisplay{50000};
+   } _animationState;
 };
 }
 

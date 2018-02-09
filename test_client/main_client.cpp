@@ -18,32 +18,33 @@ size_t count = 0;
 void stall()
 {
    HOP_PROF_FUNC();
-   std::this_thread::sleep_for(10ms);
+   std::this_thread::sleep_for(100us);
 }
 
 void buggyFunction()
 {
    HOP_PROF_FUNC();
-   std::this_thread::sleep_for(500us);
+   std::this_thread::sleep_for(250us);
    if( count % 20 == 0 )
    {
-      stall();
+      for( int i =0; i < 100; ++i )
+         stall();
    }
 }
 
-// struct MaClasse
-// {
-//    void callBuggyFunction()
-//    {
-//       HOP_PROF_MEMBER_FUNC();
-//       buggyFunction();
-//    }
-// };
+struct MaClasse
+{
+   void callBuggyFunction()
+   {
+      HOP_PROF_MEMBER_FUNC();
+      buggyFunction();
+   }
+};
 
 void func3()
 {
    HOP_PROF_FUNC_WITH_GROUP(42);
-   std::this_thread::sleep_for(1ms);
+   std::this_thread::sleep_for(500us);
 }
 void func2()
 {
@@ -79,7 +80,7 @@ void doEvenMoreStuff()
 void doMoreStuf()
 {
    HOP_PROF_FUNC_WITH_GROUP(42);
-   std::this_thread::sleep_for(50us);
+   std::this_thread::sleep_for(25us);
    for( int i = 0; i < 200; ++i )
       doEvenMoreStuff();
 }
@@ -92,7 +93,7 @@ void takeMutexAndDoStuff()
       HOP_PROF_FUNC_WITH_GROUP(42);
       doMoreStuf();
       //std::this_thread::sleep_for(10us);
-      std::this_thread::sleep_for(2ms);
+      std::this_thread::sleep_for(1ms);
       doMoreStuf();
    }
 }
@@ -133,15 +134,19 @@ int main()
 
    //const auto preDrawTime = std::chrono::system_clock::now();
 
+   std::thread t1 ( [](){ while( true ) { func1(); } } );
+   std::thread t2 ( [](){ while( true ) { func1(); } } );
+   std::thread t3 ( [](){ while( true ) { func1(); } } );
+
    while(true)
    {
       HOP_PROF_FUNC_WITH_GROUP(42);
       using namespace std::chrono_literals;
       std::lock_guard<std::mutex> g(m);
-      std::this_thread::sleep_for(10ms);
+      std::this_thread::sleep_for(3ms);
       func1();
-      // MaClasse a;
-      // a.callBuggyFunction();
+      MaClasse a;
+      a.callBuggyFunction();
       ++count;
    }
 

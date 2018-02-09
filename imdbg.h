@@ -19,6 +19,7 @@ struct Profiler
 {
    Profiler( const std::string& name );
    ~Profiler();
+   void update( float deltaTimeMs ) noexcept;
    void draw();
    void fetchClientData();
    void addTraces( const DisplayableTraces& traces, uint32_t threadId );

@@ -14,6 +14,29 @@ static constexpr uint64_t MAX_MICROS_TO_DISPLAY = 900000000;
 namespace hop
 {
 
+void Timeline::update( float deltaTimeMs ) noexcept
+{
+   if( _startMicros != _animationState.targetStartMicros )
+   {
+      int64_t delta = _animationState.targetStartMicros - _startMicros;
+      if( std::abs( delta ) < 3 )
+      {
+         _startMicros = _animationState.targetStartMicros;
+      }
+      _startMicros += delta * deltaTimeMs * 0.01f;
+   }
+
+   if( _microsToDisplay != _animationState.targetMicrosToDisplay )
+   {
+      int64_t delta = _animationState.targetMicrosToDisplay - _microsToDisplay;
+      if( std::abs( delta ) < 3 )
+      {
+         _microsToDisplay = _animationState.targetMicrosToDisplay;
+      }
+      _microsToDisplay += delta * deltaTimeMs * 0.01f;
+   }
+}
+
 void Timeline::draw(
     const std::vector<ThreadInfo>& tracesPerThread,
     const std::vector<uint32_t>& threadIds )
@@ -198,7 +221,7 @@ void Timeline::handleMouseDrag( float mouseInCanvasX, float mouseInCanvasY )
       const auto delta = ImGui::GetMouseDragDelta();
       const int64_t deltaXInMicros =
           pxlToMicros<int64_t>( windowWidthPxl, _microsToDisplay, delta.x );
-      _startMicros -= deltaXInMicros;
+      setStartMicro( _startMicros - deltaXInMicros, false );
 
       // Switch to the traces context to modify the scroll
       ImGui::BeginChild( "Traces" );
@@ -238,9 +261,8 @@ void Timeline::handleMouseDrag( float mouseInCanvasX, float mouseInCanvasY )
          const float windowWidthPxl = ImGui::GetWindowWidth();
          const int64_t minXinMicros =
              pxlToMicros<int64_t>( windowWidthPxl, _microsToDisplay, minX );
-         _startMicros += minXinMicros;
-         _microsToDisplay = pxlToMicros<int64_t>( windowWidthPxl, _microsToDisplay, maxX - minX );
-         _microsToDisplay = std::max( _microsToDisplay, MIN_MICROS_TO_DISPLAY );
+         setStartMicro( _startMicros + minXinMicros );
+         setZoom( pxlToMicros<uint64_t>( windowWidthPxl, _microsToDisplay, maxX - minX ) );
       }
 
       // Reset position
@@ -274,20 +296,34 @@ void Timeline::setAbsolutePresentTime( TimeStamp time ) noexcept
 
 int64_t Timeline::microsToDisplay() const noexcept { return _microsToDisplay; }
 
-void Timeline::moveToTime( int64_t timeInMicro ) noexcept
+void Timeline::setStartMicro( int64_t timeInMicro, bool withAnimation /*= true*/ ) noexcept
 {
-   _startMicros = timeInMicro - ( _microsToDisplay / 2 );
+   _animationState.targetStartMicros = timeInMicro;
+   if( !withAnimation )
+      _startMicros = timeInMicro;
 }
 
-void Timeline::moveToStart() noexcept
+void Timeline::moveToTime( int64_t timeInMicro, bool animate ) noexcept
 {
-   moveToTime( _microsToDisplay * 0.5f );
+   setStartMicro( timeInMicro - ( _microsToDisplay * 0.5 ), animate );
+}
+
+void Timeline::moveToStart( bool animate ) noexcept
+{
+   moveToTime( _microsToDisplay * 0.5f, animate );
    setRealtime( false );
 }
 
-void Timeline::moveToPresentTime() noexcept
+void Timeline::moveToPresentTime( bool animate ) noexcept
 {
-   moveToTime( ( _absolutePresentTime - _absoluteStartTime ) / 1000 );
+   moveToTime( ( _absolutePresentTime - _absoluteStartTime ) / 1000, animate );
+}
+
+void Timeline::setZoom( uint64_t microsToDisplay, bool withAnimation /*= true*/ )
+{
+   _animationState.targetMicrosToDisplay = hop::clamp( microsToDisplay, MIN_MICROS_TO_DISPLAY, MAX_MICROS_TO_DISPLAY );
+   if( !withAnimation )
+      _microsToDisplay = _animationState.targetMicrosToDisplay;
 }
 
 void Timeline::zoomOn( int64_t microToZoomOn, float zoomFactor )
@@ -295,9 +331,7 @@ void Timeline::zoomOn( int64_t microToZoomOn, float zoomFactor )
    const float windowWidthPxl = ImGui::GetWindowWidth();
    const size_t microToZoom = microToZoomOn - _startMicros;
    const auto prevMicrosToDisplay = _microsToDisplay;
-   _microsToDisplay *= zoomFactor;
-
-   _microsToDisplay = hop::clamp( _microsToDisplay, MIN_MICROS_TO_DISPLAY, MAX_MICROS_TO_DISPLAY );
+   setZoom( _microsToDisplay * zoomFactor, false );
 
    const int64_t prevPxlPos = microsToPxl( windowWidthPxl, prevMicrosToDisplay, microToZoom );
    const int64_t newPxlPos = microsToPxl( windowWidthPxl, _microsToDisplay, microToZoom );
@@ -306,7 +340,7 @@ void Timeline::zoomOn( int64_t microToZoomOn, float zoomFactor )
    if ( pxlDiff != 0 )
    {
       const int64_t timeDiff = pxlToMicros( windowWidthPxl, _microsToDisplay, pxlDiff );
-      _startMicros += timeDiff;
+      setStartMicro( _startMicros + timeDiff, false );
    }
 
    printf( "%llu\n", _microsToDisplay );
@@ -494,8 +528,8 @@ void Timeline::drawTraces(
             const auto traceEndMicros =
                 pxlToMicros( windowWidthPxl, _microsToDisplay, t.posPxl.x - posX + t.lengthPxl );
             const auto deltaUs = ( t.deltaMs * 1000 );
-            _startMicros += traceEndMicros - deltaUs;
-            _microsToDisplay = deltaUs;
+            setStartMicro( _startMicros + ( traceEndMicros - deltaUs ) );
+            setZoom( deltaUs );
          }
          else if( leftMouseClicked )
          {
@@ -566,10 +600,10 @@ void Timeline::drawTraces(
 
          if ( leftMouseDblClicked )
          {
-            _microsToDisplay = t.deltaMs * 1000;
-            _startMicros =
+            setZoom( t.deltaMs * 1000 );
+            setStartMicro(
                 ( data.traces.ends[traceIndex] - data.traces.deltas[traceIndex] - absoluteStart ) *
-                0.001;
+                0.001 );
          }
          else if( leftMouseClicked )
          {

@@ -31,6 +31,7 @@
 namespace
 {
 static std::chrono::time_point<std::chrono::system_clock> g_Time = std::chrono::system_clock::now();
+static float g_deltaTimeMs = 0.0f;
 static GLuint g_FontTexture = 0;
 std::vector<hop::Profiler*> _profilers;
 
@@ -238,8 +239,10 @@ void onNewFrame( int width, int height, int mouseX, int mouseY, bool lmbPressed,
 
    // Setup time step
    auto curTime = std::chrono::system_clock::now();
-   io.DeltaTime = static_cast<float>(
-       std::chrono::duration_cast<std::chrono::milliseconds>( ( curTime - g_Time ) ).count() ) / 1000.0f;
+   const float deltaTime = static_cast<float>(
+       std::chrono::duration_cast<std::chrono::milliseconds>( ( curTime - g_Time ) ).count() );
+   g_deltaTimeMs = deltaTime;
+   io.DeltaTime = deltaTime * 0.001f; // ImGui expect seconds
    g_Time = curTime;
 
    // Mouse position in screen coordinates (set to -1,-1 if no mouse / on another screen, etc.)
@@ -255,6 +258,11 @@ void onNewFrame( int width, int height, int mouseX, int mouseY, bool lmbPressed,
 
 void draw()
 {
+   for( auto p : _profilers )
+   {
+      p->update( g_deltaTimeMs );
+   }
+
    for ( auto p : _profilers )
    {
       p->draw();
@@ -428,6 +436,12 @@ Profiler::~Profiler()
 //    }
 //    return isOpen;
 // }
+
+void hop::Profiler::update( float deltaTimeMs ) noexcept
+{
+   _timeline.update( deltaTimeMs );
+}
+
 static bool ptInRect( const ImVec2& pt, const ImVec2& a, const ImVec2& b )
 {
    if( pt.x < a.x || pt.x > b.x ) return false;
@@ -498,7 +512,7 @@ void hop::Profiler::draw()
       //  Move timeline to the most recent trace if Live mode is on
       if( _recording && _timeline.realtime() )
       {
-         _timeline.moveToPresentTime();
+         _timeline.moveToPresentTime( false );
       }
 
       _timeline.draw( _tracesPerThread, _threadsId );
