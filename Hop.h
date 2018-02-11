@@ -45,6 +45,7 @@
 
 #include <windows.h>
 #define sem_handle HANDLE
+#define shm_handle HANDLE
 
 // Type defined in unistd.h
 #ifdef _WIN64
@@ -57,6 +58,7 @@
 #include <pthread.h>
 #include <semaphore.h>
 #define sem_handle sem_t*
+#define shm_handle int
 #endif
 
 #include <atomic>
@@ -201,7 +203,7 @@ class SharedMemory
    sem_handle _semaphore{NULL};
    bool _isConsumer;
    size_t _size{0};
-   int _sharedMemFd{-1};
+   shm_handle _sharedMemHandle{-1};
    char _sharedMemPath[HOP_SHARED_MEM_MAX_NAME_SIZE];
 };
 // ------ end of SharedMemory.h ------------
@@ -321,18 +323,83 @@ void ringbuf_release( ringbuf_t*, size_t );
 
 #if defined(HOP_IMPLEMENTATION) || defined(HOP_SERVER_IMPLEMENTATION)
 
-// C includes
-#include <fcntl.h>
-#include <signal.h>
-#include <sys/mman.h>
-#include <sys/un.h>
-#include <unistd.h>
-
-// C++ standard includes
+// standard includes
 #include <algorithm>
 #include <cassert>
 #include <unordered_map>
 #include <vector>
+
+#if !defined( _MSC_VER )
+
+// Unix shared memory includes
+#include <fcntl.h> //O_CREAT
+#include <cstring> // memcpy
+#include <sys/mman.h> // shm_open
+#include <unistd.h> // ftruncate
+
+#endif
+
+namespace
+{
+   sem_handle openSemaphore( const char* name )
+   {
+      sem_handle sem = NULL;
+      #if defined( _MSC_VER )
+         return NULL;
+      #else
+         sem = sem_open( name, O_CREAT, S_IRUSR | S_IWUSR, 1 );
+         if( sem == SEM_FAILED )
+         {
+            perror( "Could not acquire semaphore" );
+         }
+      #endif
+
+      return sem;
+   }
+
+   void closeSemaphore( sem_handle sem )
+   {
+      #if defined ( _MSC_VER )
+      #else
+         if ( sem_close( sem ) != 0 )
+         {
+            perror( "Could not close semaphore" );
+         }
+         if ( sem_unlink( "/mysem" ) < 0 )
+         {
+            perror( "Could not unlink semaphore" );
+         }
+      #endif
+   }
+
+   void* openSharedMemory( const char* path, size_t size, shm_handle* handle )
+   {
+      *handle = shm_open( path, O_CREAT | O_RDWR, 0666 );
+      if ( *handle < 0 )
+      {
+         return NULL;
+      }
+
+      ftruncate( *handle, size );
+
+      uint8_t* sharedMem = (uint8_t*) mmap( NULL, size, PROT_READ | PROT_WRITE, MAP_SHARED, *handle, 0 );
+      if ( sharedMem == NULL )
+      {
+         perror( "Could not map shared memory" );
+      }
+
+      return sharedMem;
+   }
+
+   void closeSharedMemory( const char* name, shm_handle handle )
+   {
+      #if defined( _MSC_VER )
+      #else
+         if ( shm_unlink( name ) != 0 ) perror( "Could not unlink shared memory" );
+      #endif
+   }
+
+}
 
 namespace hop
 {
@@ -351,32 +418,18 @@ bool SharedMemory::create( const char* path, size_t requestedSize, bool isConsum
    _size = requestedSize;
 
    // First try to open semaphore
-   _semaphore = sem_open( "/mysem", O_CREAT, S_IRUSR | S_IWUSR, 1 );
-   if( _semaphore == SEM_FAILED )
-   {
-      perror( "Could not acquire semaphore" );
-      return false;
-   }
+   _semaphore = openSemaphore( "/mysem" );
+   if( _semaphore == NULL ) return false;
 
-   _sharedMemFd = shm_open( path, O_CREAT | O_RDWR, 0666 );
-   if ( _sharedMemFd < 0 )
-   {
-      if( !isConsumer )
-      {
-         perror( "Could not shm_open shared memory" );
-      }
-      // In the case of a consumer, this simply means that there is no producer to read from.
-      return false;
-   }
-
+   // Create the shared memory next
    const size_t totalSize = ringBufSize + requestedSize + sizeof( SharedMetaInfo );
-   ftruncate( _sharedMemFd, totalSize );
-
-   uint8_t* sharedMem = (uint8_t*) mmap( NULL, totalSize, PROT_READ | PROT_WRITE, MAP_SHARED, _sharedMemFd, 0 );
-   if ( sharedMem == NULL )
+   uint8_t* sharedMem = (uint8_t*)openSharedMemory( path, totalSize, &_sharedMemHandle );
+   if( !sharedMem )
    {
-      perror( "Could not map shared memory" );
+      assert( false );
       return false;
+      //if( !isConsumer )
+         //perror( "Could not shm_open shared memory" );
    }
 
    // Get pointers inside the shared memoryu
@@ -497,16 +550,8 @@ void SharedMemory::destroy()
              ( SharedMetaInfo::CONNECTED_PRODUCER | SharedMetaInfo::CONNECTED_CONSUMER ) ) == 0 )
       {
          printf("Cleaning up shared resources...\n");
-         if ( _semaphore && sem_close( _semaphore ) != 0 )
-         {
-            perror( "Could not close semaphore" );
-         }
-
-         if ( _semaphore && sem_unlink( "/mysem" ) < 0 )
-         {
-            perror( "Could not unlink semaphore" );
-         }
-         if ( shm_unlink( _sharedMemPath ) != 0 ) perror( "Could not unlink shared memory" );
+         closeSemaphore( _semaphore );
+         closeSharedMemory( _sharedMemPath, _sharedMemHandle );
       }
 
       _data = NULL;
