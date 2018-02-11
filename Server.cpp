@@ -34,7 +34,7 @@ bool Server::start( const char* name )
             printf("Connection to shared data succesful.\n");
          }
 
-         sem_wait( _sharedMem.semaphore() );
+          _sharedMem.waitSemaphore();
          size_t offset = 0;
          const size_t bytesToRead = ringbuf_consume( _sharedMem.ringbuffer(), &offset );
          if( bytesToRead > 0 )
@@ -170,7 +170,7 @@ void Server::stop()
       // Wake up semaphore to close properly
       if( _sharedMem.data() && _sharedMem.semaphore() )
       {
-         sem_post( _sharedMem.semaphore() );
+		  _sharedMem.signalSemaphore();
       }
       if ( _thread.joinable() )
       {

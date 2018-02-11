@@ -36,31 +36,6 @@
 ///////////////////////////////////////////////////////////////
 /////     EVERYTHING AFTER THIS IS IMPL DETAILS        ////////
 ///////////////////////////////////////////////////////////////
-
-#if defined(_MSC_VER)
-
-#if !defined(_WIN64)
-    #error 32 bit not supported
-#endif
-
-#include <windows.h>
-#define sem_handle HANDLE
-#define shm_handle HANDLE
-
-// Type defined in unistd.h
-#ifdef _WIN64
-#define ssize_t __int64
-#else
-#define ssize_t long
-#endif
-
-#else
-#include <pthread.h>
-#include <semaphore.h>
-#define sem_handle sem_t*
-#define shm_handle int
-#endif
-
 #include <atomic>
 #include <memory>
 #include <chrono>
@@ -72,17 +47,61 @@
 #define HOP_CONSTEXPR constexpr
 #define HOP_NOEXCEPT noexcept
 #define HOP_STATIC_ASSERT static_assert
-#define HOP_GET_THREAD_ID() (size_t)pthread_self()
 // On MacOs the max name length seems to be 30...
 #define HOP_SHARED_MEM_MAX_NAME_SIZE 30
 #define HOP_SHARED_MEM_PREFIX "/hop_"
+
+/* Windows specific macros and defines */
+#if defined(_MSC_VER)
+#define NOMINMAX
+#include <windows.h>
+#define sem_handle HANDLE
+#define shm_handle HANDLE
+
+#define likely(x)   x
+#define unlikely(x) x
+
+inline const char* HOP_GET_PROG_NAME() HOP_NOEXCEPT
+{
+   static char name[MAX_PATH];
+   static DWORD size = GetModuleFileName( NULL, name, MAX_PATH );
+   return name;
+}
+
+#define HOP_GET_THREAD_ID() (size_t)GetCurrentThreadId()
+
+// Type defined in unistd.h
+#ifdef _WIN64
+#define ssize_t __int64
+#else
+#define ssize_t long
+
+#if !defined(_WIN64)
+    #error 32 bit not supported
+#endif
+
+#endif
+
+/* Unix (Linux & MacOs) specific macros and defines */
+#else
+#include <pthread.h>
+#include <semaphore.h>
+#define sem_handle sem_t*
+#define shm_handle int
+
+#define likely(x)       __builtin_expect(!!(x), 1)
+#define unlikely(x)     __builtin_expect(!!(x), 0)
+
+#define HOP_GET_THREAD_ID() (size_t)pthread_self()
+
 extern char* __progname;
-inline const char* getProgName() HOP_NOEXCEPT
+inline const char* HOP_GET_PROG_NAME() HOP_NOEXCEPT
 {
    return __progname;
 }
-#define likely(x)       __builtin_expect(!!(x), 1)
-#define unlikely(x)     __builtin_expect(!!(x), 0)
+
+#endif
+
 // -----------------------------
 
 // Forward declarations of type used by ringbuffer as adapted from
@@ -191,6 +210,8 @@ class SharedMemory
    ringbuf_t* ringbuffer() const HOP_NOEXCEPT;
    uint8_t* data() const HOP_NOEXCEPT;
    sem_handle semaphore() const HOP_NOEXCEPT;
+   void waitSemaphore() const HOP_NOEXCEPT;
+   void signalSemaphore() const HOP_NOEXCEPT;
    const SharedMetaInfo* sharedMetaInfo() const HOP_NOEXCEPT;
    ~SharedMemory();
 
@@ -203,7 +224,7 @@ class SharedMemory
    sem_handle _semaphore{NULL};
    bool _isConsumer;
    size_t _size{0};
-   shm_handle _sharedMemHandle{-1};
+   shm_handle _sharedMemHandle{};
    char _sharedMemPath[HOP_SHARED_MEM_MAX_NAME_SIZE];
 };
 // ------ end of SharedMemory.h ------------
@@ -359,8 +380,8 @@ namespace
 
    void closeSemaphore( sem_handle sem )
    {
-      #if defined ( _MSC_VER )
-      #else
+ #if defined ( _MSC_VER )
+ #else
          if ( sem_close( sem ) != 0 )
          {
             perror( "Could not close semaphore" );
@@ -369,11 +390,14 @@ namespace
          {
             perror( "Could not unlink semaphore" );
          }
-      #endif
+ #endif
    }
 
    void* openSharedMemory( const char* path, size_t size, shm_handle* handle )
    {
+	   uint8_t* sharedMem = NULL;
+#if defined ( _MSC_VER )
+#else
       *handle = shm_open( path, O_CREAT | O_RDWR, 0666 );
       if ( *handle < 0 )
       {
@@ -382,12 +406,12 @@ namespace
 
       ftruncate( *handle, size );
 
-      uint8_t* sharedMem = (uint8_t*) mmap( NULL, size, PROT_READ | PROT_WRITE, MAP_SHARED, *handle, 0 );
+      sharedMem = (uint8_t*) mmap( NULL, size, PROT_READ | PROT_WRITE, MAP_SHARED, *handle, 0 );
       if ( sharedMem == NULL )
       {
          perror( "Could not map shared memory" );
       }
-
+#endif
       return sharedMem;
    }
 
@@ -525,6 +549,22 @@ sem_handle SharedMemory::semaphore() const HOP_NOEXCEPT
    return _semaphore;
 }
 
+void SharedMemory::waitSemaphore() const HOP_NOEXCEPT
+{
+    #if defined(_MSC_VER)
+    #else
+        sem_wait( _semaphore );
+    #endif
+}
+
+void SharedMemory::signalSemaphore() const HOP_NOEXCEPT
+{
+    #if defined(_MSC_VER)
+    #else
+        sem_post( _semaphore );
+    #endif
+}
+
 const SharedMemory::SharedMetaInfo* SharedMemory::sharedMetaInfo() const HOP_NOEXCEPT
 {
    return _sharedMetaData;
@@ -612,7 +652,7 @@ class Client
        TLineNb_t lineNb,
        TGroup_t group )
    {
-      _shallowTraces.push_back( ShallowTrace{ fileName, className, fctName, start, end, lineNb, group, tl_traceLevel } );
+      _shallowTraces.push_back( ShallowTrace{ fileName, className, fctName, start, end, lineNb, group, (TDepth_t)tl_traceLevel } );
    }
 
    void addWaitLockTrace( void* mutexAddr, TimeStamp start, TimeStamp end )
@@ -715,7 +755,7 @@ class Client
       }
 
       ringbuf_produce( ringbuf, _worker );
-      sem_post( ClientManager::sharedMemory.semaphore() );
+      ClientManager::sharedMemory.signalSemaphore();
 
       // Update sent array size
       _sentStringDataSize = stringDataSize;
@@ -754,7 +794,7 @@ class Client
       }
 
       ringbuf_produce( ringbuf, _worker );
-      sem_post( ClientManager::sharedMemory.semaphore() );
+      ClientManager::sharedMemory.signalSemaphore();
 
       _lockWaits.clear();
 
@@ -797,7 +837,7 @@ Client* ClientManager::Get()
       char path[HOP_SHARED_MEM_MAX_NAME_SIZE] = {};
       strncpy( path, HOP_SHARED_MEM_PREFIX, sizeof( HOP_SHARED_MEM_PREFIX ) );
       strncat(
-          path, __progname, HOP_SHARED_MEM_MAX_NAME_SIZE - sizeof( HOP_SHARED_MEM_PREFIX ) - 1 );
+          path, HOP_GET_PROG_NAME(), HOP_SHARED_MEM_MAX_NAME_SIZE - sizeof( HOP_SHARED_MEM_PREFIX ) - 1 );
       bool sucess = ClientManager::sharedMemory.create( path, HOP_SHARED_MEM_SIZE, false );
       assert( sucess && "Could not create shared memory" );
    }

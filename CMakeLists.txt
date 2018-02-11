@@ -26,9 +26,8 @@ file(GLOB hop_server_src
     "imgui/*.h"
     "imgui/*.cpp"
 )
-include_directories(${SDL2_INCLUDE_DIRS} ${CMAKE_CURRENT_SOURCE_DIR})
 add_executable(hop ${hop_server_src})
-
+include_directories( ${SDL2_INCLUDE_DIR} )
 target_link_libraries( hop PUBLIC -lpthread -lGL -lrt ${SDL2_LIBRARY} -ldl )
 
 # Library for function wrapping
@@ -47,11 +46,5 @@ file(GLOB hop_client_src
 add_executable(hop_client ${hop_client_src})
 target_link_libraries( hop_client PUBLIC -lpthread -lrt -ldl )
 include_directories( ${CMAKE_CURRENT_SOURCE_DIR})
-
-set( ALL_TARGETS hop hop_client hop_wrap )
-add_custom_target( FinalMessage ALL
-    ${CMAKE_COMMAND} -E cmake_echo_color --cyan "Compilation Successful!"
-    COMMENT "Final Message" )
-add_dependencies( FinalMessage ${ALL_TARGETS} ) 
 
 #windows build : cmake -G "Visual Studio 15 2017 Win64" -DSDL2_INCLUDE_DIR:STRING=C:\Users\XXXX\source\repos\SDL2\include -DSDL2_LIBRARY:STRING=C:\Users\XXXX\source\repos\SDL2\lib\x64\SDL2.dll .. 

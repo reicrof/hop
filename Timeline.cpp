@@ -88,7 +88,7 @@ void Timeline::drawTimeline( const float posX, const float posY )
 
    const float windowWidthPxl = ImGui::GetWindowWidth();
 
-   const size_t stepsCount = [this, minStepSize]() {
+   const size_t stepsCount = [=]() {
       size_t stepsCount = _microsToDisplay / _stepSizeInMicros;
       while ( stepsCount > maxStepCount ||
               ( stepsCount < minStepCount && _stepSizeInMicros > minStepSize ) )
