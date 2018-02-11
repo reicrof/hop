@@ -3,7 +3,7 @@
 #include "Lod.h"
 #include "Stats.h"
 #include "Utils.h"
-#include <SDL2/SDL_keycode.h>
+#include <SDL_keycode.h>
 
 // Todo : I dont like this dependency
 #include "Server.h"

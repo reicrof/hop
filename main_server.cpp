@@ -3,7 +3,8 @@
 #include "Profiler.h"
 #include "Stats.h"
 #include "imgui/imgui.h"
-#include <SDL2/SDL.h>
+#include <SDL.h>
+#undef main
 
 #include <rapidjson/document.h>
 
