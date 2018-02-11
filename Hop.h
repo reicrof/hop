@@ -37,11 +37,31 @@
 /////     EVERYTHING AFTER THIS IS IMPL DETAILS        ////////
 ///////////////////////////////////////////////////////////////
 
+#if defined(_MSC_VER)
+
+#if !defined(_WIN64)
+    #error 32 bit not supported
+#endif
+
+#include <windows.h>
+#define sem_handle HANDLE
+
+// Type defined in unistd.h
+#ifdef _WIN64
+#define ssize_t __int64
+#else
+#define ssize_t long
+#endif
+
+#else
+#include <pthread.h>
+#include <semaphore.h>
+#define sem_handle sem_t*
+#endif
+
 #include <atomic>
 #include <memory>
 #include <chrono>
-#include <pthread.h>
-#include <semaphore.h>
 #include <stdint.h>
 #include <stdio.h>
 
@@ -168,7 +188,7 @@ class SharedMemory
    void setListeningConsumer( bool ) HOP_NOEXCEPT;
    ringbuf_t* ringbuffer() const HOP_NOEXCEPT;
    uint8_t* data() const HOP_NOEXCEPT;
-   sem_t* semaphore() const HOP_NOEXCEPT;
+   sem_handle semaphore() const HOP_NOEXCEPT;
    const SharedMetaInfo* sharedMetaInfo() const HOP_NOEXCEPT;
    ~SharedMemory();
 
@@ -178,7 +198,7 @@ class SharedMemory
    ringbuf_t* _ringbuf{NULL};
    uint8_t* _data{NULL};
    // ----------------
-   sem_t* _semaphore{NULL};
+   sem_handle _semaphore{NULL};
    bool _isConsumer;
    size_t _size{0};
    int _sharedMemFd{-1};
@@ -284,8 +304,6 @@ struct LockWaitGuard
  * OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
  * SUCH DAMAGE.
 */
-#include <unistd.h>
-
 int ringbuf_setup( ringbuf_t*, unsigned, size_t );
 void ringbuf_get_sizes( unsigned, size_t*, size_t* );
 
@@ -304,7 +322,6 @@ void ringbuf_release( ringbuf_t*, size_t );
 #if defined(HOP_IMPLEMENTATION) || defined(HOP_SERVER_IMPLEMENTATION)
 
 // C includes
-#include <errno.h>
 #include <fcntl.h>
 #include <signal.h>
 #include <sys/mman.h>
@@ -450,7 +467,7 @@ ringbuf_t* SharedMemory::ringbuffer() const HOP_NOEXCEPT
    return _ringbuf;
 }
 
-sem_t* SharedMemory::semaphore() const HOP_NOEXCEPT
+sem_handle SharedMemory::semaphore() const HOP_NOEXCEPT
 {
    return _semaphore;
 }
@@ -818,7 +835,6 @@ bool ClientManager::HasListeningConsumer() HOP_NOEXCEPT
 #include <inttypes.h>
 #include <string.h>
 #include <limits.h>
-#include <errno.h>
 #include <assert.h>
 #include <algorithm>
 
@@ -888,7 +904,6 @@ int ringbuf_setup( ringbuf_t* rbuf, unsigned nworkers, size_t length )
 {
    if ( length >= RBUF_OFF_MASK )
    {
-      errno = EINVAL;
       return -1;
    }
    memset( rbuf, 0, sizeof( ringbuf_t ) );
