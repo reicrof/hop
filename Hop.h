@@ -362,18 +362,32 @@ void ringbuf_release( ringbuf_t*, size_t );
 
 namespace
 {
+	static void printErrorMsg(const char* msg)
+	{
+#if defined( _MSC_VER )
+		char err[512];
+		FormatMessage(FORMAT_MESSAGE_FROM_SYSTEM, NULL, GetLastError(),
+			MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT), err, 255, NULL);
+		printf("%s %s\n", msg, err);
+		puts(err);
+#else
+		perror(msg);
+#endif
+	}
+
    sem_handle openSemaphore( const char* name )
    {
       sem_handle sem = NULL;
-      #if defined( _MSC_VER )
-         return NULL;
-      #else
+#if defined( _MSC_VER )
+	     sem = CreateSemaphore(NULL, 0, LONG_MAX, name);
+#else
          sem = sem_open( name, O_CREAT, S_IRUSR | S_IWUSR, 1 );
-         if( sem == SEM_FAILED )
-         {
-            perror( "Could not acquire semaphore" );
-         }
-      #endif
+#endif
+
+		 if (!sem)
+		 {
+			 printErrorMsg("Could not open semaphore");
+		 }
 
       return sem;
    }
@@ -397,6 +411,32 @@ namespace
    {
 	   uint8_t* sharedMem = NULL;
 #if defined ( _MSC_VER )
+	   *handle = CreateFileMapping(
+		   INVALID_HANDLE_VALUE,    // use paging file
+		   NULL,                    // default security
+		   PAGE_READWRITE,          // read/write access
+		   0,                       // maximum object size (high-order DWORD)
+		   size,                    // maximum object size (low-order DWORD)
+		   path);                   // name of mapping object
+
+	   if (*handle == NULL)
+	   {
+		   return NULL;
+	   }
+	   sharedMem = (uint8_t*) MapViewOfFile(
+		   *handle,
+		   FILE_MAP_ALL_ACCESS, // read/write permission
+		   0,
+		   0,
+		   size);
+
+	   if (sharedMem == NULL)
+	   {
+		   printErrorMsg("Could not map view of file");
+
+		   CloseHandle(*handle);
+		   return NULL;
+	   }
 #else
       *handle = shm_open( path, O_CREAT | O_RDWR, 0666 );
       if ( *handle < 0 )
@@ -409,7 +449,7 @@ namespace
       sharedMem = (uint8_t*) mmap( NULL, size, PROT_READ | PROT_WRITE, MAP_SHARED, *handle, 0 );
       if ( sharedMem == NULL )
       {
-         perror( "Could not map shared memory" );
+		  printErrorMsg( "Could not map shared memory" );
       }
 #endif
       return sharedMem;
