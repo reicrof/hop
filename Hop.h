@@ -63,9 +63,18 @@
 
 inline const char* HOP_GET_PROG_NAME() HOP_NOEXCEPT
 {
-   static char name[MAX_PATH];
-   static DWORD size = GetModuleFileName( NULL, name, MAX_PATH );
-   return name;
+   static char fullname[MAX_PATH];
+   static char* shortname;
+   static bool first = true;
+   if (first)
+   {
+	   DWORD size = GetModuleFileName(NULL, fullname, MAX_PATH);
+	   while (size > 0 && fullname[size] != '\\')
+		   --size;
+	   shortname = &fullname[size + 1];
+	   first = false;
+   }
+   return shortname;
 }
 
 #define HOP_GET_THREAD_ID() (size_t)GetCurrentThreadId()
