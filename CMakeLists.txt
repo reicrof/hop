@@ -1,8 +1,14 @@
 cmake_minimum_required (VERSION 2.6)
 project (hop)
 
-# Platform specific
+#####################
+### Platform specific
+#####################
 if(UNIX)
+   if(NOT APPLE)
+        set(HOP_LIBRT_FLAG "-lrt")
+   endif()
+
    set( CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -Wextra -pedantic" )
    set( HOP_WRAP_SRC wrap_library/hop_wrap_unix.cpp )
 else()
@@ -33,13 +39,21 @@ file(GLOB hop_server_src
 add_executable(hop ${hop_server_src})
 
 target_include_directories( hop SYSTEM PRIVATE  ${OPENGL_INCLUDE_DIRS} ${SDL2_INCLUDE_DIR} )
-target_link_libraries( hop PUBLIC -lpthread -lGL -lrt ${OPENGL_LIBRARIES} ${SDL2_LIBRARY} -ldl )
+target_link_libraries( hop PUBLIC -lpthread ${HOP_LIBRT_FLAG} ${OPENGL_LIBRARIES} ${SDL2_LIBRARY} -ldl )
 
 #####################
 ### Library for function wrapping
 #####################
+set(CMAKE_MACOSX_RPATH 1)
 add_library(hop_wrap SHARED ${HOP_WRAP_SRC})
 set (CMAKE_SHARED_LINKER_FLAGS "-ldl")
+
+# With clang on MacOs, we need to ignore the missing symbols as they are going to be resolved
+# at runtime when linking against the executable that uses hop.
+if("${CMAKE_CXX_COMPILER_ID}" STREQUAL "Clang")
+  set(CMAKE_SHARED_LINKER_FLAGS "${CMAKE_SHARED_LINKER_FLAGS} -undefined dynamic_lookup")
+endif()
+
 set_property(TARGET hop_wrap PROPERTY POSITION_INDEPENDENT_CODE ON)
 
 #####################
@@ -50,7 +64,7 @@ file(GLOB hop_client_src
     "test_client/*.cpp"
 )
 add_executable(hop_client ${hop_client_src})
-target_link_libraries( hop_client PUBLIC -lpthread -lrt -ldl )
+target_link_libraries( hop_client PUBLIC -lpthread ${HOP_LIBRT_FLAG} -ldl )
 include_directories( ${CMAKE_CURRENT_SOURCE_DIR})
 
 set( CMAKE_VERBOSE_MAKEFILE on )
