@@ -449,6 +449,8 @@ void Timeline::drawTraces(
       auto it1 = std::lower_bound( lods.begin(), lods.end(), firstInfo );
       auto it2 = std::upper_bound( lods.begin(), lods.end(), lastInfo );
 
+	  assert(it1 != lods.end());
+
       // Find the the first trace on the left and right that have a depth of 0. This prevents
       // traces that have a smaller depth than the one foune previously to vanish.
       while ( it1 != lods.begin() && it1->depth != 0 )

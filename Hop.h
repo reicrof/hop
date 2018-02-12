@@ -430,6 +430,7 @@ namespace
 
 	   if (*handle == NULL)
 	   {
+		   printErrorMsg("Could not create file mapping");
 		   return NULL;
 	   }
 	   sharedMem = (uint8_t*) MapViewOfFile(
