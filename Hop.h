@@ -601,18 +601,20 @@ sem_handle SharedMemory::semaphore() const HOP_NOEXCEPT
 
 void SharedMemory::waitSemaphore() const HOP_NOEXCEPT
 {
-    #if defined(_MSC_VER)
-    #else
-        sem_wait( _semaphore );
-    #endif
+#if defined(_MSC_VER)
+	WaitForSingleObject(_semaphore, INFINITE);
+#else
+    sem_wait( _semaphore );
+#endif
 }
 
 void SharedMemory::signalSemaphore() const HOP_NOEXCEPT
 {
-    #if defined(_MSC_VER)
-    #else
+#if defined(_MSC_VER)
+		ReleaseSemaphore(_semaphore, 1, NULL);
+#else
         sem_post( _semaphore );
-    #endif
+#endif
 }
 
 const SharedMemory::SharedMetaInfo* SharedMemory::sharedMetaInfo() const HOP_NOEXCEPT

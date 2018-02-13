@@ -136,7 +136,7 @@ void appendLods( LodsArray& dst, const LodsArray& src )
          // For each depth, we go through existing traces (dst) and see if
          // we can merge it with the new trace.
          int depthRemaining = deepestDepth;
-         while( depthRemaining >= 0 )
+         while( depthRemaining >= 0 && newTraceIt != src[i].cend() )
          {
             bool wasLoded = false;
             if( newTraceIt->depth == depthRemaining )

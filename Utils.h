@@ -4,6 +4,8 @@
 #include <cassert>
 #include <algorithm>
 
+//#define HOP_ASSERT_IS_SORTED
+
 namespace hop
 {
 template <typename I>

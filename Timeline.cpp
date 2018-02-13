@@ -397,6 +397,9 @@ void Timeline::drawTraces(
       const auto it2 = std::upper_bound(
           data.traces.ends.begin(), data.traces.ends.end(), lastTraceAbsoluteTime );
 
+	  // The last trace of the current thread does not reach the current time
+	  if (it1 == data.traces.ends.end()) return;
+
       size_t firstTraceId = std::distance( data.traces.ends.begin(), it1 );
       size_t lastTraceId = std::distance( data.traces.ends.begin(), it2 );
 
@@ -449,7 +452,8 @@ void Timeline::drawTraces(
       auto it1 = std::lower_bound( lods.begin(), lods.end(), firstInfo );
       auto it2 = std::upper_bound( lods.begin(), lods.end(), lastInfo );
 
-	  assert(it1 != lods.end());
+	  // The last trace of the current thread does not reach the current time
+	  if (it1 == lods.end()) return;
 
       // Find the the first trace on the left and right that have a depth of 0. This prevents
       // traces that have a smaller depth than the one foune previously to vanish.
