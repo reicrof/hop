@@ -4,6 +4,7 @@
 #include "Hop.h"
 #include "Timeline.h"
 #include "ThreadInfo.h"
+#include "StringDb.h"
 
 #include <array>
 #include <chrono>
@@ -36,6 +37,7 @@ private:
    std::vector< uint32_t > _threadsId;
    std::vector< ThreadInfo > _tracesPerThread;
    bool _recording{ false };
+   StringDb _strDb;
 
    // Client/Server data
    // TODO: rethink and redo this part

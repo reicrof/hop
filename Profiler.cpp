@@ -361,6 +361,7 @@ void Profiler::addStringData( const std::vector<char>& strData, uint32_t threadI
       }
 
       _tracesPerThread[i].stringData.insert( _tracesPerThread[i].stringData.end(), strData.begin(), strData.end() );
+      _strDb.addStringData( strData, i );
    }
 }
 
