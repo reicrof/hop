@@ -28,9 +28,9 @@ struct DisplayableTraces
    std::vector< TimeStamp > deltas; // in ns
 
    //Indexes of the name in the string database
-   std::vector< TStrIdx_t > fileNameIds;
-   std::vector< TStrIdx_t > classNameIds;
-   std::vector< TStrIdx_t > fctNameIds;
+   std::vector< TStrPtr_t > fileNameIds;
+   std::vector< TStrPtr_t > classNameIds;
+   std::vector< TStrPtr_t > fctNameIds;
 
    std::vector< TLineNb_t > lineNbs;
    std::vector< TGroup_t > groups;

@@ -360,8 +360,7 @@ void Profiler::addStringData( const std::vector<char>& strData, uint32_t threadI
          _tracesPerThread.emplace_back();
       }
 
-      _tracesPerThread[i].stringData.insert( _tracesPerThread[i].stringData.end(), strData.begin(), strData.end() );
-      _strDb.addStringData( strData, i );
+      _strDb.addStringData( strData );
    }
 }
 
@@ -516,7 +515,7 @@ void hop::Profiler::draw()
          _timeline.moveToPresentTime( false );
       }
 
-      _timeline.draw( _tracesPerThread, _threadsId );
+      _timeline.draw( _tracesPerThread, _threadsId, _strDb );
    }
 
    ImGui::End();

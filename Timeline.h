@@ -9,13 +9,15 @@
 namespace hop
 {
 struct ThreadInfo;
+class StringDb;
 class Timeline
 {
   public:
    void update( float deltaTimeMs ) noexcept;
    void draw(
        const std::vector<ThreadInfo>& _tracesPerThread,
-       const std::vector<uint32_t>& threadIds );
+       const std::vector<uint32_t>& threadIds,
+       const StringDb& strDb  );
    TimeStamp absoluteStartTime() const noexcept;
    TimeStamp absolutePresentTime() const noexcept;
    void setAbsoluteStartTime( TimeStamp time ) noexcept;
@@ -35,7 +37,7 @@ class Timeline
 
   private:
    void drawTimeline( const float posX, const float posY );
-   void drawTraces( const ThreadInfo& traces, int threadIndex, const float posX, const float posY );
+   void drawTraces( const ThreadInfo& traces, int threadIndex, const float posX, const float posY, const StringDb& strDb );
    void drawLockWaits( const ThreadInfo& traces, const float posX, const float posY );
    void handleMouseDrag( float mousePosX, float mousePosY );
    void handleMouseWheel( float mousePosX, float mousePosY );

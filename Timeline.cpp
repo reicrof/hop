@@ -3,6 +3,7 @@
 #include "Utils.h"
 #include "Lod.h"
 #include "Stats.h"
+#include "StringDb.h"
 
 #include "imgui/imgui.h"
 
@@ -39,7 +40,8 @@ void Timeline::update( float deltaTimeMs ) noexcept
 
 void Timeline::draw(
     const std::vector<ThreadInfo>& tracesPerThread,
-    const std::vector<uint32_t>& threadIds )
+    const std::vector<uint32_t>& threadIds,
+    const StringDb& strDb )
 {
    const auto startDrawPos = ImGui::GetCursorScreenPos();
    drawTimeline( startDrawPos.x, startDrawPos.y + 5 );
@@ -63,7 +65,7 @@ void Timeline::draw(
       ImGui::Separator();
 
       const auto curPos = ImGui::GetCursorScreenPos();
-      drawTraces( tracesPerThread[i], i, curPos.x, curPos.y );
+      drawTraces( tracesPerThread[i], i, curPos.x, curPos.y, strDb );
       drawLockWaits( tracesPerThread[i], curPos.x, curPos.y );
 
       ImGui::InvisibleButton( "trace-padding", ImVec2( 20, 40 ) );
@@ -348,7 +350,8 @@ void Timeline::drawTraces(
     const ThreadInfo& data,
     int threadIndex,
     const float posX,
-    const float posY )
+    const float posY,
+    const StringDb& strDb )
 {
    static constexpr float MIN_TRACE_LENGTH_PXL = 0.25f;
 
@@ -569,8 +572,8 @@ void Timeline::drawTraces(
              curName,
              sizeof( curName ),
              "%s::%s",
-             &data.stringData[data.traces.classNameIds[traceIndex]],
-             &data.stringData[data.traces.fctNameIds[traceIndex]] );
+             strDb.getString( data.traces.classNameIds[traceIndex] ),
+             strDb.getString( data.traces.fctNameIds[traceIndex] ) );
       }
       else
       {
@@ -579,7 +582,7 @@ void Timeline::drawTraces(
              curName,
              sizeof( curName ),
              "%s",
-             &data.stringData[data.traces.fctNameIds[traceIndex]] );
+             strDb.getString( data.traces.fctNameIds[traceIndex] ) );
       }
 
       ImGui::SetCursorScreenPos( t.posPxl );
@@ -596,7 +599,7 @@ void Timeline::drawTraces(
                 sizeof( curName ) - lastChar,
                 "(%.3f ms)\n   %s:%d ",
                 t.deltaMs,
-                &data.stringData[data.traces.fileNameIds[traceIndex]],
+                strDb.getString( data.traces.fileNameIds[traceIndex] ),
                 data.traces.lineNbs[traceIndex] );
             ImGui::TextUnformatted( curName );
             ImGui::EndTooltip();

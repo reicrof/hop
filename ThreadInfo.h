@@ -14,7 +14,6 @@ struct ThreadInfo
    void addTraces( const DisplayableTraces& traces );
    void addLockWaits( const std::vector<LockWait>& lockWaits );
    DisplayableTraces traces;
-   std::vector<char> stringData;
    std::vector<LockWait> _lockWaits;
 };
 }

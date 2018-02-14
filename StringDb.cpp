@@ -1,50 +1,61 @@
 #include "StringDb.h"
 
+#include <cassert>
+
+namespace hop
+{
 
 StringDb::StringDb()
 {
    _strData.reserve( 512 );
-   _strData.push_back( '\0' ); // First character should always be NULL
-   stringIndex.reserve( 256 );
-   for( auto& v : idsPerThreads )
-   {
-      v.reserve( 256 );
-      v.push_back( 0 );
-   }
+   _strData.push_back( '\0' );  // First character should always be NULL
+   _stringIndices.reserve( 256 );
 }
 
-void StringDb::addStringData( const std::vector<char>& inData, uint32_t threadIndex )
+void StringDb::addStringData( const char* inData, size_t count )
 {
-   // Update the idsPerThreads
-   idsPerThreads[ threadIndex ].resize( idsPerThreads[ threadIndex ].size() + inData.size() );
+   using namespace hop;
+   size_t i = 0;
 
-   std::string curStr;
-   curStr.reserve( 256 );
-   size_t startStrPos = 0;
-   for( size_t i = 0; i < inData.size(); ++i )
+   // Check if the first entry is NULL.
+   TStrPtr_t firstStrPtr = *( (TStrPtr_t*)&inData[0] );
+   if ( firstStrPtr == 0 )
    {
-      if( inData[i] == '\0' && i != startStrPos )
+      i += sizeof( TStrPtr_t );
+   }
+
+   while ( i < count )
+   {
+      TStrPtr_t strPtr = *( (TStrPtr_t*)&inData[i] );
+      i += sizeof( TStrPtr_t );
+
+      auto& strIndex = _stringIndices[strPtr];
+      const size_t stringLen = strlen( &inData[i] );
+      // If not already in the db, add it
+      if ( strIndex == 0 )
       {
-         curStr.assign( &inData[ startStrPos ], i - startStrPos );
-         uint32_t& value = stringIndex[ curStr ];
-         if( value == 0 )
-         {
-            // String was not previously in the db, so add it
-            value = _strData.size();
-            for( char c : curStr )
-               _strData.push_back( c );
-         }
-
-         // Update string index for the thread
-         idsPerThreads[ threadIndex ][ startStrPos ] = value;
-
-         startStrPos = i + 1;
+         strIndex = _strData.size();
+         _strData.resize( _strData.size() + stringLen + 1 );
+         strcpy( &_strData[strIndex], &inData[i] );
       }
+
+      i += stringLen + 1;
    }
 }
 
-const char* StringDb::getString( uint32_t stringIndex, uint32_t threadIndex ) const
+void StringDb::addStringData( const std::vector<char>& inData )
 {
-   const uint32_t stringIndexForThread = idsPerThreads[ threadIndex ][ stringIndex ];
-   return &_strData[ stringIndexForThread ];
+   addStringData( inData.data(), inData.size() );
+}
+
+size_t StringDb::getStringIndex( hop::TStrPtr_t strId ) const
+{
+   // Early return on NULL
+   if( strId == 0 ) { return 0; }
+
+   const auto it = _stringIndices.find( strId );
+   assert( it != _stringIndices.end() );
+   return it->second;
+}
+
 }

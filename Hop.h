@@ -16,11 +16,15 @@
 
 
 ///////////////////////////////////////////////////////////////
-/////   THESE ARE THE MACROS YOU SHOULD USE/MODIFY  ///////////
+/////       THESE ARE THE MACROS YOU CAN MODIFY     ///////////
 ///////////////////////////////////////////////////////////////
 
 #define MAX_THREAD_NB 64
 #define HOP_SHARED_MEM_SIZE 32000000
+
+///////////////////////////////////////////////////////////////
+/////       THESE ARE THE MACROS YOU SHOULD USE     ///////////
+///////////////////////////////////////////////////////////////
 
 // Create a new profiling trace for a free function
 #define HOP_PROF_FUNC() HOP_PROF_GUARD_VAR( __LINE__, ( __FILE__, __LINE__, NULL, __func__, 0 ) )
@@ -163,21 +167,20 @@ struct MsgInfo
 HOP_STATIC_ASSERT( sizeof(MsgInfo) == EXPECTED_MSG_INFO_SIZE, "MsgInfo layout has changed unexpectedly" );
 
 
-using TStrIdx_t = uint32_t;
+using TStrPtr_t = uint64_t;
 using TLineNb_t = uint32_t;
 using TGroup_t = uint16_t;
 using TDepth_t = uint16_t;
-HOP_CONSTEXPR uint32_t EXPECTED_TRACE_SIZE = 64;
+HOP_CONSTEXPR uint32_t EXPECTED_TRACE_SIZE = 48;
 struct Trace
 {
    TimeStamp start, end;   // Timestamp for start/end of this trace
-   TStrIdx_t fileNameIdx;  // Index into string array for the file name
-   TStrIdx_t classNameIdx; // Index into string array for the class name
-   TStrIdx_t fctNameIdx;   // Index into string array for the function name
+   TStrPtr_t fileNameId;  // Index into string array for the file name
+   TStrPtr_t classNameId; // Index into string array for the class name
+   TStrPtr_t fctNameId;   // Index into string array for the function name
    TLineNb_t lineNumber;   // Line at which the trace was inserted
    TGroup_t group;         // Group to which this trace belongs
    TDepth_t depth;         // The depth in the callstack of this trace
-   char padding[24];
 };
 HOP_STATIC_ASSERT( sizeof(Trace) == EXPECTED_TRACE_SIZE, "Trace layout has changed unexpectedly" );
 
@@ -356,7 +359,7 @@ void ringbuf_release( ringbuf_t*, size_t );
 // standard includes
 #include <algorithm>
 #include <cassert>
-#include <unordered_map>
+#include <unordered_set>
 #include <vector>
 
 #if !defined( _MSC_VER )
@@ -513,15 +516,15 @@ bool SharedMemory::create( const char* path, size_t requestedSize, bool isConsum
 
    // If there is neither a consumer nor a producer, clear the shared memory, and create
    // the shared ring buffer
-   if ( ( _sharedMetaData->flags &
-          ( SharedMetaInfo::CONNECTED_PRODUCER | SharedMetaInfo::CONNECTED_CONSUMER ) ) == 0 )
-   {
+   // if ( ( _sharedMetaData->flags &
+   //        ( SharedMetaInfo::CONNECTED_PRODUCER | SharedMetaInfo::CONNECTED_CONSUMER ) ) == 0 )
+   // {
       memset( _ringbuf, 0, totalSize - sizeof( SharedMetaInfo) );
       if ( ringbuf_setup( _ringbuf, MAX_THREAD_NB, requestedSize ) < 0 )
       {
          assert( false && "Ring buffer creation failed" );
       }
-   }
+   //}
 
    // We can only have one consumer
    if( isConsumer && hasConnectedConsumer() )
@@ -673,26 +676,18 @@ thread_local size_t tl_threadId = 0;
 
 class Client
 {
-   struct ShallowTrace
-   {
-      const char *fileName, *className, *fctName;
-      TimeStamp start, end;
-      TLineNb_t lineNumber;
-      TGroup_t group;
-      TDepth_t depth;
-   };
-
   public:
    Client()
    {
-      _shallowTraces.reserve( 256 );
+      _traces.reserve( 256 );
       _lockWaits.reserve( 256 );
-      _stringIndex.reserve( 256 );
+      _stringPtr.reserve( 256 );
       _stringData.reserve( 256 * 32 );
 
       // Push back first name as empty string
-      _stringIndex[ NULL ] = 0;
-      _stringData.push_back('\0');
+      _stringPtr.insert( 0 );
+      for( int i = 0; i < sizeof( TStrPtr_t ); ++i )
+         _stringData.push_back('\0');
    }
 
    void addProfilingTrace(
@@ -704,7 +699,7 @@ class Client
        TLineNb_t lineNb,
        TGroup_t group )
    {
-      _shallowTraces.push_back( ShallowTrace{ fileName, className, fctName, start, end, lineNb, group, (TDepth_t)tl_traceLevel } );
+      _traces.push_back( Trace{ start, end, (TStrPtr_t)fileName, (TStrPtr_t)className, (TStrPtr_t)fctName, lineNb, group, (TDepth_t)tl_traceLevel } );
    }
 
    void addWaitLockTrace( void* mutexAddr, TimeStamp start, TimeStamp end )
@@ -712,53 +707,44 @@ class Client
       _lockWaits.push_back( LockWait{ mutexAddr, start, end } );
    }
 
-   uint32_t findOrAddStringToDb( const char* strId )
+   bool addStringToDb( const char* strId )
    {
       // Early return on NULL. The db should always contains NULL as first
       // entry
       if( strId == NULL ) return 0;
 
-      auto& stringIndex = _stringIndex[strId];
-      // If the string was not found, add it to the database and return its index
-      if( stringIndex == 0 )
+      auto res = _stringPtr.insert( (TStrPtr_t) strId );
+      // If the string was inserted (meaning it was not already there),
+      // add it to the database, otherwise do nothing
+      if( res.second )
       {
-         const TStrIdx_t newEntryPos = (TStrIdx_t) _stringData.size();
-         stringIndex = newEntryPos;
-         _stringData.resize( newEntryPos + strlen( strId ) + 1 );
-         strcpy( &_stringData[newEntryPos], strId );
-         return newEntryPos;
+         const size_t newEntryPos = _stringData.size();
+         _stringData.resize( newEntryPos + sizeof( TStrPtr_t ) + strlen( strId ) + 1 );
+         TStrPtr_t* strIdPtr = (TStrPtr_t*)&_stringData[newEntryPos];
+         *strIdPtr = (TStrPtr_t)strId;
+         strcpy( &_stringData[newEntryPos + sizeof( TStrPtr_t ) ], strId );
       }
 
-      return stringIndex;
+      return res.second;
    }
 
 
    bool sendTraces()
    {
-      // Convert string pointers to index in the string database
-      struct StringsIdx
+      // Add all strings to the database
+      for( const auto& t : _traces  )
       {
-         StringsIdx( TStrIdx_t f, TStrIdx_t c, TStrIdx_t fct )
-             : fileName( f ), className( c ), fctName( fct ) {}
-         TStrIdx_t fileName, className, fctName;
-      };
-
-      std::vector< StringsIdx > classFctNamesIdx;
-      classFctNamesIdx.reserve( _shallowTraces.size() );
-      for( const auto& t : _shallowTraces  )
-      {
-         classFctNamesIdx.emplace_back(
-             findOrAddStringToDb( t.fileName ),
-             findOrAddStringToDb( t.className ),
-             findOrAddStringToDb( t.fctName ) );
+         addStringToDb( (const char*) t.fileNameId );
+         addStringToDb( (const char*) t.classNameId );
+         addStringToDb( (const char*) t.fctNameId );
       }
 
       // 1- Get size of profiling traces message
       const uint32_t stringDataSize = _stringData.size();
       assert( stringDataSize >= _sentStringDataSize );
-      const uint32_t stringToSend = stringDataSize - _sentStringDataSize;
+      const uint32_t stringToSendSize = stringDataSize - _sentStringDataSize;
       const size_t profilerMsgSize =
-          sizeof( MsgInfo ) + stringToSend + sizeof( Trace ) * _shallowTraces.size();
+          sizeof( MsgInfo ) + stringToSendSize + sizeof( Trace ) * _traces.size();
 
       // Allocate big enough buffer from the shared memory
       ringbuf_t* ringbuf = ClientManager::sharedMemory.ringbuffer();
@@ -766,7 +752,7 @@ class Client
       if ( offset == -1 )
       {
          printf("Failed to acquire enough shared memory. Consider increasing shared memory size\n");
-         _shallowTraces.clear();
+         _traces.clear();
          return false;
       }
 
@@ -781,29 +767,20 @@ class Client
          // traceToSend = Traces                   - Array containing all of the traces
          MsgInfo* tracesInfo = (MsgInfo*)bufferPtr;
          char* stringData = (char*)( bufferPtr + sizeof( MsgInfo ) );
-         Trace* traceToSend = (Trace*)( bufferPtr + sizeof( MsgInfo ) + stringToSend );
+         Trace* traceToSend = (Trace*)( bufferPtr + sizeof( MsgInfo ) + stringToSendSize );
 
          tracesInfo->type = MsgType::PROFILER_TRACE;
          tracesInfo->threadId = (uint32_t)tl_threadId;
-         tracesInfo->traces.stringDataSize = stringToSend;
-         tracesInfo->traces.traceCount = (uint32_t)_shallowTraces.size();
+         tracesInfo->traces.stringDataSize = stringToSendSize;
+         tracesInfo->traces.traceCount = (uint32_t)_traces.size();
 
          // Copy string data into its array
-         memcpy( stringData, _stringData.data() + _sentStringDataSize, stringToSend );
+         const auto itFrom = _stringData.begin() + _sentStringDataSize;
+         std::copy( itFrom, itFrom + stringToSendSize, stringData );
+         //memcpy( stringData, _stringData.data() + _sentStringDataSize, stringToSendSize );
 
          // Copy trace information into buffer to send
-         for ( size_t i = 0; i < _shallowTraces.size(); ++i )
-         {
-            auto& t = traceToSend[i];
-            t.start = _shallowTraces[i].start;
-            t.end = _shallowTraces[i].end;
-            t.fileNameIdx = classFctNamesIdx[i].fileName;
-            t.classNameIdx = classFctNamesIdx[i].className;
-            t.fctNameIdx = classFctNamesIdx[i].fctName;
-            t.lineNumber = _shallowTraces[i].lineNumber;
-            t.group = _shallowTraces[i].group;
-            t.depth = _shallowTraces[i].depth;
-         }
+         std::copy( _traces.begin(), _traces.end(), traceToSend );
       }
 
       ringbuf_produce( ringbuf, _worker );
@@ -812,7 +789,7 @@ class Client
       // Update sent array size
       _sentStringDataSize = stringDataSize;
       // Free the buffers
-      _shallowTraces.clear();
+      _traces.clear();
 
       return true;
    }
@@ -857,7 +834,7 @@ class Client
    {
       if( !ClientManager::HasListeningConsumer() )
       {
-         _shallowTraces.clear();
+         _traces.clear();
          _lockWaits.clear();
          // Also reset the string data that was sent since we might
          // have lost the connection with the consumer
@@ -869,9 +846,9 @@ class Client
       sendLockWaits();
    }
 
-   std::vector< ShallowTrace > _shallowTraces;
+   std::vector< Trace > _traces;
    std::vector< LockWait > _lockWaits;
-   std::unordered_map< const char*, TStrIdx_t > _stringIndex;
+   std::unordered_set< TStrPtr_t > _stringPtr;
    std::vector< char > _stringData;
    ringbuf_worker_t* _worker{NULL};
    uint32_t _sentStringDataSize{0}; // The size of the string array on the server side

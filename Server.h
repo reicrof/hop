@@ -3,6 +3,7 @@
 
 #include <Hop.h>
 #include <Profiler.h>
+#include "StringDb.h"
 
 #include <vector>
 #include <thread>
@@ -32,6 +33,7 @@ class Server
    std::thread _thread;
    bool _running{false};
    SharedMemory _sharedMem;
+   StringDb stringDb;
 
    std::mutex pendingTracesMutex;
    std::vector< DisplayableTraces > pendingTraces;
