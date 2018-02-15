@@ -27,8 +27,7 @@ bool Server::start( const char* name )
             bool success = _sharedMem.create( name, HOP_SHARED_MEM_SIZE, true );
             if( !success )
             {
-               using namespace std::chrono_literals;
-               std::this_thread::sleep_for(1s);
+               std::this_thread::sleep_for(std::chrono::milliseconds( 500 ));
                continue;
             }
             printf("Connection to shared data succesful.\n");

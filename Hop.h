@@ -82,6 +82,7 @@ inline const char* HOP_GET_PROG_NAME() HOP_NOEXCEPT
 }
 
 #define HOP_GET_THREAD_ID() (size_t)GetCurrentThreadId()
+#define HOP_SLEEP_MS( x ) Sleep( x )
 
 // Type defined in unistd.h
 #ifdef _WIN64
@@ -106,6 +107,7 @@ inline const char* HOP_GET_PROG_NAME() HOP_NOEXCEPT
 #define unlikely(x)     __builtin_expect(!!(x), 0)
 
 #define HOP_GET_THREAD_ID() (size_t)pthread_self()
+#define HOP_SLEEP_MS( x ) usleep( x * 1000 )
 
 extern char* __progname;
 inline const char* HOP_GET_PROG_NAME() HOP_NOEXCEPT
@@ -509,22 +511,19 @@ bool SharedMemory::create( const char* path, size_t requestedSize, bool isConsum
          //perror( "Could not shm_open shared memory" );
    }
 
-   // Get pointers inside the shared memoryu
+   // Get pointers inside the shared memory
    _sharedMetaData = (SharedMetaInfo*) sharedMem;
    _ringbuf = (ringbuf_t*) (sharedMem + sizeof( SharedMetaInfo ));
    _data = sharedMem + sizeof( SharedMetaInfo ) + ringBufSize ;
 
-   // If there is neither a consumer nor a producer, clear the shared memory, and create
-   // the shared ring buffer
-   // if ( ( _sharedMetaData->flags &
-   //        ( SharedMetaInfo::CONNECTED_PRODUCER | SharedMetaInfo::CONNECTED_CONSUMER ) ) == 0 )
-   // {
+   if( !isConsumer )
+   {
       memset( _ringbuf, 0, totalSize - sizeof( SharedMetaInfo) );
       if ( ringbuf_setup( _ringbuf, MAX_THREAD_NB, requestedSize ) < 0 )
       {
          assert( false && "Ring buffer creation failed" );
       }
-   //}
+   }
 
    // We can only have one consumer
    if( isConsumer && hasConnectedConsumer() )
@@ -534,11 +533,15 @@ bool SharedMemory::create( const char* path, size_t requestedSize, bool isConsum
              " You might be trying to run the consumer application twice or"
              " have a dangling shared memory segment. hop might be unstable"
              " in this state. You could consider manually removing the shared"
-             " memory, or restart your client application.\n\n");
+             " memory, or restart this excutable cleanly.\n\n");
       // Force resetting the listening state as this could cause crash. The side
       // effect would simply be that other consumer would stop listening. Not a
       // big deal as there should not be any other consumer...
       _sharedMetaData->flags &= ~(SharedMetaInfo::LISTENING_CONSUMER);
+
+      // Fake a disconnected consumer for a few ms so the producer can readjust.
+      _sharedMetaData->flags &= ~(SharedMetaInfo::CONNECTED_CONSUMER);
+      HOP_SLEEP_MS( 250 );
    }
 
    _sharedMetaData->flags |=

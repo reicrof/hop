@@ -242,7 +242,7 @@ void Timeline::handleMouseDrag( float mouseInCanvasX, float mouseInCanvasY )
       const auto curMousePosInScreen = ImGui::GetMousePos();
       DrawList->AddRectFilled(
           ImVec2( curMousePosInScreen.x, 0 ),
-          ImVec2( curMousePosInScreen.x - delta.x, ImGui::GetWindowHeight() ),
+          ImVec2( curMousePosInScreen.x - delta.x, 9999 ),
           ImColor( 255, 255, 255, 64 ) );
    }
 
