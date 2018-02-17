@@ -3,6 +3,7 @@
 
 #include "Hop.h"
 #include "Lod.h"
+#include "TraceDetail.h"
 
 #include <vector>
 
@@ -23,7 +24,8 @@ class Timeline
    void setAbsoluteStartTime( TimeStamp time ) noexcept;
    void setAbsolutePresentTime( TimeStamp time ) noexcept;
    int64_t microsToDisplay() const noexcept;
-   float windowWidthPxl() const noexcept;
+   void drawTraceDetails(const std::vector<ThreadInfo>& _tracesPerThread,
+						 const StringDb& strDb) const noexcept;
 
    // Move to first trace
    void moveToStart( bool animate = true ) noexcept;
@@ -69,6 +71,8 @@ class Timeline
       int64_t targetStartMicros{0};
       uint64_t targetMicrosToDisplay{50000};
    } _animationState;
+
+   TraceDetails _traceDetails{};
 };
 }
 

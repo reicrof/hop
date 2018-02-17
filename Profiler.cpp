@@ -516,6 +516,7 @@ void hop::Profiler::draw()
       }
 
       _timeline.draw( _tracesPerThread, _threadsId, _strDb );
+	  _timeline.drawTraceDetails(_tracesPerThread,_strDb);
    }
 
    ImGui::End();

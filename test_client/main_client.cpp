@@ -127,6 +127,30 @@ void LODTest()
    }
 }
 
+void l3()
+{
+	HOP_PROF_FUNC_WITH_GROUP(42);
+	std::this_thread::sleep_for(100us);
+}
+
+void l2()
+{
+	HOP_PROF_FUNC_WITH_GROUP(42);
+	std::this_thread::sleep_for(500us);
+	for (int i = 0; i < 2; ++i)
+	{
+		l3();
+	}
+}
+
+void l1()
+{
+	HOP_PROF_FUNC_WITH_GROUP(42);
+	std::this_thread::sleep_for(1ms);
+	l2();
+	l2();
+}
+
 int main()
 {
    // srand (time(NULL));
@@ -148,6 +172,8 @@ int main()
       MaClasse a;
       a.callBuggyFunction();
       ++count;
+	  l1();
+	  l1();
    }
 
    // const auto postDrawTime = std::chrono::system_clock::now();

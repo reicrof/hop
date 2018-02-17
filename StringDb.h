@@ -13,6 +13,7 @@ class StringDb
 {
 public:
    StringDb();
+   bool empty() const;
    void addStringData( const std::vector<char>& inData );
    void addStringData( const char* inData, size_t count );
    size_t getStringIndex( hop::TStrPtr_t strId ) const;

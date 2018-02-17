@@ -4,6 +4,7 @@
 #include "Lod.h"
 #include "Stats.h"
 #include "StringDb.h"
+#include "TraceDetail.h"
 
 #include "imgui/imgui.h"
 
@@ -244,17 +245,18 @@ void Timeline::handleMouseDrag( float mouseInCanvasX, float mouseInCanvasY )
           ImVec2( curMousePosInScreen.x, 0 ),
           ImVec2( curMousePosInScreen.x - delta.x, 9999 ),
           ImColor( 255, 255, 255, 64 ) );
-   }
 
-   if ( ImGui::IsMouseClicked( 1 ) )
-   {
-      _rightClickStartPosInCanvas[0] = mouseInCanvasX;
-      _rightClickStartPosInCanvas[1] = mouseInCanvasY;
-      setRealtime( false );
+	  // If it is the first time we enter
+	  if (_rightClickStartPosInCanvas[0] == 0.0f)
+	  {
+		  _rightClickStartPosInCanvas[0] = mouseInCanvasX;
+		  _rightClickStartPosInCanvas[1] = mouseInCanvasY;
+		  setRealtime(false);
+	  }
    }
 
    // Handle right mouse click up. (Finished right click selection zoom)
-   if ( ImGui::IsMouseReleased( 1 ) )
+   if ( ImGui::IsMouseReleased( 1 ) && _rightClickStartPosInCanvas[0] != 0.0f )
    {
       const float minX = std::min( _rightClickStartPosInCanvas[0], mouseInCanvasX );
       const float maxX = std::max( _rightClickStartPosInCanvas[0], mouseInCanvasX );
@@ -507,13 +509,14 @@ void Timeline::drawTraces(
    _maxTraceDepthPerThread[threadIndex] =
        std::max( _maxTraceDepthPerThread[threadIndex], maxDepth );
 
-   const bool leftMouseClicked = ImGui::IsMouseClicked( 0 );
-   const bool rightMouseClicked = ImGui::IsMouseClicked( 1 );
+   const bool leftMouseClicked = ImGui::IsMouseReleased( 0 );
+   const bool rightMouseClicked = ImGui::IsMouseReleased( 1 );
    const bool leftMouseDblClicked = ImGui::IsMouseDoubleClicked( 0 );
 
    ImGui::PushStyleColor( ImGuiCol_Button, ImColor( 0.2f, 0.2f, 0.75f ) );
    ImGui::PushStyleColor( ImGuiCol_ButtonHovered, ImColor( 0.3f, 0.3f, 1.0f ) );
    ImGui::PushStyleColor( ImGuiCol_ButtonActive, ImColor( 0.2f, 0.2f, 0.5f ) );
+
    // Draw the loded traces
    char curName[512] = {};
    const char* menuAction = NULL;
@@ -524,6 +527,7 @@ void Timeline::drawTraces(
       ImGui::SetCursorScreenPos( t.posPxl );
 
       ImGui::Button( "", ImVec2( t.lengthPxl, TRACE_HEIGHT ) );
+	  
       if ( ImGui::IsItemHovered() )
       {
          if ( t.lengthPxl > 3 )
@@ -558,27 +562,11 @@ void Timeline::drawTraces(
             }
             selectTrace( data, threadIndex, traceIndex );
          }
-         else if( rightMouseClicked )
-         {
-            printf( "Right clickeeeeeeed %zu\n", t.traceIndex );
-            if ( ImGui::BeginPopupContextItem( "item menu" ) )
-            {
-               menuAction = menuSaveAsJason;
-               if ( ImGui::Selectable( "Set to zero" ) ) menuAction = menuSaveAsJason;
-               if ( ImGui::Selectable( "Set to PI" ) ) menuAction = menuHelp;
-               ImGui::EndPopup();
-            }
-         }
+		 else if (rightMouseClicked)
+		 {
+			 _traceDetails = createTraceDetails(data.traces, threadIndex, t.traceIndex);
+		 }
       }
-   }
-
-   if ( menuAction == menuSaveAsJason )
-   {
-      ImGui::OpenPopup( menuSaveAsJason );
-   }
-   else if( menuAction == menuHelp )
-   {
-      ImGui::OpenPopup( menuHelp );
    }
 
    ImGui::PopStyleColor( 3 );
@@ -641,10 +629,10 @@ void Timeline::drawTraces(
          {
             selectTrace( data, threadIndex, traceIndex );
          }
-         else if( rightMouseClicked )
-         {
-            printf("Right clicked\n");
-         }
+		 else if (rightMouseClicked)
+		 {
+			 _traceDetails = createTraceDetails(data.traces, threadIndex, t.traceIndex);
+		 }
       }
    }
    ImGui::PopStyleColor( 3 );
@@ -727,6 +715,38 @@ void Timeline::selectTrace( const ThreadInfo& data, uint32_t threadIndex, size_t
    setRealtime( false );
 
    g_stats.selectedTrace = traceIndex;
+}
+
+void Timeline::drawTraceDetails(
+	const std::vector<ThreadInfo>& tracesPerThread,
+	const StringDb& strDb) const noexcept
+{
+	if (ImGui::Begin("TraceDetails") && _traceDetails.details.size() > 0)
+	{
+		const auto& threadInfo = tracesPerThread[_traceDetails.threadIndex];
+
+		ImGui::Columns(4, "TraceDetailsTable"); // 4-ways, with border
+		ImGui::Separator();
+		ImGui::Text("Trace"); ImGui::NextColumn();
+		ImGui::Text("Excl. %%"); ImGui::NextColumn();
+		ImGui::Text("Excl Time"); ImGui::NextColumn();
+		ImGui::Text("Count"); ImGui::NextColumn();
+		ImGui::Separator();
+		static size_t selected = -1;
+		for (size_t i = 0; i < _traceDetails.details.size(); ++i)
+		{
+			TStrPtr_t fctIdx = threadInfo.traces.fctNameIds[_traceDetails.details[i].traceId];
+			const char* name = strDb.getString(fctIdx);
+			if (ImGui::Selectable(name, selected == i, ImGuiSelectableFlags_SpanAllColumns))
+				selected = i;
+			ImGui::NextColumn();
+			ImGui::Text("%3.2f", _traceDetails.details[i].exclusivePct * 100.0f); ImGui::NextColumn();
+			ImGui::Text("%4.5f us", _traceDetails.details[i].deltaTimeInMicros); ImGui::NextColumn();
+			ImGui::Text("%zu", _traceDetails.details[i].callCount); ImGui::NextColumn();
+		}
+		ImGui::Columns(1);
+	}
+	ImGui::End();
 }
 
 } // namespace hop

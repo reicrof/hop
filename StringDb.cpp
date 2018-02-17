@@ -12,6 +12,11 @@ StringDb::StringDb()
    _stringIndices.reserve( 256 );
 }
 
+bool StringDb::empty() const
+{
+	return _stringIndices.empty();
+}
+
 void StringDb::addStringData( const char* inData, size_t count )
 {
    using namespace hop;

@@ -65,7 +65,6 @@ size_t Server::handleNewMessage( uint8_t* data, size_t maxSize )
 
     bufPtr += sizeof( MsgInfo );
     assert( (size_t)(bufPtr - data) <= maxSize );
-    (void)maxSize; // Avoid unused warning
 
     switch ( msgType )
     {
@@ -79,6 +78,14 @@ size_t Server::handleNewMessage( uint8_t* data, size_t maxSize )
             stringDb.addStringData( stringData );
             bufPtr += stringData.size();
          }
+		 // If our string table is emtpy and we did not received any strings,
+		 // it means these messages are pending messages from previous execution.
+		 // Ignore them until we receive string data. This can happen after an
+		 // unclean exit.
+		 else if (stringDb.empty())
+		 {
+			 return maxSize;
+		 }
          assert( (size_t)(bufPtr - data) <= maxSize );
 
         const Trace* traces = (const Trace*) bufPtr;
