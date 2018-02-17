@@ -508,6 +508,7 @@ void Timeline::drawTraces(
        std::max( _maxTraceDepthPerThread[threadIndex], maxDepth );
 
    const bool leftMouseClicked = ImGui::IsMouseClicked( 0 );
+   const bool rightMouseClicked = ImGui::IsMouseClicked( 1 );
    const bool leftMouseDblClicked = ImGui::IsMouseDoubleClicked( 0 );
 
    ImGui::PushStyleColor( ImGuiCol_Button, ImColor( 0.2f, 0.2f, 0.75f ) );
@@ -515,6 +516,9 @@ void Timeline::drawTraces(
    ImGui::PushStyleColor( ImGuiCol_ButtonActive, ImColor( 0.2f, 0.2f, 0.5f ) );
    // Draw the loded traces
    char curName[512] = {};
+   const char* menuAction = NULL;
+   const char* const menuSaveAsJason = "Save as JSON";
+   const char* const menuHelp = "Help";
    for ( const auto& t : lodTracesToDraw )
    {
       ImGui::SetCursorScreenPos( t.posPxl );
@@ -554,8 +558,29 @@ void Timeline::drawTraces(
             }
             selectTrace( data, threadIndex, traceIndex );
          }
+         else if( rightMouseClicked )
+         {
+            printf( "Right clickeeeeeeed %zu\n", t.traceIndex );
+            if ( ImGui::BeginPopupContextItem( "item menu" ) )
+            {
+               menuAction = menuSaveAsJason;
+               if ( ImGui::Selectable( "Set to zero" ) ) menuAction = menuSaveAsJason;
+               if ( ImGui::Selectable( "Set to PI" ) ) menuAction = menuHelp;
+               ImGui::EndPopup();
+            }
+         }
       }
    }
+
+   if ( menuAction == menuSaveAsJason )
+   {
+      ImGui::OpenPopup( menuSaveAsJason );
+   }
+   else if( menuAction == menuHelp )
+   {
+      ImGui::OpenPopup( menuHelp );
+   }
+
    ImGui::PopStyleColor( 3 );
 
    ImGui::PushStyleColor( ImGuiCol_Button, ImColor( 0.2f, 0.2f, 0.8f ) );
@@ -616,6 +641,10 @@ void Timeline::drawTraces(
          {
             selectTrace( data, threadIndex, traceIndex );
          }
+         else if( rightMouseClicked )
+         {
+            printf("Right clicked\n");
+         }
       }
    }
    ImGui::PopStyleColor( 3 );
@@ -637,7 +666,7 @@ void Timeline::drawTraces(
 }
 
 void Timeline::drawLockWaits(
-    const ThreadInfo& data,
+ const ThreadInfo& data,
     const float posX,
     const float posY )
 {
