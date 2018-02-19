@@ -44,14 +44,15 @@ void Timeline::draw(
     const std::vector<uint32_t>& threadIds,
     const StringDb& strDb )
 {
+   ImGui::BeginChild(
+      "Traces",
+      ImVec2(0, 0),
+      false,
+      ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
+
    const auto startDrawPos = ImGui::GetCursorScreenPos();
    drawTimeline( startDrawPos.x, startDrawPos.y + 5 );
 
-   ImGui::BeginChild(
-       "Traces",
-       ImVec2( 0, 0 ),
-       false,
-       ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse );
    char threadName[128] = "Thread ";
    for ( size_t i = 0; i < tracesPerThread.size(); ++i )
    {
@@ -74,7 +75,7 @@ void Timeline::draw(
 
    ImGui::EndChild();
 
-   if ( ImGui::IsItemHoveredRect() )
+   if ( ImGui::IsItemHoveredRect() && ImGui::IsRootWindowOrAnyChildFocused() )
    {
       ImVec2 mousePosInCanvas = ImVec2(
           ImGui::GetIO().MousePos.x - startDrawPos.x, ImGui::GetIO().MousePos.y - startDrawPos.y );
@@ -260,14 +261,11 @@ void Timeline::handleMouseDrag( float mouseInCanvasX, float mouseInCanvasY )
    {
       const float minX = std::min( _rightClickStartPosInCanvas[0], mouseInCanvasX );
       const float maxX = std::max( _rightClickStartPosInCanvas[0], mouseInCanvasX );
-      if ( maxX - minX > 5 )
-      {
-         const float windowWidthPxl = ImGui::GetWindowWidth();
-         const int64_t minXinMicros =
-             pxlToMicros<int64_t>( windowWidthPxl, _microsToDisplay, minX );
-         setStartMicro( _startMicros + minXinMicros );
-         setZoom( pxlToMicros<uint64_t>( windowWidthPxl, _microsToDisplay, maxX - minX ) );
-      }
+      const float windowWidthPxl = ImGui::GetWindowWidth();
+      const int64_t minXinMicros =
+        pxlToMicros<int64_t>( windowWidthPxl, _microsToDisplay, minX );
+      setStartMicro( _startMicros + minXinMicros );
+      setZoom( pxlToMicros<uint64_t>( windowWidthPxl, _microsToDisplay, maxX - minX ) );
 
       // Reset position
       _rightClickStartPosInCanvas[0] = _rightClickStartPosInCanvas[1] = 0.0f;
@@ -299,6 +297,16 @@ void Timeline::setAbsolutePresentTime( TimeStamp time ) noexcept
 }
 
 int64_t Timeline::microsToDisplay() const noexcept { return _microsToDisplay; }
+
+const TraceDetails& Timeline::getTraceDetails() const noexcept
+{
+	return _traceDetails;
+}
+
+void Timeline::clearTraceDetails()
+{
+	_traceDetails = TraceDetails{};
+}
 
 void Timeline::setStartMicro( int64_t timeInMicro, bool withAnimation /*= true*/ ) noexcept
 {
@@ -578,25 +586,7 @@ void Timeline::drawTraces(
    for ( const auto& t : tracesToDraw )
    {
       const size_t traceIndex = t.traceIndex;
-      if ( data.traces.classNameIds[traceIndex] > 0 )
-      {
-         // We do have a class name. Prepend it to the string
-         snprintf(
-             curName,
-             sizeof( curName ),
-             "%s::%s",
-             strDb.getString( data.traces.classNameIds[traceIndex] ),
-             strDb.getString( data.traces.fctNameIds[traceIndex] ) );
-      }
-      else
-      {
-         // No class name. Ignore it
-         snprintf(
-             curName,
-             sizeof( curName ),
-             "%s",
-             strDb.getString( data.traces.fctNameIds[traceIndex] ) );
-      }
+	  strDb.formatTraceName(data.traces.classNameIds[traceIndex], data.traces.fctNameIds[traceIndex], curName, sizeof(curName));
 
       ImGui::SetCursorScreenPos( t.posPxl );
       ImGui::Button( curName, ImVec2( t.lengthPxl, TRACE_HEIGHT ) );
@@ -715,38 +705,6 @@ void Timeline::selectTrace( const ThreadInfo& data, uint32_t threadIndex, size_t
    setRealtime( false );
 
    g_stats.selectedTrace = traceIndex;
-}
-
-void Timeline::drawTraceDetails(
-	const std::vector<ThreadInfo>& tracesPerThread,
-	const StringDb& strDb) const noexcept
-{
-	if (ImGui::Begin("TraceDetails") && _traceDetails.details.size() > 0)
-	{
-		const auto& threadInfo = tracesPerThread[_traceDetails.threadIndex];
-
-		ImGui::Columns(4, "TraceDetailsTable"); // 4-ways, with border
-		ImGui::Separator();
-		ImGui::Text("Trace"); ImGui::NextColumn();
-		ImGui::Text("Excl. %%"); ImGui::NextColumn();
-		ImGui::Text("Excl Time"); ImGui::NextColumn();
-		ImGui::Text("Count"); ImGui::NextColumn();
-		ImGui::Separator();
-		static size_t selected = -1;
-		for (size_t i = 0; i < _traceDetails.details.size(); ++i)
-		{
-			TStrPtr_t fctIdx = threadInfo.traces.fctNameIds[_traceDetails.details[i].traceId];
-			const char* name = strDb.getString(fctIdx);
-			if (ImGui::Selectable(name, selected == i, ImGuiSelectableFlags_SpanAllColumns))
-				selected = i;
-			ImGui::NextColumn();
-			ImGui::Text("%3.2f", _traceDetails.details[i].exclusivePct * 100.0f); ImGui::NextColumn();
-			ImGui::Text("%4.5f us", _traceDetails.details[i].deltaTimeInMicros); ImGui::NextColumn();
-			ImGui::Text("%zu", _traceDetails.details[i].callCount); ImGui::NextColumn();
-		}
-		ImGui::Columns(1);
-	}
-	ImGui::End();
 }
 
 } // namespace hop

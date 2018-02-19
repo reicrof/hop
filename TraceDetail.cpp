@@ -1,5 +1,8 @@
 #include "TraceDetail.h"
-#include "DisplayableTraces.h"
+#include "StringDb.h"
+#include "Utils.h"
+
+#include "imgui\imgui.h"
 
 #include <algorithm>
 
@@ -66,7 +69,7 @@ namespace hop
 			{
 				size_t index = std::distance(uniqueTraces.begin(), it);
 				++traceDetails[index].callCount;
-				traceDetails[index].deltaTimeInMicros += traceDelta;
+				traceDetails[index].deltaTimeInNanos += traceDelta;
 			}
 		}
 		
@@ -74,7 +77,7 @@ namespace hop
 		float totalPct = 0.0f;
 		for (auto& t : traceDetails)
 		{
-			t.exclusivePct = (double)t.deltaTimeInMicros / (double)totalDelta;
+			t.exclusivePct = (double)t.deltaTimeInNanos / (double)totalDelta;
 			totalPct += t.exclusivePct;
 		}
 
@@ -90,6 +93,51 @@ namespace hop
 		details.threadIndex = threadIndex;
 		std::swap(details.details, traceDetails);
 		return details;
+	}
+
+	bool drawTraceDetails(
+		const TraceDetails& details,
+		const std::vector<ThreadInfo>& tracesPerThread,
+		const StringDb& strDb)
+	{
+		bool isWindowOpen = details.details.size() > 0;
+		if (details.details.size() > 0 )
+		{
+			if (ImGui::Begin("Trace Details", &isWindowOpen))
+			{
+				const auto& threadInfo = tracesPerThread[details.threadIndex];
+
+				ImGui::Columns(4, "TraceDetailsTable"); // 4-ways, with border
+				ImGui::Separator();
+				ImGui::Text("Trace"); ImGui::NextColumn();
+				ImGui::Text("Excl. %%"); ImGui::NextColumn();
+				ImGui::Text("Excl Time"); ImGui::NextColumn();
+				ImGui::Text("Count"); ImGui::NextColumn();
+				ImGui::Separator();
+
+				char traceName[256] = {};
+				char traceDuration[128] = {};
+				static size_t selected = -1;
+				for (size_t i = 0; i < details.details.size(); ++i)
+				{
+					const size_t traceId = details.details[i].traceId;
+					TStrPtr_t classIdx = threadInfo.traces.classNameIds[traceId];
+					TStrPtr_t fctIdx = threadInfo.traces.fctNameIds[traceId];
+					strDb.formatTraceName(classIdx, fctIdx, traceName, sizeof(traceName));
+					if (ImGui::Selectable(traceName, selected == i, ImGuiSelectableFlags_SpanAllColumns))
+						selected = i;
+					ImGui::NextColumn();
+					ImGui::Text("%3.2f", details.details[i].exclusivePct * 100.0f); ImGui::NextColumn();
+					formatMicrosDurationToDisplay( details.details[i].deltaTimeInNanos * 0.001f, traceDuration, sizeof(traceDuration) );
+					ImGui::Text("%s", traceDuration); ImGui::NextColumn();
+					ImGui::Text("%zu", details.details[i].callCount); ImGui::NextColumn();
+				}
+				ImGui::Columns(1);
+			}
+			ImGui::End();
+		}
+
+		return isWindowOpen;
 	}
 
 }

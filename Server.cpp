@@ -142,7 +142,6 @@ size_t Server::handleNewMessage( uint8_t* data, size_t maxSize )
       default:
          return (size_t)(bufPtr - data);
    }
-   return (size_t)(bufPtr - data);
 }
 
 void Server::getPendingProfilingTraces(

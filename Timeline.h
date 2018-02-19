@@ -24,8 +24,9 @@ class Timeline
    void setAbsoluteStartTime( TimeStamp time ) noexcept;
    void setAbsolutePresentTime( TimeStamp time ) noexcept;
    int64_t microsToDisplay() const noexcept;
-   void drawTraceDetails(const std::vector<ThreadInfo>& _tracesPerThread,
-						 const StringDb& strDb) const noexcept;
+
+   const TraceDetails& getTraceDetails() const noexcept;
+   void clearTraceDetails();
 
    // Move to first trace
    void moveToStart( bool animate = true ) noexcept;

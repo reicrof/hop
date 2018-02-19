@@ -37,6 +37,27 @@ static inline T pxlToMicros( double windowWidth, int64_t usToDisplay, int64_t px
    const double usPerPxl = usToDisplay / windowWidth;
    return static_cast<T>( usPerPxl * (double)pxl );
 }
+
+inline void formatMicrosDurationToDisplay( int64_t usToDisplay, char* str, size_t strSize )
+{
+   if ( usToDisplay < 1000 )
+   {
+      snprintf( str, strSize, "%d us", (int)usToDisplay );
+   }
+   else if ( usToDisplay < 1000000 )
+   {
+     snprintf( str, strSize, "%.3f ms", usToDisplay * 0.001f );
+   }
+   else if ( usToDisplay < 1000000000 )
+   {
+       snprintf( str, strSize, "%.3f s", usToDisplay * 0.000001f );
+   }
+   else
+   {
+       snprintf( str, strSize, "%.3f s", usToDisplay * 2.77778e-10 );
+   }
+}
+
 }
 
 #endif  // UTILS_H_

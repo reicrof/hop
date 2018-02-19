@@ -3,6 +3,7 @@
 #include "Lod.h"
 #include "Stats.h"
 #include "Utils.h"
+#include "TraceDetail.h"
 #include <SDL_keycode.h>
 
 // Todo : I dont like this dependency
@@ -516,7 +517,10 @@ void hop::Profiler::draw()
       }
 
       _timeline.draw( _tracesPerThread, _threadsId, _strDb );
-	  _timeline.drawTraceDetails(_tracesPerThread,_strDb);
+	  if (!drawTraceDetails(_timeline.getTraceDetails(), _tracesPerThread, _strDb))
+	  {
+		  _timeline.clearTraceDetails();
+	  }
    }
 
    ImGui::End();
