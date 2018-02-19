@@ -249,13 +249,13 @@ void Timeline::handleMouseDrag( float mouseInCanvasX, float mouseInCanvasY )
           ImVec2( curMousePosInScreen.x - delta.x, 9999 ),
           ImColor( 255, 255, 255, 64 ) );
 
-	  // If it is the first time we enter
-	  if (_rightClickStartPosInCanvas[0] == 0.0f)
-	  {
-		  _rightClickStartPosInCanvas[0] = mouseInCanvasX;
-		  _rightClickStartPosInCanvas[1] = mouseInCanvasY;
-		  setRealtime(false);
-	  }
+      // If it is the first time we enter
+      if ( _rightClickStartPosInCanvas[0] == 0.0f )
+      {
+         _rightClickStartPosInCanvas[0] = mouseInCanvasX;
+         _rightClickStartPosInCanvas[1] = mouseInCanvasY;
+         setRealtime( false );
+      }
    }
 
    // Handle right mouse click up. (Finished right click selection zoom)
@@ -366,7 +366,7 @@ void Timeline::drawTraces(
     const StringDb& strDb,
     const ImColor& color )
 {
-   static constexpr float MIN_TRACE_LENGTH_PXL = 0.25f;
+   static constexpr float MIN_TRACE_LENGTH_PXL = 0.1f;
 
    if ( data.traces.ends.empty() ) return;
 
@@ -413,8 +413,8 @@ void Timeline::drawTraces(
       const auto it2 = std::upper_bound(
           data.traces.ends.begin(), data.traces.ends.end(), lastTraceAbsoluteTime );
 
-	  // The last trace of the current thread does not reach the current time
-	  if (it1 == data.traces.ends.end()) return;
+      // The last trace of the current thread does not reach the current time
+      if ( it1 == data.traces.ends.end() ) return;
 
       size_t firstTraceId = std::distance( data.traces.ends.begin(), it1 );
       size_t lastTraceId = std::distance( data.traces.ends.begin(), it2 );
@@ -468,8 +468,8 @@ void Timeline::drawTraces(
       auto it1 = std::lower_bound( lods.begin(), lods.end(), firstInfo );
       auto it2 = std::upper_bound( lods.begin(), lods.end(), lastInfo );
 
-	  // The last trace of the current thread does not reach the current time
-	  if (it1 == lods.end()) return;
+      // The last trace of the current thread does not reach the current time
+      if ( it1 == lods.end() ) return;
 
       // Find the the first trace on the left and right that have a depth of 0. This prevents
       // traces that have a smaller depth than the one foune previously to vanish.
@@ -498,6 +498,9 @@ void Timeline::drawTraces(
          const float traceLengthPxl =
              microsToPxl<float>( windowWidthPxl, _microsToDisplay, t.delta / 1000 );
          const float traceTimeMs = t.delta / 1000000.0f;
+
+         // Skip trace if it is way smaller than treshold
+         if ( traceLengthPxl < MIN_TRACE_LENGTH_PXL ) continue;
 
          maxDepth = std::max( t.depth, maxDepth );
          const auto tracePos = ImVec2(
@@ -538,7 +541,7 @@ void Timeline::drawTraces(
       ImGui::SetCursorScreenPos( t.posPxl );
 
       ImGui::Button( "", ImVec2( t.lengthPxl, TRACE_HEIGHT ) );
-	  
+
       if ( ImGui::IsItemHovered() )
       {
          if ( t.lengthPxl > 3 )
@@ -573,10 +576,10 @@ void Timeline::drawTraces(
             }
             selectTrace( data, threadIndex, traceIndex );
          }
-		 else if (rightMouseClicked)
-		 {
-			 _traceDetails = createTraceDetails(data.traces, threadIndex, t.traceIndex);
-		 }
+         else if ( rightMouseClicked )
+         {
+            _traceDetails = createTraceDetails( data.traces, threadIndex, t.traceIndex );
+         }
       }
    }
 
@@ -589,7 +592,7 @@ void Timeline::drawTraces(
    for ( const auto& t : tracesToDraw )
    {
       const size_t traceIndex = t.traceIndex;
-	  strDb.formatTraceName(data.traces.classNameIds[traceIndex], data.traces.fctNameIds[traceIndex], curName, sizeof(curName));
+      strDb.formatTraceName(data.traces.classNameIds[traceIndex], data.traces.fctNameIds[traceIndex], curName, sizeof(curName));
 
       ImGui::SetCursorScreenPos( t.posPxl );
       ImGui::Button( curName, ImVec2( t.lengthPxl, TRACE_HEIGHT ) );

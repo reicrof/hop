@@ -2,7 +2,7 @@
 #include "StringDb.h"
 #include "Utils.h"
 
-#include "imgui\imgui.h"
+#include "imgui/imgui.h"
 
 #include <algorithm>
 
@@ -130,7 +130,7 @@ namespace hop
 					ImGui::Text("%3.2f", details.details[i].exclusivePct * 100.0f); ImGui::NextColumn();
 					formatMicrosDurationToDisplay( details.details[i].deltaTimeInNanos * 0.001f, traceDuration, sizeof(traceDuration) );
 					ImGui::Text("%s", traceDuration); ImGui::NextColumn();
-					ImGui::Text("%zu", details.details[i].callCount); ImGui::NextColumn();
+					ImGui::Text("%u", details.details[i].callCount); ImGui::NextColumn();
 				}
 				ImGui::Columns(1);
 			}

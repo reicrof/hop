@@ -169,8 +169,31 @@ int main()
       std::lock_guard<std::mutex> g(m);
       std::this_thread::sleep_for(3ms);
       func1();
+      {
+      HOP_PROF( "Creating maclass1" );
+      {
+         std::this_thread::sleep_for(250us);
+         HOP_PROF( "Creating maclass2" );
+         {
+            std::this_thread::sleep_for(250us);
+            HOP_PROF( "Creating maclass3" );
+            {
+               std::this_thread::sleep_for(250us);
+               HOP_PROF( "Creating maclass4" );
+               {
+                  std::this_thread::sleep_for(250us);
+                  HOP_PROF( "Creating maclass5" );
+                  {
+                     std::this_thread::sleep_for(250us);
+                     HOP_PROF( "Creating maclass6" );
+                  }
+               }
+            }
+         }
+      }
       MaClasse a;
       a.callBuggyFunction();
+      }
       ++count;
 	  l1();
 	  l1();
