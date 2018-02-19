@@ -7,6 +7,8 @@
 
 #include <vector>
 
+struct ImColor;
+
 namespace hop
 {
 struct ThreadInfo;
@@ -40,7 +42,7 @@ class Timeline
 
   private:
    void drawTimeline( const float posX, const float posY );
-   void drawTraces( const ThreadInfo& traces, int threadIndex, const float posX, const float posY, const StringDb& strDb );
+   void drawTraces( const ThreadInfo& traces, int threadIndex, const float posX, const float posY, const StringDb& strDb, const ImColor& color );
    void drawLockWaits( const ThreadInfo& traces, const float posX, const float posY );
    void handleMouseDrag( float mousePosX, float mousePosY );
    void handleMouseWheel( float mousePosX, float mousePosY );

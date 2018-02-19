@@ -58,16 +58,18 @@ void Timeline::draw(
    {
       snprintf(
           threadName + sizeof( "Thread" ), sizeof( threadName ), "%lu (id=%u)", i, threadIds[i] );
-      ImGui::PushStyleColor( ImGuiCol_Button, ImColor::HSV( i / 7.0f, 0.6f, 0.6f ) );
-      ImGui::PushStyleColor( ImGuiCol_ButtonHovered, ImColor::HSV( i / 7.0f, 0.6f, 0.6f ) );
-      ImGui::PushStyleColor( ImGuiCol_ButtonActive, ImColor::HSV( i / 7.0f, 0.6f, 0.6f ) );
+	  const auto traceColor = ImColor::HSV(i / 7.0f, 0.6f, 0.6f);
+	  const auto threadHeaderColor = ImColor(traceColor.Value.x - 0.2f, traceColor.Value.y - 0.2f, traceColor.Value.z - 0.2f);
+	  ImGui::PushStyleColor(ImGuiCol_Button, threadHeaderColor);
+      ImGui::PushStyleColor( ImGuiCol_ButtonHovered, threadHeaderColor);
+      ImGui::PushStyleColor( ImGuiCol_ButtonActive, threadHeaderColor);
       ImGui::Button( threadName );
       ImGui::PopStyleColor( 3 );
       ImGui::Spacing();
       ImGui::Separator();
 
       const auto curPos = ImGui::GetCursorScreenPos();
-      drawTraces( tracesPerThread[i], i, curPos.x, curPos.y, strDb );
+      drawTraces( tracesPerThread[i], i, curPos.x, curPos.y, strDb, traceColor);
       drawLockWaits( tracesPerThread[i], curPos.x, curPos.y );
 
       ImGui::InvisibleButton( "trace-padding", ImVec2( 20, 40 ) );
@@ -361,7 +363,8 @@ void Timeline::drawTraces(
     int threadIndex,
     const float posX,
     const float posY,
-    const StringDb& strDb )
+    const StringDb& strDb,
+    const ImColor& color )
 {
    static constexpr float MIN_TRACE_LENGTH_PXL = 0.25f;
 
@@ -521,9 +524,9 @@ void Timeline::drawTraces(
    const bool rightMouseClicked = ImGui::IsMouseReleased( 1 );
    const bool leftMouseDblClicked = ImGui::IsMouseDoubleClicked( 0 );
 
-   ImGui::PushStyleColor( ImGuiCol_Button, ImColor( 0.2f, 0.2f, 0.75f ) );
-   ImGui::PushStyleColor( ImGuiCol_ButtonHovered, ImColor( 0.3f, 0.3f, 1.0f ) );
-   ImGui::PushStyleColor( ImGuiCol_ButtonActive, ImColor( 0.2f, 0.2f, 0.5f ) );
+   ImGui::PushStyleColor( ImGuiCol_Button, ImColor( color.Value.x, color.Value.y, color.Value.z ) );
+   ImGui::PushStyleColor( ImGuiCol_ButtonHovered, ImColor(color.Value.x + 0.1f, color.Value.y + 0.1f, color.Value.z + 0.1f));
+   ImGui::PushStyleColor( ImGuiCol_ButtonActive, ImColor(color.Value.x + 0.2f, color.Value.y + 0.2f, color.Value.z + 0.2f));
 
    // Draw the loded traces
    char curName[512] = {};
@@ -579,9 +582,9 @@ void Timeline::drawTraces(
 
    ImGui::PopStyleColor( 3 );
 
-   ImGui::PushStyleColor( ImGuiCol_Button, ImColor( 0.2f, 0.2f, 0.8f ) );
-   ImGui::PushStyleColor( ImGuiCol_ButtonHovered, ImColor( 0.3f, 0.3f, 1.0f ) );
-   ImGui::PushStyleColor( ImGuiCol_ButtonActive, ImColor( 0.2f, 0.2f, 0.6f ) );
+   ImGui::PushStyleColor(ImGuiCol_Button, ImColor(color.Value.x, color.Value.y, color.Value.z));
+   ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImColor(color.Value.x + 0.1f, color.Value.y + 0.1f, color.Value.z + 0.1f));
+   ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImColor(color.Value.x + 0.2f, color.Value.y + 0.2f, color.Value.z + 0.2f));
    // Draw the non-loded traces
    for ( const auto& t : tracesToDraw )
    {
