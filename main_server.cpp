@@ -49,13 +49,17 @@ static void sdlImGuiInit()
 
 static void handleMouseWheel( const SDL_Event& e )
 {
-   if ( e.wheel.y == 1 )  // scroll up
+   if ( e.wheel.y > 0 )  // scroll up
    {
       g_mouseWheel = 1.0f;
    }
-   else if ( e.wheel.y == -1 )  // scroll down
+   else if ( e.wheel.y < 0 )  // scroll down
    {
       g_mouseWheel = -1.0f;
+   }
+   else
+   {
+      g_mouseWheel = 0.0f;
    }
 }
 

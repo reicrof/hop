@@ -19,7 +19,7 @@
 /////       THESE ARE THE MACROS YOU CAN MODIFY     ///////////
 ///////////////////////////////////////////////////////////////
 
-#define MAX_THREAD_NB 64
+#define HOP_MAX_THREAD_NB 64
 #define HOP_SHARED_MEM_SIZE 32000000
 
 ///////////////////////////////////////////////////////////////
@@ -491,7 +491,7 @@ bool SharedMemory::create( const char* path, size_t requestedSize, bool isConsum
    _isConsumer = isConsumer;
    // Get the size needed for the ringbuf struct
    size_t ringBufSize;
-   ringbuf_get_sizes(MAX_THREAD_NB, &ringBufSize, NULL);
+   ringbuf_get_sizes(HOP_MAX_THREAD_NB, &ringBufSize, NULL);
 
    // TODO handle signals
    // signal( SIGINT, sig_callback_handler );
@@ -521,7 +521,7 @@ bool SharedMemory::create( const char* path, size_t requestedSize, bool isConsum
    if( !isConsumer )
    {
       memset( _ringbuf, 0, totalSize - sizeof( SharedMetaInfo) );
-      if ( ringbuf_setup( _ringbuf, MAX_THREAD_NB, requestedSize ) < 0 )
+      if ( ringbuf_setup( _ringbuf, HOP_MAX_THREAD_NB, requestedSize ) < 0 )
       {
          assert( false && "Ring buffer creation failed" );
       }
@@ -645,8 +645,7 @@ void SharedMemory::destroy()
       }
 
       // If we are the last one accessing the shared memory, clean it.
-      if ( _sharedMemPath &&
-           ( _sharedMetaData->flags &
+      if ( ( _sharedMetaData->flags &
              ( SharedMetaInfo::CONNECTED_PRODUCER | SharedMetaInfo::CONNECTED_CONSUMER ) ) == 0 )
       {
          printf("Cleaning up shared resources...\n");
@@ -691,7 +690,7 @@ class Client
 
       // Push back first name as empty string
       _stringPtr.insert( 0 );
-      for( int i = 0; i < sizeof( TStrPtr_t ); ++i )
+      for( size_t i = 0; i < sizeof( TStrPtr_t ); ++i )
          _stringData.push_back('\0');
    }
 
@@ -889,7 +888,7 @@ Client* ClientManager::Get()
    }
 
    ++threadCount;
-   assert( threadCount <= MAX_THREAD_NB );
+   assert( threadCount <= HOP_MAX_THREAD_NB );
 
    return threadClient.get();
 }
@@ -1037,7 +1036,8 @@ int ringbuf_setup( ringbuf_t* rbuf, unsigned nworkers, size_t length )
  */
 void ringbuf_get_sizes( const unsigned nworkers, size_t* ringbuf_size, size_t* ringbuf_worker_size )
 {
-   if ( ringbuf_size ) *ringbuf_size = offsetof( ringbuf_t, workers[nworkers] );
+   assert( nworkers == HOP_MAX_THREAD_NB );
+   if ( ringbuf_size ) *ringbuf_size = offsetof( ringbuf_t, workers[HOP_MAX_THREAD_NB] );
    if ( ringbuf_worker_size ) *ringbuf_worker_size = sizeof( ringbuf_worker_t );
 }
 
