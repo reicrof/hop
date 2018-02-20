@@ -193,7 +193,8 @@ struct LockWait
 {
    void* mutexAddress;
    TimeStamp start, end;
-   uint32_t padding;
+   TDepth_t depth;
+   uint16_t padding;
 };
 HOP_STATIC_ASSERT( sizeof(LockWait) == EXPECTED_LOCK_WAIT_SIZE, "Lock wait layout has changed unexpectedly" );
 
@@ -706,9 +707,9 @@ class Client
       _traces.push_back( Trace{ start, end, (TStrPtr_t)fileName, (TStrPtr_t)className, (TStrPtr_t)fctName, lineNb, group, (TDepth_t)tl_traceLevel } );
    }
 
-   void addWaitLockTrace( void* mutexAddr, TimeStamp start, TimeStamp end )
+   void addWaitLockTrace( void* mutexAddr, TimeStamp start, TimeStamp end, TDepth_t depth )
    {
-      _lockWaits.push_back( LockWait{ mutexAddr, start, end } );
+      _lockWaits.push_back( LockWait{ mutexAddr, start, end, depth } );
    }
 
    bool addStringToDb( const char* strId )
@@ -925,7 +926,7 @@ void ClientManager::EndLockWait( void* mutexAddr, TimeStamp start, TimeStamp end
    // measured code and if it has a wait time greater than 500ns
    if( end - start > 500 && tl_traceLevel > 0 )
    {
-      ClientManager::Get()->addWaitLockTrace( mutexAddr, start, end );
+      ClientManager::Get()->addWaitLockTrace( mutexAddr, start, end, tl_traceLevel );
    }
 }
 

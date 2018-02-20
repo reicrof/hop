@@ -12,6 +12,7 @@ static constexpr float TRACE_HEIGHT = 20.0f;
 static constexpr float TRACE_VERTICAL_PADDING = 2.0f;
 static constexpr uint64_t MIN_MICROS_TO_DISPLAY = 100;
 static constexpr uint64_t MAX_MICROS_TO_DISPLAY = 900000000;
+static constexpr float MIN_TRACE_LENGTH_PXL = 0.1f;
 
 namespace hop
 {
@@ -58,11 +59,12 @@ void Timeline::draw(
    {
       snprintf(
           threadName + sizeof( "Thread" ), sizeof( threadName ), "%lu (id=%u)", i, threadIds[i] );
-	  const auto traceColor = ImColor::HSV(i / 7.0f, 0.6f, 0.6f);
-	  const auto threadHeaderColor = ImColor(traceColor.Value.x - 0.2f, traceColor.Value.y - 0.2f, traceColor.Value.z - 0.2f);
-	  ImGui::PushStyleColor(ImGuiCol_Button, threadHeaderColor);
-      ImGui::PushStyleColor( ImGuiCol_ButtonHovered, threadHeaderColor);
-      ImGui::PushStyleColor( ImGuiCol_ButtonActive, threadHeaderColor);
+      const auto traceColor = ImColor::HSV( i / 7.0f, 0.6f, 0.6f );
+      const auto threadHeaderColor = ImColor(
+          traceColor.Value.x - 0.2f, traceColor.Value.y - 0.2f, traceColor.Value.z - 0.2f );
+      ImGui::PushStyleColor( ImGuiCol_Button, threadHeaderColor );
+      ImGui::PushStyleColor( ImGuiCol_ButtonHovered, threadHeaderColor );
+      ImGui::PushStyleColor( ImGuiCol_ButtonActive, threadHeaderColor );
       ImGui::Button( threadName );
       ImGui::PopStyleColor( 3 );
       ImGui::Spacing();
@@ -302,12 +304,12 @@ int64_t Timeline::microsToDisplay() const noexcept { return _microsToDisplay; }
 
 const TraceDetails& Timeline::getTraceDetails() const noexcept
 {
-	return _traceDetails;
+   return _traceDetails;
 }
 
 void Timeline::clearTraceDetails()
 {
-	_traceDetails = TraceDetails{};
+   _traceDetails = TraceDetails{};
 }
 
 void Timeline::setStartMicro( int64_t timeInMicro, bool withAnimation /*= true*/ ) noexcept
@@ -366,8 +368,6 @@ void Timeline::drawTraces(
     const StringDb& strDb,
     const ImColor& color )
 {
-   static constexpr float MIN_TRACE_LENGTH_PXL = 0.1f;
-
    if ( data.traces.ends.empty() ) return;
 
    const auto absoluteStart = _absoluteStartTime;
@@ -625,10 +625,10 @@ void Timeline::drawTraces(
          {
             selectTrace( data, threadIndex, traceIndex );
          }
-		 else if (rightMouseClicked)
-		 {
-			 _traceDetails = createTraceDetails(data.traces, threadIndex, t.traceIndex);
-		 }
+         else if ( rightMouseClicked )
+         {
+            _traceDetails = createTraceDetails( data.traces, threadIndex, t.traceIndex );
+         }
       }
    }
    ImGui::PopStyleColor( 3 );
@@ -667,9 +667,9 @@ void Timeline::drawLockWaits(
    const TimeStamp firstTraceAbsoluteTime = absoluteStart + ( _startMicros * 1000 );
    const TimeStamp lastTraceAbsoluteTime = firstTraceAbsoluteTime + ( _microsToDisplay * 1000 );
 
-   ImGui::PushStyleColor( ImGuiCol_Button, ImColor( 1, 0, 0 ) );
-   ImGui::PushStyleColor( ImGuiCol_ButtonHovered, ImColor( 1, 0, 0 ) );
-   ImGui::PushStyleColor( ImGuiCol_ButtonActive, ImColor( 1, 0, 0 ) );
+   ImGui::PushStyleColor( ImGuiCol_Button, ImColor( 0.8f, 0, 0 ) );
+   ImGui::PushStyleColor( ImGuiCol_ButtonHovered, ImColor( 0.9f, 0, 0 ) );
+   ImGui::PushStyleColor( ImGuiCol_ButtonActive, ImColor( 1.0f, 0, 0 ) );
    for ( const auto& lw : lockWaits )
    {
       if ( lw.end >= firstTraceAbsoluteTime && lw.start <= lastTraceAbsoluteTime )
@@ -682,9 +682,11 @@ void Timeline::drawLockWaits(
              windowWidthPxl, _microsToDisplay, ( lw.end - lw.start ) / 1000.0f );
 
          // Skip if it is way smaller than treshold
-         if ( lengthPxl < 0.25 ) continue;
+         if ( lengthPxl < MIN_TRACE_LENGTH_PXL ) continue;
 
-         ImGui::SetCursorScreenPos( ImVec2( posX - startMicrosAsPxl + startPxl, posY ) );
+         ImGui::SetCursorScreenPos( ImVec2(
+             posX - startMicrosAsPxl + startPxl,
+             posY + lw.depth * ( TRACE_HEIGHT + TRACE_VERTICAL_PADDING ) ) );
          ImGui::Button( "Lock", ImVec2( lengthPxl, 20.f ) );
       }
    }
