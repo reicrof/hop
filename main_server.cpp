@@ -49,7 +49,6 @@ static void sdlImGuiInit()
 
 static void handleMouseWheel( const SDL_Event& e )
 {
-   printf("Mouse wheel %d\n", e.wheel.y );
    if ( e.wheel.y > 0 )  // scroll up
    {
       g_mouseWheel = 1.0f;
