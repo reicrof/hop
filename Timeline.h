@@ -57,8 +57,7 @@ class Timeline
    TimeStamp _absoluteStartTime{};
    TimeStamp _absolutePresentTime{};
    float _rightClickStartPosInCanvas[2] = {};
-   TDepth_t _maxTraceDepthPerThread[MAX_THREAD_NB] = {};
-   float _windowWidthPxl{0};
+   TDepth_t _maxTraceDepthPerThread[HOP_MAX_THREAD_NB] = {};
    bool _realtime{true};
 
    struct Selection
