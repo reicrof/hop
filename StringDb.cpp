@@ -1,6 +1,7 @@
 #include "StringDb.h"
 
 #include <cassert>
+#include <cstring>
 
 namespace hop
 {

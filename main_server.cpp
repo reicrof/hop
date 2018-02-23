@@ -14,6 +14,7 @@
 #include <GL/gl.h>
 #endif
 
+
 static bool g_run = true;
 static float g_mouseWheel = 0.0f;
 
@@ -144,7 +145,7 @@ int main( int argc, const char* argv[] )
    std::string exeName( HOP_SHARED_MEM_PREFIX );
    exeName += argv[1];
 
-   auto profiler = std::make_unique< hop::Profiler >( exeName );
+   auto profiler = std::unique_ptr< hop::Profiler >( new hop::Profiler( exeName ) );
    hop::addNewProfiler( profiler.get() );
    std::vector< uint32_t > profTrheadsId;
 

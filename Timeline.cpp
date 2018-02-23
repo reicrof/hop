@@ -654,7 +654,7 @@ void Timeline::drawLockWaits(
     const float posX,
     const float posY )
 {
-   if ( data.traces.ends.empty() ) return;
+   if ( data._lockWaits.empty() ) return;
 
    const auto& lockWaits = data._lockWaits;
 
@@ -667,9 +667,9 @@ void Timeline::drawLockWaits(
    const TimeStamp firstTraceAbsoluteTime = absoluteStart + ( _startMicros * 1000 );
    const TimeStamp lastTraceAbsoluteTime = firstTraceAbsoluteTime + ( _microsToDisplay * 1000 );
 
-   ImGui::PushStyleColor( ImGuiCol_Button, ImColor( 0.8f, 0, 0 ) );
-   ImGui::PushStyleColor( ImGuiCol_ButtonHovered, ImColor( 0.9f, 0, 0 ) );
-   ImGui::PushStyleColor( ImGuiCol_ButtonActive, ImColor( 1.0f, 0, 0 ) );
+   ImGui::PushStyleColor( ImGuiCol_Button, ImColor( 0.8f, 0.0f, 0.0f ) );
+   ImGui::PushStyleColor( ImGuiCol_ButtonHovered, ImColor( 0.9f, 0.0f, 0.0f ) );
+   ImGui::PushStyleColor( ImGuiCol_ButtonActive, ImColor( 1.0f, 0.0f, 0.0f ) );
    for ( const auto& lw : lockWaits )
    {
       if ( lw.end >= firstTraceAbsoluteTime && lw.start <= lastTraceAbsoluteTime )

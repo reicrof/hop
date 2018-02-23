@@ -10,21 +10,19 @@
 #define HOP_IMPLEMENTATION
 #include <Hop.h>
 
-using namespace std::chrono_literals;
-
 int bug = -1;
 size_t count = 0;
+std::mutex m;
+std::mutex m1;
 
 void stall()
 {
    HOP_PROF_FUNC();
-   std::this_thread::sleep_for(100us);
 }
 
 void buggyFunction()
 {
    HOP_PROF_FUNC();
-   std::this_thread::sleep_for(250us);
    if( count % 20 == 0 )
    {
       for( int i =0; i < 100; ++i )
@@ -44,7 +42,7 @@ struct MaClasse
 void func3()
 {
    HOP_PROF_FUNC_WITH_GROUP(42);
-   std::this_thread::sleep_for(500us);
+   std::this_thread::sleep_for(std::chrono::microseconds(500));
 }
 void func2()
 {
@@ -57,12 +55,11 @@ void func1()
 {
    static size_t i = 0;
    HOP_PROF_FUNC_WITH_GROUP(42);
+   std::lock_guard<std::mutex> g(m1);
    func2();
    ++i;
    printf( "%lu\n", i );
 }
-
-std::mutex m;
 
 void doEvenMoreStuff()
 {
@@ -72,15 +69,11 @@ void doEvenMoreStuff()
    {
       micros = 1;
    }
-   std::chrono::microseconds waittime(micros);
-   HOP_PROF_FUNC_WITH_GROUP(42);
-   std::this_thread::sleep_for(waittime);
 }
 
 void doMoreStuf()
 {
    HOP_PROF_FUNC_WITH_GROUP(42);
-   std::this_thread::sleep_for(25us);
    for( int i = 0; i < 200; ++i )
       doEvenMoreStuff();
 }
@@ -92,8 +85,7 @@ void takeMutexAndDoStuff()
    {
       HOP_PROF_FUNC_WITH_GROUP(42);
       doMoreStuf();
-      //std::this_thread::sleep_for(10us);
-      std::this_thread::sleep_for(1ms);
+      std::this_thread::sleep_for(std::chrono::milliseconds(1));
       doMoreStuf();
    }
 }
@@ -108,7 +100,7 @@ void threadFunc()
 
 void LODTest()
 {
-   std::this_thread::sleep_for(10ms);
+   //std::this_thread::sleep_for(10ms);
 
    std::thread t1( threadFunc );
    std::thread t2( threadFunc );
@@ -119,7 +111,7 @@ void LODTest()
    std::thread t7( threadFunc );
    std::thread t8( threadFunc );
 
-   std::this_thread::sleep_for(10ms);
+   //std::this_thread::sleep_for(10ms);
 
    while( true )
    {
@@ -130,13 +122,13 @@ void LODTest()
 void l3()
 {
 	HOP_PROF_FUNC_WITH_GROUP(42);
-	std::this_thread::sleep_for(100us);
+	//std::this_thread::sleep_for(100us);
 }
 
 void l2()
 {
 	HOP_PROF_FUNC_WITH_GROUP(42);
-	std::this_thread::sleep_for(500us);
+	//std::this_thread::sleep_for(500us);
 	for (int i = 0; i < 2; ++i)
 	{
 		l3();
@@ -146,7 +138,7 @@ void l2()
 void l1()
 {
 	HOP_PROF_FUNC_WITH_GROUP(42);
-	std::this_thread::sleep_for(1ms);
+	//std::this_thread::sleep_for(1ms);
 	l2();
 	l2();
 }
@@ -156,7 +148,7 @@ int main()
    // srand (time(NULL));
    // bug = rand() % 100 + 1;
 
-   //const auto preDrawTime = std::chrono::system_clock::now();
+   //const auto preDrawTime = std::chrono_literals::system_clock::now();
 
    std::thread t1 ( [](){ while( true ) { func1(); } } );
    std::thread t2 ( [](){ while( true ) { func1(); } } );
@@ -165,26 +157,26 @@ int main()
    while(true)
    {
       HOP_PROF_FUNC_WITH_GROUP(42);
-      using namespace std::chrono_literals;
       std::lock_guard<std::mutex> g(m);
-      std::this_thread::sleep_for(3ms);
+      std::this_thread::sleep_for(std::chrono::milliseconds(3));
       func1();
       {
       HOP_PROF( "Creating maclass1" );
       {
-         std::this_thread::sleep_for(250us);
+         std::this_thread::sleep_for(std::chrono::microseconds(250));
          HOP_PROF( "Creating maclass2" );
          {
-            std::this_thread::sleep_for(250us);
+            std::this_thread::sleep_for(std::chrono::microseconds(250));
             HOP_PROF( "Creating maclass3" );
             {
-               std::this_thread::sleep_for(250us);
+               std::this_thread::sleep_for(std::chrono::microseconds(250));
                HOP_PROF( "Creating maclass4" );
                {
-                  std::this_thread::sleep_for(250us);
+                  std::this_thread::sleep_for(std::chrono::microseconds(250));
                   HOP_PROF( "Creating maclass5" );
                   {
-                     std::this_thread::sleep_for(250us);
+                     std::lock_guard<std::mutex> g(m1);
+                     std::this_thread::sleep_for(std::chrono::microseconds(250));
                      HOP_PROF( "Creating maclass6" );
                   }
                }
