@@ -25,6 +25,9 @@ class Server
    void getPendingLockWaits(
        std::vector<std::vector<LockWait> >& lockWaits,
        std::vector<uint32_t>& threadIds );
+   void getPendingUnlockEvents(
+       std::vector<std::vector<UnlockEvent> >& unlockEvents,
+       std::vector<uint32_t>& threadIds );
 
   private:
    // Returns the number of bytes processed
@@ -43,6 +46,10 @@ class Server
    std::mutex pendingLockWaitsMutex;
    std::vector<uint32_t> pendingLockWaitThreadIds;
    std::vector<std::vector<LockWait> > pendingLockWaits;
+
+   std::mutex pendingUnlockEventsMutex;
+   std::vector<uint32_t> pendingUnlockEventsThreadIds;
+   std::vector<std::vector<UnlockEvent> > pendingUnlockEvents;
 };
 
 }  // namespace hop

@@ -78,14 +78,14 @@ size_t Server::handleNewMessage( uint8_t* data, size_t maxSize )
             stringDb.addStringData( stringData );
             bufPtr += stringData.size();
          }
-		 // If our string table is emtpy and we did not received any strings,
-		 // it means these messages are pending messages from previous execution.
-		 // Ignore them until we receive string data. This can happen after an
-		 // unclean exit.
-		 else if (stringDb.empty())
-		 {
-			 return maxSize;
-		 }
+         // If our string table is emtpy and we did not received any strings,
+         // it means these messages are pending messages from previous execution.
+         // Ignore them until we receive string data. This can happen after an
+         // unclean exit.
+         else if ( stringDb.empty() )
+         {
+            return maxSize;
+         }
          assert( (size_t)(bufPtr - data) <= maxSize );
 
         const Trace* traces = (const Trace*) bufPtr;
@@ -139,7 +139,27 @@ size_t Server::handleNewMessage( uint8_t* data, size_t maxSize )
 
          return (size_t)(bufPtr - data);
       }
+      case MsgType::PROFILER_UNLOCK_EVENT:
+      {
+         std::vector< UnlockEvent > unlockEvents( msgInfo->unlockEvents.count );
+         memcpy( unlockEvents.data(), bufPtr, unlockEvents.size() * sizeof(UnlockEvent) );
+
+         bufPtr += unlockEvents.size() * sizeof(UnlockEvent);
+         assert( (size_t)(bufPtr - data) <= maxSize );
+
+         std::sort(
+             unlockEvents.begin(), unlockEvents.end(), []( const UnlockEvent& lhs, const UnlockEvent& rhs ) {
+                return lhs.time < rhs.time;
+             } );
+
+         // TODO: Could lock later when we received all the messages
+         std::lock_guard<std::mutex> guard( pendingUnlockEventsMutex );
+         pendingUnlockEvents.emplace_back( std::move( unlockEvents ) );
+         pendingUnlockEventsThreadIds.push_back( threadId );
+         return (size_t)(bufPtr - data);
+      }
       default:
+         assert( false );
          return (size_t)(bufPtr - data);
    }
 }
@@ -171,6 +191,18 @@ void Server::getPendingLockWaits(
    pendingLockWaitThreadIds.clear();
 }
 
+void Server::getPendingUnlockEvents(
+    std::vector<std::vector<UnlockEvent> >& unlockEvents,
+    std::vector<uint32_t>& threadIds )
+{
+   std::lock_guard<std::mutex> guard( pendingUnlockEventsMutex );
+   std::swap( unlockEvents, pendingUnlockEvents );
+   std::swap( threadIds, pendingUnlockEventsThreadIds );
+
+   pendingUnlockEvents.clear();
+   pendingUnlockEventsThreadIds.clear();
+}
+
 void Server::stop()
 {
    if( _running )
@@ -179,7 +211,7 @@ void Server::stop()
       // Wake up semaphore to close properly
       if( _sharedMem.data() && _sharedMem.semaphore() )
       {
-		  _sharedMem.signalSemaphore();
+         _sharedMem.signalSemaphore();
       }
       if ( _thread.joinable() )
       {

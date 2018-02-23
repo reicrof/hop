@@ -142,6 +142,7 @@ enum class MsgType : uint32_t
 {
    PROFILER_TRACE,
    PROFILER_WAIT_LOCK,
+   PROFILER_UNLOCK_EVENT,
    INVALID_MESSAGE,
 };
 
@@ -156,6 +157,11 @@ struct LockWaitsMsgInfo
    uint32_t count;
 };
 
+struct UnlockEventsMsgInfo
+{
+   uint32_t count;
+};
+
 HOP_CONSTEXPR uint32_t EXPECTED_MSG_INFO_SIZE = 16;
 struct MsgInfo
 {
@@ -166,6 +172,7 @@ struct MsgInfo
    union {
       TracesMsgInfo traces;
       LockWaitsMsgInfo lockwaits;
+      UnlockEventsMsgInfo unlockEvents;
    };
 };
 HOP_STATIC_ASSERT( sizeof(MsgInfo) == EXPECTED_MSG_INFO_SIZE, "MsgInfo layout has changed unexpectedly" );
@@ -197,6 +204,14 @@ struct LockWait
    uint16_t padding;
 };
 HOP_STATIC_ASSERT( sizeof(LockWait) == EXPECTED_LOCK_WAIT_SIZE, "Lock wait layout has changed unexpectedly" );
+
+HOP_CONSTEXPR uint32_t EXPECTED_UNLOCK_EVENT_SIZE = 16;
+struct UnlockEvent
+{
+   void* mutexAddress;
+   TimeStamp time;
+};
+HOP_STATIC_ASSERT( sizeof(UnlockEvent) == EXPECTED_UNLOCK_EVENT_SIZE, "Unlock Event layout has changed unexpectedly" );
 
 // ------ end of message.h ------------
 
@@ -264,6 +279,7 @@ class ClientManager
       void* mutexAddr,
       TimeStamp start,
       TimeStamp end );
+   static void UnlockEvent( void* mutexAddr, TimeStamp time );
    static bool HasConnectedConsumer() HOP_NOEXCEPT;
    static bool HasListeningConsumer() HOP_NOEXCEPT;
 
@@ -685,7 +701,8 @@ class Client
    Client()
    {
       _traces.reserve( 256 );
-      _lockWaits.reserve( 256 );
+      _lockWaits.reserve( 64 );
+      _unlockEvents.reserve( 64 );
       _stringPtr.reserve( 256 );
       _stringData.reserve( 256 * 32 );
 
@@ -710,6 +727,11 @@ class Client
    void addWaitLockTrace( void* mutexAddr, TimeStamp start, TimeStamp end, TDepth_t depth )
    {
       _lockWaits.push_back( LockWait{ mutexAddr, start, end, depth } );
+   }
+
+   void addUnlockEvent( void* mutexAddr, TimeStamp time )
+   {
+      _unlockEvents.push_back( UnlockEvent{ mutexAddr, time } );
    }
 
    bool addStringToDb( const char* strId )
@@ -835,12 +857,49 @@ class Client
       return true;
    }
 
+   bool sendUnlockEvents()
+   {
+      if( _unlockEvents.empty() ) return false;
+
+      const size_t unlocksMsgSize = sizeof( MsgInfo ) + _unlockEvents.size() * sizeof( UnlockEvent );
+
+      // Allocate big enough buffer from the shared memory
+      ringbuf_t* ringbuf = ClientManager::sharedMemory.ringbuffer();
+      const auto offset = ringbuf_acquire( ringbuf, _worker, unlocksMsgSize );
+      if ( offset == -1 )
+      {
+         printf("Failed to acquire enough shared memory. Consider increasing shared memory size\n");
+         _unlockEvents.clear();
+         return false;
+      }
+
+      uint8_t* bufferPtr = &ClientManager::sharedMemory.data()[offset];
+
+      // Fill the buffer with the lock message
+      {
+         MsgInfo* uInfo = (MsgInfo*)bufferPtr;
+         uInfo->type = MsgType::PROFILER_UNLOCK_EVENT;
+         uInfo->threadId = (uint32_t)tl_threadId;
+         uInfo->unlockEvents.count = (uint32_t)_unlockEvents.size();
+         bufferPtr += sizeof( MsgInfo );
+         memcpy( bufferPtr, _unlockEvents.data(), _unlockEvents.size() * sizeof( UnlockEvent ) );
+      }
+
+      ringbuf_produce( ringbuf, _worker );
+      ClientManager::sharedMemory.signalSemaphore();
+
+      _unlockEvents.clear();
+
+      return true;
+   }
+
    void flushToConsumer()
    {
       if( !ClientManager::HasListeningConsumer() )
       {
          _traces.clear();
          _lockWaits.clear();
+         _unlockEvents.clear();
          // Also reset the string data that was sent since we might
          // have lost the connection with the consumer
          _sentStringDataSize = 0;
@@ -849,10 +908,12 @@ class Client
 
       sendTraces();
       sendLockWaits();
+      sendUnlockEvents();
    }
 
    std::vector< Trace > _traces;
    std::vector< LockWait > _lockWaits;
+   std::vector< UnlockEvent > _unlockEvents;
    std::unordered_set< TStrPtr_t > _stringPtr;
    std::vector< char > _stringData;
    ringbuf_worker_t* _worker{NULL};
@@ -927,6 +988,14 @@ void ClientManager::EndLockWait( void* mutexAddr, TimeStamp start, TimeStamp end
    if( end - start > 500 && tl_traceLevel > 0 )
    {
       ClientManager::Get()->addWaitLockTrace( mutexAddr, start, end, tl_traceLevel );
+   }
+}
+
+void ClientManager::UnlockEvent( void* mutexAddr, TimeStamp time )
+{
+   if( tl_traceLevel > 0 )
+   {
+      ClientManager::Get()->addUnlockEvent( mutexAddr, time );
    }
 }
 
