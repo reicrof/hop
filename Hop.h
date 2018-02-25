@@ -493,6 +493,7 @@ namespace
    {
       #if defined( _MSC_VER )
       #else
+         (void)handle; // Remove unuesed warning
          if ( shm_unlink( name ) != 0 ) perror( "Could not unlink shared memory" );
       #endif
    }

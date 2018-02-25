@@ -138,7 +138,6 @@ void l2()
 void l1()
 {
 	HOP_PROF_FUNC_WITH_GROUP(42);
-	//std::this_thread::sleep_for(1ms);
 	l2();
 	l2();
 }

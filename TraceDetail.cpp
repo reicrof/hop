@@ -7,6 +7,7 @@
 #include <algorithm>
 
 #include <cassert>
+#include <cmath>
 
 namespace hop
 {
@@ -88,7 +89,7 @@ createTraceDetails( const DisplayableTraces& traces, uint32_t threadIndex, size_
           return lhs.exclusivePct > rhs.exclusivePct;
        } );
 
-   assert( std::abs( totalPct - 1.0f ) < 0.01 );
+   assert( std::abs( totalPct - 1.0f ) < 0.01f );
 
    TraceDetails details;
    details.threadIndex = threadIndex;
