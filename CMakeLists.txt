@@ -69,4 +69,4 @@ include_directories( ${CMAKE_CURRENT_SOURCE_DIR})
 
 set( CMAKE_VERBOSE_MAKEFILE on )
 
-#windows build : cmake -G "Visual Studio 15 2017 Win64" -DSDL2_INCLUDE_DIR:STRING=C:\Users\XXXX\source\repos\SDL2\include -DSDL2_LIBRARY:STRING=C:\Users\XXXX\source\repos\SDL2\lib\x64\SDL2.lib .. 
+#windows build : cmake -G "Visual Studio 15 2017 Win64" -DSDL2_INCLUDE_DIR:STRING=C:\\Users\\XXXX\\source\\repos\\SDL2\\include -DSDL2_LIBRARY:STRING=C:\\Users\\XXXX\\source\\repos\\SDL2\\lib\\x64\\SDL2.lib .. 

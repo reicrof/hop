@@ -985,8 +985,8 @@ void ClientManager::EndProfile(
 void ClientManager::EndLockWait( void* mutexAddr, TimeStamp start, TimeStamp end )
 {
    // Only add lock wait event if the lock is coming from within
-   // measured code and if it has a wait time greater than 500ns
-   if( end - start > 500 && tl_traceLevel > 0 )
+   // measured code
+   if( tl_traceLevel > 0 )
    {
       ClientManager::Get()->addWaitLockTrace( mutexAddr, start, end, tl_traceLevel );
    }

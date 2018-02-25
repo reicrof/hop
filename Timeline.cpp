@@ -72,7 +72,7 @@ void Timeline::draw(
 
       const auto curPos = ImGui::GetCursorScreenPos();
       drawTraces( tracesPerThread[i], i, curPos.x, curPos.y, strDb, traceColor);
-      drawLockWaits( tracesPerThread[i], curPos.x, curPos.y );
+      drawLockWaits( tracesPerThread, i, curPos.x, curPos.y );
 
       ImGui::InvisibleButton( "trace-padding", ImVec2( 20, 40 ) );
    }
@@ -649,11 +649,22 @@ void Timeline::drawTraces(
        posY + _maxTraceDepthPerThread[threadIndex] * ( TRACE_HEIGHT + TRACE_VERTICAL_PADDING )} );
 }
 
+static void highlightLockOwner(const std::vector<ThreadInfo>& infos, size_t threadIndex, const hop::LockWait& highlightedLockWait )
+{
+    for (size_t i = 0; i < infos.size(); ++i)
+    {
+        if (i == threadIndex) continue;
+
+    }
+}
+
 void Timeline::drawLockWaits(
- const ThreadInfo& data,
+    const std::vector<ThreadInfo>& infos,
+    size_t threadIndex,
     const float posX,
     const float posY )
 {
+    const auto& data = infos[threadIndex];
    if ( data._lockWaits.empty() ) return;
 
    const auto& lockWaits = data._lockWaits;
@@ -688,6 +699,10 @@ void Timeline::drawLockWaits(
              posX - startMicrosAsPxl + startPxl,
              posY + lw.depth * ( TRACE_HEIGHT + TRACE_VERTICAL_PADDING ) ) );
          ImGui::Button( "Lock", ImVec2( lengthPxl, 20.f ) );
+         if (ImGui::IsItemHovered())
+         {
+             highlightLockOwner(infos, threadIndex, lw);
+         }
       }
    }
    ImGui::PopStyleColor( 3 );

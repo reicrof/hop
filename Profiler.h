@@ -26,6 +26,7 @@ struct Profiler
    void addTraces( const DisplayableTraces& traces, uint32_t threadId );
    void addStringData( const std::vector< char >& stringData, uint32_t threadId );
    void addLockWaits( const std::vector< LockWait >& lockWaits, uint32_t threadId );
+   void addUnlockEvents(const std::vector<UnlockEvent>& unlockEvents, uint32_t threadId);
    void handleHotkey();
    void setRecording( bool recording );
 
@@ -48,6 +49,9 @@ private:
 
    std::vector< uint32_t > threadIdsLockWaits;
    std::vector<std::vector< hop::LockWait > > pendingLockWaits;
+
+   std::vector< uint32_t > threadIdsUnlockEvents;
+   std::vector<std::vector< hop::UnlockEvent > > pendingUnlockEvents;
 };
 
 // Initialize the imgui framework

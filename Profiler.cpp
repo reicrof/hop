@@ -340,6 +340,11 @@ void Profiler::fetchClientData()
    {
       addLockWaits( pendingLockWaits[i], threadIdsLockWaits[i] );
    }
+   _server->getPendingUnlockEvents(pendingUnlockEvents, threadIdsUnlockEvents);
+   for (size_t i = 0; i < pendingUnlockEvents.size(); ++i)
+   {
+       addLockWaits(pendingLockWaits[i], threadIdsLockWaits[i]);
+   }
 }
 
 void Profiler::addStringData( const std::vector<char>& strData, uint32_t threadId )
@@ -384,6 +389,27 @@ void Profiler::addLockWaits( const std::vector<LockWait>& lockWaits, uint32_t th
 
       _tracesPerThread[i].addLockWaits( lockWaits );
    }
+}
+
+void Profiler::addUnlockEvents(const std::vector<UnlockEvent>& unlockEvents, uint32_t threadId)
+{
+    if (_recording)
+    {
+        size_t i = 0;
+        for (; i < _threadsId.size(); ++i)
+        {
+            if (_threadsId[i] == threadId) break;
+        }
+
+        // Thread id not found so add it
+        if (i == _threadsId.size())
+        {
+            _threadsId.push_back(threadId);
+            _tracesPerThread.emplace_back();
+        }
+
+        _tracesPerThread[i].addUnlockEvents(unlockEvents);
+    }
 }
 
 Profiler::~Profiler()

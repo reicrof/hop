@@ -21,4 +21,9 @@ void ThreadInfo::addLockWaits( const std::vector<LockWait>& lockWaits )
    _lockWaits.insert( _lockWaits.end(), lockWaits.begin(), lockWaits.end() );
 }
 
+void ThreadInfo::addUnlockEvents(const std::vector<UnlockEvent>& unlockEvents)
+{
+    _unlockEvents.insert(_unlockEvents.end(), unlockEvents.begin(), unlockEvents.end());
+}
+
 }
