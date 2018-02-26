@@ -50,6 +50,7 @@ class Timeline
    void selectTrace( const ThreadInfo& data, uint32_t threadIndex, size_t traceIndex );
    void setStartMicro( int64_t timeInMicro, bool withAnimation = true ) noexcept;
    void setZoom( uint64_t microsToDisplay, bool withAnimation = true );
+   void highlightLockOwner(const std::vector<ThreadInfo>& infos, size_t threadIndex, const hop::LockWait& highlightedLockWait );
 
    int64_t _startMicros{0};
    uint64_t _microsToDisplay{50000};

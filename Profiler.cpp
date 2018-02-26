@@ -343,7 +343,7 @@ void Profiler::fetchClientData()
    _server->getPendingUnlockEvents(pendingUnlockEvents, threadIdsUnlockEvents);
    for (size_t i = 0; i < pendingUnlockEvents.size(); ++i)
    {
-       addLockWaits(pendingLockWaits[i], threadIdsLockWaits[i]);
+       addUnlockEvents(pendingUnlockEvents[i], threadIdsUnlockEvents[i]);
    }
 }
 
