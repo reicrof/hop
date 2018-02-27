@@ -649,18 +649,23 @@ void Timeline::drawTraces(
        posY + _maxTraceDepthPerThread[threadIndex] * ( TRACE_HEIGHT + TRACE_VERTICAL_PADDING )} );
 }
 
-void Timeline::highlightLockOwner(const std::vector<ThreadInfo>& infos, size_t threadIndex, const hop::LockWait& highlightedLockWait )
+void Timeline::highlightLockOwner(
+    const std::vector<ThreadInfo>& infos,
+    size_t threadIndex,
+    const hop::LockWait& highlightedLockWait,
+    const float posX,
+    const float posY )
 {
-    struct lock_wait_less_cmp
+    struct unlock_events_less_cmp
     {
-       bool operator()( const hop::LockWait& lw, TimeStamp startTime )
+       bool operator()( const hop::UnlockEvent& ue, TimeStamp startTime )
        {
-          return lw.start < startTime;
+          return ue.time < startTime;
        }
 
-       bool operator()( TimeStamp startTime, const hop::LockWait& lw )
+       bool operator()( TimeStamp startTime, const hop::UnlockEvent& ue )
        {
-          return startTime < lw.start;
+          return startTime < ue.time;
        }
     };
 
@@ -672,24 +677,36 @@ void Timeline::highlightLockOwner(const std::vector<ThreadInfo>& infos, size_t t
     {
         if (i == threadIndex) continue;
 
-        auto last = std::upper_bound( infos[i]._lockWaits.cbegin(), infos[i]._lockWaits.cend(), highlightedLockWait.end, lock_wait_less_cmp() );
-        if( last == infos[i]._lockWaits.cend() ) --last;
+        auto last = std::upper_bound( infos[i]._unlockEvents.cbegin(), infos[i]._unlockEvents.cend(), highlightedLockWait.end, unlock_events_less_cmp() );
 
-        while( last != infos[i]._lockWaits.cbegin() && last->mutexAddress == highlightedLockWait.mutexAddress )
+        // upper_bound returns the first that is bigger. Thus we need the one just before that
+        --last;
+
+        const float startMicrosAsPxl =
+            microsToPxl<float>( windowWidthPxl, _microsToDisplay, _startMicros );
+
+        while( last != infos[i]._unlockEvents.cbegin() )
         {
-            // We've gone to far, so early break
-            if( last->end < highlightedLockWait.start )
-               break;
+            if( last->mutexAddress == highlightedLockWait.mutexAddress )
+            {
+               // We've gone to far, so early break
+               if( last->time < highlightedLockWait.start )
+                  break;
 
-            const int64_t startMicrosAsPxl =
-               microsToPxl<float>( windowWidthPxl, _microsToDisplay, ((last->start - absoluteStart) / 1000) -_startMicros );
-            const int64_t endMicrosAsPxl =
-               microsToPxl<float>( windowWidthPxl, _microsToDisplay, ((last->end - absoluteStart) / 1000) - _startMicros );
+               const int64_t unlockTimeAsPxl =
+                   microsToPxl<float>( windowWidthPxl, _microsToDisplay, ((last->time - absoluteStart) / 1000) );
 
-            DrawList->AddRectFilled(
-             ImVec2( startMicrosAsPxl, 0 ),
-             ImVec2( endMicrosAsPxl, 9999 ),
-             ImColor( 0, 255, 0, 64 ) );
+               // const int64_t startMicrosAsPxl =
+               //    microsToPxl<float>( windowWidthPxl, _microsToDisplay, ((last->start - absoluteStart) / 1000) -_startMicros );
+               // const int64_t endMicrosAsPxl =
+               //    microsToPxl<float>( windowWidthPxl, _microsToDisplay, ((last->end - absoluteStart) / 1000) - _startMicros );
+
+               DrawList->AddRectFilled(
+                ImVec2( posX - startMicrosAsPxl + unlockTimeAsPxl - 3.0f, 0 ),
+                ImVec2( posX - startMicrosAsPxl + unlockTimeAsPxl + 3.0f, 9999 ),
+                ImColor( 0, 255, 0, 64 ) );
+            }
+
             --last;
         }
     }
@@ -738,7 +755,7 @@ void Timeline::drawLockWaits(
          ImGui::Button( "Lock", ImVec2( lengthPxl, 20.f ) );
          if (ImGui::IsItemHovered())
          {
-             highlightLockOwner(infos, threadIndex, lw);
+             highlightLockOwner(infos, threadIndex, lw, posX, posY);
          }
       }
    }
