@@ -5,12 +5,13 @@ project (hop)
 ### Platform specific
 #####################
 if(UNIX)
-   if(NOT APPLE)
+   if(APPLE)
+        set( HOP_WRAP_SRC wrap_library/hop_wrap_macos.cpp )
+   else()
+        set( HOP_WRAP_SRC wrap_library/hop_wrap_linux.cpp )
         set(HOP_LIBRT_FLAG "-lrt")
    endif()
-
    set( CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -Wextra -pedantic" )
-   set( HOP_WRAP_SRC wrap_library/hop_wrap_unix.cpp )
 else()
    set( CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall" )
    set( HOP_WRAP_SRC wrap_library/hop_wrap_windows.cpp )
