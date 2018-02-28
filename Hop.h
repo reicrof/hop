@@ -564,8 +564,10 @@ bool SharedMemory::create( const char* path, size_t requestedSize, bool isConsum
       HOP_SLEEP_MS( 250 );
    }
 
-   _sharedMetaData->flags |=
-       isConsumer ? SharedMetaInfo::CONNECTED_CONSUMER : SharedMetaInfo::CONNECTED_PRODUCER;
+   if( isConsumer )
+      setConnectedConsumer( true );
+   else
+      setConnectedProducer( true );
 
    return true;
 }

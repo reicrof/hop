@@ -71,8 +71,10 @@ void Timeline::draw(
       ImGui::Separator();
 
       const auto curPos = ImGui::GetCursorScreenPos();
-      drawTraces( tracesPerThread[i], i, curPos.x, curPos.y, strDb, traceColor);
       drawLockWaits( tracesPerThread, i, curPos.x, curPos.y );
+      // Draw traces needs to be done after draw lock waits because it sets the position
+      // for the next drawing. TODO : Fix that ... -_-
+      drawTraces( tracesPerThread[i], i, curPos.x, curPos.y, strDb, traceColor);
 
       ImGui::InvisibleButton( "trace-padding", ImVec2( 20, 40 ) );
    }

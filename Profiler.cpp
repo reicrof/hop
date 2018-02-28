@@ -543,10 +543,10 @@ void hop::Profiler::draw()
       }
 
       _timeline.draw( _tracesPerThread, _threadsId, _strDb );
-	  if (!drawTraceDetails(_timeline.getTraceDetails(), _tracesPerThread, _strDb))
-	  {
-		  _timeline.clearTraceDetails();
-	  }
+      if ( !drawTraceDetails( _timeline.getTraceDetails(), _tracesPerThread, _strDb ) )
+      {
+         _timeline.clearTraceDetails();
+      }
    }
 
    ImGui::End();

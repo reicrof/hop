@@ -18,30 +18,34 @@ bool Server::start( const char* name )
    _running = true;
 
    _thread = std::thread( [this, name]() {
-      while ( _running )
+      while ( true )
       {
-
          // Try to get the shared memory
-         if( !_sharedMem.data() )
+         if ( !_sharedMem.data() )
          {
             bool success = _sharedMem.create( name, HOP_SHARED_MEM_SIZE, true );
-            if( !success )
+            if ( !success )
             {
-               std::this_thread::sleep_for(std::chrono::milliseconds( 500 ));
+               std::this_thread::sleep_for( std::chrono::milliseconds( 500 ) );
                continue;
             }
-            printf("Connection to shared data succesful.\n");
+            printf( "Connection to shared data succesful.\n" );
          }
 
-          _sharedMem.waitSemaphore();
+         _sharedMem.waitSemaphore();
+
+         // We are done running.s
+         if ( !_running ) break;
+
          size_t offset = 0;
          const size_t bytesToRead = ringbuf_consume( _sharedMem.ringbuffer(), &offset );
-         if( bytesToRead > 0 )
+         if ( bytesToRead > 0 )
          {
             size_t bytesRead = 0;
-            while( bytesRead < bytesToRead )
+            while ( bytesRead < bytesToRead )
             {
-               bytesRead += handleNewMessage( &_sharedMem.data()[offset + bytesRead], bytesToRead - bytesRead );
+               bytesRead += handleNewMessage(
+                   &_sharedMem.data()[offset + bytesRead], bytesToRead - bytesRead );
             }
             ringbuf_release( _sharedMem.ringbuffer(), bytesToRead );
          }

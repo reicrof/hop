@@ -8,6 +8,7 @@
 #include <vector>
 #include <thread>
 #include <mutex>
+#include <atomic>
 
 namespace hop
 {
@@ -34,7 +35,7 @@ class Server
    size_t handleNewMessage( uint8_t* data, size_t maxSize );
 
    std::thread _thread;
-   bool _running{false};
+   std::atomic< bool > _running{false};
    SharedMemory _sharedMem;
    StringDb stringDb;
 
