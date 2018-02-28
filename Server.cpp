@@ -133,7 +133,7 @@ size_t Server::handleNewMessage( uint8_t* data, size_t maxSize )
 
          std::sort(
              lockwaits.begin(), lockwaits.end(), []( const LockWait& lhs, const LockWait& rhs ) {
-                return lhs.start < rhs.start;
+                return lhs.end < rhs.end;
              } );
 
          // TODO: Could lock later when we received all the messages

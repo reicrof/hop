@@ -671,6 +671,19 @@ void Timeline::highlightLockOwner(
        }
     };
 
+    struct lock_wait_less_cmp
+    {
+       bool operator()( const hop::LockWait& lw, TimeStamp startTime )
+       {
+          return lw.end < startTime;
+       }
+
+       bool operator()( TimeStamp startTime, const hop::LockWait& lw )
+       {
+          return startTime < lw.end;
+       }
+    };
+
 
     ImDrawList* DrawList = ImGui::GetWindowDrawList();
     const float windowWidthPxl = ImGui::GetWindowWidth();
@@ -695,18 +708,36 @@ void Timeline::highlightLockOwner(
                if( last->time < highlightedLockWait.start )
                   break;
 
-               const int64_t unlockTimeAsPxl =
-                   microsToPxl<float>( windowWidthPxl, _microsToDisplay, ((last->time - absoluteStart) / 1000) );
+               // Find the associated lock wait
+               auto lockWaitIt = std::lower_bound(
+                   infos[i]._lockWaits.cbegin(),
+                   infos[i]._lockWaits.cend(),
+                   last->time,
+                   lock_wait_less_cmp() );
 
-               // const int64_t startMicrosAsPxl =
-               //    microsToPxl<float>( windowWidthPxl, _microsToDisplay, ((last->start - absoluteStart) / 1000) -_startMicros );
-               // const int64_t endMicrosAsPxl =
-               //    microsToPxl<float>( windowWidthPxl, _microsToDisplay, ((last->end - absoluteStart) / 1000) - _startMicros );
+               // lower_bound returns the first that does not compare smaller than the unlock time.
+               // Therefore, we need to start from this iterator and find the first one that matches
+               // the highlighted mutex
+               --lockWaitIt;
+               while ( lockWaitIt != infos[i]._lockWaits.cbegin() &&
+                       lockWaitIt->mutexAddress != highlightedLockWait.mutexAddress )
+               {
+                  --lockWaitIt;
+               }
+
+               const int64_t lockTimeAsPxl = microsToPxl<float>(
+                   windowWidthPxl,
+                   _microsToDisplay,
+                   ( ( lockWaitIt->end - absoluteStart ) / 1000 ) );
+               const int64_t unlockTimeAsPxl = microsToPxl<float>(
+                   windowWidthPxl, _microsToDisplay, ( ( last->time - absoluteStart ) / 1000 ) );
 
                DrawList->AddRectFilled(
-                ImVec2( posX - startMicrosAsPxl + unlockTimeAsPxl - 3.0f, 0 ),
-                ImVec2( posX - startMicrosAsPxl + unlockTimeAsPxl + 3.0f, 9999 ),
-                ImColor( 0, 255, 0, 64 ) );
+                   ImVec2( posX - startMicrosAsPxl + lockTimeAsPxl, 0 ),
+                   ImVec2(
+                       posX - startMicrosAsPxl + unlockTimeAsPxl,
+                       999999 ),
+                   ImColor( 0, 255, 0, 64 ) );
             }
 
             --last;

@@ -142,6 +142,25 @@ void l1()
 	l2();
 }
 
+void rec( int& i )
+{
+   HOP_PROF_FUNC_WITH_GROUP(42);
+   while( i > 0 )
+   {
+      std::this_thread::sleep_for(std::chrono::microseconds(5));
+      rec(--i);
+   }
+   
+
+}
+
+void startRec()
+{
+   HOP_PROF_FUNC_WITH_GROUP(42);
+   int recCount = 100;
+   rec( recCount );
+}
+
 void testMutex()
 {
    HOP_PROF_FUNC_WITH_GROUP(42);
@@ -183,7 +202,9 @@ int main()
    //                {
    //                   std::lock_guard<std::mutex> g(m1);
    //                   std::this_thread::sleep_for(std::chrono::microseconds(250));
+   //                   startRec();
    //                   HOP_PROF( "Creating maclass6" );
+
    //                }
    //             }
    //          }
@@ -198,7 +219,7 @@ int main()
    // }
 
    std::thread t ( [](){ while( true ) { testMutex(); } } );
-   std::thread t1 ( [](){ while( true ) { testMutex(); } } );
+   //std::thread t1 ( [](){ while( true ) { testMutex(); } } );
    while( true )
    {
       testMutex();
