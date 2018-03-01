@@ -17,11 +17,11 @@ constexpr int LOD_COUNT = sizeof( LOD_MICROS ) / sizeof( LOD_MICROS[0] );
 
 struct LodInfo
 {
-   TimeStamp end, delta;
+   TimeStamp start, delta;
    size_t traceIndex;
    TDepth_t depth;
    bool isLoded;
-   bool operator<( const LodInfo& rhs ) const noexcept { return end < rhs.end; }
+   bool operator<( const LodInfo& rhs ) const noexcept { return start < rhs.start; }
 };
 
 using LodsArray = std::array< std::vector< LodInfo >, LOD_COUNT >;

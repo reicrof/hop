@@ -27,7 +27,7 @@
 ///////////////////////////////////////////////////////////////
 
 // Create a new profiling trace with specified name
-#define HOP_PROF( x ) HOP_PROF_GUARD_VAR( __LINE__, ( __FILE__, __LINE__, NULL, (x), 0 ) )
+#define HOP_PROF( DESCRIPTION ) HOP_PROF_GUARD_VAR( __LINE__, ( __FILE__, __LINE__, NULL, (DESCRIPTION), 0 ) )
 // Create a new profiling trace for a free function
 #define HOP_PROF_FUNC() HOP_PROF_GUARD_VAR( __LINE__, ( __FILE__, __LINE__, NULL, __func__, 0 ) )
 // Create a new profiling trace for a member function

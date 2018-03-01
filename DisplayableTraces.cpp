@@ -11,7 +11,7 @@ void DisplayableTraces::append( const DisplayableTraces& newTraces )
    const size_t prevSize = deltas.size();
 
    deltas.insert( deltas.end(), newTraces.deltas.begin(), newTraces.deltas.end() );
-   ends.insert( ends.end(), newTraces.ends.begin(), newTraces.ends.end() );
+   starts.insert( starts.end(), newTraces.starts.begin(), newTraces.starts.end() );
    flags.insert( flags.end(), newTraces.flags.begin(), newTraces.flags.end() );
    fileNameIds.insert(
        fileNameIds.end(), newTraces.fileNameIds.begin(), newTraces.fileNameIds.end() );
@@ -26,7 +26,7 @@ void DisplayableTraces::append( const DisplayableTraces& newTraces )
 
 void DisplayableTraces::reserve( size_t size )
 {
-   ends.reserve( size );
+   starts.reserve( size );
    deltas.reserve( size );
    flags.reserve( size );
    fileNameIds.reserve( size );
@@ -38,7 +38,7 @@ void DisplayableTraces::reserve( size_t size )
 
 void DisplayableTraces::clear()
 {
-   ends.clear();
+   starts.clear();
    deltas.clear();
    flags.clear();
    fileNameIds.clear();

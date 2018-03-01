@@ -31,27 +31,26 @@ LodsArray computeLods( const DisplayableTraces& traces, size_t idOffset )
 
    // Compute first LOD from raw data
    int lodLvl = 0;
-   for ( size_t i = 0; i < traces.ends.size(); ++i )
+   for ( size_t i = 0; i < traces.starts.size(); ++i )
    {
       const TDepth_t curDepth = traces.depths[i];
       if ( lods[curDepth].empty() )
       {
-         lods[curDepth].push_back( LodInfo{traces.ends[i], traces.deltas[i], idOffset + i, curDepth, false} );
+         lods[curDepth].push_back( LodInfo{traces.starts[i], traces.deltas[i], idOffset + i, curDepth, false} );
          continue;
       }
 
       auto& lastTrace = lods[curDepth].back();
-      const auto timeBetweenTrace = (traces.ends[i] - traces.deltas[i]) - lastTrace.end;
+      const auto timeBetweenTrace = traces.starts[i] - (lastTrace.start + lastTrace.delta);
       if( canBeLoded( lodLvl, timeBetweenTrace, lastTrace.delta, traces.deltas[i] ) )
       {
          assert( lastTrace.depth == curDepth );
-         lastTrace.end = traces.ends[i];
          lastTrace.delta += timeBetweenTrace + traces.deltas[i];
          lastTrace.isLoded = true;
       }
       else
       {
-         lods[curDepth].push_back( LodInfo{traces.ends[i], traces.deltas[i], idOffset + i, curDepth, false} );
+         lods[curDepth].push_back( LodInfo{traces.starts[i], traces.deltas[i], idOffset + i, curDepth, false} );
       }
    }
 
@@ -81,11 +80,10 @@ LodsArray computeLods( const DisplayableTraces& traces, size_t idOffset )
          }
 
          auto& lastTrace = lods[curDepth].back();
-         const auto timeBetweenTrace = (l.end - l.delta) - lastTrace.end;
+         const auto timeBetweenTrace = l.start - (lastTrace.start + lastTrace.delta);
          if( canBeLoded( lodLvl, timeBetweenTrace, lastTrace.delta, l.delta ) )
          {
             assert( lastTrace.depth == curDepth );
-            lastTrace.end = l.end;
             lastTrace.delta += timeBetweenTrace + l.delta;
             lastTrace.isLoded = true;
          }
@@ -150,15 +148,12 @@ void appendLods( LodsArray& dst, const LodsArray& src )
                // Check if we can merge it if the previous one at the same depth
                if( sameDepthIt != dst[i].rend() )
                {
-                  const auto timeBetweenTrace = (newTraceIt->end - newTraceIt->delta) - sameDepthIt->end;
+                  const auto timeBetweenTrace = newTraceIt->start - (sameDepthIt->start + sameDepthIt->delta);
                   wasLoded = canBeLoded( i, timeBetweenTrace, sameDepthIt->delta, newTraceIt->delta );
                   if( wasLoded )
                   {
-                     sameDepthIt->end = newTraceIt->end;
                      sameDepthIt->delta += timeBetweenTrace + newTraceIt->delta;
                      sameDepthIt->isLoded = true;
-                     const size_t dist = (size_t)std::distance( dst[i].rend(), sameDepthIt);
-                     sortFromIdx = std::min( dist, sortFromIdx );
                   }
                }
 
@@ -175,8 +170,6 @@ void appendLods( LodsArray& dst, const LodsArray& src )
 
       dst[i].insert( dst[i].end(), nonLodedInfos.begin(), nonLodedInfos.end() );
       dst[i].insert( dst[i].end(), newTraceIt, src[i].end() );
-
-      std::sort( dst[i].begin() + sortFromIdx, dst[i].end() );
 
       assert_is_sorted( dst[i].begin(), dst[i].end() );
 

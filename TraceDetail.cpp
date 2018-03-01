@@ -15,12 +15,15 @@ TraceDetails
 createTraceDetails( const DisplayableTraces& traces, uint32_t threadIndex, size_t traceId )
 {
    // Find the traces to analyze
-   const TimeStamp end = traces.ends[traceId];
+   const TimeStamp startTime = traces.starts[traceId];
    const TimeStamp totalDelta = traces.deltas[traceId];
 
    size_t firstTraceId = traceId;
-   const TimeStamp firstTraceTime = end - totalDelta;
-   while ( firstTraceId > 0 && traces.ends[firstTraceId] >= firstTraceTime ) firstTraceId--;
+   while ( firstTraceId > 0 &&
+           traces.starts[firstTraceId] + traces.deltas[firstTraceId] >= startTime )
+   {
+      --firstTraceId;
+   }
 
    ++firstTraceId;
 

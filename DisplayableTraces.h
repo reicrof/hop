@@ -24,7 +24,7 @@ struct DisplayableTraces
    void reserve( size_t size );
    void clear();
 
-   std::vector< TimeStamp > ends; // in ns
+   std::vector< TimeStamp > starts; // in ns
    std::vector< TimeStamp > deltas; // in ns
 
    //Indexes of the name in the string database

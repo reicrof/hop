@@ -92,15 +92,20 @@ size_t Server::handleNewMessage( uint8_t* data, size_t maxSize )
          }
          assert( (size_t)(bufPtr - data) <= maxSize );
 
-        const Trace* traces = (const Trace*) bufPtr;
+        Trace* traces = (Trace*) bufPtr;
         const size_t traceCount = msgInfo->traces.traceCount;
+
+        // Sort according to their start time.
+        std::sort( traces, traces + traceCount, []( const Trace& lhs, const Trace& rhs ) {
+           return lhs.start < rhs.start;
+        } );
 
         DisplayableTraces dispTraces;
         dispTraces.reserve( traceCount );
         for( size_t i = 0; i < traceCount; ++i )
         {
             const auto& t = traces[i];
-            dispTraces.ends.push_back( t.end );
+            dispTraces.starts.push_back( t.start );
             dispTraces.deltas.push_back( t.end - t.start );
             dispTraces.fileNameIds.push_back( stringDb.getStringIndex( t.fileNameId ) );
             dispTraces.classNameIds.push_back( stringDb.getStringIndex( t.classNameId ) );
@@ -109,9 +114,6 @@ size_t Server::handleNewMessage( uint8_t* data, size_t maxSize )
             dispTraces.depths.push_back( t.depth );
             dispTraces.groups.push_back( t.group );
         }
-
-        // The ends time should already be sorted
-        assert_is_sorted( dispTraces.ends.begin(), dispTraces.ends.end() );
 
         bufPtr += ( traceCount * sizeof( Trace ) );
         assert( ( size_t )( bufPtr - data ) <= maxSize );
@@ -131,6 +133,7 @@ size_t Server::handleNewMessage( uint8_t* data, size_t maxSize )
          bufPtr += lockwaits.size() * sizeof(LockWait);
          assert( (size_t)(bufPtr - data) <= maxSize );
 
+         // Sort according to their end times
          std::sort(
              lockwaits.begin(), lockwaits.end(), []( const LockWait& lhs, const LockWait& rhs ) {
                 return lhs.end < rhs.end;

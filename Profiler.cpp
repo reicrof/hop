@@ -315,12 +315,12 @@ void Profiler::addTraces( const DisplayableTraces& traces, uint32_t threadId )
       }
 
       const auto startTime = _timeline.absoluteStartTime();
-      if( startTime == 0 || (traces.ends[0] - traces.deltas[0]) < startTime )
-        _timeline.setAbsoluteStartTime( (traces.ends[0] - traces.deltas[0]) );
+      if( startTime == 0 || traces.starts[0] < startTime )
+        _timeline.setAbsoluteStartTime( traces.starts[0] );
 
       const auto presentTime = _timeline.absolutePresentTime();
-      if( presentTime == 0 || traces.ends.back() > presentTime )
-        _timeline.setAbsolutePresentTime( traces.ends.back() );
+      if( presentTime == 0 || traces.starts.back() + traces.deltas.back() > presentTime )
+        _timeline.setAbsolutePresentTime( traces.starts.back() + traces.deltas.back() );
 
       _tracesPerThread[threadIndex].addTraces( traces );
    }

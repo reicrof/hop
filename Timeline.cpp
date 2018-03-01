@@ -370,7 +370,7 @@ void Timeline::drawTraces(
     const StringDb& strDb,
     const ImColor& color )
 {
-   if ( data.traces.ends.empty() ) return;
+   if ( data.traces.starts.empty() ) return;
 
    const auto absoluteStart = _absoluteStartTime;
    const float windowWidthPxl = ImGui::GetWindowWidth();
@@ -411,36 +411,42 @@ void Timeline::drawTraces(
    if ( lodLevel == -1 )
    {
       const auto it1 = std::lower_bound(
-          data.traces.ends.begin(), data.traces.ends.end(), firstTraceAbsoluteTime );
+          data.traces.starts.begin(), data.traces.starts.end(), firstTraceAbsoluteTime );
       const auto it2 = std::upper_bound(
-          data.traces.ends.begin(), data.traces.ends.end(), lastTraceAbsoluteTime );
+          data.traces.starts.begin(), data.traces.starts.end(), lastTraceAbsoluteTime );
 
       // The last trace of the current thread does not reach the current time
-      if ( it1 == data.traces.ends.end() ) return;
+      if ( it1 == data.traces.starts.end() ) return;
 
-      size_t firstTraceId = std::distance( data.traces.ends.begin(), it1 );
-      size_t lastTraceId = std::distance( data.traces.ends.begin(), it2 );
+      size_t firstTraceId = std::distance( data.traces.starts.begin(), it1 );
+      size_t lastTraceId = std::distance( data.traces.starts.begin(), it2 );
 
-      // Find the the first trace on the left and right that have a depth of 0. This prevents
-      // traces that have a smaller depth than the one foune previously to vanish.
-      while ( firstTraceId > 0 && data.traces.depths[firstTraceId] != 0 )
+      // We've located the first trace that starts after the first shown trace. We now
+      // need to find the last trace at depth level 0 that could be shown, meaning its
+      // endtime < firstTraceAbsoluteTime
+      while ( firstTraceId > 0 && // Is a valid trace
+              data.traces.depths[firstTraceId] != 0 && // Is a level 0 trace
+              // Has its end time before the timeline start
+              data.traces.starts[firstTraceId] + data.traces.deltas[firstTraceId] > firstTraceAbsoluteTime )
       {
          --firstTraceId;
       }
+
+      // We have found the last trace that starts after the end time of the timeline. Just
+      // take the next level 0 trace to make sure we display the complete stack of traces
       while ( lastTraceId < data.traces.depths.size() && data.traces.depths[lastTraceId] != 0 )
       {
          ++lastTraceId;
       }
-      if ( lastTraceId < data.traces.depths.size() )
-      {
-         ++lastTraceId;
-      }  // We need to go one past the depth 0
+      // We need to go one past the depth 0 so it is included in the rendering
+      lastTraceId = std::min( lastTraceId + 1, data.traces.depths.size() );
 
+      // Lets create the drawing info for the traces
       for ( size_t i = firstTraceId; i < lastTraceId; ++i )
       {
-         const int64_t traceEndInMicros = ( data.traces.ends[i] - absoluteStart ) / 1000;
-         const auto traceEndPxl = microsToPxl<float>(
-             windowWidthPxl, _microsToDisplay, traceEndInMicros - _startMicros );
+         const int64_t traceStartInMicros = ( data.traces.starts[i] - absoluteStart ) / 1000;
+         const auto traceStartPxl = microsToPxl<float>(
+             windowWidthPxl, _microsToDisplay, traceStartInMicros - _startMicros );
          const float traceLengthPxl =
              microsToPxl<float>( windowWidthPxl, _microsToDisplay, data.traces.deltas[i] / 1000 );
          const float traceTimeMs = data.traces.deltas[i] / 1000000.0f;
@@ -451,7 +457,7 @@ void Timeline::drawTraces(
          const auto curDepth = data.traces.depths[i];
          maxDepth = std::max( curDepth, maxDepth );
          const auto tracePos = ImVec2(
-             posX + traceEndPxl - traceLengthPxl,
+             posX + traceStartPxl,
              posY + curDepth * ( TRACE_HEIGHT + TRACE_VERTICAL_PADDING ) );
 
          tracesToDraw.push_back( DrawingInfo{tracePos, traceLengthPxl, traceTimeMs, i} );
@@ -473,12 +479,15 @@ void Timeline::drawTraces(
       // The last trace of the current thread does not reach the current time
       if ( it1 == lods.end() ) return;
 
+      --it1; // We want the first trace that is < start time
       // Find the the first trace on the left and right that have a depth of 0. This prevents
       // traces that have a smaller depth than the one foune previously to vanish.
-      while ( it1 != lods.begin() && it1->depth != 0 )
+      while ( it1 != lods.begin() && (it1->start + it1->delta) > firstTraceAbsoluteTime )
       {
          --it1;
       }
+      while( it1->depth != 0 ) --it1;
+
       while ( it2 != lods.end() && it2->depth != 0 )
       {
          ++it2;
@@ -494,9 +503,9 @@ void Timeline::drawTraces(
       for ( size_t i = firstTraceId; i < lastTraceId; ++i )
       {
          const auto& t = lods[i];
-         const int64_t traceEndInMicros = ( t.end - absoluteStart ) / 1000;
-         const auto traceEndPxl = microsToPxl<float>(
-             windowWidthPxl, _microsToDisplay, traceEndInMicros - _startMicros );
+         const int64_t traceStartInMicros = ( t.start - absoluteStart ) / 1000;
+         const auto traceStartPxl = microsToPxl<float>(
+             windowWidthPxl, _microsToDisplay, traceStartInMicros - _startMicros );
          const float traceLengthPxl =
              microsToPxl<float>( windowWidthPxl, _microsToDisplay, t.delta / 1000 );
          const float traceTimeMs = t.delta / 1000000.0f;
@@ -506,7 +515,7 @@ void Timeline::drawTraces(
 
          maxDepth = std::max( t.depth, maxDepth );
          const auto tracePos = ImVec2(
-             posX + traceEndPxl - traceLengthPxl,
+             posX + traceStartPxl,
              posY + t.depth * ( TRACE_HEIGHT + TRACE_VERTICAL_PADDING ) );
          if ( t.isLoded )
             lodTracesToDraw.push_back(
@@ -556,11 +565,10 @@ void Timeline::drawTraces(
 
          if ( leftMouseDblClicked )
          {
-            const auto traceEndMicros =
-                pxlToMicros( windowWidthPxl, _microsToDisplay, t.posPxl.x - posX + t.lengthPxl );
-            const auto deltaUs = ( t.deltaMs * 1000 );
-            setStartMicro( _startMicros + ( traceEndMicros - deltaUs ) );
-            setZoom( deltaUs );
+            const auto traceStartMicros =
+                pxlToMicros( windowWidthPxl, _microsToDisplay, t.posPxl.x - posX );
+            setStartMicro( _startMicros + traceStartMicros );
+            setZoom( t.deltaMs * 1000 );
          }
          else if( leftMouseClicked )
          {
@@ -569,9 +577,9 @@ void Timeline::drawTraces(
             const TimeStamp mouseInAbsoluteTime =
                firstTraceAbsoluteTime + pxlToMicros( windowWidthPxl, _microsToDisplay, mousePos.x - posX ) * 1000;
             const auto it = std::lower_bound(
-               data.traces.ends.begin(), data.traces.ends.end(), mouseInAbsoluteTime );
+               data.traces.starts.begin(), data.traces.starts.end(), mouseInAbsoluteTime );
             const int depth = (t.posPxl.y - posY) / ( TRACE_HEIGHT + TRACE_VERTICAL_PADDING );
-            size_t traceIndex = std::distance( data.traces.ends.begin(), it );
+            size_t traceIndex = std::distance( data.traces.starts.begin(), it );
             while( traceIndex < data.traces.depths.size() && data.traces.depths[ traceIndex ] != depth )
             {
                ++traceIndex;
@@ -619,9 +627,7 @@ void Timeline::drawTraces(
          if ( leftMouseDblClicked )
          {
             setZoom( t.deltaMs * 1000 );
-            setStartMicro(
-                ( data.traces.ends[traceIndex] - data.traces.deltas[traceIndex] - absoluteStart ) *
-                0.001 );
+            setStartMicro( ( data.traces.starts[traceIndex] - absoluteStart ) * 0.001 );
          }
          else if( leftMouseClicked )
          {
@@ -804,7 +810,7 @@ void Timeline::selectTrace( const ThreadInfo& data, uint32_t threadIndex, size_t
    {
       const auto& lods = data.traces._lods[i];
       auto lodIt = std::lower_bound(
-          lods.begin(), lods.end(), LodInfo{data.traces.ends[traceIndex], 0, 0, 0, false} );
+          lods.begin(), lods.end(), LodInfo{data.traces.starts[traceIndex], 0, 0, 0, false} );
       while( lodIt != lods.end() && lodIt->depth != wantedDepth )
       {
          ++lodIt;

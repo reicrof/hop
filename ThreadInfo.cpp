@@ -13,7 +13,7 @@ void ThreadInfo::addTraces( const DisplayableTraces& newTraces )
 {
    traces.append( newTraces );
 
-   assert_is_sorted( traces.ends.begin(), traces.ends.end() );
+   assert_is_sorted( traces.starts.begin(), traces.starts.end() );
 }
 
 void ThreadInfo::addLockWaits( const std::vector<LockWait>& lockWaits )
