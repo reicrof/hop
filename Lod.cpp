@@ -126,7 +126,6 @@ void appendLods( LodsArray& dst, const LodsArray& src )
    {
       // First trace to insert
       auto newTraceIt = src[i].cbegin();
-      size_t sortFromIdx = dst[i].size();
 
       // If there is already LOD in the dest, try to merge them
       if( dst[i].size() > 0 )

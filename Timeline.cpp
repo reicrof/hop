@@ -425,12 +425,12 @@ void Timeline::drawTraces(
       // need to find the last trace at depth level 0 that could be shown, meaning its
       // endtime < firstTraceAbsoluteTime
       while ( firstTraceId > 0 && // Is a valid trace
-              data.traces.depths[firstTraceId] != 0 && // Is a level 0 trace
               // Has its end time before the timeline start
               data.traces.starts[firstTraceId] + data.traces.deltas[firstTraceId] > firstTraceAbsoluteTime )
       {
          --firstTraceId;
       }
+      while( data.traces.depths[firstTraceId] != 0 ) --firstTraceId;
 
       // We have found the last trace that starts after the end time of the timeline. Just
       // take the next level 0 trace to make sure we display the complete stack of traces
