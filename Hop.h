@@ -778,13 +778,20 @@ class Client
 
       // Allocate big enough buffer from the shared memory
       ringbuf_t* ringbuf = ClientManager::sharedMemory.ringbuffer();
-      const auto offset = ringbuf_acquire( ringbuf, _worker, profilerMsgSize );
-      if ( offset == -1 )
+      const bool messageWayToBig = profilerMsgSize > HOP_SHARED_MEM_SIZE;
+      ssize_t offset = -1;
+      if( !messageWayToBig )
       {
-         printf("Failed to acquire enough shared memory. Consider increasing shared memory size\n");
-         _traces.clear();
-         return false;
+         offset = ringbuf_acquire( ringbuf, _worker, profilerMsgSize );
       }
+
+       if ( offset == -1 )
+       {
+          printf("Failed to acquire enough shared memory. Consider increasing shared"
+                 " memory size if you see this message more than once\n");
+          _traces.clear();
+          return false;
+       }
 
       uint8_t* bufferPtr = &ClientManager::sharedMemory.data()[offset];
 
