@@ -314,6 +314,11 @@ void Timeline::clearTraceDetails()
    _traceDetails = TraceDetails{};
 }
 
+void Timeline::setTraceDetailsDisplayed()
+{
+    _traceDetails.shouldFocusWindow = false;
+}
+
 void Timeline::setStartMicro( int64_t timeInMicro, bool withAnimation /*= true*/ ) noexcept
 {
    _animationState.targetStartMicros = timeInMicro;

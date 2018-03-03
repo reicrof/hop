@@ -22,6 +22,7 @@ namespace hop
 	{
 		std::vector<TraceDetail> details;
 		uint32_t threadIndex;
+        bool shouldFocusWindow{ false };
 	};
 
 	TraceDetails createTraceDetails(const DisplayableTraces& traces, uint32_t threadIndex, size_t traceId);

@@ -547,6 +547,10 @@ void hop::Profiler::draw()
       {
          _timeline.clearTraceDetails();
       }
+      else
+      {
+          _timeline.setTraceDetailsDisplayed();
+      }
    }
 
    ImGui::End();

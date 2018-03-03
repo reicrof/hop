@@ -29,6 +29,7 @@ class Timeline
 
    const TraceDetails& getTraceDetails() const noexcept;
    void clearTraceDetails();
+   void setTraceDetailsDisplayed();
 
    // Move to first trace
    void moveToStart( bool animate = true ) noexcept;
