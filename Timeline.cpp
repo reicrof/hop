@@ -51,7 +51,6 @@ void Timeline::draw(
       ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
 
    const auto startDrawPos = ImGui::GetCursorScreenPos();
-   //printf("(%f,%f)\n", startDrawPos.x, startDrawPos.y);
    drawTimeline( startDrawPos.x, startDrawPos.y + 5 );
 
    char threadName[128] = "Thread ";
@@ -91,13 +90,13 @@ void Timeline::draw(
 void Timeline::drawTimeline( const float posX, const float posY )
 {
    constexpr int64_t minStepSize = 10;
-   constexpr int64_t minStepCount = 20;
-   constexpr int64_t maxStepCount = 140;
+   constexpr float minStepCount = 20.0f;
+   constexpr float maxStepCount = 140.0f;
 
    const float windowWidthPxl = ImGui::GetWindowWidth();
 
    const size_t stepsCount = [=]() {
-      size_t stepsCount = _microsToDisplay / _stepSizeInMicros;
+      float stepsCount = _microsToDisplay / (double)_stepSizeInMicros;
       while ( stepsCount > maxStepCount ||
               ( stepsCount < minStepCount && _stepSizeInMicros > minStepSize ) )
       {
@@ -126,7 +125,7 @@ void Timeline::drawTimeline( const float posX, const float posY )
    constexpr float deltaBigLineLength = 12.0f;  // The diff between the small line and big one
    constexpr float deltaMidLineLength = 7.0f;   // The diff between the small line and mid one
 
-   const int64_t stepSizePxl = microsToPxl( windowWidthPxl, _microsToDisplay, _stepSizeInMicros );
+   const float stepSizePxl = microsToPxl<float>( windowWidthPxl, _microsToDisplay, _stepSizeInMicros );
    const int64_t stepsDone = _startMicros / _stepSizeInMicros;
    const int64_t remainder = _startMicros % _stepSizeInMicros;
    int remainderPxl = 0;
