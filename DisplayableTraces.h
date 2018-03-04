@@ -37,7 +37,8 @@ struct DisplayableTraces
    std::vector< TDepth_t > depths;
    std::vector< uint32_t > flags;
 
-   LodsArray _lods;
+   LodsArray lods;
+   TDepth_t maxDepth{ 0 };
 };
 
 }

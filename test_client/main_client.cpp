@@ -53,12 +53,12 @@ void func2()
 }
 void func1()
 {
-   static size_t i = 0;
+   //static size_t i = 0;
    HOP_PROF_FUNC_WITH_GROUP(42);
-   std::lock_guard<std::mutex> g(m1);
+   //std::lock_guard<std::mutex> g(m1);
    func2();
-   ++i;
-   printf( "%lu\n", i );
+   //++i;
+   //printf( "%lu\n", i );
 }
 
 void doEvenMoreStuff()
@@ -147,7 +147,7 @@ void rec( int& i )
    HOP_PROF_FUNC_WITH_GROUP(42);
    while( i > 0 )
    {
-      std::this_thread::sleep_for(std::chrono::microseconds(5));
+      std::this_thread::sleep_for(std::chrono::microseconds(1));
       rec(--i);
    }
    
@@ -157,7 +157,7 @@ void rec( int& i )
 void startRec()
 {
    HOP_PROF_FUNC_WITH_GROUP(42);
-   int recCount = 100;
+   int recCount = 50;
    rec( recCount );
 }
 
@@ -182,7 +182,7 @@ int main()
     while(true)
     {
        HOP_PROF_FUNC_WITH_GROUP(42);
-       std::lock_guard<std::mutex> g(m);
+       //std::lock_guard<std::mutex> g(m);
        std::this_thread::sleep_for(std::chrono::milliseconds(3));
        func1();
        {
@@ -200,8 +200,10 @@ int main()
                    std::this_thread::sleep_for(std::chrono::microseconds(250));
                    HOP_PROF( "Creating maclass5" );
                    {
-                      std::lock_guard<std::mutex> g(m1);
+                      //std::lock_guard<std::mutex> g(m1);
                       std::this_thread::sleep_for(std::chrono::microseconds(250));
+                      startRec();
+                      startRec();
                       startRec();
                       HOP_PROF( "Creating maclass6" );
 

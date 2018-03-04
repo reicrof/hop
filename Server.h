@@ -16,7 +16,7 @@ class Server
 {
   public:
    bool start( const char* name );
-   void setRecording( bool recording );
+   bool setRecording( bool recording );
    void stop();
 
    struct PendingData

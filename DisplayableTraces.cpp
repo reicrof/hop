@@ -20,8 +20,9 @@ void DisplayableTraces::append( const DisplayableTraces& newTraces )
    fctNameIds.insert( fctNameIds.end(), newTraces.fctNameIds.begin(), newTraces.fctNameIds.end() );
    lineNbs.insert( lineNbs.end(), newTraces.lineNbs.begin(), newTraces.lineNbs.end() );
    depths.insert( depths.end(), newTraces.depths.begin(), newTraces.depths.end() );
+   maxDepth = std::max(maxDepth, newTraces.maxDepth);
 
-   appendLods( _lods, computeLods( newTraces, prevSize ) );
+   appendLods( lods, computeLods( newTraces, prevSize ) );
 }
 
 void DisplayableTraces::reserve( size_t size )
@@ -46,6 +47,7 @@ void DisplayableTraces::clear()
    fctNameIds.clear();
    lineNbs.clear();
    depths.clear();
+   maxDepth = 0;
 }
 
 }

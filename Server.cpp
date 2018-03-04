@@ -26,6 +26,7 @@ bool Server::start( const char* name )
             bool success = _sharedMem.create( name, HOP_SHARED_MEM_SIZE, true );
             if ( !success )
             {
+               if (!_running) return; // We are done without even opening the shared mem :(
                std::this_thread::sleep_for( std::chrono::milliseconds( 500 ) );
                continue;
             }
@@ -34,7 +35,7 @@ bool Server::start( const char* name )
 
          _sharedMem.waitSemaphore();
 
-         // We are done running.s
+         // We are done running.
          if ( !_running ) break;
 
          size_t offset = 0;
@@ -55,9 +56,15 @@ bool Server::start( const char* name )
    return true;
 }
 
-void Server::setRecording( bool recording )
+bool Server::setRecording( bool recording )
 {
-   _sharedMem.setListeningConsumer( recording );
+    bool stateChanged = false;
+    if (_sharedMem.data())
+    {
+        _sharedMem.setListeningConsumer(recording);
+        stateChanged = true;
+    }
+    return stateChanged;
 }
 
 void Server::getPendingData(PendingData & data)
@@ -104,6 +111,7 @@ size_t Server::handleNewMessage( uint8_t* data, size_t maxSize )
 
         DisplayableTraces dispTraces;
         dispTraces.reserve( traceCount );
+        TDepth_t maxDepth = 0;
         for( size_t i = 0; i < traceCount; ++i )
         {
             const auto& t = traces[i];
@@ -114,8 +122,10 @@ size_t Server::handleNewMessage( uint8_t* data, size_t maxSize )
             dispTraces.fctNameIds.push_back(  _stringDb.getStringIndex( t.fctNameId ) );
             dispTraces.lineNbs.push_back( t.lineNumber );
             dispTraces.depths.push_back( t.depth );
+            maxDepth = std::max(maxDepth, t.depth);
             dispTraces.groups.push_back( t.group );
         }
+        dispTraces.maxDepth = maxDepth;
 
         // The ends time should already be sorted
         assert_is_sorted( dispTraces.ends.begin(), dispTraces.ends.end() );
@@ -123,6 +133,7 @@ size_t Server::handleNewMessage( uint8_t* data, size_t maxSize )
         bufPtr += ( traceCount * sizeof( Trace ) );
         assert( ( size_t )( bufPtr - data ) <= maxSize );
 
+        static_assert(std::is_move_constructible<DisplayableTraces>::value, "Displayble Traces not moveable");
         // TODO: Could lock later when we received all the messages
         std::lock_guard<std::mutex> guard(_pendingData.mutex);
         _pendingData.traces.emplace_back( std::move( dispTraces ) );

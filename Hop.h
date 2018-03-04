@@ -384,6 +384,7 @@ void ringbuf_release( ringbuf_t*, size_t );
 #include <cassert>
 #include <unordered_set>
 #include <vector>
+#include <mutex>
 
 #if !defined( _MSC_VER )
 
@@ -397,18 +398,18 @@ void ringbuf_release( ringbuf_t*, size_t );
 
 namespace
 {
-	static void printErrorMsg(const char* msg)
-	{
+    static void printErrorMsg(const char* msg)
+    {
 #if defined( _MSC_VER )
-		char err[512];
-		FormatMessage(FORMAT_MESSAGE_FROM_SYSTEM, NULL, GetLastError(),
-			MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT), err, 255, NULL);
-		printf("%s %s\n", msg, err);
-		puts(err);
+        char err[512];
+        FormatMessage(FORMAT_MESSAGE_FROM_SYSTEM, NULL, GetLastError(),
+            MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT), err, 255, NULL);
+        printf("%s %s\n", msg, err);
+        puts(err);
 #else
-		perror(msg);
+        perror(msg);
 #endif
-	}
+    }
 
    sem_handle openSemaphore( const char* name )
    {
@@ -419,10 +420,10 @@ namespace
          sem = sem_open( name, O_CREAT, S_IRUSR | S_IWUSR, 1 );
 #endif
 
-		 if (!sem)
-		 {
-			 printErrorMsg("Could not open semaphore");
-		 }
+         if (!sem)
+         {
+             printErrorMsg("Could not open semaphore");
+         }
 
       return sem;
    }
@@ -430,6 +431,7 @@ namespace
    void closeSemaphore( sem_handle sem )
    {
  #if defined ( _MSC_VER )
+         BOOL success = CloseHandle(sem);
  #else
          if ( sem_close( sem ) != 0 )
          {
@@ -442,39 +444,83 @@ namespace
  #endif
    }
 
-   void* openSharedMemory( const char* path, size_t size, shm_handle* handle )
+   void* createSharedMemory(const char* path, size_t size, shm_handle* handle)
    {
-	   uint8_t* sharedMem = NULL;
+       uint8_t* sharedMem = NULL;
 #if defined ( _MSC_VER )
-	   *handle = CreateFileMapping(
-		   INVALID_HANDLE_VALUE,    // use paging file
-		   NULL,                    // default security
-		   PAGE_READWRITE,          // read/write access
-		   0,                       // maximum object size (high-order DWORD)
-		   size,                    // maximum object size (low-order DWORD)
-		   path);                   // name of mapping object
+       *handle = CreateFileMapping(
+           INVALID_HANDLE_VALUE,    // use paging file
+           NULL,                    // default security
+           PAGE_READWRITE,          // read/write access
+           0,                       // maximum object size (high-order DWORD)
+           size,                    // maximum object size (low-order DWORD)
+           path);                   // name of mapping object
 
-	   if (*handle == NULL)
-	   {
-		   printErrorMsg("Could not create file mapping");
-		   return NULL;
-	   }
-	   sharedMem = (uint8_t*) MapViewOfFile(
-		   *handle,
-		   FILE_MAP_ALL_ACCESS, // read/write permission
-		   0,
-		   0,
-		   size);
+       if (*handle == NULL)
+       {
+           printErrorMsg("Could not create file mapping");
+           return NULL;
+       }
+       sharedMem = (uint8_t*)MapViewOfFile(
+           *handle,
+           FILE_MAP_ALL_ACCESS, // read/write permission
+           0,
+           0,
+           size);
 
-	   if (sharedMem == NULL)
-	   {
-		   printErrorMsg("Could not map view of file");
+       if (sharedMem == NULL)
+       {
+           printErrorMsg("Could not map view of file");
 
-		   CloseHandle(*handle);
-		   return NULL;
-	   }
+           CloseHandle(*handle);
+           return NULL;
+       }
 #else
-      *handle = shm_open( path, O_CREAT | O_RDWR, 0666 );
+       *handle = shm_open(path, O_CREAT | O_RDWR, 0666);
+       if (*handle < 0)
+       {
+           return NULL;
+       }
+
+       ftruncate(*handle, size);
+
+       sharedMem = (uint8_t*)mmap(NULL, size, PROT_READ | PROT_WRITE, MAP_SHARED, *handle, 0);
+       if (sharedMem == NULL)
+       {
+           printErrorMsg("Could not map shared memory");
+       }
+#endif
+       return sharedMem;
+   }
+
+   void* openSharedMemory(const char* path, size_t size, shm_handle* handle)
+   {
+       uint8_t* sharedMem = NULL;
+#if defined ( _MSC_VER )
+       *handle = OpenFileMapping(
+           FILE_MAP_ALL_ACCESS,   // read/write access
+           FALSE,                 // do not inherit the name
+           path);               // name of mapping object
+
+       if (*handle == NULL)
+       {
+           return NULL;
+       }
+
+       sharedMem = (uint8_t*)MapViewOfFile(
+           *handle,
+           FILE_MAP_ALL_ACCESS, // read/write permission
+           0,
+           0,
+           size);
+
+       if (sharedMem == NULL)
+       {
+           CloseHandle(*handle);
+           return NULL;
+       }
+#else
+      *handle = shm_open( path, O_RDWR, 0666 );
       if ( *handle < 0 )
       {
          return NULL;
@@ -527,13 +573,13 @@ bool SharedMemory::create( const char* path, size_t requestedSize, bool isConsum
 
    // Create the shared memory next
    const size_t totalSize = ringBufSize + requestedSize + sizeof( SharedMetaInfo );
-   uint8_t* sharedMem = (uint8_t*)openSharedMemory( path, totalSize, &_sharedMemHandle );
+   uint8_t* sharedMem = isConsumer ? (uint8_t*)openSharedMemory(path, totalSize, &_sharedMemHandle) : (uint8_t*)createSharedMemory(path, totalSize, &_sharedMemHandle);
    if( !sharedMem )
    {
-      assert( false );
+      if( !isConsumer )
+          printErrorMsg( "Could not shm_open shared memory" );
+
       return false;
-      //if( !isConsumer )
-         //perror( "Could not shm_open shared memory" );
    }
 
    // Get pointers inside the shared memory
@@ -541,13 +587,24 @@ bool SharedMemory::create( const char* path, size_t requestedSize, bool isConsum
    _ringbuf = (ringbuf_t*) (sharedMem + sizeof( SharedMetaInfo ));
    _data = sharedMem + sizeof( SharedMetaInfo ) + ringBufSize ;
 
-   if( !isConsumer )
+   // If we are the first producer, we create the shared memory
+   if (!isConsumer)
    {
-      memset( _ringbuf, 0, totalSize - sizeof( SharedMetaInfo) );
-      if ( ringbuf_setup( _ringbuf, HOP_MAX_THREAD_NB, requestedSize ) < 0 )
-      {
-         assert( false && "Ring buffer creation failed" );
-      }
+       static bool memoryCreated = false;
+       static std::mutex m;
+       std::lock_guard< std::mutex > g(m);
+       if (!memoryCreated)
+       {
+           memset(_ringbuf, 0, totalSize - sizeof(SharedMetaInfo));
+           if (ringbuf_setup(_ringbuf, HOP_MAX_THREAD_NB, requestedSize) < 0)
+           {
+               assert(false && "Ring buffer creation failed");
+           }
+           else
+           {
+               memoryCreated = true;
+           }
+       }
    }
 
    // We can only have one consumer
@@ -949,21 +1006,20 @@ Client* ClientManager::Get()
       assert( sucess && "Could not create shared memory" );
    }
 
-   static int threadCount = 0;
+   static std::atomic< int > threadCount = -1;
+   ++threadCount;
    tl_threadId = HOP_GET_THREAD_ID();
    tl_threadIndex = threadCount;
    threadClient.reset( new Client() );
 
    // Register producer in the ringbuffer
+   assert(tl_threadIndex <= HOP_MAX_THREAD_NB);
    auto ringBuffer = ClientManager::sharedMemory.ringbuffer();
-   threadClient->_worker = ringbuf_register( ringBuffer, threadCount );
+   threadClient->_worker = ringbuf_register( ringBuffer, tl_threadIndex);
    if ( threadClient->_worker  == NULL )
    {
       assert( false && "ringbuf_register" );
    }
-
-   ++threadCount;
-   assert( threadCount <= HOP_MAX_THREAD_NB );
 
    return threadClient.get();
 }

@@ -627,12 +627,13 @@ void hop::Profiler::handleHotkey()
    }
 }
 
-void hop::Profiler::setRecording( bool recording )
+void hop::Profiler::setRecording(bool recording)
 {
-   _recording = recording;
-   _server.setRecording( recording );
-   if( recording )
+   bool success = _server.setRecording(recording);
+   if (success)
    {
-      _timeline.setRealtime ( true );
+      _recording = recording;
+      if (recording)
+         _timeline.setRealtime(true);
    }
 }

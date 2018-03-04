@@ -51,7 +51,7 @@ void Timeline::draw(
       ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
 
    const auto startDrawPos = ImGui::GetCursorScreenPos();
-   printf("(%f,%f)\n", startDrawPos.x, startDrawPos.y);
+   //printf("(%f,%f)\n", startDrawPos.x, startDrawPos.y);
    drawTimeline( startDrawPos.x, startDrawPos.y + 5 );
 
    char threadName[128] = "Thread ";
@@ -67,16 +67,14 @@ void Timeline::draw(
       ImGui::PushStyleColor( ImGuiCol_ButtonActive, threadHeaderColor );
       ImGui::Button( threadName );
       ImGui::PopStyleColor( 3 );
-      ImGui::Spacing();
       ImGui::Separator();
 
-      const auto curPos = ImGui::GetCursorScreenPos();
-      drawLockWaits( tracesPerThread, i, curPos.x, curPos.y );
-      // Draw traces needs to be done after draw lock waits because it sets the position
-      // for the next drawing. TODO : Fix that ... -_-
-      drawTraces( tracesPerThread[i], i, curPos.x, curPos.y, strDb, traceColor);
+      ImVec2 curDrawPos = ImGui::GetCursorScreenPos();
+      drawTraces(tracesPerThread[i], i, curDrawPos.x, curDrawPos.y, strDb, traceColor);
+      drawLockWaits( tracesPerThread, i, curDrawPos.x, curDrawPos.y );
 
-      ImGui::InvisibleButton( "trace-padding", ImVec2( 20, 40 ) );
+      curDrawPos.y += tracesPerThread[i].traces.maxDepth * (TRACE_HEIGHT + TRACE_VERTICAL_PADDING) + 70;
+      ImGui::SetCursorScreenPos(curDrawPos);
    }
 
    ImGui::EndChild();
@@ -411,7 +409,6 @@ void Timeline::drawTraces(
    const TimeStamp firstTraceAbsoluteTime = absoluteStart + ( _startMicros * 1000 );
    const TimeStamp lastTraceAbsoluteTime = firstTraceAbsoluteTime + ( _microsToDisplay * 1000 );
 
-   TDepth_t maxDepth = 0;
    // If we do not use LOD, draw the traces normally.
    if ( lodLevel == -1 )
    {
@@ -454,7 +451,6 @@ void Timeline::drawTraces(
          if ( traceLengthPxl < MIN_TRACE_LENGTH_PXL ) continue;
 
          const auto curDepth = data.traces.depths[i];
-         maxDepth = std::max( curDepth, maxDepth );
          const auto tracePos = ImVec2(
              posX + traceEndPxl - traceLengthPxl,
              posY + curDepth * ( TRACE_HEIGHT + TRACE_VERTICAL_PADDING ) );
@@ -469,7 +465,7 @@ void Timeline::drawTraces(
    }
    else
    {
-      const auto& lods = data.traces._lods[lodLevel];
+      const auto& lods = data.traces.lods[lodLevel];
       LodInfo firstInfo = {firstTraceAbsoluteTime, 0, 0, 0, false};
       LodInfo lastInfo = {lastTraceAbsoluteTime, 0, 0, 0, false};
       auto it1 = std::lower_bound( lods.begin(), lods.end(), firstInfo );
@@ -509,7 +505,6 @@ void Timeline::drawTraces(
          // Skip trace if it is way smaller than treshold
          if ( traceLengthPxl < MIN_TRACE_LENGTH_PXL ) continue;
 
-         maxDepth = std::max( t.depth, maxDepth );
          const auto tracePos = ImVec2(
              posX + traceEndPxl - traceLengthPxl,
              posY + t.depth * ( TRACE_HEIGHT + TRACE_VERTICAL_PADDING ) );
@@ -526,9 +521,6 @@ void Timeline::drawTraces(
          }
       }
    }
-
-   _maxTraceDepthPerThread[threadIndex] =
-       std::max( _maxTraceDepthPerThread[threadIndex], maxDepth );
 
    const bool leftMouseClicked = ImGui::IsMouseReleased( 0 );
    const bool rightMouseClicked = ImGui::IsMouseReleased( 1 );
@@ -583,7 +575,7 @@ void Timeline::drawTraces(
             }
             selectTrace( data, threadIndex, traceIndex );
          }
-         else if ( rightMouseClicked )
+         else if ( rightMouseClicked && _rightClickStartPosInCanvas[0] == 0.0f)
          {
             _traceDetails = createTraceDetails( data.traces, threadIndex, t.traceIndex );
          }
@@ -632,7 +624,7 @@ void Timeline::drawTraces(
          {
             selectTrace( data, threadIndex, traceIndex );
          }
-         else if ( rightMouseClicked )
+         else if ( rightMouseClicked && _rightClickStartPosInCanvas[0] == 0.0f)
          {
             _traceDetails = createTraceDetails( data.traces, threadIndex, t.traceIndex );
          }
@@ -650,10 +642,6 @@ void Timeline::drawTraces(
       ImGui::Button( "", ImVec2( selTraceDrawingInfo.lengthPxl, TRACE_HEIGHT ) );
       ImGui::PopStyleColor( 3 );
    }
-
-   ImGui::SetCursorScreenPos( ImVec2{
-       posX,
-       posY + _maxTraceDepthPerThread[threadIndex] * ( TRACE_HEIGHT + TRACE_VERTICAL_PADDING )} );
 }
 
 void Timeline::highlightLockOwner(
@@ -807,7 +795,7 @@ void Timeline::selectTrace( const ThreadInfo& data, uint32_t threadIndex, size_t
    int wantedDepth = data.traces.depths[ traceIndex ];
    for ( int i = 0; i < LOD_COUNT; ++i )
    {
-      const auto& lods = data.traces._lods[i];
+      const auto& lods = data.traces.lods[i];
       auto lodIt = std::lower_bound(
           lods.begin(), lods.end(), LodInfo{data.traces.ends[traceIndex], 0, 0, 0, false} );
       while( lodIt != lods.end() && lodIt->depth != wantedDepth )
