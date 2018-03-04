@@ -14,12 +14,10 @@ static constexpr uint64_t MIN_MICROS_TO_DISPLAY = 100;
 static constexpr uint64_t MAX_MICROS_TO_DISPLAY = 900000000;
 static constexpr float MIN_TRACE_LENGTH_PXL = 0.1f;
 
-static void drawHoveringTimelineLine(float posInScreenX, float timelineStartPosY, int64_t hoveredMicros)
+static void drawHoveringTimelineLine(float posInScreenX, float timelineStartPosY, const char* text )
 {
    constexpr float LINE_PADDING = 5.0f;
    constexpr float TEXT_PADDING = 10.0f;
-   static char timeToDisplay[64] = {};
-   hop::formatMicrosDurationToDisplay( hoveredMicros, timeToDisplay, sizeof( timeToDisplay ) );
    
    auto drawList = ImGui::GetWindowDrawList();
    drawList->PushClipRectFullScreen();
@@ -28,7 +26,7 @@ static void drawHoveringTimelineLine(float posInScreenX, float timelineStartPosY
       ImVec2(posInScreenX, 9999),
       ImColor(255, 255, 255, 200),
       1.5f);
-   drawList->AddText( ImVec2( posInScreenX, timelineStartPosY - TEXT_PADDING), ImColor(255,255,255), timeToDisplay);
+   drawList->AddText( ImVec2( posInScreenX, timelineStartPosY - TEXT_PADDING), ImColor(255,255,255), text);
    drawList->PopClipRect();
 }
 
@@ -97,8 +95,10 @@ void Timeline::draw(
 
    if (_timelineHoverPos > 0.0f)
    {
+      static char text[32] = {};
       const int64_t hoveredMicro = _startMicros + pxlToMicros(ImGui::GetWindowWidth(), _microsToDisplay, _timelineHoverPos - startDrawPos.x);
-      drawHoveringTimelineLine(_timelineHoverPos, startDrawPos.y, hoveredMicro);
+      hop::formatMicrosTimepointToDisplay(hoveredMicro, _microsToDisplay, text, sizeof(text));
+      drawHoveringTimelineLine(_timelineHoverPos, startDrawPos.y, text);
    }
 
    ImGui::EndChild();
