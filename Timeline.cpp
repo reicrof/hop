@@ -101,8 +101,6 @@ void Timeline::draw(
       drawHoveringTimelineLine(_timelineHoverPos, startDrawPos.y, hoveredMicro);
    }
 
-   printf("start micros = %f\n", _startMicros / 1000.0f);
-
    ImGui::EndChild();
    ImGui::EndChild();
 
