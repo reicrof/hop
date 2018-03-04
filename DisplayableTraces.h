@@ -39,6 +39,7 @@ struct DisplayableTraces
 
    LodsArray _lods;
 };
+
 }
 
 #endif // DISPLAYABLE_TRACE_H_

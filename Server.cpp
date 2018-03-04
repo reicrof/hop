@@ -60,12 +60,19 @@ void Server::setRecording( bool recording )
    _sharedMem.setListeningConsumer( recording );
 }
 
+void Server::getPendingData(PendingData & data)
+{
+    std::lock_guard<std::mutex> guard(_pendingData.mutex);
+    _pendingData.swap(data);
+    _pendingData.clear();
+}
+
 size_t Server::handleNewMessage( uint8_t* data, size_t maxSize )
 {
    uint8_t* bufPtr = data;
    const MsgInfo* msgInfo = (const MsgInfo*)bufPtr;
    const MsgType msgType = msgInfo->type;
-   const uint32_t threadId = msgInfo->threadId;
+   const uint32_t threadIndex = msgInfo->threadIndex;
 
     bufPtr += sizeof( MsgInfo );
     assert( (size_t)(bufPtr - data) <= maxSize );
@@ -79,14 +86,14 @@ size_t Server::handleNewMessage( uint8_t* data, size_t maxSize )
          if( stringData.size() > 0 )
          {
             memcpy( stringData.data(), bufPtr, stringData.size() );
-            stringDb.addStringData( stringData );
+            _stringDb.addStringData( stringData );
             bufPtr += stringData.size();
          }
          // If our string table is emtpy and we did not received any strings,
          // it means these messages are pending messages from previous execution.
          // Ignore them until we receive string data. This can happen after an
          // unclean exit.
-         else if ( stringDb.empty() )
+         else if ( _stringDb.empty() )
          {
             return maxSize;
          }
@@ -102,9 +109,9 @@ size_t Server::handleNewMessage( uint8_t* data, size_t maxSize )
             const auto& t = traces[i];
             dispTraces.ends.push_back( t.end );
             dispTraces.deltas.push_back( t.end - t.start );
-            dispTraces.fileNameIds.push_back( stringDb.getStringIndex( t.fileNameId ) );
-            dispTraces.classNameIds.push_back( stringDb.getStringIndex( t.classNameId ) );
-            dispTraces.fctNameIds.push_back(  stringDb.getStringIndex( t.fctNameId ) );
+            dispTraces.fileNameIds.push_back( _stringDb.getStringIndex( t.fileNameId ) );
+            dispTraces.classNameIds.push_back( _stringDb.getStringIndex( t.classNameId ) );
+            dispTraces.fctNameIds.push_back(  _stringDb.getStringIndex( t.fctNameId ) );
             dispTraces.lineNbs.push_back( t.lineNumber );
             dispTraces.depths.push_back( t.depth );
             dispTraces.groups.push_back( t.group );
@@ -117,10 +124,10 @@ size_t Server::handleNewMessage( uint8_t* data, size_t maxSize )
         assert( ( size_t )( bufPtr - data ) <= maxSize );
 
         // TODO: Could lock later when we received all the messages
-        std::lock_guard<std::mutex> guard( pendingTracesMutex );
-        pendingTraces.emplace_back( std::move( dispTraces ) );
-        pendingStringData.emplace_back( std::move( stringData ) );
-        pendingThreadIds.push_back( threadId );
+        std::lock_guard<std::mutex> guard(_pendingData.mutex);
+        _pendingData.traces.emplace_back( std::move( dispTraces ) );
+        _pendingData.stringData.emplace_back( std::move( stringData ) );
+        _pendingData.tracesThreadIndex.push_back(threadIndex);
         return ( size_t )( bufPtr - data );
       }
       case MsgType::PROFILER_WAIT_LOCK:
@@ -137,9 +144,9 @@ size_t Server::handleNewMessage( uint8_t* data, size_t maxSize )
              } );
 
          // TODO: Could lock later when we received all the messages
-         std::lock_guard<std::mutex> guard( pendingLockWaitsMutex );
-         pendingLockWaits.emplace_back( std::move( lockwaits ) );
-         pendingLockWaitThreadIds.push_back( threadId );
+         std::lock_guard<std::mutex> guard( _pendingData.mutex );
+         _pendingData.lockWaits.emplace_back( std::move( lockwaits ) );
+         _pendingData.lockWaitThreadIndex.push_back(threadIndex);
 
          return (size_t)(bufPtr - data);
       }
@@ -157,54 +164,15 @@ size_t Server::handleNewMessage( uint8_t* data, size_t maxSize )
              } );
 
          // TODO: Could lock later when we received all the messages
-         std::lock_guard<std::mutex> guard( pendingUnlockEventsMutex );
-         pendingUnlockEvents.emplace_back( std::move( unlockEvents ) );
-         pendingUnlockEventsThreadIds.push_back( threadId );
+         std::lock_guard<std::mutex> guard(_pendingData.mutex);
+         _pendingData.unlockEvents.emplace_back( std::move( unlockEvents ) );
+         _pendingData.unlockEventsThreadIndex.push_back(threadIndex);
          return (size_t)(bufPtr - data);
       }
       default:
          assert( false );
          return (size_t)(bufPtr - data);
    }
-}
-
-void Server::getPendingProfilingTraces(
-    std::vector< hop::DisplayableTraces >& tracesFrame,
-    std::vector< std::vector< char > >& stringData,
-    std::vector< uint32_t >& threadIds )
-{
-   std::lock_guard<std::mutex> guard( pendingTracesMutex );
-   std::swap( tracesFrame, pendingTraces );
-   std::swap( stringData, pendingStringData );
-   std::swap( threadIds, pendingThreadIds );
-
-   pendingTraces.clear();
-   pendingStringData.clear();
-   pendingThreadIds.clear();
-}
-
-void Server::getPendingLockWaits(
-    std::vector<std::vector<LockWait> >& lockWaits,
-    std::vector<uint32_t>& threadIds )
-{
-   std::lock_guard<std::mutex> guard( pendingLockWaitsMutex );
-   std::swap( lockWaits, pendingLockWaits );
-   std::swap( threadIds, pendingLockWaitThreadIds );
-
-   pendingLockWaits.clear();
-   pendingLockWaitThreadIds.clear();
-}
-
-void Server::getPendingUnlockEvents(
-    std::vector<std::vector<UnlockEvent> >& unlockEvents,
-    std::vector<uint32_t>& threadIds )
-{
-   std::lock_guard<std::mutex> guard( pendingUnlockEventsMutex );
-   std::swap( unlockEvents, pendingUnlockEvents );
-   std::swap( threadIds, pendingUnlockEventsThreadIds );
-
-   pendingUnlockEvents.clear();
-   pendingUnlockEventsThreadIds.clear();
 }
 
 void Server::stop()
@@ -222,6 +190,29 @@ void Server::stop()
          _thread.join();
       }
    }
+}
+
+void Server::PendingData::clear()
+{
+    traces.clear();
+    stringData.clear();
+    tracesThreadIndex.clear();
+    lockWaits.clear();
+    lockWaitThreadIndex.clear();
+    unlockEvents.clear();
+    unlockEventsThreadIndex.clear();
+}
+
+void Server::PendingData::swap(PendingData & rhs)
+{
+    using std::swap;
+    swap(traces, rhs.traces);
+    swap(stringData, rhs.stringData);
+    swap(tracesThreadIndex, rhs.tracesThreadIndex);
+    swap(lockWaits, rhs.lockWaits);
+    swap(lockWaitThreadIndex, rhs.lockWaitThreadIndex);
+    swap(unlockEvents, rhs.unlockEvents);
+    swap(unlockEventsThreadIndex, rhs.unlockEventsThreadIndex);
 }
 
 }  // namespace hop

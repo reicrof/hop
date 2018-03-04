@@ -19,7 +19,6 @@ class Timeline
    void update( float deltaTimeMs ) noexcept;
    void draw(
        const std::vector<ThreadInfo>& _tracesPerThread,
-       const std::vector<uint32_t>& threadIds,
        const StringDb& strDb  );
    TimeStamp absoluteStartTime() const noexcept;
    TimeStamp absolutePresentTime() const noexcept;

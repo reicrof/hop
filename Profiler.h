@@ -5,12 +5,12 @@
 #include "Timeline.h"
 #include "ThreadInfo.h"
 #include "StringDb.h"
+#include "Server.h"
 
 #include <array>
 #include <chrono>
 #include <string>
 #include <vector>
-#include <memory>
 
 namespace hop
 {
@@ -23,10 +23,10 @@ struct Profiler
    void update( float deltaTimeMs ) noexcept;
    void draw();
    void fetchClientData();
-   void addTraces( const DisplayableTraces& traces, uint32_t threadId );
-   void addStringData( const std::vector< char >& stringData, uint32_t threadId );
-   void addLockWaits( const std::vector< LockWait >& lockWaits, uint32_t threadId );
-   void addUnlockEvents(const std::vector<UnlockEvent>& unlockEvents, uint32_t threadId);
+   void addTraces( const DisplayableTraces& traces, uint32_t threadIndex );
+   void addStringData( const std::vector< char >& stringData, uint32_t threadIndex);
+   void addLockWaits( const std::vector< LockWait >& lockWaits, uint32_t threadIndex);
+   void addUnlockEvents(const std::vector<UnlockEvent>& unlockEvents, uint32_t threadIndex);
    void handleHotkey();
    void setRecording( bool recording );
 
@@ -35,23 +35,12 @@ private:
 
    std::string _name;
    Timeline _timeline;
-   std::vector< uint32_t > _threadsId;
    std::vector< ThreadInfo > _tracesPerThread;
    bool _recording{ false };
    StringDb _strDb;
 
-   // Client/Server data
-   // TODO: rethink and redo this part
-   std::unique_ptr< Server > _server;
-   std::vector< uint32_t > threadIds;
-   std::vector< hop::DisplayableTraces > pendingTraces;
-   std::vector< std::vector< char > > stringData;
-
-   std::vector< uint32_t > threadIdsLockWaits;
-   std::vector<std::vector< hop::LockWait > > pendingLockWaits;
-
-   std::vector< uint32_t > threadIdsUnlockEvents;
-   std::vector<std::vector< hop::UnlockEvent > > pendingUnlockEvents;
+   Server _server;
+   Server::PendingData _serverPendingData;
 };
 
 // Initialize the imgui framework

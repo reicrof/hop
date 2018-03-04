@@ -162,18 +162,20 @@ struct UnlockEventsMsgInfo
    uint32_t count;
 };
 
-HOP_CONSTEXPR uint32_t EXPECTED_MSG_INFO_SIZE = 16;
+HOP_CONSTEXPR uint32_t EXPECTED_MSG_INFO_SIZE = 32;
 struct MsgInfo
 {
    MsgType type;
    // Thread id from which the msg was sent
-   uint32_t threadId;
+   uint32_t threadIndex;
+   uint64_t threadId;
    // Specific message data
    union {
       TracesMsgInfo traces;
       LockWaitsMsgInfo lockwaits;
       UnlockEventsMsgInfo unlockEvents;
    };
+   unsigned char padding[8];
 };
 HOP_STATIC_ASSERT( sizeof(MsgInfo) == EXPECTED_MSG_INFO_SIZE, "MsgInfo layout has changed unexpectedly" );
 
@@ -489,11 +491,14 @@ namespace
       return sharedMem;
    }
 
-   void closeSharedMemory( const char* name, shm_handle handle )
+   void closeSharedMemory( const char* name, shm_handle handle, void* dataPtr )
    {
       #if defined( _MSC_VER )
+       UnmapViewOfFile(dataPtr);
+       CloseHandle(handle);
       #else
          (void)handle; // Remove unuesed warning
+         (void)dataPtr;
          if ( shm_unlink( name ) != 0 ) perror( "Could not unlink shared memory" );
       #endif
    }
@@ -630,7 +635,7 @@ sem_handle SharedMemory::semaphore() const HOP_NOEXCEPT
 void SharedMemory::waitSemaphore() const HOP_NOEXCEPT
 {
 #if defined(_MSC_VER)
-	WaitForSingleObject(_semaphore, INFINITE);
+    WaitForSingleObject(_semaphore, INFINITE);
 #else
     sem_wait( _semaphore );
 #endif
@@ -639,7 +644,7 @@ void SharedMemory::waitSemaphore() const HOP_NOEXCEPT
 void SharedMemory::signalSemaphore() const HOP_NOEXCEPT
 {
 #if defined(_MSC_VER)
-		ReleaseSemaphore(_semaphore, 1, NULL);
+        ReleaseSemaphore(_semaphore, 1, NULL);
 #else
         sem_post( _semaphore );
 #endif
@@ -670,7 +675,7 @@ void SharedMemory::destroy()
       {
          printf("Cleaning up shared resources...\n");
          closeSemaphore( _semaphore );
-         closeSharedMemory( _sharedMemPath, _sharedMemHandle );
+         closeSharedMemory( _sharedMemPath, _sharedMemHandle, _sharedMetaData );
       }
 
       _data = NULL;
@@ -696,7 +701,8 @@ SharedMemory ClientManager::sharedMemory;
 
 // The call stack depth of the current measured trace. One variable per thread
 thread_local int tl_traceLevel = 0;
-thread_local size_t tl_threadId = 0;
+thread_local uint32_t tl_threadIndex = 0;
+thread_local uint64_t tl_threadId = 0;
 
 class Client
 {
@@ -800,7 +806,8 @@ class Client
          Trace* traceToSend = (Trace*)( bufferPtr + sizeof( MsgInfo ) + stringToSendSize );
 
          tracesInfo->type = MsgType::PROFILER_TRACE;
-         tracesInfo->threadId = (uint32_t)tl_threadId;
+         tracesInfo->threadId = tl_threadId;
+         tracesInfo->threadIndex = tl_threadIndex;
          tracesInfo->traces.stringDataSize = stringToSendSize;
          tracesInfo->traces.traceCount = (uint32_t)_traces.size();
 
@@ -846,7 +853,8 @@ class Client
       {
          MsgInfo* lwInfo = (MsgInfo*)bufferPtr;
          lwInfo->type = MsgType::PROFILER_WAIT_LOCK;
-         lwInfo->threadId = (uint32_t)tl_threadId;
+         lwInfo->threadId = tl_threadId;
+         lwInfo->threadIndex = tl_threadIndex;
          lwInfo->lockwaits.count = (uint32_t)_lockWaits.size();
          bufferPtr += sizeof( MsgInfo );
          memcpy( bufferPtr, _lockWaits.data(), _lockWaits.size() * sizeof( LockWait ) );
@@ -882,7 +890,8 @@ class Client
       {
          MsgInfo* uInfo = (MsgInfo*)bufferPtr;
          uInfo->type = MsgType::PROFILER_UNLOCK_EVENT;
-         uInfo->threadId = (uint32_t)tl_threadId;
+         uInfo->threadId = tl_threadId;
+         uInfo->threadIndex = tl_threadIndex;
          uInfo->unlockEvents.count = (uint32_t)_unlockEvents.size();
          bufferPtr += sizeof( MsgInfo );
          memcpy( bufferPtr, _unlockEvents.data(), _unlockEvents.size() * sizeof( UnlockEvent ) );
@@ -942,6 +951,7 @@ Client* ClientManager::Get()
 
    static int threadCount = 0;
    tl_threadId = HOP_GET_THREAD_ID();
+   tl_threadIndex = threadCount;
    threadClient.reset( new Client() );
 
    // Register producer in the ringbuffer
@@ -1403,34 +1413,6 @@ void ringbuf_release( ringbuf_t* rbuf, size_t nbytes )
 }
 
 /* end of ringbuf.c */
-
-// symbols to be acessed from shared library
-
-// void* vdbg_details_start_wait_lock( size_t threadId )
-// {
-//    auto client = hop::details::ClientProfiler::Get( threadId, false );
-//    if( client )
-//    {
-//       printf( "increase push trace lvl\n");
-//       ++client->_pushTraceLevel;
-//    }
-//    return (void*) client;
-// }
-
-// void vdbg_details_end_wait_lock(
-//     void* clientProfiler,
-//     void* mutexAddr,
-//     size_t timeStampStart,
-//     size_t timeStampEnd )
-// {
-//    if( clientProfiler )
-//    {
-//       auto client = reinterpret_cast<hop::details::ClientProfiler::Impl*>( clientProfiler );
-//       --client->_pushTraceLevel;
-//       client->addWaitLockTrace( mutexAddr, timeStampStart, timeStampEnd );
-//       printf( "decrease push trace lvl\n");
-//    }
-// }
 
 #endif  // end HOP_IMPLEMENTATION
 

@@ -42,23 +42,23 @@ void Timeline::update( float deltaTimeMs ) noexcept
 
 void Timeline::draw(
     const std::vector<ThreadInfo>& tracesPerThread,
-    const std::vector<uint32_t>& threadIds,
     const StringDb& strDb )
 {
    ImGui::BeginChild(
-      "Traces",
+      "Timeline",
       ImVec2(0, 0),
       false,
       ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
 
    const auto startDrawPos = ImGui::GetCursorScreenPos();
+   printf("(%f,%f)\n", startDrawPos.x, startDrawPos.y);
    drawTimeline( startDrawPos.x, startDrawPos.y + 5 );
 
    char threadName[128] = "Thread ";
    for ( size_t i = 0; i < tracesPerThread.size(); ++i )
    {
       snprintf(
-          threadName + sizeof( "Thread" ), sizeof( threadName ), "%lu (id=%u)", i, threadIds[i] );
+          threadName + sizeof( "Thread" ), sizeof( threadName ), "%lu", i );
       const auto traceColor = ImColor::HSV( i / 7.0f, 0.6f, 0.6f );
       const auto threadHeaderColor = ImColor(
           traceColor.Value.x - 0.2f, traceColor.Value.y - 0.2f, traceColor.Value.z - 0.2f );
@@ -234,7 +234,7 @@ void Timeline::handleMouseDrag( float mouseInCanvasX, float mouseInCanvasY )
       setStartMicro( _startMicros - deltaXInMicros, false );
 
       // Switch to the traces context to modify the scroll
-      ImGui::BeginChild( "Traces" );
+      ImGui::BeginChild( "Timeline" );
       ImGui::SetScrollY( ImGui::GetScrollY() - delta.y );
       ImGui::EndChild();
 

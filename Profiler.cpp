@@ -180,7 +180,7 @@ void createResources()
    glBindTexture( GL_TEXTURE_2D, last_texture );
 }
 
-bool saveAsJson( const char* path, const std::vector< uint32_t >& /*threadsId*/, const std::vector< hop::ThreadInfo >& /*threadTraces*/ )
+bool saveAsJson( const char* path, const std::vector< hop::ThreadInfo >& /*threadTraces*/ )
 {
    using namespace rapidjson;
 
@@ -293,25 +293,17 @@ void addNewProfiler( Profiler* profiler )
 
 Profiler::Profiler( const std::string& name ) : _name( name )
 {
-   _server.reset( new Server() );
-   _server->start( _name.c_str() );
+   _server.start( _name.c_str() );
 }
 
-void Profiler::addTraces( const DisplayableTraces& traces, uint32_t threadId )
+void Profiler::addTraces( const DisplayableTraces& traces, uint32_t threadIndex )
 {
    if ( _recording )
    {
-      size_t threadIndex = 0;
-      for ( ; threadIndex < _threadsId.size(); ++threadIndex )
+      // Add new thread as they come
+      if ( threadIndex >= _tracesPerThread.size() )
       {
-         if ( _threadsId[threadIndex] == threadId ) break;
-      }
-
-      //Thread id not found so add it
-      if ( threadIndex == _threadsId.size() )
-      {
-         _threadsId.push_back( threadId );
-         _tracesPerThread.emplace_back();
+         _tracesPerThread.resize( threadIndex + 1 );
       }
 
       const auto startTime = _timeline.absoluteStartTime();
@@ -328,93 +320,70 @@ void Profiler::addTraces( const DisplayableTraces& traces, uint32_t threadId )
 
 void Profiler::fetchClientData()
 {
-   // TODO: rethink and redo this part
-   _server->getPendingProfilingTraces( pendingTraces, stringData, threadIds );
-   for( size_t i = 0; i < pendingTraces.size(); ++i )
+   _server.getPendingData(_serverPendingData);
+
+   for( size_t i = 0; i <_serverPendingData.traces.size(); ++i )
    {
-      addTraces( pendingTraces[i], threadIds[i] );
-      addStringData( stringData[i], threadIds[i] );
+      addTraces(_serverPendingData.traces[i], _serverPendingData.tracesThreadIndex[i] );
+      addStringData(_serverPendingData.stringData[i], _serverPendingData.tracesThreadIndex[i] );
    }
-   _server->getPendingLockWaits( pendingLockWaits, threadIdsLockWaits );
-   for( size_t i = 0; i < pendingLockWaits.size(); ++i )
+   for( size_t i = 0; i < _serverPendingData.lockWaits.size(); ++i )
    {
-      addLockWaits( pendingLockWaits[i], threadIdsLockWaits[i] );
+      addLockWaits(_serverPendingData.lockWaits[i], _serverPendingData.lockWaitThreadIndex[i] );
    }
-   _server->getPendingUnlockEvents(pendingUnlockEvents, threadIdsUnlockEvents);
-   for (size_t i = 0; i < pendingUnlockEvents.size(); ++i)
+   for (size_t i = 0; i < _serverPendingData.unlockEvents.size(); ++i)
    {
-       addUnlockEvents(pendingUnlockEvents[i], threadIdsUnlockEvents[i]);
+       addUnlockEvents(_serverPendingData.unlockEvents[i], _serverPendingData.unlockEventsThreadIndex[i]);
    }
 }
 
-void Profiler::addStringData( const std::vector<char>& strData, uint32_t threadId )
+void Profiler::addStringData( const std::vector<char>& strData, uint32_t threadIndex)
 {
    // We should read the string data even when not recording since the string data
    // is sent only once (the first time a function is used)
    if( !strData.empty() )
    {
-      size_t i = 0;
-      for( ; i < _threadsId.size(); ++i )
+      // Check if new thread
+      if( threadIndex >= _tracesPerThread.size() )
       {
-         if( _threadsId[i] == threadId ) break;
-      }
-      
-      // Thread id not found so add it
-      if( i == _threadsId.size() )
-      {
-         _threadsId.push_back( threadId );
-         _tracesPerThread.emplace_back();
+          _tracesPerThread.resize( threadIndex + 1 );
       }
 
       _strDb.addStringData( strData );
    }
 }
 
-void Profiler::addLockWaits( const std::vector<LockWait>& lockWaits, uint32_t threadId )
+void Profiler::addLockWaits( const std::vector<LockWait>& lockWaits, uint32_t threadIndex)
 {
    if ( _recording )
    {
-      size_t i = 0;
-      for ( ; i < _threadsId.size(); ++i )
-      {
-         if ( _threadsId[i] == threadId ) break;
-      }
+       // Check if new thread
+       if (threadIndex >= _tracesPerThread.size())
+       {
+           _tracesPerThread.resize(threadIndex + 1);
+       }
 
-      // Thread id not found so add it
-      if ( i == _threadsId.size() )
-      {
-         _threadsId.push_back( threadId );
-         _tracesPerThread.emplace_back();
-      }
-
-      _tracesPerThread[i].addLockWaits( lockWaits );
+      _tracesPerThread[threadIndex].addLockWaits( lockWaits );
    }
 }
 
-void Profiler::addUnlockEvents(const std::vector<UnlockEvent>& unlockEvents, uint32_t threadId)
+void Profiler::addUnlockEvents(const std::vector<UnlockEvent>& unlockEvents, uint32_t threadIndex)
 {
     if (_recording)
     {
-        size_t i = 0;
-        for (; i < _threadsId.size(); ++i)
+        // Check if new thread
+        if (threadIndex >= _tracesPerThread.size())
         {
-            if (_threadsId[i] == threadId) break;
+            _tracesPerThread.resize(threadIndex + 1);
         }
 
-        // Thread id not found so add it
-        if (i == _threadsId.size())
-        {
-            _threadsId.push_back(threadId);
-            _tracesPerThread.emplace_back();
-        }
-
-        _tracesPerThread[i].addUnlockEvents(unlockEvents);
+        _tracesPerThread[threadIndex].addUnlockEvents(unlockEvents);
     }
 }
 
 Profiler::~Profiler()
 {
-   _server->stop();
+   _server.stop();
 }
 
 } // end of namespace hop
@@ -542,7 +511,7 @@ void hop::Profiler::draw()
          _timeline.moveToPresentTime( false );
       }
 
-      _timeline.draw( _tracesPerThread, _threadsId, _strDb );
+      _timeline.draw( _tracesPerThread, _strDb );
       if ( !drawTraceDetails( _timeline.getTraceDetails(), _tracesPerThread, _strDb ) )
       {
          _timeline.clearTraceDetails();
@@ -600,7 +569,7 @@ void hop::Profiler::drawMenuBar()
 
       if ( ImGui::Button( "Save", ImVec2( 120, 0 ) ) )
       {
-         saveAsJson( path, _threadsId, _tracesPerThread );
+         saveAsJson( path, _tracesPerThread );
          ImGui::CloseCurrentPopup();
       }
 
@@ -661,7 +630,7 @@ void hop::Profiler::handleHotkey()
 void hop::Profiler::setRecording( bool recording )
 {
    _recording = recording;
-   _server->setRecording( recording );
+   _server.setRecording( recording );
    if( recording )
    {
       _timeline.setRealtime ( true );
