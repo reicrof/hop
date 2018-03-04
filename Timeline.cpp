@@ -14,6 +14,24 @@ static constexpr uint64_t MIN_MICROS_TO_DISPLAY = 100;
 static constexpr uint64_t MAX_MICROS_TO_DISPLAY = 900000000;
 static constexpr float MIN_TRACE_LENGTH_PXL = 0.1f;
 
+static void drawHoveringTimelineLine(float posInScreenX, float timelineStartPosY, int64_t hoveredMicros)
+{
+   constexpr float LINE_PADDING = 5.0f;
+   constexpr float TEXT_PADDING = 10.0f;
+   static char timeToDisplay[64] = {};
+   hop::formatMicrosDurationToDisplay( hoveredMicros, timeToDisplay, sizeof( timeToDisplay ) );
+   
+   auto drawList = ImGui::GetWindowDrawList();
+   drawList->PushClipRectFullScreen();
+   drawList->AddLine(
+      ImVec2(posInScreenX, timelineStartPosY + LINE_PADDING),
+      ImVec2(posInScreenX, 9999),
+      ImColor(255, 255, 255, 200),
+      1.5f);
+   drawList->AddText( ImVec2( posInScreenX, timelineStartPosY - TEXT_PADDING), ImColor(255,255,255), timeToDisplay);
+   drawList->PopClipRect();
+}
+
 namespace hop
 {
 
@@ -44,14 +62,15 @@ void Timeline::draw(
     const std::vector<ThreadInfo>& tracesPerThread,
     const StringDb& strDb )
 {
+   ImGui::BeginChild("TimelineAndCanvas");
+   const auto startDrawPos = ImGui::GetCursorScreenPos();
+   drawTimeline(startDrawPos.x, startDrawPos.y + 5);
+
    ImGui::BeginChild(
-      "Timeline",
+      "TimelineCanvas",
       ImVec2(0, 0),
       false,
       ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
-
-   const auto startDrawPos = ImGui::GetCursorScreenPos();
-   drawTimeline( startDrawPos.x, startDrawPos.y + 5 );
 
    char threadName[128] = "Thread ";
    for ( size_t i = 0; i < tracesPerThread.size(); ++i )
@@ -76,6 +95,15 @@ void Timeline::draw(
       ImGui::SetCursorScreenPos(curDrawPos);
    }
 
+   if (_timelineHoverPos > 0.0f)
+   {
+      const int64_t hoveredMicro = _startMicros + pxlToMicros(ImGui::GetWindowWidth(), _microsToDisplay, _timelineHoverPos - startDrawPos.x);
+      drawHoveringTimelineLine(_timelineHoverPos, startDrawPos.y, hoveredMicro);
+   }
+
+   printf("start micros = %f\n", _startMicros / 1000.0f);
+
+   ImGui::EndChild();
    ImGui::EndChild();
 
    if ( ImGui::IsItemHoveredRect() && ImGui::IsRootWindowOrAnyChildFocused() )
@@ -89,11 +117,14 @@ void Timeline::draw(
 
 void Timeline::drawTimeline( const float posX, const float posY )
 {
+   constexpr float TIMELINE_TOTAL_HEIGHT = 50.0f;
    constexpr int64_t minStepSize = 10;
    constexpr float minStepCount = 20.0f;
    constexpr float maxStepCount = 140.0f;
 
    const float windowWidthPxl = ImGui::GetWindowWidth();
+
+   ImGui::BeginChild("Timeline", ImVec2( windowWidthPxl, TIMELINE_TOTAL_HEIGHT) );
 
    const size_t stepsCount = [=]() {
       float stepsCount = _microsToDisplay / (double)_stepSizeInMicros;
@@ -119,6 +150,12 @@ void Timeline::drawTimeline( const float posX, const float posY )
    }();
 
    ImDrawList* DrawList = ImGui::GetWindowDrawList();
+
+   // Draw darker background under the timeline to differentiate with the canvas
+   DrawList->AddRectFilled(
+      ImVec2(posX, posY),
+      ImVec2(posX + windowWidthPxl, posY + TIMELINE_TOTAL_HEIGHT),
+      ImColor( 0.1f, 0.1f, 0.1f ));
 
    // Start drawing the vertical lines on the timeline
    constexpr float smallLineLength = 10.0f;
@@ -202,7 +239,19 @@ void Timeline::drawTimeline( const float posX, const float posY )
       }
    }
 
-   ImGui::SetCursorScreenPos( ImVec2{posX, posY + 50.0f} );
+   ImGui::EndChild();
+
+   if (ImGui::IsItemHovered())
+   {
+      const auto curMousePosInScreen = ImGui::GetMousePos();
+      _timelineHoverPos = curMousePosInScreen.x;
+   }
+   else
+   {
+      _timelineHoverPos = -1.0f;
+   }
+
+   ImGui::SetCursorScreenPos( ImVec2{posX, posY + TIMELINE_TOTAL_HEIGHT } );
 }
 
 void Timeline::handleMouseWheel( float mousePosX, float )
@@ -231,7 +280,7 @@ void Timeline::handleMouseDrag( float mouseInCanvasX, float mouseInCanvasY )
       setStartMicro( _startMicros - deltaXInMicros, false );
 
       // Switch to the traces context to modify the scroll
-      ImGui::BeginChild( "Timeline" );
+      ImGui::BeginChild( "TimelineCanvas" );
       ImGui::SetScrollY( ImGui::GetScrollY() - delta.y );
       ImGui::EndChild();
 
