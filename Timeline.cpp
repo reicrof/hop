@@ -637,7 +637,7 @@ void Timeline::drawTraces(
    for ( const auto& t : tracesToDraw )
    {
       const size_t traceIndex = t.traceIndex;
-      strDb.formatTraceName(data.traces.classNameIds[traceIndex], data.traces.fctNameIds[traceIndex], curName, sizeof(curName));
+      snprintf( curName, sizeof(curName), "%s", strDb.getString( data.traces.fctNameIds[traceIndex] ) );
 
       ImGui::SetCursorScreenPos( t.posPxl );
       ImGui::Button( curName, ImVec2( t.lengthPxl, TRACE_HEIGHT ) );

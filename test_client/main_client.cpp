@@ -34,7 +34,7 @@ struct MaClasse
 {
    void callBuggyFunction()
    {
-      HOP_PROF_MEMBER_FUNC();
+      HOP_PROF("MaClass::callBuggyFunction");
       buggyFunction();
    }
 };

@@ -64,27 +64,4 @@ size_t StringDb::getStringIndex( hop::TStrPtr_t strId ) const
    return it->second;
 }
 
-void StringDb::formatTraceName(size_t classNameIndex, size_t fctNameIndex, char* nameArray, size_t size) const
-{
-	if (classNameIndex > 0)
-	{
-		// We do have a class name. Prepend it to the string
-		snprintf(
-			nameArray,
-			size,
-			"%s::%s",
-			getString(classNameIndex),
-			getString(fctNameIndex) );
-	}
-	else
-	{
-		// No class name. Ignore it
-		snprintf(
-			nameArray,
-			size,
-			"%s",
-			getString(fctNameIndex));
-	}
-}
-
 }

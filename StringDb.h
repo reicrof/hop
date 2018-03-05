@@ -22,8 +22,6 @@ public:
       return &_strData[ index ];
    }
 
-   void formatTraceName(size_t classNameIndex, size_t fctNameIndex, char* nameArray, size_t size) const;
-
 private:
    std::unordered_map< hop::TStrPtr_t, size_t > _stringIndices;
    std::vector< char > _strData;

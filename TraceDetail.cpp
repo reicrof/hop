@@ -132,9 +132,8 @@ bool drawTraceDetails(
          for ( size_t i = 0; i < details.details.size(); ++i )
          {
             const size_t traceId = details.details[i].traceId;
-            TStrPtr_t classIdx = threadInfo.traces.classNameIds[traceId];
-            TStrPtr_t fctIdx = threadInfo.traces.fctNameIds[traceId];
-            strDb.formatTraceName( classIdx, fctIdx, traceName, sizeof( traceName ) );
+            const TStrPtr_t fctIdx = threadInfo.traces.fctNameIds[traceId];
+            snprintf( traceName, sizeof( traceName ), "%s", strDb.getString( fctIdx ) );
             if ( ImGui::Selectable(
                      traceName, selected == i, ImGuiSelectableFlags_SpanAllColumns ) )
                selected = i;

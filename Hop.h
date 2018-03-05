@@ -27,17 +27,11 @@
 ///////////////////////////////////////////////////////////////
 
 // Create a new profiling trace with specified name
-#define HOP_PROF( x ) HOP_PROF_GUARD_VAR( __LINE__, ( __FILE__, __LINE__, NULL, (x), 0 ) )
+#define HOP_PROF( x ) HOP_PROF_GUARD_VAR( __LINE__, ( __FILE__, __LINE__, (x), 0 ) )
 // Create a new profiling trace for a free function
-#define HOP_PROF_FUNC() HOP_PROF_GUARD_VAR( __LINE__, ( __FILE__, __LINE__, NULL, __func__, 0 ) )
-// Create a new profiling trace for a member function
-#define HOP_PROF_MEMBER_FUNC() \
-   HOP_PROF_GUARD_VAR( __LINE__, ( __FILE__, __LINE__, typeid( this ).name(), __func__, 0 ) )
+#define HOP_PROF_FUNC() HOP_PROF_GUARD_VAR( __LINE__, ( __FILE__, __LINE__, __func__, 0 ) )
 // Create a new profiling trace for a free function that falls under category x
-#define HOP_PROF_FUNC_WITH_GROUP( x ) HOP_PROF_GUARD_VAR(__LINE__,( __FILE__, __LINE__, NULL, __func__, (x) ) )
-// Create a new profiling trace for a member function that falls under category x
-#define HOP_PROF_MEMBER_FUNC_WITH_GROUP( x ) \
-   HOP_PROF_GUARD_VAR(__LINE__,(( __FILE__, __LINE__, typeid( this ).name(), __func__, x ))
+#define HOP_PROF_FUNC_WITH_GROUP( x ) HOP_PROF_GUARD_VAR(__LINE__,( __FILE__, __LINE__, __func__, (x) ) )
 
 ///////////////////////////////////////////////////////////////
 /////     EVERYTHING AFTER THIS IS IMPL DETAILS        ////////
@@ -184,12 +178,11 @@ using TStrPtr_t = uint64_t;
 using TLineNb_t = uint32_t;
 using TGroup_t = uint16_t;
 using TDepth_t = uint16_t;
-HOP_CONSTEXPR uint32_t EXPECTED_TRACE_SIZE = 48;
+HOP_CONSTEXPR uint32_t EXPECTED_TRACE_SIZE = 40;
 struct Trace
 {
    TimeStamp start, end;   // Timestamp for start/end of this trace
    TStrPtr_t fileNameId;  // Index into string array for the file name
-   TStrPtr_t classNameId; // Index into string array for the class name
    TStrPtr_t fctNameId;   // Index into string array for the function name
    TLineNb_t lineNumber;   // Line at which the trace was inserted
    TGroup_t group;         // Group to which this trace belongs
@@ -272,7 +265,6 @@ class ClientManager
    static void EndProfile(
        const char* fileName,
        const char* fctName,
-       const char* className,
        TimeStamp start,
        TimeStamp end,
        TLineNb_t lineNb,
@@ -291,10 +283,9 @@ class ClientManager
 class ProfGuard
 {
   public:
-   ProfGuard( const char* fileName, TLineNb_t lineNb, const char* className, const char* fctName, TGroup_t groupId ) HOP_NOEXCEPT
+   ProfGuard( const char* fileName, TLineNb_t lineNb, const char* fctName, TGroup_t groupId ) HOP_NOEXCEPT
        : _start( getTimeStamp() ),
          _fileName( fileName ),
-         _className( className ),
          _fctName( fctName ),
          _lineNb( lineNb ),
          _group( groupId )
@@ -303,12 +294,12 @@ class ProfGuard
    }
    ~ProfGuard()
    {
-      ClientManager::EndProfile( _fileName, _className, _fctName, _start, getTimeStamp(), _lineNb, _group );
+      ClientManager::EndProfile( _fileName, _fctName, _start, getTimeStamp(), _lineNb, _group );
    }
 
   private:
    TimeStamp _start;
-   const char *_fileName, *_className, *_fctName;
+   const char *_fileName, *_fctName;
    TLineNb_t _lineNb;
    TGroup_t _group;
 };
@@ -784,14 +775,13 @@ class Client
 
    void addProfilingTrace(
        const char* fileName,
-       const char* className,
        const char* fctName,
        TimeStamp start,
        TimeStamp end,
        TLineNb_t lineNb,
        TGroup_t group )
    {
-      _traces.push_back( Trace{ start, end, (TStrPtr_t)fileName, (TStrPtr_t)className, (TStrPtr_t)fctName, lineNb, group, (TDepth_t)tl_traceLevel } );
+      _traces.push_back( Trace{ start, end, (TStrPtr_t)fileName, (TStrPtr_t)fctName, lineNb, group, (TDepth_t)tl_traceLevel } );
    }
 
    void addWaitLockTrace( void* mutexAddr, TimeStamp start, TimeStamp end, TDepth_t depth )
@@ -832,7 +822,6 @@ class Client
       for( const auto& t : _traces  )
       {
          addStringToDb( (const char*) t.fileNameId );
-         addStringToDb( (const char*) t.classNameId );
          addStringToDb( (const char*) t.fctNameId );
       }
 
@@ -1042,7 +1031,6 @@ void ClientManager::StartProfile()
 
 void ClientManager::EndProfile(
     const char* fileName,
-    const char* className,
     const char* fctName,
     TimeStamp start,
     TimeStamp end,
@@ -1053,7 +1041,7 @@ void ClientManager::EndProfile(
    Client* client = ClientManager::Get();
    if( end - start > 50 ) // Minimum trace time is 50 ns
    {
-      client->addProfilingTrace( fileName, className, fctName, start, end, lineNb, group );
+      client->addProfilingTrace( fileName, fctName, start, end, lineNb, group );
    }
    if ( remainingPushedTraces <= 0 )
    {

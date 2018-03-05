@@ -29,7 +29,6 @@ struct DisplayableTraces
 
    //Indexes of the name in the string database
    std::vector< TStrPtr_t > fileNameIds;
-   std::vector< TStrPtr_t > classNameIds;
    std::vector< TStrPtr_t > fctNameIds;
 
    std::vector< TLineNb_t > lineNbs;

@@ -118,7 +118,6 @@ size_t Server::handleNewMessage( uint8_t* data, size_t maxSize )
             dispTraces.ends.push_back( t.end );
             dispTraces.deltas.push_back( t.end - t.start );
             dispTraces.fileNameIds.push_back( _stringDb.getStringIndex( t.fileNameId ) );
-            dispTraces.classNameIds.push_back( _stringDb.getStringIndex( t.classNameId ) );
             dispTraces.fctNameIds.push_back(  _stringDb.getStringIndex( t.fctNameId ) );
             dispTraces.lineNbs.push_back( t.lineNumber );
             dispTraces.depths.push_back( t.depth );
