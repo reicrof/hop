@@ -1006,10 +1006,11 @@ Client* ClientManager::Get()
       assert( sucess && "Could not create shared memory" );
    }
 
-   static std::atomic< int > threadCount{ -1 };
-   ++threadCount;
+   // Static variable that counts the total number of thread
+   static std::atomic< int > threadCount{ 0 };
+   tl_threadIndex = threadCount.fetch_add(1);
    tl_threadId = HOP_GET_THREAD_ID();
-   tl_threadIndex = threadCount;
+
    threadClient.reset( new Client() );
 
    // Register producer in the ringbuffer
