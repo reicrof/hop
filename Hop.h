@@ -582,10 +582,9 @@ bool SharedMemory::create( const char* path, size_t requestedSize, bool isConsum
       return false;
    }
 
-   // Get pointers inside the shared memory
-   _sharedMetaData = (SharedMetaInfo*) sharedMem;
-   _ringbuf = (ringbuf_t*) (sharedMem + sizeof( SharedMetaInfo ));
-   _data = sharedMem + sizeof( SharedMetaInfo ) + ringBufSize ;
+   // Take a local copy as we do not want to expose the ring buffer before it is
+   // actually initialized
+   ringbuf_t* localRingBuf = (ringbuf_t*) (sharedMem + sizeof( SharedMetaInfo ));
 
    // If we are the first producer, we create the shared memory
    if (!isConsumer)
@@ -595,8 +594,8 @@ bool SharedMemory::create( const char* path, size_t requestedSize, bool isConsum
        std::lock_guard< std::mutex > g(m);
        if (!memoryCreated)
        {
-           memset(_ringbuf, 0, totalSize - sizeof(SharedMetaInfo));
-           if (ringbuf_setup(_ringbuf, HOP_MAX_THREAD_NB, requestedSize) < 0)
+           memset(localRingBuf, 0, totalSize - sizeof(SharedMetaInfo));
+           if (ringbuf_setup(localRingBuf, HOP_MAX_THREAD_NB, requestedSize) < 0)
            {
                assert(false && "Ring buffer creation failed");
            }
@@ -606,6 +605,11 @@ bool SharedMemory::create( const char* path, size_t requestedSize, bool isConsum
            }
        }
    }
+
+   // Get pointers inside the shared memory once it has been initialized
+   _sharedMetaData = (SharedMetaInfo*) sharedMem;
+   _ringbuf = (ringbuf_t*) (sharedMem + sizeof( SharedMetaInfo ));
+   _data = sharedMem + sizeof( SharedMetaInfo ) + ringBufSize ;
 
    // We can only have one consumer
    if( isConsumer && hasConnectedConsumer() )
@@ -1013,7 +1017,7 @@ Client* ClientManager::Get()
       assert( sucess && "Could not create shared memory" );
    }
 
-   static std::atomic< int > threadCount = -1;
+   static std::atomic< int > threadCount{ -1 };
    ++threadCount;
    tl_threadId = HOP_GET_THREAD_ID();
    tl_threadIndex = threadCount;
