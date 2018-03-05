@@ -101,8 +101,7 @@ void Timeline::draw(
       drawHoveringTimelineLine(_timelineHoverPos, startDrawPos.y, text);
    }
 
-   ImGui::EndChild();
-   ImGui::EndChild();
+   ImGui::EndChild(); // TimelineCanvas
 
    if ( ImGui::IsItemHoveredRect() && ImGui::IsRootWindowOrAnyChildFocused() )
    {
@@ -111,6 +110,8 @@ void Timeline::draw(
       handleMouseDrag( mousePosInCanvas.x, mousePosInCanvas.y );
       handleMouseWheel( mousePosInCanvas.x, mousePosInCanvas.y );
    }
+
+   ImGui::EndChild(); // TimelineAndCanvas
 }
 
 void Timeline::drawTimeline( const float posX, const float posY )
