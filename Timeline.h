@@ -19,7 +19,6 @@ class Timeline
    void update( float deltaTimeMs ) noexcept;
    void draw(
        const std::vector<ThreadInfo>& _tracesPerThread,
-       const std::vector<uint32_t>& threadIds,
        const StringDb& strDb  );
    TimeStamp absoluteStartTime() const noexcept;
    TimeStamp absolutePresentTime() const noexcept;
@@ -29,6 +28,7 @@ class Timeline
 
    const TraceDetails& getTraceDetails() const noexcept;
    void clearTraceDetails();
+   void setTraceDetailsDisplayed();
 
    // Move to first trace
    void moveToStart( bool animate = true ) noexcept;
@@ -58,6 +58,7 @@ class Timeline
    TimeStamp _absoluteStartTime{};
    TimeStamp _absolutePresentTime{};
    float _rightClickStartPosInCanvas[2] = {};
+   float _timelineHoverPos{-1.0f};
    TDepth_t _maxTraceDepthPerThread[HOP_MAX_THREAD_NB] = {};
    bool _realtime{true};
 

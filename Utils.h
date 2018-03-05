@@ -58,6 +58,26 @@ inline void formatMicrosDurationToDisplay( int64_t usToDisplay, char* str, size_
    }
 }
 
+inline void formatMicrosTimepointToDisplay(int64_t usToDisplay, uint64_t totalMicrosInScreen, char* str, size_t strSize)
+{
+   if (totalMicrosInScreen < 1000)
+   {
+      snprintf(str, strSize, "%d us", (int)usToDisplay);
+   }
+   else if (totalMicrosInScreen < 1000000)
+   {
+      snprintf(str, strSize, "%.3f ms", usToDisplay * 0.001f);
+   }
+   else if (totalMicrosInScreen < 1000000000)
+   {
+      snprintf(str, strSize, "%.3f s", usToDisplay * 0.000001f);
+   }
+   else
+   {
+      snprintf(str, strSize, "%.3f s", usToDisplay * 2.77778e-10);
+   }
+}
+
 }
 
 #endif  // UTILS_H_

@@ -14,6 +14,22 @@ static constexpr uint64_t MIN_MICROS_TO_DISPLAY = 100;
 static constexpr uint64_t MAX_MICROS_TO_DISPLAY = 900000000;
 static constexpr float MIN_TRACE_LENGTH_PXL = 0.1f;
 
+static void drawHoveringTimelineLine(float posInScreenX, float timelineStartPosY, const char* text )
+{
+   constexpr float LINE_PADDING = 5.0f;
+   constexpr float TEXT_PADDING = 10.0f;
+   
+   auto drawList = ImGui::GetWindowDrawList();
+   drawList->PushClipRectFullScreen();
+   drawList->AddLine(
+      ImVec2(posInScreenX, timelineStartPosY + LINE_PADDING),
+      ImVec2(posInScreenX, 9999),
+      ImColor(255, 255, 255, 200),
+      1.5f);
+   drawList->AddText( ImVec2( posInScreenX, timelineStartPosY - TEXT_PADDING), ImColor(255,255,255), text);
+   drawList->PopClipRect();
+}
+
 namespace hop
 {
 
@@ -42,23 +58,23 @@ void Timeline::update( float deltaTimeMs ) noexcept
 
 void Timeline::draw(
     const std::vector<ThreadInfo>& tracesPerThread,
-    const std::vector<uint32_t>& threadIds,
     const StringDb& strDb )
 {
+   ImGui::BeginChild("TimelineAndCanvas");
+   const auto startDrawPos = ImGui::GetCursorScreenPos();
+   drawTimeline(startDrawPos.x, startDrawPos.y + 5);
+
    ImGui::BeginChild(
-      "Traces",
+      "TimelineCanvas",
       ImVec2(0, 0),
       false,
       ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
-
-   const auto startDrawPos = ImGui::GetCursorScreenPos();
-   drawTimeline( startDrawPos.x, startDrawPos.y + 5 );
 
    char threadName[128] = "Thread ";
    for ( size_t i = 0; i < tracesPerThread.size(); ++i )
    {
       snprintf(
-          threadName + sizeof( "Thread" ), sizeof( threadName ), "%lu (id=%u)", i, threadIds[i] );
+          threadName + sizeof( "Thread" ), sizeof( threadName ), "%lu", i );
       const auto traceColor = ImColor::HSV( i / 7.0f, 0.6f, 0.6f );
       const auto threadHeaderColor = ImColor(
           traceColor.Value.x - 0.2f, traceColor.Value.y - 0.2f, traceColor.Value.z - 0.2f );
@@ -67,18 +83,25 @@ void Timeline::draw(
       ImGui::PushStyleColor( ImGuiCol_ButtonActive, threadHeaderColor );
       ImGui::Button( threadName );
       ImGui::PopStyleColor( 3 );
-      ImGui::Spacing();
       ImGui::Separator();
 
-      const auto curPos = ImGui::GetCursorScreenPos();
-      drawLockWaits( tracesPerThread, i, curPos.x, curPos.y );
-      // Draw traces needs to be done after draw lock waits because it sets the position
-      // for the next drawing. TODO : Fix that ... -_-
-      drawTraces( tracesPerThread[i], i, curPos.x, curPos.y, strDb, traceColor);
+      ImVec2 curDrawPos = ImGui::GetCursorScreenPos();
+      drawTraces(tracesPerThread[i], i, curDrawPos.x, curDrawPos.y, strDb, traceColor);
+      drawLockWaits( tracesPerThread, i, curDrawPos.x, curDrawPos.y );
 
-      ImGui::InvisibleButton( "trace-padding", ImVec2( 20, 40 ) );
+      curDrawPos.y += tracesPerThread[i].traces.maxDepth * (TRACE_HEIGHT + TRACE_VERTICAL_PADDING) + 70;
+      ImGui::SetCursorScreenPos(curDrawPos);
    }
 
+   if (_timelineHoverPos > 0.0f)
+   {
+      static char text[32] = {};
+      const int64_t hoveredMicro = _startMicros + pxlToMicros(ImGui::GetWindowWidth(), _microsToDisplay, _timelineHoverPos - startDrawPos.x);
+      hop::formatMicrosTimepointToDisplay(hoveredMicro, _microsToDisplay, text, sizeof(text));
+      drawHoveringTimelineLine(_timelineHoverPos, startDrawPos.y, text);
+   }
+
+   ImGui::EndChild();
    ImGui::EndChild();
 
    if ( ImGui::IsItemHoveredRect() && ImGui::IsRootWindowOrAnyChildFocused() )
@@ -92,14 +115,17 @@ void Timeline::draw(
 
 void Timeline::drawTimeline( const float posX, const float posY )
 {
+   constexpr float TIMELINE_TOTAL_HEIGHT = 50.0f;
    constexpr int64_t minStepSize = 10;
-   constexpr int64_t minStepCount = 20;
-   constexpr int64_t maxStepCount = 140;
+   constexpr float minStepCount = 20.0f;
+   constexpr float maxStepCount = 140.0f;
 
    const float windowWidthPxl = ImGui::GetWindowWidth();
 
+   ImGui::BeginChild("Timeline", ImVec2( windowWidthPxl, TIMELINE_TOTAL_HEIGHT) );
+
    const size_t stepsCount = [=]() {
-      size_t stepsCount = _microsToDisplay / _stepSizeInMicros;
+      float stepsCount = _microsToDisplay / (double)_stepSizeInMicros;
       while ( stepsCount > maxStepCount ||
               ( stepsCount < minStepCount && _stepSizeInMicros > minStepSize ) )
       {
@@ -123,12 +149,18 @@ void Timeline::drawTimeline( const float posX, const float posY )
 
    ImDrawList* DrawList = ImGui::GetWindowDrawList();
 
+   // Draw darker background under the timeline to differentiate with the canvas
+   DrawList->AddRectFilled(
+      ImVec2(posX, posY),
+      ImVec2(posX + windowWidthPxl, posY + TIMELINE_TOTAL_HEIGHT),
+      ImColor( 0.1f, 0.1f, 0.1f ));
+
    // Start drawing the vertical lines on the timeline
    constexpr float smallLineLength = 10.0f;
    constexpr float deltaBigLineLength = 12.0f;  // The diff between the small line and big one
    constexpr float deltaMidLineLength = 7.0f;   // The diff between the small line and mid one
 
-   const int64_t stepSizePxl = microsToPxl( windowWidthPxl, _microsToDisplay, _stepSizeInMicros );
+   const float stepSizePxl = microsToPxl<float>( windowWidthPxl, _microsToDisplay, _stepSizeInMicros );
    const int64_t stepsDone = _startMicros / _stepSizeInMicros;
    const int64_t remainder = _startMicros % _stepSizeInMicros;
    int remainderPxl = 0;
@@ -205,7 +237,19 @@ void Timeline::drawTimeline( const float posX, const float posY )
       }
    }
 
-   ImGui::SetCursorScreenPos( ImVec2{posX, posY + 50.0f} );
+   ImGui::EndChild();
+
+   if (ImGui::IsItemHovered())
+   {
+      const auto curMousePosInScreen = ImGui::GetMousePos();
+      _timelineHoverPos = curMousePosInScreen.x;
+   }
+   else
+   {
+      _timelineHoverPos = -1.0f;
+   }
+
+   ImGui::SetCursorScreenPos( ImVec2{posX, posY + TIMELINE_TOTAL_HEIGHT } );
 }
 
 void Timeline::handleMouseWheel( float mousePosX, float )
@@ -234,7 +278,7 @@ void Timeline::handleMouseDrag( float mouseInCanvasX, float mouseInCanvasY )
       setStartMicro( _startMicros - deltaXInMicros, false );
 
       // Switch to the traces context to modify the scroll
-      ImGui::BeginChild( "Traces" );
+      ImGui::BeginChild( "TimelineCanvas" );
       ImGui::SetScrollY( ImGui::GetScrollY() - delta.y );
       ImGui::EndChild();
 
@@ -312,6 +356,11 @@ const TraceDetails& Timeline::getTraceDetails() const noexcept
 void Timeline::clearTraceDetails()
 {
    _traceDetails = TraceDetails{};
+}
+
+void Timeline::setTraceDetailsDisplayed()
+{
+    _traceDetails.shouldFocusWindow = false;
 }
 
 void Timeline::setStartMicro( int64_t timeInMicro, bool withAnimation /*= true*/ ) noexcept
@@ -406,7 +455,6 @@ void Timeline::drawTraces(
    const TimeStamp firstTraceAbsoluteTime = absoluteStart + ( _startMicros * 1000 );
    const TimeStamp lastTraceAbsoluteTime = firstTraceAbsoluteTime + ( _microsToDisplay * 1000 );
 
-   TDepth_t maxDepth = 0;
    // If we do not use LOD, draw the traces normally.
    if ( lodLevel == -1 )
    {
@@ -449,7 +497,6 @@ void Timeline::drawTraces(
          if ( traceLengthPxl < MIN_TRACE_LENGTH_PXL ) continue;
 
          const auto curDepth = data.traces.depths[i];
-         maxDepth = std::max( curDepth, maxDepth );
          const auto tracePos = ImVec2(
              posX + traceEndPxl - traceLengthPxl,
              posY + curDepth * ( TRACE_HEIGHT + TRACE_VERTICAL_PADDING ) );
@@ -464,7 +511,7 @@ void Timeline::drawTraces(
    }
    else
    {
-      const auto& lods = data.traces._lods[lodLevel];
+      const auto& lods = data.traces.lods[lodLevel];
       LodInfo firstInfo = {firstTraceAbsoluteTime, 0, 0, 0, false};
       LodInfo lastInfo = {lastTraceAbsoluteTime, 0, 0, 0, false};
       auto it1 = std::lower_bound( lods.begin(), lods.end(), firstInfo );
@@ -504,7 +551,6 @@ void Timeline::drawTraces(
          // Skip trace if it is way smaller than treshold
          if ( traceLengthPxl < MIN_TRACE_LENGTH_PXL ) continue;
 
-         maxDepth = std::max( t.depth, maxDepth );
          const auto tracePos = ImVec2(
              posX + traceEndPxl - traceLengthPxl,
              posY + t.depth * ( TRACE_HEIGHT + TRACE_VERTICAL_PADDING ) );
@@ -521,9 +567,6 @@ void Timeline::drawTraces(
          }
       }
    }
-
-   _maxTraceDepthPerThread[threadIndex] =
-       std::max( _maxTraceDepthPerThread[threadIndex], maxDepth );
 
    const bool leftMouseClicked = ImGui::IsMouseReleased( 0 );
    const bool rightMouseClicked = ImGui::IsMouseReleased( 1 );
@@ -578,7 +621,7 @@ void Timeline::drawTraces(
             }
             selectTrace( data, threadIndex, traceIndex );
          }
-         else if ( rightMouseClicked )
+         else if ( rightMouseClicked && _rightClickStartPosInCanvas[0] == 0.0f)
          {
             _traceDetails = createTraceDetails( data.traces, threadIndex, t.traceIndex );
          }
@@ -627,7 +670,7 @@ void Timeline::drawTraces(
          {
             selectTrace( data, threadIndex, traceIndex );
          }
-         else if ( rightMouseClicked )
+         else if ( rightMouseClicked && _rightClickStartPosInCanvas[0] == 0.0f)
          {
             _traceDetails = createTraceDetails( data.traces, threadIndex, t.traceIndex );
          }
@@ -645,10 +688,6 @@ void Timeline::drawTraces(
       ImGui::Button( "", ImVec2( selTraceDrawingInfo.lengthPxl, TRACE_HEIGHT ) );
       ImGui::PopStyleColor( 3 );
    }
-
-   ImGui::SetCursorScreenPos( ImVec2{
-       posX,
-       posY + _maxTraceDepthPerThread[threadIndex] * ( TRACE_HEIGHT + TRACE_VERTICAL_PADDING )} );
 }
 
 void Timeline::highlightLockOwner(
@@ -802,7 +841,7 @@ void Timeline::selectTrace( const ThreadInfo& data, uint32_t threadIndex, size_t
    int wantedDepth = data.traces.depths[ traceIndex ];
    for ( int i = 0; i < LOD_COUNT; ++i )
    {
-      const auto& lods = data.traces._lods[i];
+      const auto& lods = data.traces.lods[i];
       auto lodIt = std::lower_bound(
           lods.begin(), lods.end(), LodInfo{data.traces.ends[traceIndex], 0, 0, 0, false} );
       while( lodIt != lods.end() && lodIt->depth != wantedDepth )

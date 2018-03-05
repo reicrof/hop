@@ -92,6 +92,7 @@ createTraceDetails( const DisplayableTraces& traces, uint32_t threadIndex, size_
    assert( std::abs( totalPct - 1.0f ) < 0.01f );
 
    TraceDetails details;
+   details.shouldFocusWindow = true;
    details.threadIndex = threadIndex;
    std::swap( details.details, traceDetails );
    return details;
@@ -105,8 +106,10 @@ bool drawTraceDetails(
    bool isWindowOpen = details.details.size() > 0;
    if ( details.details.size() > 0 )
    {
-      ImGui::PushStyleColor( ImGuiCol_WindowBg, ImVec4(0.20f, 0.20f, 0.20f, 0.85f));
-      ImGui::SetNextWindowSize(ImVec2(600,300), ImGuiSetCond_FirstUseEver);
+      if (details.shouldFocusWindow) ImGui::SetNextWindowFocus();
+
+      ImGui::PushStyleColor(ImGuiCol_WindowBg, ImVec4(0.20f, 0.20f, 0.20f, 0.85f));
+      ImGui::SetNextWindowSize(ImVec2(600, 300), ImGuiSetCond_FirstUseEver);
       if ( ImGui::Begin( "Trace Details", &isWindowOpen ) )
       {
          const auto& threadInfo = tracesPerThread[details.threadIndex];
