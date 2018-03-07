@@ -64,4 +64,21 @@ size_t StringDb::getStringIndex( hop::TStrPtr_t strId ) const
    return it->second;
 }
 
+std::vector< size_t > StringDb::findStringIndexMatching( const char* substrToFind ) const noexcept
+{
+   std::vector< size_t > indices;
+   indices.reserve( 64 );
+   size_t i = 1;
+   while( i < _strData.size() )
+   {
+      const auto length = strlen( &_strData[i] );
+      if( strcasestr( &_strData[i], substrToFind ) )
+      {
+         indices.push_back( i );
+      }
+      i += length + 1;
+   }
+   return indices;
+}
+
 }

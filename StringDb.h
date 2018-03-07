@@ -21,6 +21,7 @@ public:
    {
       return &_strData[ index ];
    }
+   std::vector< size_t > findStringIndexMatching( const char* ) const noexcept;
 
 private:
    std::unordered_map< hop::TStrPtr_t, size_t > _stringIndices;

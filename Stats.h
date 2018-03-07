@@ -8,6 +8,7 @@ namespace hop
       double frameTimeMs;
       double drawingTimeMs;
       double fetchTimeMs;
+      double searchTimeMs;
       int currentLOD;
       long long selectedTrace;
    };
