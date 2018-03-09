@@ -51,7 +51,7 @@ int hop_pthread_mutex_lock( pthread_mutex_t* mutex )
       return pthread_mutex_lock( mutex );
    }
 
-   hop::LockWaitGuard lwGuard( mutex );
+   HOP_PROF_MUTEX_LOCK( mutex );
 
    return pthread_mutex_lock( mutex );
 }
@@ -64,7 +64,7 @@ int hop_pthread_mutex_unlock( pthread_mutex_t* mutex )
       ++unlockCount;
       return pthread_mutex_unlock( mutex );
    }
-   hop::ClientManager::UnlockEvent( mutex, hop::getTimeStamp() );
+   HOP_PROF_MUTEX_UNLOCK( mutex );
 
    return pthread_mutex_unlock( mutex );
 }

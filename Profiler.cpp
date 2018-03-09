@@ -475,56 +475,56 @@ static bool drawPlayStopButton( bool& isRecording )
 
 void hop::Profiler::drawSearchWindow()
 {
-   ImGui::PushStyleColor( ImGuiCol_WindowBg, ImVec4( 0.20f, 0.20f, 0.20f, 0.85f ) );
-
    bool inputFocus = false;
-   if( _focusSearchWindow && _searchWindowOpen )
+   if ( _focusSearchWindow && _searchWindowOpen )
    {
       ImGui::SetNextWindowFocus();
       inputFocus = true;
       _focusSearchWindow = false;
    }
 
-   ImGui::SetNextWindowSize( ImVec2( 600, 300 ), ImGuiSetCond_FirstUseEver );
-   if ( _searchWindowOpen && ImGui::Begin( "Search Window", &_searchWindowOpen ) )
+   if ( _searchWindowOpen )
    {
-      static hop::SearchResult lastSearch;
-      static char input[512];
-
-      if( inputFocus )
-        ImGui::SetKeyboardFocusHere();
-
-      if ( ImGui::InputText(
-               "Search",
-               input,
-               sizeof( input ),
-               ImGuiInputTextFlags_AutoSelectAll | ImGuiInputTextFlags_EnterReturnsTrue ) &&
-           strlen( input ) > 0 )
+      ImGui::PushStyleColor( ImGuiCol_WindowBg, ImVec4( 0.20f, 0.20f, 0.20f, 0.85f ) );
+      ImGui::SetNextWindowSize( ImVec2( 600, 300 ), ImGuiSetCond_FirstUseEver );
+      if ( ImGui::Begin( "Search Window", &_searchWindowOpen ) )
       {
-         const auto startSearch = std::chrono::system_clock::now();
+         static hop::SearchResult lastSearch;
+         static char input[512];
 
-         findTraces( input, _strDb, _tracesPerThread, lastSearch );
+         if ( inputFocus ) ImGui::SetKeyboardFocusHere();
 
-         const auto endSearch = std::chrono::system_clock::now();
-         hop::g_stats.searchTimeMs =
-             std::chrono::duration<double, std::milli>( ( endSearch - startSearch ) ).count();
+         if ( ImGui::InputText(
+                  "Search",
+                  input,
+                  sizeof( input ),
+                  ImGuiInputTextFlags_AutoSelectAll | ImGuiInputTextFlags_EnterReturnsTrue ) &&
+              strlen( input ) > 0 )
+         {
+            const auto startSearch = std::chrono::system_clock::now();
+
+            findTraces( input, _strDb, _tracesPerThread, lastSearch );
+
+            const auto endSearch = std::chrono::system_clock::now();
+            hop::g_stats.searchTimeMs =
+                std::chrono::duration<double, std::milli>( ( endSearch - startSearch ) ).count();
+         }
+
+         auto selection = drawSearchResult( lastSearch, _timeline, _strDb, _tracesPerThread );
+
+         if ( selection.first != (size_t)-1 && selection.second != (uint32_t)-1 )
+         {
+            const TimeStamp absEndTime =
+                _tracesPerThread[selection.second].traces.ends[selection.first];
+            const TimeStamp delta =
+                _tracesPerThread[selection.second].traces.deltas[selection.first];
+            const TimeStamp startTime = absEndTime - delta - _timeline.absoluteStartTime();
+            _timeline.frameToTime( startTime / 1000, delta / 1000 );
+         }
       }
-
-      auto selection =
-          drawSearchResult( lastSearch, _timeline, _strDb, _tracesPerThread );
-
-      if ( selection.first != (size_t)-1 && selection.second != (uint32_t)-1 )
-      {
-         const TimeStamp absEndTime =
-             _tracesPerThread[selection.second].traces.ends[selection.first];
-         const TimeStamp delta = _tracesPerThread[selection.second].traces.deltas[selection.first];
-         const TimeStamp startTime = absEndTime - delta - _timeline.absoluteStartTime();
-         _timeline.frameToTime( startTime / 1000, delta / 1000 );
-      }
-
       ImGui::End();
+      ImGui::PopStyleColor();
    }
-   ImGui::PopStyleColor();
 }
 
 void hop::Profiler::draw()

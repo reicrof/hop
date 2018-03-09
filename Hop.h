@@ -7,10 +7,9 @@
 
 // Stubbing all profiling macros so they are disabled
 // when HOP_ENABLED is false
+#define HOP_PROF( x )
 #define HOP_PROF_FUNC()
-#define HOP_PROF_MEMBER_FUNC()
 #define HOP_PROF_FUNC_WITH_GROUP( x )
-#define HOP_PROF_MEMBER_FUNC_WITH_GROUP( x )
 
 #else  // We do want to profile
 
@@ -28,10 +27,21 @@
 
 // Create a new profiling trace with specified name
 #define HOP_PROF( x ) HOP_PROF_GUARD_VAR( __LINE__, ( __FILE__, __LINE__, (x), 0 ) )
+
 // Create a new profiling trace for a free function
 #define HOP_PROF_FUNC() HOP_PROF_GUARD_VAR( __LINE__, ( __FILE__, __LINE__, __func__, 0 ) )
+
 // Create a new profiling trace for a free function that falls under category x
 #define HOP_PROF_FUNC_WITH_GROUP( x ) HOP_PROF_GUARD_VAR(__LINE__,( __FILE__, __LINE__, __func__, (x) ) )
+
+// Create a trace that represent the time waiting for a mutex. You need to provide
+// a pointer to the mutex that is being locked
+#define HOP_PROF_MUTEX_LOCK( x ) HOP_MUTEX_LOCK_GUARD_VAR( __LINE__,( x ) )
+
+// Create an event that correspond to the unlock of the specified mutex. This is
+// used to provide stall region. You should provide a pointer to the mutex that
+// is being unlocked.
+#define HOP_PROF_MUTEX_UNLOCK( x ) HOP_MUTEX_UNLOCK_EVENT( x )
 
 ///////////////////////////////////////////////////////////////
 /////     EVERYTHING AFTER THIS IS IMPL DETAILS        ////////
@@ -323,6 +333,10 @@ struct LockWaitGuard
 #define HOP_COMBINE( X, Y ) X##Y
 #define HOP_PROF_GUARD_VAR( LINE, ARGS ) \
    hop::ProfGuard HOP_COMBINE( hopProfGuard, LINE ) ARGS
+#define HOP_MUTEX_LOCK_GUARD_VAR( LINE, ARGS ) \
+   hop::LockWaitGuard HOP_COMBINE( hopMutexLock, LINE ) ARGS
+#define HOP_MUTEX_UNLOCK_EVENT( x ) \
+   hop::ClientManager::UnlockEvent( x, hop::getTimeStamp() );
 
 }  // namespace hop
 
