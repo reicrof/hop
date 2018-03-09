@@ -550,13 +550,18 @@ void hop::Profiler::draw()
 
    if( _tracesPerThread.empty() && !_recording )
    {
-      const char* record = "To start recording press 'r'";
+      const char* record = "-------------- Hop --------------\n\n"
+                           "Press 'R' to start/stop recording\n"
+                           "Right mouse click to get traces details\n"
+                           "Double click on a trace to focus it\n"
+                           "Right mouse drag to zoom on a region\n"
+                           "Use CTRL+F to search traces\n";
       const auto pos = ImGui::GetWindowPos();
       const float windowWidthPxl = ImGui::GetWindowWidth();
       const float windowHeightPxl = ImGui::GetWindowHeight();
       ImDrawList* DrawList = ImGui::GetWindowDrawList();
       auto size = ImGui::CalcTextSize( record );
-      DrawList->AddText( ImGui::GetIO().Fonts->Fonts[0], 30.0f, ImVec2(pos.x + windowWidthPxl/2 - (size.x), pos.y + windowHeightPxl/2),ImGui::GetColorU32( ImGuiCol_TextDisabled ), record );
+      DrawList->AddText( ImGui::GetIO().Fonts->Fonts[0], 30.0f, ImVec2(pos.x + windowWidthPxl/2 - (size.x), pos.y + windowHeightPxl/2 - size.y),ImGui::GetColorU32( ImGuiCol_TextDisabled ), record );
    }
    else
    {
