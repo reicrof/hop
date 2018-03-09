@@ -6,6 +6,7 @@
 
 namespace hop
 {
+   class Timeline;
    class StringDb;
    struct ThreadInfo;
 
@@ -17,7 +18,7 @@ namespace hop
    };
 
    void findTraces( const char* string, const StringDb& strDb, const std::vector< ThreadInfo >& threadInfos, SearchResult& result );
-   std::pair< size_t, uint32_t > drawSearchResult( SearchResult& searchRes, const StringDb& strDb, const std::vector< ThreadInfo >& threadInfos, uint64_t totalMicrosInScreen );
+   std::pair< size_t, uint32_t > drawSearchResult( SearchResult& searchRes, const Timeline& timeline, const StringDb& strDb, const std::vector< ThreadInfo >& threadInfos );
 }
 
 #endif //TRACE_SEARCH_H_

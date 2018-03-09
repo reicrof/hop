@@ -1,4 +1,5 @@
 #include "TraceSearch.h"
+#include "Timeline.h"
 #include "StringDb.h"
 #include "ThreadInfo.h"
 #include "Utils.h"
@@ -16,8 +17,8 @@ static void sortSearchResOnTime(
        [&threadInfos, &cmp](
            const std::pair<size_t, uint32_t>& lhs, const std::pair<size_t, uint32_t>& rhs ) {
           return cmp(
-              threadInfos[lhs.second].traces.ends[lhs.first],
-              threadInfos[rhs.second].traces.ends[rhs.first] );
+              threadInfos[lhs.second].traces.ends[lhs.first] - threadInfos[lhs.second].traces.deltas[lhs.first],
+              threadInfos[rhs.second].traces.ends[rhs.first] - threadInfos[rhs.second].traces.deltas[rhs.first] );
        } );
 }
 
@@ -86,9 +87,12 @@ void findTraces( const char* string, const hop::StringDb& strDb, const std::vect
           }
        }
    }
+
+   // Sort them by duration
+   sortSearchResOnDuration( result, threadInfos, std::greater<TimeStamp>() );
 }
 
-std::pair< size_t, uint32_t > drawSearchResult( SearchResult& searchRes, const StringDb& strDb, const std::vector< ThreadInfo >& threadInfos, uint64_t totalMicrosInScreen )
+std::pair< size_t, uint32_t > drawSearchResult( SearchResult& searchRes, const Timeline& timeline, const StringDb& strDb, const std::vector< ThreadInfo >& threadInfos )
 {
    ImGui::Text("Found %zu matches", searchRes.matchCount );
 
@@ -155,9 +159,11 @@ std::pair< size_t, uint32_t > drawSearchResult( SearchResult& searchRes, const S
    ImGui::InvisibleButton( "padding3", ImVec2( 0.0f, paddingHeight ) );
    ImGui::NextColumn();
 
+   static size_t selected = -1;
+   const TimeStamp absoluteStartTime = timeline.absoluteStartTime();
+   const auto totalMicrosInScreen = timeline.microsToDisplay();
    char traceTime[64] = {};
    char traceDuration[64] = {};
-   static size_t selected = -1;
    bool selectedSomething = false;
    for( size_t i = startIndex; i < lastIndex; ++i )
    {
@@ -168,7 +174,7 @@ std::pair< size_t, uint32_t > drawSearchResult( SearchResult& searchRes, const S
        const TimeStamp delta = ti.traces.deltas[ traceId ];
 
        hop::formatMicrosTimepointToDisplay(
-           (ti.traces.ends[ traceId ] - delta) * 0.001f,
+           (ti.traces.ends[ traceId ] - delta - absoluteStartTime) * 0.001f,
            totalMicrosInScreen,
            traceTime,
            sizeof( traceTime ) );

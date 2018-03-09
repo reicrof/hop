@@ -32,11 +32,14 @@ struct Profiler
 
 private:
    void drawMenuBar();
+   void drawSearchWindow();
 
    std::string _name;
    Timeline _timeline;
    std::vector< ThreadInfo > _tracesPerThread;
    bool _recording{ false };
+   bool _searchWindowOpen{ false };
+   bool _focusSearchWindow{ false };
    StringDb _strDb;
 
    Server _server;
