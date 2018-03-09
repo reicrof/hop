@@ -8,6 +8,7 @@
 
 namespace hop
 {
+
 struct ThreadInfo
 {
    ThreadInfo();

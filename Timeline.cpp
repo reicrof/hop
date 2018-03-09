@@ -387,6 +387,12 @@ void Timeline::moveToPresentTime( bool animate ) noexcept
    moveToTime( ( _absolutePresentTime - _absoluteStartTime ) / 1000, animate );
 }
 
+void Timeline::frameToTime( int64_t startInMicro, uint64_t deltaInMicro ) noexcept
+{
+   setStartMicro( startInMicro );
+   setZoom( deltaInMicro );
+}
+
 void Timeline::setZoom( uint64_t microsToDisplay, bool withAnimation /*= true*/ )
 {
    _animationState.targetMicrosToDisplay = hop::clamp( microsToDisplay, MIN_MICROS_TO_DISPLAY, MAX_MICROS_TO_DISPLAY );
@@ -603,8 +609,7 @@ void Timeline::drawTraces(
             const auto traceEndMicros =
                 pxlToMicros( windowWidthPxl, _microsToDisplay, t.posPxl.x - posX + t.lengthPxl );
             const auto deltaUs = ( t.deltaMs * 1000 );
-            setStartMicro( _startMicros + ( traceEndMicros - deltaUs ) );
-            setZoom( deltaUs );
+            frameToTime( _startMicros + ( traceEndMicros - deltaUs ), deltaUs );
          }
          else if( leftMouseClicked )
          {

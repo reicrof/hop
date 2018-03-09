@@ -473,9 +473,10 @@ static bool drawPlayStopButton( bool& isRecording )
    return hovering && ImGui::IsMouseClicked(0);
 }
 
-static bool drawSearchWindow( const hop::StringDb& strDb, const std::vector< hop::ThreadInfo >& threadInfos, int64_t microsToDisplay )
+static std::pair< size_t, uint32_t > drawSearchWindow( const hop::StringDb& strDb, const std::vector< hop::ThreadInfo >& threadInfos, int64_t microsToDisplay )
 {
    static bool searchWindowOpen = true;
+   std::pair< size_t, uint32_t > selection{ -1, -1 };
    ImGui::PushStyleColor( ImGuiCol_WindowBg, ImVec4( 0.20f, 0.20f, 0.20f, 0.85f ) );
    ImGui::SetNextWindowSize( ImVec2( 600, 300 ), ImGuiSetCond_FirstUseEver );
    if ( ImGui::Begin( "Search Window", &searchWindowOpen ) )
@@ -486,41 +487,18 @@ static bool drawSearchWindow( const hop::StringDb& strDb, const std::vector< hop
           strlen( input ) > 0 )
       {
          const auto startSearch = std::chrono::system_clock::now();
+
          findTraces( input, strDb, threadInfos, lastSearch );
-
-         // // Draw the table
-         // ImGui::Columns( 2, "SearchResult" );  // 4-ways, with border
-         // ImGui::Separator();
-         // ImGui::Text( "Trace Name" );
-         // ImGui::NextColumn();
-         // ImGui::Text( "Duration" );
-         // ImGui::NextColumn();
-         // ImGui::Separator();
-
-         // char traceDuration[128] = {};
-         // static size_t selected = -1;
-         // for ( auto traceId : traceMatching )
-         // {
-         //    ImGui::Text( "%s", strDb.getString( ti.traces.fctNameIds[ traceId ] ) );
-         //    ImGui::NextColumn();
-         //    hop::formatMicrosDurationToDisplay(
-         //        ti.traces.deltas[ traceId ] * 0.001f,
-         //        traceDuration,
-         //        sizeof( traceDuration ) );
-         //    ImGui::Text( "%s", traceDuration );
-         //    ImGui::NextColumn();
-         // }
-         // ImGui::Columns( 1 );
 
          const auto endSearch = std::chrono::system_clock::now();
          hop::g_stats.searchTimeMs = std::chrono::duration< double, std::milli>( ( endSearch - startSearch ) ).count();
       }
-      drawSearchResult( lastSearch, strDb, threadInfos, microsToDisplay );
+      selection = drawSearchResult( lastSearch, strDb, threadInfos, microsToDisplay );
    }
    ImGui::End();
    ImGui::PopStyleColor();
 
-   return true;
+   return selection;
 }
 
 void hop::Profiler::draw()
@@ -574,7 +552,14 @@ void hop::Profiler::draw()
       }
 
       // Draw the search window
-      drawSearchWindow( _strDb, _tracesPerThread, _timeline.microsToDisplay() );
+      auto selection = drawSearchWindow( _strDb, _tracesPerThread, _timeline.microsToDisplay() );
+      if( selection.first != (size_t)-1 && selection.second != (uint32_t)-1 )
+      {
+         const TimeStamp absEndTime = _tracesPerThread[selection.second].traces.ends[selection.first];
+         const TimeStamp delta = _tracesPerThread[selection.second].traces.deltas[selection.first];
+         const TimeStamp startTime = absEndTime - delta - _timeline.absoluteStartTime();
+         _timeline.frameToTime( startTime / 1000, delta / 1000 );
+      }
    }
 
    ImGui::End();

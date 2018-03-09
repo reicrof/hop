@@ -36,6 +36,7 @@ class Timeline
    void moveToPresentTime( bool animate = true ) noexcept;
    // Move timeline so the specified time is in the middle
    void moveToTime( int64_t timeInMicro, bool animate = true ) noexcept;
+   void frameToTime( int64_t startInMicro, uint64_t deltaInMicro ) noexcept;
    // Update timeline to always display last race
    void setRealtime( bool isRealtime ) noexcept;
    bool realtime() const noexcept;

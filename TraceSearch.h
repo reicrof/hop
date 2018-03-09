@@ -17,7 +17,7 @@ namespace hop
    };
 
    void findTraces( const char* string, const StringDb& strDb, const std::vector< ThreadInfo >& threadInfos, SearchResult& result );
-   void drawSearchResult( const SearchResult& searchRes, const StringDb& strDb, const std::vector< ThreadInfo >& threadInfos, uint64_t totalMicrosInScreen );
+   std::pair< size_t, uint32_t > drawSearchResult( SearchResult& searchRes, const StringDb& strDb, const std::vector< ThreadInfo >& threadInfos, uint64_t totalMicrosInScreen );
 }
 
 #endif //TRACE_SEARCH_H_
