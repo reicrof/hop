@@ -38,6 +38,20 @@ static inline T pxlToMicros( double windowWidth, int64_t usToDisplay, int64_t px
    return static_cast<T>( usPerPxl * (double)pxl );
 }
 
+template< typename T = uint64_t >
+static inline T nanosToPxl( double windowWidth, uint64_t timelineRange, uint64_t ns )
+{
+   const double nsPerPxl = timelineRange / windowWidth;
+   return static_cast<T>( (double)ns / nsPerPxl );
+}
+
+template< typename T = uint64_t >
+static inline T pxlToNanos( double windowWidth, uint64_t timelineRange, double pxl )
+{
+   const double nsPerPxl = timelineRange / windowWidth;
+   return static_cast<T>( nsPerPxl * pxl );
+}
+
 inline void formatMicrosDurationToDisplay( int64_t usToDisplay, char* str, size_t strSize )
 {
    if ( usToDisplay < 1000 )

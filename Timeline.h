@@ -36,7 +36,7 @@ class Timeline
    void moveToPresentTime( bool animate = true ) noexcept;
    // Move timeline so the specified time is in the middle
    void moveToTime( int64_t timeInMicro, bool animate = true ) noexcept;
-   void frameToTime( int64_t startInMicro, uint64_t deltaInMicro ) noexcept;
+   void frameToTime( TimeStamp startInMicro, TimeDuration deltaInMicro ) noexcept;
    // Update timeline to always display last race
    void setRealtime( bool isRealtime ) noexcept;
    bool realtime() const noexcept;
@@ -49,13 +49,13 @@ class Timeline
    void handleMouseWheel( float mousePosX, float mousePosY );
    void zoomOn( int64_t microToZoomOn, float zoomFactor );
    void selectTrace( const ThreadInfo& data, uint32_t threadIndex, size_t traceIndex );
-   void setStartMicro( int64_t timeInMicro, bool withAnimation = true ) noexcept;
-   void setZoom( uint64_t microsToDisplay, bool withAnimation = true );
+   void setStartTime( int64_t timeInMicro, bool withAnimation = true ) noexcept;
+   void setZoom( TimeDuration microsToDisplay, bool withAnimation = true );
    void highlightLockOwner(const std::vector<ThreadInfo>& infos, size_t threadIndex, const hop::LockWait& highlightedLockWait, const float posX, const float posY );
 
-   int64_t _startMicros{0};
-   uint64_t _microsToDisplay{50000};
-   int64_t _stepSizeInMicros{1000};
+   int64_t _timelineStart{0};
+   TimeDuration _timelineRange{50000000};
+   uint64_t _stepSizeInNanos{1000000};
    TimeStamp _absoluteStartTime{};
    TimeStamp _absolutePresentTime{};
    float _rightClickStartPosInCanvas[2] = {};
@@ -73,8 +73,8 @@ class Timeline
 
    struct AnimationState
    {
-      int64_t targetStartMicros{0};
-      uint64_t targetMicrosToDisplay{50000};
+      int64_t targetTimelineStart{0};
+      uint64_t targetTimelineRange{50000000};
    } _animationState;
 
    TraceDetails _traceDetails{};

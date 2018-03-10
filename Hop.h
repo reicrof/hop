@@ -141,6 +141,7 @@ inline decltype( std::chrono::duration_cast<Precision>( Clock::now().time_since_
    return std::chrono::duration_cast<Precision>( Clock::now().time_since_epoch() ).count();
 }
 using TimeStamp = decltype( getTimeStamp() );
+using TimeDuration = uint64_t;
 
 enum class MsgType : uint32_t
 {

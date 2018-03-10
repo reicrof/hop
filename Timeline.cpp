@@ -10,8 +10,8 @@
 
 static constexpr float TRACE_HEIGHT = 20.0f;
 static constexpr float TRACE_VERTICAL_PADDING = 2.0f;
-static constexpr uint64_t MIN_MICROS_TO_DISPLAY = 100;
-static constexpr uint64_t MAX_MICROS_TO_DISPLAY = 900000000;
+static constexpr hop::TimeDuration MIN_NANOS_TO_DISPLAY = 100;
+static constexpr hop::TimeDuration MAX_NANOS_TO_DISPLAY = 900000000000;
 static constexpr float MIN_TRACE_LENGTH_PXL = 0.1f;
 
 static void drawHoveringTimelineLine(float posInScreenX, float timelineStartPosY, const char* text )
@@ -35,24 +35,24 @@ namespace hop
 
 void Timeline::update( float deltaTimeMs ) noexcept
 {
-   if( _startMicros != _animationState.targetStartMicros )
+   if( _timelineStart != _animationState.targetTimelineStart )
    {
-      int64_t delta = _animationState.targetStartMicros - _startMicros;
+      int64_t delta = _animationState.targetTimelineStart - _timelineStart;
       if( std::abs( delta ) < 3 )
       {
-         _startMicros = _animationState.targetStartMicros;
+         _timelineStart = _animationState.targetTimelineStart;
       }
-      _startMicros += delta * deltaTimeMs * 0.01f;
+      _timelineStart += delta * deltaTimeMs * 0.01f;
    }
 
-   if( _microsToDisplay != _animationState.targetMicrosToDisplay )
+   if( _timelineRange != _animationState.targetTimelineRange )
    {
-      int64_t delta = _animationState.targetMicrosToDisplay - _microsToDisplay;
+      int64_t delta = _animationState.targetTimelineRange - _timelineRange;
       if( std::abs( delta ) < 3 )
       {
-         _microsToDisplay = _animationState.targetMicrosToDisplay;
+         _timelineRange = _animationState.targetTimelineRange;
       }
-      _microsToDisplay += delta * deltaTimeMs * 0.01f;
+      _timelineRange += delta * deltaTimeMs * 0.01f;
    }
 }
 
@@ -96,8 +96,8 @@ void Timeline::draw(
    if (_timelineHoverPos > 0.0f)
    {
       static char text[32] = {};
-      const int64_t hoveredMicro = _startMicros + pxlToMicros(ImGui::GetWindowWidth(), _microsToDisplay, _timelineHoverPos - startDrawPos.x);
-      hop::formatMicrosTimepointToDisplay(hoveredMicro, _microsToDisplay, text, sizeof(text));
+      const int64_t hoveredMicro = _timelineStart + pxlToNanos(ImGui::GetWindowWidth(), _timelineRange, _timelineHoverPos - startDrawPos.x);
+      hop::formatMicrosTimepointToDisplay(hoveredMicro, _timelineRange, text, sizeof(text));
       drawHoveringTimelineLine(_timelineHoverPos, startDrawPos.y, text);
    }
 
@@ -117,7 +117,7 @@ void Timeline::draw(
 void Timeline::drawTimeline( const float posX, const float posY )
 {
    constexpr float TIMELINE_TOTAL_HEIGHT = 50.0f;
-   constexpr int64_t minStepSize = 10;
+   constexpr uint64_t minStepSize = 10;
    constexpr float minStepCount = 20.0f;
    constexpr float maxStepCount = 140.0f;
 
@@ -126,24 +126,24 @@ void Timeline::drawTimeline( const float posX, const float posY )
    ImGui::BeginChild("Timeline", ImVec2( windowWidthPxl, TIMELINE_TOTAL_HEIGHT) );
 
    const size_t stepsCount = [=]() {
-      float stepsCount = _microsToDisplay / (double)_stepSizeInMicros;
+      float stepsCount = _timelineRange / (double)_stepSizeInNanos;
       while ( stepsCount > maxStepCount ||
-              ( stepsCount < minStepCount && _stepSizeInMicros > minStepSize ) )
+              ( stepsCount < minStepCount && _stepSizeInNanos > minStepSize ) )
       {
          if ( stepsCount > maxStepCount )
          {
-            if ( _stepSizeInMicros == minStepSize )
+            if ( _stepSizeInNanos == minStepSize )
             {
-               _stepSizeInMicros = 8000;
+               _stepSizeInNanos = 8000;
             }
-            _stepSizeInMicros *= 5.0f;
+            _stepSizeInNanos *= 5.0f;
          }
          else if ( stepsCount < minStepCount )
          {
-            _stepSizeInMicros /= 5.0f;
-            _stepSizeInMicros = std::max( _stepSizeInMicros, minStepSize );
+            _stepSizeInNanos /= 5.0f;
+            _stepSizeInNanos = std::max( _stepSizeInNanos, minStepSize );
          }
-         stepsCount = _microsToDisplay / _stepSizeInMicros;
+         stepsCount = _timelineRange / _stepSizeInNanos;
       }
       return stepsCount;
    }();
@@ -161,11 +161,11 @@ void Timeline::drawTimeline( const float posX, const float posY )
    constexpr float deltaBigLineLength = 12.0f;  // The diff between the small line and big one
    constexpr float deltaMidLineLength = 7.0f;   // The diff between the small line and mid one
 
-   const float stepSizePxl = microsToPxl<float>( windowWidthPxl, _microsToDisplay, _stepSizeInMicros );
-   const int64_t stepsDone = _startMicros / _stepSizeInMicros;
-   const int64_t remainder = _startMicros % _stepSizeInMicros;
+   const float stepSizePxl = nanosToPxl<float>( windowWidthPxl, _timelineRange, _stepSizeInNanos );
+   const int64_t stepsDone = _timelineStart / _stepSizeInNanos;
+   const int64_t remainder = _timelineStart % _stepSizeInNanos;
    int remainderPxl = 0;
-   if ( remainder != 0 ) remainderPxl = microsToPxl( windowWidthPxl, _microsToDisplay, remainder );
+   if ( remainder != 0 ) remainderPxl = nanosToPxl( windowWidthPxl, _timelineRange, remainder );
 
    // Start drawing one step before the start position to account for partial steps
    ImVec2 top( posX, posY );
@@ -173,8 +173,8 @@ void Timeline::drawTimeline( const float posX, const float posY )
    ImVec2 bottom = top;
    bottom.y += smallLineLength;
 
-   int count = stepsDone;
-   std::vector<std::pair<ImVec2, double> > textPos;
+   int64_t count = stepsDone;
+   std::vector<std::pair<ImVec2, int64_t> > textPos;
    const auto maxPosX = posX + windowWidthPxl;
    for ( double i = top.x; i < maxPosX; i += stepSizePxl, ++count )
    {
@@ -185,7 +185,7 @@ void Timeline::drawTimeline( const float posX, const float posY )
          startEndLine.y += deltaBigLineLength;
          DrawList->AddLine( top, startEndLine, ImGui::GetColorU32( ImGuiCol_TextDisabled ), 3.0f );
          textPos.emplace_back(
-             ImVec2( startEndLine.x, startEndLine.y + 5.0f ), count * _stepSizeInMicros );
+             ImVec2( startEndLine.x, startEndLine.y + 5.0f ), count * _stepSizeInNanos );
       }
       // Draw midline
       else if ( count % 5 == 0 )
@@ -209,32 +209,41 @@ void Timeline::drawTimeline( const float posX, const float posY )
        ImVec2( posX + windowWidthPxl, posY ),
        ImGui::GetColorU32( ImGuiCol_Border ) );
 
-   const int64_t total = stepsCount * _stepSizeInMicros;
+   const int64_t total = stepsCount * _stepSizeInNanos;
    if ( total < 1000 )
+   {
+      // print as nanoseconds
+      for ( const auto& pos : textPos )
+      {
+         ImGui::SetCursorScreenPos( pos.first );
+         ImGui::Text( "%ld ns", pos.second );
+      }
+   }
+   else if ( total < 1000000 )
    {
       // print as microsecs
       for ( const auto& pos : textPos )
       {
          ImGui::SetCursorScreenPos( pos.first );
-         ImGui::Text( "%d us", (int)pos.second );
+         ImGui::Text( "%.3f us", (double)( pos.second ) / 1000.0f );
       }
    }
-   else if ( total < 1000000 )
+   else if ( total < 1000000000 )
    {
       // print as milliseconds
       for ( const auto& pos : textPos )
       {
          ImGui::SetCursorScreenPos( pos.first );
-         ImGui::Text( "%.3f ms", (float)( pos.second ) / 1000.0f );
+         ImGui::Text( "%.3f ms", (double)( pos.second ) / 1000000.0f );
       }
    }
-   else if ( total < 1000000000 )
+   else if ( total < 1000000000000 )
    {
       // print as seconds
       for ( const auto& pos : textPos )
       {
          ImGui::SetCursorScreenPos( pos.first );
-         ImGui::Text( "%.3f s", (float)( pos.second ) / 1000000.0f );
+         ImGui::Text( "%.3f s", (double)( pos.second ) / 1000000000.0f );
       }
    }
 
@@ -259,11 +268,11 @@ void Timeline::handleMouseWheel( float mousePosX, float )
    ImGuiIO& io = ImGui::GetIO();
    if ( io.MouseWheel > 0 )
    {
-      zoomOn( pxlToMicros( windowWidthPxl, _microsToDisplay, mousePosX ) + _startMicros, 0.9f );
+      zoomOn( pxlToMicros( windowWidthPxl, _timelineRange, mousePosX ) + _timelineStart, 0.9f );
    }
    else if ( io.MouseWheel < 0 )
    {
-      zoomOn( pxlToMicros( windowWidthPxl, _microsToDisplay, mousePosX ) + _startMicros, 1.1f );
+      zoomOn( pxlToMicros( windowWidthPxl, _timelineRange, mousePosX ) + _timelineStart, 1.1f );
    }
 }
 
@@ -274,9 +283,9 @@ void Timeline::handleMouseDrag( float mouseInCanvasX, float mouseInCanvasY )
    {
       const float windowWidthPxl = ImGui::GetWindowWidth();
       const auto delta = ImGui::GetMouseDragDelta();
-      const int64_t deltaXInMicros =
-          pxlToMicros<int64_t>( windowWidthPxl, _microsToDisplay, delta.x );
-      setStartMicro( _startMicros - deltaXInMicros, false );
+      const int64_t deltaXInNanos =
+          pxlToNanos<int64_t>( windowWidthPxl, _timelineRange, delta.x );
+      setStartTime( _timelineStart - deltaXInNanos, false );
 
       // Switch to the traces context to modify the scroll
       ImGui::BeginChild( "TimelineCanvas" );
@@ -313,10 +322,10 @@ void Timeline::handleMouseDrag( float mouseInCanvasX, float mouseInCanvasY )
       const float minX = std::min( _rightClickStartPosInCanvas[0], mouseInCanvasX );
       const float maxX = std::max( _rightClickStartPosInCanvas[0], mouseInCanvasX );
       const float windowWidthPxl = ImGui::GetWindowWidth();
-      const int64_t minXinMicros =
-        pxlToMicros<int64_t>( windowWidthPxl, _microsToDisplay, minX );
-      setStartMicro( _startMicros + minXinMicros );
-      setZoom( pxlToMicros<uint64_t>( windowWidthPxl, _microsToDisplay, maxX - minX ) );
+      const int64_t minXinNanos =
+        pxlToNanos<int64_t>( windowWidthPxl, _timelineRange, minX );
+      setStartTime( _timelineStart + minXinNanos );
+      setZoom( pxlToNanos<TimeDuration>( windowWidthPxl, _timelineRange, maxX - minX ) );
 
       // Reset position
       _rightClickStartPosInCanvas[0] = _rightClickStartPosInCanvas[1] = 0.0f;
@@ -347,7 +356,7 @@ void Timeline::setAbsolutePresentTime( TimeStamp time ) noexcept
    _absolutePresentTime = time;
 }
 
-int64_t Timeline::microsToDisplay() const noexcept { return _microsToDisplay; }
+int64_t Timeline::microsToDisplay() const noexcept { return _timelineRange; }
 
 const TraceDetails& Timeline::getTraceDetails() const noexcept
 {
@@ -364,57 +373,57 @@ void Timeline::setTraceDetailsDisplayed()
     _traceDetails.shouldFocusWindow = false;
 }
 
-void Timeline::setStartMicro( int64_t timeInMicro, bool withAnimation /*= true*/ ) noexcept
+void Timeline::setStartTime( int64_t time, bool withAnimation /*= true*/ ) noexcept
 {
-   _animationState.targetStartMicros = timeInMicro;
+   _animationState.targetTimelineStart = time;
    if( !withAnimation )
-      _startMicros = timeInMicro;
+      _timelineStart = time;
 }
 
-void Timeline::moveToTime( int64_t timeInMicro, bool animate ) noexcept
+void Timeline::moveToTime( TimeStamp time, bool animate ) noexcept
 {
-   setStartMicro( timeInMicro - ( _microsToDisplay * 0.5 ), animate );
+   setStartTime( time - ( _timelineRange * 0.5 ), animate );
 }
 
 void Timeline::moveToStart( bool animate ) noexcept
 {
-   moveToTime( _microsToDisplay * 0.5f, animate );
+   moveToTime( _timelineRange * 0.5f, animate );
    setRealtime( false );
 }
 
 void Timeline::moveToPresentTime( bool animate ) noexcept
 {
-   moveToTime( ( _absolutePresentTime - _absoluteStartTime ) / 1000, animate );
+   moveToTime( ( _absolutePresentTime - _absoluteStartTime ), animate );
 }
 
-void Timeline::frameToTime( int64_t startInMicro, uint64_t deltaInMicro ) noexcept
+void Timeline::frameToTime( TimeStamp time, TimeDuration duration ) noexcept
 {
-   setStartMicro( startInMicro );
-   setZoom( deltaInMicro );
+   setStartTime( time );
+   setZoom( duration );
 }
 
-void Timeline::setZoom( uint64_t microsToDisplay, bool withAnimation /*= true*/ )
+void Timeline::setZoom( TimeDuration timelineDuration, bool withAnimation /*= true*/ )
 {
-   _animationState.targetMicrosToDisplay = hop::clamp( microsToDisplay, MIN_MICROS_TO_DISPLAY, MAX_MICROS_TO_DISPLAY );
+   _animationState.targetTimelineRange = hop::clamp( timelineDuration, MIN_NANOS_TO_DISPLAY, MAX_NANOS_TO_DISPLAY );
    if( !withAnimation )
-      _microsToDisplay = _animationState.targetMicrosToDisplay;
+      _timelineRange = _animationState.targetTimelineRange;
 }
 
-void Timeline::zoomOn( int64_t microToZoomOn, float zoomFactor )
+void Timeline::zoomOn( int64_t nanoToZoomOn, float zoomFactor )
 {
    const float windowWidthPxl = ImGui::GetWindowWidth();
-   const size_t microToZoom = microToZoomOn - _startMicros;
-   const auto prevMicrosToDisplay = _microsToDisplay;
-   setZoom( _microsToDisplay * zoomFactor, false );
+   const int64_t nanoToZoom = nanoToZoomOn - _timelineStart;
+   const auto prevTimelineRange = _timelineRange;
+   setZoom( _timelineRange * zoomFactor, false );
 
-   const int64_t prevPxlPos = microsToPxl( windowWidthPxl, prevMicrosToDisplay, microToZoom );
-   const int64_t newPxlPos = microsToPxl( windowWidthPxl, _microsToDisplay, microToZoom );
+   const int64_t prevPxlPos = nanosToPxl( windowWidthPxl, prevTimelineRange, nanoToZoom );
+   const int64_t newPxlPos = nanosToPxl( windowWidthPxl, _timelineRange, nanoToZoom );
 
    const int64_t pxlDiff = newPxlPos - prevPxlPos;
    if ( pxlDiff != 0 )
    {
-      const int64_t timeDiff = pxlToMicros( windowWidthPxl, _microsToDisplay, pxlDiff );
-      setStartMicro( _startMicros + timeDiff, false );
+      const int64_t timeDiff = pxlToNanos( windowWidthPxl, _timelineRange, pxlDiff );
+      setStartTime( _timelineStart + timeDiff, false );
    }
 }
 
@@ -446,10 +455,10 @@ void Timeline::drawTraces(
 
    // Find the best lodLevel for our current zoom
    const int lodLevel = [this]() {
-      if ( _microsToDisplay < LOD_MICROS[0] / 2 ) return -1;
+      if ( _timelineRange < LOD_NANOS[0] / 2 ) return -1;
 
       int lodLevel = 0;
-      while ( lodLevel < LOD_COUNT - 1 && _microsToDisplay > LOD_MICROS[lodLevel] )
+      while ( lodLevel < LOD_COUNT - 1 && _timelineRange > LOD_NANOS[lodLevel] )
       {
          ++lodLevel;
       }
@@ -459,8 +468,8 @@ void Timeline::drawTraces(
    g_stats.currentLOD = lodLevel;
 
    // The time range to draw in absolute time
-   const TimeStamp firstTraceAbsoluteTime = absoluteStart + ( _startMicros * 1000 );
-   const TimeStamp lastTraceAbsoluteTime = firstTraceAbsoluteTime + ( _microsToDisplay * 1000 );
+   const TimeStamp firstTraceAbsoluteTime = absoluteStart + _timelineStart;
+   const TimeStamp lastTraceAbsoluteTime = firstTraceAbsoluteTime + _timelineRange;
 
    // If we do not use LOD, draw the traces normally.
    if ( lodLevel == -1 )
@@ -493,11 +502,11 @@ void Timeline::drawTraces(
 
       for ( size_t i = firstTraceId; i < lastTraceId; ++i )
       {
-         const int64_t traceEndInMicros = ( data.traces.ends[i] - absoluteStart ) / 1000;
-         const auto traceEndPxl = microsToPxl<float>(
-             windowWidthPxl, _microsToDisplay, traceEndInMicros - _startMicros );
+         const TimeStamp traceEndTime = ( data.traces.ends[i] - absoluteStart );
+         const auto traceEndPxl = nanosToPxl<float>(
+             windowWidthPxl, _timelineRange, traceEndTime - _timelineStart );
          const float traceLengthPxl =
-             microsToPxl<float>( windowWidthPxl, _microsToDisplay, data.traces.deltas[i] / 1000 );
+             microsToPxl<float>( windowWidthPxl, _timelineRange, data.traces.deltas[i] );
          const float traceTimeMs = data.traces.deltas[i] / 1000000.0f;
 
          // Skip trace if it is way smaller than treshold
@@ -548,11 +557,11 @@ void Timeline::drawTraces(
       for ( size_t i = firstTraceId; i < lastTraceId; ++i )
       {
          const auto& t = lods[i];
-         const int64_t traceEndInMicros = ( t.end - absoluteStart ) / 1000;
-         const auto traceEndPxl = microsToPxl<float>(
-             windowWidthPxl, _microsToDisplay, traceEndInMicros - _startMicros );
+         const TimeStamp traceEndTime = ( t.end - absoluteStart );
+         const auto traceEndPxl = nanosToPxl<float>(
+             windowWidthPxl, _timelineRange, traceEndTime - _timelineStart );
          const float traceLengthPxl =
-             microsToPxl<float>( windowWidthPxl, _microsToDisplay, t.delta / 1000 );
+             nanosToPxl<float>( windowWidthPxl, _timelineRange, t.delta );
          const float traceTimeMs = t.delta / 1000000.0f;
 
          // Skip trace if it is way smaller than treshold
@@ -585,9 +594,6 @@ void Timeline::drawTraces(
 
    // Draw the loded traces
    char curName[512] = {};
-   const char* menuAction = NULL;
-   const char* const menuSaveAsJason = "Save as JSON";
-   const char* const menuHelp = "Help";
    for ( const auto& t : lodTracesToDraw )
    {
       ImGui::SetCursorScreenPos( t.posPxl );
@@ -606,17 +612,17 @@ void Timeline::drawTraces(
 
          if ( leftMouseDblClicked )
          {
-            const auto traceEndMicros =
-                pxlToMicros( windowWidthPxl, _microsToDisplay, t.posPxl.x - posX + t.lengthPxl );
-            const auto deltaUs = ( t.deltaMs * 1000 );
-            frameToTime( _startMicros + ( traceEndMicros - deltaUs ), deltaUs );
+            const TimeStamp traceEndTime =
+                pxlToMicros( windowWidthPxl, _timelineRange, t.posPxl.x - posX + t.lengthPxl );
+            const auto deltaNs = ( t.deltaMs * 1000000 );
+            frameToTime( _timelineStart + ( traceEndTime - deltaNs ), deltaNs );
          }
          else if( leftMouseClicked )
          {
             // Find the non-loded trace that is the closest to the cursor and at the right depth
             const auto& mousePos = ImGui::GetMousePos();
             const TimeStamp mouseInAbsoluteTime =
-               firstTraceAbsoluteTime + pxlToMicros( windowWidthPxl, _microsToDisplay, mousePos.x - posX ) * 1000;
+               firstTraceAbsoluteTime + pxlToNanos( windowWidthPxl, _timelineRange, mousePos.x - posX );
             const auto it = std::lower_bound(
                data.traces.ends.begin(), data.traces.ends.end(), mouseInAbsoluteTime );
             const int depth = (t.posPxl.y - posY) / ( TRACE_HEIGHT + TRACE_VERTICAL_PADDING );
@@ -667,10 +673,9 @@ void Timeline::drawTraces(
 
          if ( leftMouseDblClicked )
          {
-            setZoom( t.deltaMs * 1000 );
-            setStartMicro(
-                ( data.traces.ends[traceIndex] - data.traces.deltas[traceIndex] - absoluteStart ) *
-                0.001 );
+            setZoom( t.deltaMs * 1000000 );
+            setStartTime(
+                ( data.traces.ends[traceIndex] - data.traces.deltas[traceIndex] - absoluteStart ) );
          }
          else if( leftMouseClicked )
          {
@@ -701,7 +706,7 @@ void Timeline::highlightLockOwner(
     size_t threadIndex,
     const hop::LockWait& highlightedLockWait,
     const float posX,
-    const float posY )
+    const float /*posY*/ )
 {
     struct unlock_events_less_cmp
     {
@@ -743,7 +748,7 @@ void Timeline::highlightLockOwner(
         --last;
 
         const float startMicrosAsPxl =
-            microsToPxl<float>( windowWidthPxl, _microsToDisplay, _startMicros );
+            microsToPxl<float>( windowWidthPxl, _timelineRange, _timelineStart );
 
         while( last != infos[i]._unlockEvents.cbegin() )
         {
@@ -772,10 +777,10 @@ void Timeline::highlightLockOwner(
 
                const int64_t lockTimeAsPxl = microsToPxl<float>(
                    windowWidthPxl,
-                   _microsToDisplay,
+                   _timelineRange,
                    ( ( lockWaitIt->end - absoluteStart ) / 1000 ) );
                const int64_t unlockTimeAsPxl = microsToPxl<float>(
-                   windowWidthPxl, _microsToDisplay, ( ( last->time - absoluteStart ) / 1000 ) );
+                   windowWidthPxl, _timelineRange, ( ( last->time - absoluteStart ) / 1000 ) );
 
                DrawList->AddRectFilled(
                    ImVec2( posX - startMicrosAsPxl + lockTimeAsPxl, 0 ),
@@ -804,11 +809,11 @@ void Timeline::drawLockWaits(
    const auto absoluteStart = _absoluteStartTime;
    const float windowWidthPxl = ImGui::GetWindowWidth();
    const int64_t startMicrosAsPxl =
-       microsToPxl<int64_t>( windowWidthPxl, _microsToDisplay, _startMicros );
+       microsToPxl<int64_t>( windowWidthPxl, _timelineRange, _timelineStart );
 
    // The time range to draw in absolute time
-   const TimeStamp firstTraceAbsoluteTime = absoluteStart + ( _startMicros * 1000 );
-   const TimeStamp lastTraceAbsoluteTime = firstTraceAbsoluteTime + ( _microsToDisplay * 1000 );
+   const TimeStamp firstTraceAbsoluteTime = absoluteStart + ( _timelineStart * 1000 );
+   const TimeStamp lastTraceAbsoluteTime = firstTraceAbsoluteTime + ( _timelineRange * 1000 );
 
    ImGui::PushStyleColor( ImGuiCol_Button, ImColor( 0.8f, 0.0f, 0.0f ) );
    ImGui::PushStyleColor( ImGuiCol_ButtonHovered, ImColor( 0.9f, 0.0f, 0.0f ) );
@@ -820,9 +825,9 @@ void Timeline::drawLockWaits(
          const int64_t startInMicros = ( ( lw.start - absoluteStart ) / 1000 );
 
          const auto startPxl =
-             microsToPxl<float>( windowWidthPxl, _microsToDisplay, startInMicros );
+             microsToPxl<float>( windowWidthPxl, _timelineRange, startInMicros );
          const float lengthPxl = microsToPxl<float>(
-             windowWidthPxl, _microsToDisplay, ( lw.end - lw.start ) / 1000.0f );
+             windowWidthPxl, _timelineRange, ( lw.end - lw.start ) / 1000.0f );
 
          // Skip if it is way smaller than treshold
          if ( lengthPxl < MIN_TRACE_LENGTH_PXL ) continue;
