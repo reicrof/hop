@@ -1,3 +1,33 @@
+/*
+                  /NN\
+                  :NN:
+               ..-+NN+-..
+          ./mmmNNNNNNNNNmmmm\.
+       .mmNNNNNNNNNNNNNNNNNNNmm.
+     .nNNNNNNNNNNNNNNNNNNNNNNNNNNn.
+   .nmNNNNNNNNNNNNNNNNNNNNNNNNNNNNmn.
+  .nNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNn.
+  .oydmmdhs+:`+NNNNNNNNNNh.-+shdmmdy+.
+     .////shmd.-dNNNNNNN+.dmhs+/:/.
+    `dNdmdNNdmo `+mdNhs` ommdNNNdmd`
+    sNmdmmdmds`ss--sh--hs`ommNNNNNdo
+    dNmNNNmd:.yNNmy--ymmNd.:hNNNmmmm
+    dNNNds:-/`yNNNNmmNNNNh`/-:sdNNNd
+    -:-./ohmms`omNNNNNNmo`smmho/.-:-
+       .mNNNNmh-:hNNNNh:-hmNNNNm.
+       `mmmmmmmd `+dd+` dmmmmmmm`
+        smmmmmd--d+--+d--dmmmmms
+        `hmmms-/dmmddmmd/-smmmh`
+         `o+. ommmmmmmmmmo .+o`
+              .ymmmmmmmmy.
+               `smmmmmms`
+                 \dmmd/
+                  -yy-
+                   ``
+           | || |/ _ \| _ \
+           | __ | (_) |  _/
+           |_||_|\___/|_|
+*/
 #ifndef HOP_H_
 #define HOP_H_
 
