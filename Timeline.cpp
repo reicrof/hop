@@ -103,12 +103,16 @@ void Timeline::draw(
 
    ImGui::EndChild(); // TimelineCanvas
 
-   if ( ImGui::IsItemHoveredRect() && ImGui::IsRootWindowOrAnyChildFocused() )
+   if ( ImGui::IsItemHoveredRect() )
    {
       ImVec2 mousePosInCanvas = ImVec2(
           ImGui::GetIO().MousePos.x - startDrawPos.x, ImGui::GetIO().MousePos.y - startDrawPos.y );
-      handleMouseDrag( mousePosInCanvas.x, mousePosInCanvas.y );
-      handleMouseWheel( mousePosInCanvas.x, mousePosInCanvas.y );
+
+      if( ImGui::IsRootWindowOrAnyChildHovered() )
+         handleMouseWheel( mousePosInCanvas.x, mousePosInCanvas.y );
+
+      if( ImGui::IsRootWindowOrAnyChildFocused() )
+         handleMouseDrag( mousePosInCanvas.x, mousePosInCanvas.y );
    }
 
    ImGui::EndChild(); // TimelineAndCanvas
