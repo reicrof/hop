@@ -118,30 +118,25 @@ void Timeline::drawTimeline( const float posX, const float posY )
 {
    constexpr float TIMELINE_TOTAL_HEIGHT = 50.0f;
    constexpr uint64_t minStepSize = 10;
-   constexpr float minStepCount = 20.0f;
-   constexpr float maxStepCount = 140.0f;
+   constexpr uint64_t minStepCount = 20;
+   constexpr uint64_t maxStepCount = 140;
 
    const float windowWidthPxl = ImGui::GetWindowWidth();
 
    ImGui::BeginChild("Timeline", ImVec2( windowWidthPxl, TIMELINE_TOTAL_HEIGHT) );
 
-   const size_t stepsCount = [=]() {
-      float stepsCount = _timelineRange / (double)_stepSizeInNanos;
+   const uint64_t stepsCount = [=]() {
+      uint64_t stepsCount = _timelineRange / _stepSizeInNanos;
       while ( stepsCount > maxStepCount ||
               ( stepsCount < minStepCount && _stepSizeInNanos > minStepSize ) )
       {
          if ( stepsCount > maxStepCount )
          {
-            if ( _stepSizeInNanos == minStepSize )
-            {
-               _stepSizeInNanos = 8000;
-            }
-            _stepSizeInNanos *= 5.0f;
+            _stepSizeInNanos *= 5;
          }
          else if ( stepsCount < minStepCount )
          {
-            _stepSizeInNanos /= 5.0f;
-            _stepSizeInNanos = std::max( _stepSizeInNanos, minStepSize );
+            _stepSizeInNanos = std::max( _stepSizeInNanos / 5, minStepSize );
          }
          stepsCount = _timelineRange / _stepSizeInNanos;
       }

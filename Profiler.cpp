@@ -307,13 +307,25 @@ void Profiler::addTraces( const DisplayableTraces& traces, uint32_t threadIndex 
          _tracesPerThread.resize( threadIndex + 1 );
       }
 
-      const auto startTime = _timeline.absoluteStartTime();
-      if( startTime == 0 || (traces.ends[0] - traces.deltas[0]) < startTime )
-        _timeline.setAbsoluteStartTime( (traces.ends[0] - traces.deltas[0]) );
-
-      const auto presentTime = _timeline.absolutePresentTime();
-      if( presentTime == 0 || traces.ends.back() > presentTime )
+     // Update the current time
+      if( traces.ends.back() > _timeline.absolutePresentTime() )
         _timeline.setAbsolutePresentTime( traces.ends.back() );
+
+     // If this is the first traces received from the thread, update the
+      // start time as it may be earlier.
+      if( _tracesPerThread[threadIndex].traces.ends.empty() )
+      {
+         // Find the earliest trace
+         TimeStamp earliestTime = traces.ends[0] - traces.deltas[0];
+         for( size_t i = 1; i < traces.ends.size(); ++i )
+         {
+            earliestTime = std::min( earliestTime, traces.ends[i] - traces.deltas[i] );
+         }
+         // Set the timeline absolute start time to this new value
+         const auto startTime = _timeline.absoluteStartTime();
+         if( startTime == 0 || earliestTime < startTime )
+            _timeline.setAbsoluteStartTime( earliestTime );
+      }
 
       _tracesPerThread[threadIndex].addTraces( traces );
    }

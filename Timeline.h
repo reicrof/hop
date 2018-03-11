@@ -56,8 +56,8 @@ class Timeline
    int64_t _timelineStart{0};
    TimeDuration _timelineRange{50000000};
    uint64_t _stepSizeInNanos{1000000};
-   TimeStamp _absoluteStartTime{};
-   TimeStamp _absolutePresentTime{};
+   TimeStamp _absoluteStartTime{0};
+   TimeStamp _absolutePresentTime{0};
    float _rightClickStartPosInCanvas[2] = {};
    float _timelineHoverPos{-1.0f};
    TDepth_t _maxTraceDepthPerThread[HOP_MAX_THREAD_NB] = {};
