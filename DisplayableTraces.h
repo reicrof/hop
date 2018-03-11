@@ -25,7 +25,7 @@ struct DisplayableTraces
    void clear();
 
    std::vector< TimeStamp > ends; // in ns
-   std::vector< TimeStamp > deltas; // in ns
+   std::vector< TimeDuration > deltas; // in ns
 
    //Indexes of the name in the string database
    std::vector< TStrPtr_t > fileNameIds;

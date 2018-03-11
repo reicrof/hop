@@ -12,7 +12,7 @@ int pthread_mutex_lock( pthread_mutex_t* mutex ) noexcept
       real_pthread_mutex_lock =
           (int ( * )( pthread_mutex_t* ))dlsym( RTLD_NEXT, "pthread_mutex_lock" );
 
-   hop::LockWaitGuard lwGuard( mutex );
+   HOP_PROF_MUTEX_LOCK( mutex );
 
    return real_pthread_mutex_lock( mutex );
 }
@@ -23,7 +23,7 @@ int pthread_mutex_unlock( pthread_mutex_t* mutex ) noexcept
       real_pthread_mutex_unlock =
           (int ( * )( pthread_mutex_t* ))dlsym( RTLD_NEXT, "pthread_mutex_unlock" );
 
-   hop::LockWaitGuard lwGuard( mutex );
+   HOP_PROF_MUTEX_UNLOCK( mutex );
 
    return real_pthread_mutex_unlock( mutex );
 }

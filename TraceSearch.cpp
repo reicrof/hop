@@ -161,7 +161,7 @@ std::pair< size_t, uint32_t > drawSearchResult( SearchResult& searchRes, const T
 
    static size_t selected = -1;
    const TimeStamp absoluteStartTime = timeline.absoluteStartTime();
-   const auto totalMicrosInScreen = timeline.microsToDisplay();
+   const TimeDuration timelineRange = timeline.timelineRange();
    char traceTime[64] = {};
    char traceDuration[64] = {};
    bool selectedSomething = false;
@@ -173,9 +173,9 @@ std::pair< size_t, uint32_t > drawSearchResult( SearchResult& searchRes, const T
        const size_t traceId = traceIdThreadId.first;
        const TimeStamp delta = ti.traces.deltas[ traceId ];
 
-       hop::formatMicrosTimepointToDisplay(
-           (ti.traces.ends[ traceId ] - delta - absoluteStartTime) * 0.001f,
-           totalMicrosInScreen,
+       hop::formatNanosTimepointToDisplay(
+           ti.traces.ends[ traceId ] - delta - absoluteStartTime,
+           timelineRange,
            traceTime,
            sizeof( traceTime ) );
        if ( ImGui::Selectable( traceTime, selected == i, ImGuiSelectableFlags_SpanAllColumns ) )
@@ -186,8 +186,8 @@ std::pair< size_t, uint32_t > drawSearchResult( SearchResult& searchRes, const T
        ImGui::NextColumn();
        ImGui::Text( "%s", strDb.getString( ti.traces.fctNameIds[ traceId ] ) );
        ImGui::NextColumn();
-       hop::formatMicrosDurationToDisplay(
-           delta * 0.001f,
+       hop::formatNanosDurationToDisplay(
+           delta,
            traceDuration,
            sizeof( traceDuration ) );
        ImGui::Text( "%s", traceDuration );

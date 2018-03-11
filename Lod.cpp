@@ -8,12 +8,12 @@
 
 static bool canBeLoded(
     int lodLevel,
-    hop::TimeStamp timeBetweenTrace,
-    hop::TimeStamp lastTraceDelta,
-    hop::TimeStamp newTraceDelta )
+    hop::TimeDuration timeBetweenTrace,
+    hop::TimeDuration lastTraceDelta,
+    hop::TimeDuration newTraceDelta )
 {
-   const auto minTraceSize = hop::LOD_MIN_SIZE_NANOS[lodLevel];
-   const auto maxTimeBetweenTrace = minTraceSize;
+   const hop::TimeDuration minTraceSize = hop::LOD_MIN_SIZE_NANOS[lodLevel];
+   const hop::TimeDuration maxTimeBetweenTrace = minTraceSize;
    return lastTraceDelta < minTraceSize && newTraceDelta < minTraceSize &&
         timeBetweenTrace < maxTimeBetweenTrace;
 }
@@ -41,7 +41,7 @@ LodsArray computeLods( const DisplayableTraces& traces, size_t idOffset )
       }
 
       auto& lastTrace = lods[curDepth].back();
-      const auto timeBetweenTrace = (traces.ends[i] - traces.deltas[i]) - lastTrace.end;
+      const TimeDuration timeBetweenTrace = (traces.ends[i] - traces.deltas[i]) - lastTrace.end;
       if( canBeLoded( lodLvl, timeBetweenTrace, lastTrace.delta, traces.deltas[i] ) )
       {
          assert( lastTrace.depth == curDepth );

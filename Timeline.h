@@ -24,7 +24,7 @@ class Timeline
    TimeStamp absolutePresentTime() const noexcept;
    void setAbsoluteStartTime( TimeStamp time ) noexcept;
    void setAbsolutePresentTime( TimeStamp time ) noexcept;
-   int64_t microsToDisplay() const noexcept;
+   TimeDuration timelineRange() const noexcept;
 
    const TraceDetails& getTraceDetails() const noexcept;
    void clearTraceDetails();
@@ -36,7 +36,10 @@ class Timeline
    void moveToPresentTime( bool animate = true ) noexcept;
    // Move timeline so the specified time is in the middle
    void moveToTime( int64_t timeInMicro, bool animate = true ) noexcept;
-   void frameToTime( TimeStamp startInMicro, TimeDuration deltaInMicro ) noexcept;
+   void moveToAbsoluteTime( TimeStamp time, bool animate ) noexcept;
+   // Frame the timeline to display the specified range of time
+   void frameToTime( int64_t time, TimeDuration duration ) noexcept;
+   void frameToAbsoluteTime( TimeStamp time, TimeDuration duration ) noexcept;
    // Update timeline to always display last race
    void setRealtime( bool isRealtime ) noexcept;
    bool realtime() const noexcept;
@@ -74,7 +77,7 @@ class Timeline
    struct AnimationState
    {
       int64_t targetTimelineStart{0};
-      uint64_t targetTimelineRange{50000000};
+      TimeDuration targetTimelineRange{50000000};
    } _animationState;
 
    TraceDetails _traceDetails{};

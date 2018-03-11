@@ -11,7 +11,7 @@ namespace hop
 template <typename I>
 inline void assert_is_sorted( I first, I last )
 {
-	(void)first;(void)last;
+   (void)first;(void)last;
 #ifdef HOP_ASSERT_IS_SORTED
    assert( std::is_sorted( first, last ) );
 #endif
@@ -24,20 +24,6 @@ inline T clamp(const T& val, const T& lower, const T& upper)
 }
 
 // TODO template these 2 functions so they can be used with different time ratios
-template< typename T = uint64_t >
-static inline T microsToPxl( double windowWidth, int64_t usToDisplay, int64_t us )
-{
-   const double usPerPxl = usToDisplay / windowWidth;
-   return static_cast<T>( (double)us / usPerPxl );
-}
-
-template< typename T = uint64_t >
-static inline T pxlToMicros( double windowWidth, int64_t usToDisplay, int64_t pxl )
-{
-   const double usPerPxl = usToDisplay / windowWidth;
-   return static_cast<T>( usPerPxl * (double)pxl );
-}
-
 template< typename T = uint64_t >
 static inline T nanosToPxl( double windowWidth, uint64_t timelineRange, uint64_t ns )
 {
@@ -52,43 +38,43 @@ static inline T pxlToNanos( double windowWidth, uint64_t timelineRange, double p
    return static_cast<T>( nsPerPxl * pxl );
 }
 
-inline void formatMicrosDurationToDisplay( int64_t usToDisplay, char* str, size_t strSize )
+inline int formatNanosDurationToDisplay( uint64_t duration, char* str, size_t strSize )
 {
-   if ( usToDisplay < 1000 )
+   if ( duration < 1000 )
    {
-      snprintf( str, strSize, "%d us", (int)usToDisplay );
+      return snprintf( str, strSize, "%ld ns", duration );
    }
-   else if ( usToDisplay < 1000000 )
+   else if ( duration < 1000000 )
    {
-     snprintf( str, strSize, "%.3f ms", usToDisplay * 0.001f );
+      return snprintf( str, strSize, "%.3f us", duration * 0.001f );
    }
-   else if ( usToDisplay < 1000000000 )
+   else if ( duration < 1000000000 )
    {
-       snprintf( str, strSize, "%.3f s", usToDisplay * 0.000001f );
+      return snprintf( str, strSize, "%.3f ms", duration * 0.000001f );
    }
    else
    {
-       snprintf( str, strSize, "%.3f s", usToDisplay * 2.77778e-10 );
+      return snprintf( str, strSize, "%.3f s", duration * 0.000000001f );
    }
 }
 
-inline void formatMicrosTimepointToDisplay(int64_t usToDisplay, uint64_t totalMicrosInScreen, char* str, size_t strSize)
+inline void formatNanosTimepointToDisplay(int64_t timepoint, uint64_t totalNanosInScreen, char* str, size_t strSize)
 {
-   if (totalMicrosInScreen < 1000)
+   if (totalNanosInScreen < 1000)
    {
-      snprintf(str, strSize, "%d us", (int)usToDisplay);
+      snprintf(str, strSize, "%ld ns", timepoint);
    }
-   else if (totalMicrosInScreen < 1000000)
+   else if (totalNanosInScreen < 1000000)
    {
-      snprintf(str, strSize, "%.3f ms", usToDisplay * 0.001f);
+      snprintf(str, strSize, "%.3f us", timepoint * 0.001f);
    }
-   else if (totalMicrosInScreen < 1000000000)
+   else if (totalNanosInScreen < 1000000000)
    {
-      snprintf(str, strSize, "%.3f s", usToDisplay * 0.000001f);
+      snprintf(str, strSize, "%.3f ms", timepoint * 0.000001f);
    }
    else
    {
-      snprintf(str, strSize, "%.3f s", usToDisplay * 2.77778e-10);
+      snprintf(str, strSize, "%.3f s", timepoint * 0.000000001f);
    }
 }
 

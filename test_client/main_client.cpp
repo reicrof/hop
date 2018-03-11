@@ -12,7 +12,7 @@
 
 int bug = -1;
 size_t count = 0;
-std::mutex m;
+//std::mutex m;
 std::mutex m1;
 
 void stall()
@@ -81,7 +81,7 @@ void doMoreStuf()
 void takeMutexAndDoStuff()
 {
    HOP_PROF_FUNC_WITH_GROUP(42);
-   std::lock_guard<std::mutex> g(m);
+   //std::lock_guard<std::mutex> g(m);
    {
       HOP_PROF_FUNC_WITH_GROUP(42);
       doMoreStuf();
@@ -164,8 +164,12 @@ void startRec()
 void testMutex()
 {
    HOP_PROF_FUNC_WITH_GROUP(42);
+
+   const auto start = hop::getTimeStamp();
    std::lock_guard<std::mutex> g(m1);
-   std::this_thread::sleep_for(std::chrono::microseconds(500));
+   hop::ClientManager::EndLockWait( &m1, start, hop::getTimeStamp() );
+   std::this_thread::sleep_for(std::chrono::microseconds(1000));
+   HOP_PROF_MUTEX_UNLOCK( &m1 );
 }
 
 int main()
@@ -220,12 +224,13 @@ int main()
 	   l1();
     }
 
-   //std::thread t ( [](){ while( true ) { testMutex(); } } );
-   ////std::thread t1 ( [](){ while( true ) { testMutex(); } } );
-   //while( true )
-   //{
+   // std::thread t ( [](){ while( true ) { testMutex(); } } );
+   // //std::thread t1 ( [](){ while( true ) { testMutex(); } } );
+   // std::this_thread::sleep_for(std::chrono::microseconds(25000));
+   // while( true )
+   // {
    //   testMutex();
-   //}
+   // }
 
    // const auto postDrawTime = std::chrono::system_clock::now();
    // auto lastTime = std::chrono::duration< double, std::milli>( ( postDrawTime - preDrawTime ) ).count();

@@ -140,8 +140,8 @@ bool drawTraceDetails(
             ImGui::NextColumn();
             ImGui::Text( "%3.2f", details.details[i].exclusivePct * 100.0f );
             ImGui::NextColumn();
-            formatMicrosDurationToDisplay(
-                details.details[i].deltaTimeInNanos * 0.001f,
+            formatNanosDurationToDisplay(
+                details.details[i].deltaTimeInNanos,
                 traceDuration,
                 sizeof( traceDuration ) );
             ImGui::Text( "%s", traceDuration );
