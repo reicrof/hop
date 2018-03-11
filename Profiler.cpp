@@ -531,7 +531,7 @@ void hop::Profiler::drawSearchWindow()
             const TimeStamp delta =
                 _tracesPerThread[selection.second].traces.deltas[selection.first];
             const TimeStamp startTime = absEndTime - delta - _timeline.absoluteStartTime();
-            _timeline.frameToTime( startTime / 1000, delta / 1000 );
+            _timeline.frameToTime( startTime, delta );
          }
       }
       ImGui::End();
@@ -681,7 +681,7 @@ void hop::Profiler::handleHotkey()
       _timeline.moveToPresentTime();
       _timeline.setRealtime ( true );
    }
-   else if( ImGui::IsKeyReleased( 'r' ) )
+   else if( ImGui::IsKeyReleased( 'r' ) && ImGui::IsRootWindowOrAnyChildFocused() )
    {
       setRecording( !_recording );
    }
