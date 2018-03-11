@@ -92,7 +92,7 @@ void findTraces( const char* string, const hop::StringDb& strDb, const std::vect
    sortSearchResOnDuration( result, threadInfos, std::greater<TimeStamp>() );
 }
 
-std::pair< size_t, uint32_t > drawSearchResult( SearchResult& searchRes, const Timeline& timeline, const StringDb& strDb, const std::vector< ThreadInfo >& threadInfos )
+SearchSelection drawSearchResult( SearchResult& searchRes, const Timeline& timeline, const StringDb& strDb, const std::vector< ThreadInfo >& threadInfos )
 {
    ImGui::Text("Found %zu matches", searchRes.matchCount );
 
@@ -159,7 +159,8 @@ std::pair< size_t, uint32_t > drawSearchResult( SearchResult& searchRes, const T
    ImGui::InvisibleButton( "padding3", ImVec2( 0.0f, paddingHeight ) );
    ImGui::NextColumn();
 
-   static size_t selected = -1;
+   static size_t selectedId = -1;
+   size_t hoveredId = -1;
    const TimeStamp absoluteStartTime = timeline.absoluteStartTime();
    const TimeDuration timelineRange = timeline.timelineRange();
    char traceTime[64] = {};
@@ -178,11 +179,12 @@ std::pair< size_t, uint32_t > drawSearchResult( SearchResult& searchRes, const T
            timelineRange,
            traceTime,
            sizeof( traceTime ) );
-       if ( ImGui::Selectable( traceTime, selected == i, ImGuiSelectableFlags_SpanAllColumns ) )
+       if ( ImGui::Selectable( traceTime, selectedId == i, ImGuiSelectableFlags_SpanAllColumns ) )
        {
-          selected = i;
+          selectedId = i;
           selectedSomething = true;
        }
+       if( ImGui::IsItemHovered() ) { hoveredId = i; }
        ImGui::NextColumn();
        ImGui::Text( "%s", strDb.getString( ti.traces.fctNameIds[ traceId ] ) );
        ImGui::NextColumn();
@@ -199,15 +201,23 @@ std::pair< size_t, uint32_t > drawSearchResult( SearchResult& searchRes, const T
    ImGui::PopStyleColor( 3 );
 
    size_t selectedTraceId = -1;
+   size_t hoveredTraceId = -1;
    uint32_t selectedThreadId = -1;
-   if( selectedSomething )
+   uint32_t hoveredThreadId = -1;
+   if( selectedSomething && selectedId != (size_t) -1 )
    {
-      const auto& traceIdThreadId = searchRes.tracesIdxThreadIdx[selected];
+      const auto& traceIdThreadId = searchRes.tracesIdxThreadIdx[selectedId];
       selectedTraceId = traceIdThreadId.first;
       selectedThreadId = traceIdThreadId.second;
    }
+   if( hoveredId != (size_t)-1 )
+   {
+      const auto& traceIdThreadId = searchRes.tracesIdxThreadIdx[hoveredId];
+      hoveredTraceId = traceIdThreadId.first;
+      hoveredThreadId = traceIdThreadId.second;
+   }
 
-   return std::make_pair( selectedTraceId, selectedThreadId );
+   return SearchSelection{ selectedTraceId, hoveredTraceId, selectedThreadId, hoveredThreadId };
 }
 
 } // namespace hop

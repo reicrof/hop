@@ -524,18 +524,40 @@ void hop::Profiler::drawSearchWindow()
 
          auto selection = drawSearchResult( lastSearch, _timeline, _strDb, _tracesPerThread );
 
-         if ( selection.first != (size_t)-1 && selection.second != (uint32_t)-1 )
+         if ( selection.selectedTraceIdx != (size_t)-1 && selection.selectedThreadIdx != (uint32_t)-1 )
          {
             const TimeStamp absEndTime =
-                _tracesPerThread[selection.second].traces.ends[selection.first];
+                _tracesPerThread[selection.selectedThreadIdx].traces.ends[selection.selectedTraceIdx];
             const TimeStamp delta =
-                _tracesPerThread[selection.second].traces.deltas[selection.first];
+                _tracesPerThread[selection.selectedThreadIdx].traces.deltas[selection.selectedTraceIdx];
             const TimeStamp startTime = absEndTime - delta - _timeline.absoluteStartTime();
             _timeline.frameToTime( startTime, delta );
+         }
+
+         if( selection.hoveredTraceIdx != (size_t)-1 && selection.hoveredThreadIdx != (uint32_t)-1 )
+         {
+            _timeline.addTraceToHighlight( std::make_pair( selection.hoveredTraceIdx, selection.hoveredThreadIdx ) );
          }
       }
       ImGui::End();
       ImGui::PopStyleColor();
+   }
+}
+
+void hop::Profiler::drawTraceDetailsWindow()
+{
+   const auto traceDetailRes = drawTraceDetails( _timeline.getTraceDetails(), _tracesPerThread, _strDb );
+   if ( traceDetailRes.isWindowOpen )
+   {
+       _timeline.setTraceDetailsDisplayed();
+       for( const auto& traceHoveredIdx : traceDetailRes.hoveredTraceIds )
+       {
+          _timeline.addTraceToHighlight( std::make_pair( traceHoveredIdx, traceDetailRes.hoveredThreadIdx ) );
+       }
+   }
+   else
+   {
+      _timeline.clearTraceDetails();
    }
 }
 
@@ -583,20 +605,17 @@ void hop::Profiler::draw()
          _timeline.moveToPresentTime( false );
       }
 
-      // Draw the trace details window
-      _timeline.draw( _tracesPerThread, _strDb );
-      if ( !drawTraceDetails( _timeline.getTraceDetails(), _tracesPerThread, _strDb ) )
-      {
-         _timeline.clearTraceDetails();
-      }
-      else
-      {
-          _timeline.setTraceDetailsDisplayed();
-      }
-
-      // Draw the search window
+      // Draw the search window. This must be done before drawing the traces as we need to highlight traces
+      // that might be hovered from this window
       drawSearchWindow();
+
+      // Draw the trace details window before the traces for the same reason
+      drawTraceDetailsWindow();
+
+      _timeline.draw( _tracesPerThread, _strDb );
    }
+
+   _timeline.clearHighlightedTraces();
 
    ImGui::End();
    ImGui::PopStyleVar();

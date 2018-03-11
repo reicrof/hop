@@ -44,17 +44,20 @@ class Timeline
    void setRealtime( bool isRealtime ) noexcept;
    bool realtime() const noexcept;
 
+   void addTraceToHighlight( const std::pair< size_t, uint32_t >& trace );
+   void clearHighlightedTraces();
+
   private:
    void drawTimeline( const float posX, const float posY );
-   void drawTraces( const ThreadInfo& traces, int threadIndex, const float posX, const float posY, const StringDb& strDb, const ImColor& color );
-   void drawLockWaits(const std::vector<ThreadInfo>& infos, size_t threadIndex, const float posX, const float posY );
+   void drawTraces( const ThreadInfo& traces, uint32_t threadIndex, const float posX, const float posY, const StringDb& strDb, const ImColor& color );
+   void drawLockWaits(const std::vector<ThreadInfo>& infos, uint32_t threadIndex, const float posX, const float posY );
    void handleMouseDrag( float mousePosX, float mousePosY );
    void handleMouseWheel( float mousePosX, float mousePosY );
    void zoomOn( int64_t microToZoomOn, float zoomFactor );
    void selectTrace( const ThreadInfo& data, uint32_t threadIndex, size_t traceIndex );
    void setStartTime( int64_t timeInMicro, bool withAnimation = true ) noexcept;
    void setZoom( TimeDuration microsToDisplay, bool withAnimation = true );
-   void highlightLockOwner(const std::vector<ThreadInfo>& infos, size_t threadIndex, const hop::LockWait& highlightedLockWait, const float posX, const float posY );
+   void highlightLockOwner(const std::vector<ThreadInfo>& infos, uint32_t threadIndex, const hop::LockWait& highlightedLockWait, const float posX, const float posY );
 
    int64_t _timelineStart{0};
    TimeDuration _timelineRange{50000000};
@@ -68,15 +71,18 @@ class Timeline
    struct Selection
    {
       static constexpr size_t NONE = -1;
-      int threadIndex;
+      uint32_t threadIndex;
       size_t id{NONE};
       size_t lodIds[ LOD_COUNT ];
    } _selection;
+
+   std::vector< std::pair< size_t, uint32_t > > _highlightedTraces;
 
    struct AnimationState
    {
       int64_t targetTimelineStart{0};
       TimeDuration targetTimelineRange{50000000};
+      float highlightPercent{0};
    } _animationState;
 
    TraceDetails _traceDetails{};

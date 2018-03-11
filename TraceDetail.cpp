@@ -63,13 +63,14 @@ createTraceDetails( const DisplayableTraces& traces, uint32_t threadIndex, size_
       {
          // New entry
          uniqueTraces.emplace_back( traceId );
-         traceDetails.emplace_back( TraceDetail{i, traceDelta, 1.0f, 1} );
+         traceDetails.emplace_back( TraceDetail(i, traceDelta) );
       }
       else
       {
          size_t index = std::distance( uniqueTraces.begin(), it );
          ++traceDetails[index].callCount;
          traceDetails[index].deltaTimeInNanos += traceDelta;
+         traceDetails[index].traceIds.push_back( i );
       }
    }
 
@@ -98,19 +99,20 @@ createTraceDetails( const DisplayableTraces& traces, uint32_t threadIndex, size_
    return details;
 }
 
-bool drawTraceDetails(
+TraceDetailDrawResult drawTraceDetails(
     const TraceDetails& details,
     const std::vector<ThreadInfo>& tracesPerThread,
     const StringDb& strDb )
 {
-   bool isWindowOpen = details.details.size() > 0;
+   TraceDetailDrawResult result;
+   result.isWindowOpen = details.details.size() > 0;
    if ( details.details.size() > 0 )
    {
       if (details.shouldFocusWindow) ImGui::SetNextWindowFocus();
 
       ImGui::PushStyleColor(ImGuiCol_WindowBg, ImVec4(0.20f, 0.20f, 0.20f, 0.85f));
       ImGui::SetNextWindowSize(ImVec2(600, 300), ImGuiSetCond_FirstUseEver);
-      if ( ImGui::Begin( "Trace Details", &isWindowOpen ) )
+      if ( ImGui::Begin( "Trace Details", &result.isWindowOpen ) )
       {
          const auto& threadInfo = tracesPerThread[details.threadIndex];
 
@@ -129,14 +131,16 @@ bool drawTraceDetails(
          char traceName[256] = {};
          char traceDuration[128] = {};
          static size_t selected = -1;
+         size_t hoveredId = -1;
          for ( size_t i = 0; i < details.details.size(); ++i )
          {
-            const size_t traceId = details.details[i].traceId;
+            const size_t traceId = details.details[i].traceIds[0];
             const TStrPtr_t fctIdx = threadInfo.traces.fctNameIds[traceId];
             snprintf( traceName, sizeof( traceName ), "%s", strDb.getString( fctIdx ) );
             if ( ImGui::Selectable(
                      traceName, selected == i, ImGuiSelectableFlags_SpanAllColumns ) )
                selected = i;
+            if( ImGui::IsItemHovered() ) { hoveredId = i; }
             ImGui::NextColumn();
             ImGui::Text( "%3.2f", details.details[i].exclusivePct * 100.0f );
             ImGui::NextColumn();
@@ -150,11 +154,17 @@ bool drawTraceDetails(
             ImGui::NextColumn();
          }
          ImGui::Columns( 1 );
+         if( hoveredId != (size_t) -1 )
+         {
+            result.hoveredTraceIds = details.details[hoveredId].traceIds;
+         }
       }
       ImGui::End();
       ImGui::PopStyleColor();
+
+      result.hoveredThreadIdx = details.threadIndex;
    }
 
-   return isWindowOpen;
+   return result;
 }
 }

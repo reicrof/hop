@@ -17,8 +17,16 @@ namespace hop
       size_t matchCount{0};
    };
 
+   struct SearchSelection
+   {
+      size_t selectedTraceIdx;
+      size_t hoveredTraceIdx;
+      uint32_t selectedThreadIdx;
+      uint32_t hoveredThreadIdx;
+   };
+
    void findTraces( const char* string, const StringDb& strDb, const std::vector< ThreadInfo >& threadInfos, SearchResult& result );
-   std::pair< size_t, uint32_t > drawSearchResult( SearchResult& searchRes, const Timeline& timeline, const StringDb& strDb, const std::vector< ThreadInfo >& threadInfos );
+   SearchSelection drawSearchResult( SearchResult& searchRes, const Timeline& timeline, const StringDb& strDb, const std::vector< ThreadInfo >& threadInfos );
 }
 
 #endif //TRACE_SEARCH_H_

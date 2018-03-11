@@ -33,6 +33,7 @@ struct Profiler
 private:
    void drawMenuBar();
    void drawSearchWindow();
+   void drawTraceDetailsWindow();
 
    std::string _name;
    Timeline _timeline;

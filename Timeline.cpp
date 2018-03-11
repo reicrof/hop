@@ -8,6 +8,8 @@
 
 #include "imgui/imgui.h"
 
+#include <cmath>
+
 static constexpr float TRACE_HEIGHT = 20.0f;
 static constexpr float TRACE_VERTICAL_PADDING = 2.0f;
 static constexpr hop::TimeDuration MIN_NANOS_TO_DISPLAY = 500;
@@ -54,6 +56,10 @@ void Timeline::update( float deltaTimeMs ) noexcept
       }
       _timelineRange += delta * deltaTimeMs * 0.01f;
    }
+
+   static float x = 0.0f;
+   x += 0.007f * deltaTimeMs;
+   _animationState.highlightPercent = (std::sin( x ) + 1.3f) / 2.0f;
 }
 
 void Timeline::draw(
@@ -438,7 +444,7 @@ void Timeline::zoomOn( int64_t nanoToZoomOn, float zoomFactor )
 
 void Timeline::drawTraces(
     const ThreadInfo& data,
-    int threadIndex,
+    uint32_t threadIndex,
     const float posX,
     const float posY,
     const StringDb& strDb,
@@ -457,10 +463,11 @@ void Timeline::drawTraces(
       float lengthPxl;
    };
 
-   static std::vector<DrawingInfo> tracesToDraw, lodTracesToDraw;
+   static std::vector<DrawingInfo> tracesToDraw, lodTracesToDraw, highlightTraceToDraw;
    DrawingInfo selTraceDrawingInfo{};
    tracesToDraw.clear();
    lodTracesToDraw.clear();
+   highlightTraceToDraw.clear();
 
    // Find the best lodLevel for our current zoom
    const int lodLevel = [this]() {
@@ -531,6 +538,14 @@ void Timeline::drawTraces(
          {
             selTraceDrawingInfo = DrawingInfo{tracePos, data.traces.deltas[i], i, traceLengthPxl};
          }
+
+         for( const auto& tid : _highlightedTraces )
+         {
+            if( threadIndex == tid.second && i == tid.first )
+            {
+               highlightTraceToDraw.push_back( DrawingInfo{tracePos, data.traces.deltas[i], i, traceLengthPxl} );
+            }
+         }
       }
    }
    else
@@ -578,11 +593,22 @@ void Timeline::drawTraces(
              posX + traceEndPxl - traceLengthPxl,
              posY + t.depth * ( TRACE_HEIGHT + TRACE_VERTICAL_PADDING ) );
          if ( t.isLoded )
+         {
             lodTracesToDraw.push_back(
                 DrawingInfo{tracePos, t.delta, t.traceIndex, traceLengthPxl} );
+         }
          else
+         {
             tracesToDraw.push_back(
                 DrawingInfo{tracePos, t.delta, t.traceIndex, traceLengthPxl} );
+            for( const auto& tid : _highlightedTraces )
+            {
+               if( threadIndex == tid.second && t.traceIndex == tid.first )
+               {
+                  highlightTraceToDraw.push_back( DrawingInfo{tracePos, t.delta, t.traceIndex, traceLengthPxl} );
+               }
+            }
+         }
 
          if( i == _selection.lodIds[lodLevel] )
          {
@@ -701,18 +727,28 @@ void Timeline::drawTraces(
    // Draw selected trace
    if( _selection.id != Timeline::Selection::NONE && _selection.threadIndex == threadIndex )
    {
-      ImGui::PushStyleColor( ImGuiCol_Button, ImColor( 1.0f, 1.0f, 1.0f, 0.5f ) );
-      ImGui::PushStyleColor( ImGuiCol_ButtonHovered, ImColor( 1.0f, 1.0f, 1.0f, 0.4f ) );
-      ImGui::PushStyleColor( ImGuiCol_ButtonActive, ImColor( 1.0f, 1.0f, 1.0f, 0.4f ) );
+      ImGui::PushStyleColor( ImGuiCol_Button, ImColor( 1.0f, 1.0f, 1.0f, 0.5f * _animationState.highlightPercent ) );
+      ImGui::PushStyleColor( ImGuiCol_ButtonHovered, ImColor( 1.0f, 1.0f, 1.0f, 0.4f * _animationState.highlightPercent ) );
+      ImGui::PushStyleColor( ImGuiCol_ButtonActive, ImColor( 1.0f, 1.0f, 1.0f, 0.4f * _animationState.highlightPercent ) );
       ImGui::SetCursorScreenPos( selTraceDrawingInfo.posPxl );
       ImGui::Button( "", ImVec2( selTraceDrawingInfo.lengthPxl, TRACE_HEIGHT ) );
       ImGui::PopStyleColor( 3 );
    }
+
+   ImGui::PushStyleColor( ImGuiCol_Button, ImColor( 1.0f, 1.0f, 1.0f, 0.5f * _animationState.highlightPercent ) );
+   ImGui::PushStyleColor( ImGuiCol_ButtonHovered, ImColor( 1.0f, 1.0f, 1.0f, 0.4f * _animationState.highlightPercent ) );
+   ImGui::PushStyleColor( ImGuiCol_ButtonActive, ImColor( 1.0f, 1.0f, 1.0f, 0.4f * _animationState.highlightPercent ) );
+   for( const auto& t : highlightTraceToDraw )
+   {
+      ImGui::SetCursorScreenPos( t.posPxl );
+      ImGui::Button( "", ImVec2( t.lengthPxl, TRACE_HEIGHT ) );
+   }
+   ImGui::PopStyleColor( 3 );
 }
 
 void Timeline::highlightLockOwner(
     const std::vector<ThreadInfo>& infos,
-    size_t threadIndex,
+    uint32_t threadIndex,
     const hop::LockWait& highlightedLockWait,
     const float posX,
     const float /*posY*/ )
@@ -806,7 +842,7 @@ void Timeline::highlightLockOwner(
 
 void Timeline::drawLockWaits(
     const std::vector<ThreadInfo>& infos,
-    size_t threadIndex,
+    uint32_t threadIndex,
     const float posX,
     const float posY )
 {
@@ -874,6 +910,16 @@ void Timeline::selectTrace( const ThreadInfo& data, uint32_t threadIndex, size_t
    setRealtime( false );
 
    g_stats.selectedTrace = traceIndex;
+}
+
+void Timeline::addTraceToHighlight( const std::pair< size_t, uint32_t >& trace )
+{
+   _highlightedTraces.push_back( trace );
+}
+
+void Timeline::clearHighlightedTraces()
+{
+   _highlightedTraces.clear();
 }
 
 } // namespace hop
