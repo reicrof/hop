@@ -190,6 +190,7 @@ int main()
        std::this_thread::sleep_for(std::chrono::milliseconds(3));
        func1();
        {
+       HOP_PROF_GL_FINISH( "GL finish" );
        HOP_PROF( "Creating maclass1" );
        {
           std::this_thread::sleep_for(std::chrono::microseconds(250));

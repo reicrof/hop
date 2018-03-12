@@ -1,33 +1,3 @@
-/*
-                  /NN\
-                  :NN:
-               ..-+NN+-..
-          ./mmmNNNNNNNNNmmmm\.
-       .mmNNNNNNNNNNNNNNNNNNNmm.
-     .nNNNNNNNNNNNNNNNNNNNNNNNNNNn.
-   .nmNNNNNNNNNNNNNNNNNNNNNNNNNNNNmn.
-  .nNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNn.
-  .oydmmdhs+:`+NNNNNNNNNNh.-+shdmmdy+.
-     .////shmd.-dNNNNNNN+.dmhs+/:/.
-    `dNdmdNNdmo `+mdNhs` ommdNNNdmd`
-    sNmdmmdmds`ss--sh--hs`ommNNNNNdo
-    dNmNNNmd:.yNNmy--ymmNd.:hNNNmmmm
-    dNNNds:-/`yNNNNmmNNNNh`/-:sdNNNd
-    -:-./ohmms`omNNNNNNmo`smmho/.-:-
-       .mNNNNmh-:hNNNNh:-hmNNNNm.
-       `mmmmmmmd `+dd+` dmmmmmmm`
-        smmmmmd--d+--+d--dmmmmms
-        `hmmms-/dmmddmmd/-smmmh`
-         `o+. ommmmmmmmmmo .+o`
-              .ymmmmmmmmy.
-               `smmmmmms`
-                 \dmmd/
-                  -yy-
-                   ``
-           | || |/ _ \| _ \
-           | __ | (_) |  _/
-           |_||_|\___/|_|
-*/
 #ifndef HOP_H_
 #define HOP_H_
 
@@ -38,11 +8,11 @@
 // Stubbing all profiling macros so they are disabled
 // when HOP_ENABLED is false
 #define HOP_PROF( x )
+#define HOP_PROF_GL_FINISH( x )
 #define HOP_PROF_FUNC()
 #define HOP_PROF_FUNC_WITH_GROUP( x )
 
 #else  // We do want to profile
-
 
 ///////////////////////////////////////////////////////////////
 /////       THESE ARE THE MACROS YOU CAN MODIFY     ///////////
@@ -61,6 +31,9 @@
 // Create a new profiling trace for a free function
 #define HOP_PROF_FUNC() HOP_PROF_GUARD_VAR( __LINE__, ( __FILE__, __LINE__, __func__, 0 ) )
 
+// Create a new profiling trace that will call glFinish() before being destroyed
+#define HOP_PROF_GL_FINISH( x ) HOP_PROF_GL_FINISH_GUARD_VAR( __LINE__, ( __FILE__, __LINE__, (x), 0 ) )
+
 // Create a new profiling trace for a free function that falls under category x
 #define HOP_PROF_FUNC_WITH_GROUP( x ) HOP_PROF_GUARD_VAR(__LINE__,( __FILE__, __LINE__, __func__, (x) ) )
 
@@ -76,6 +49,37 @@
 ///////////////////////////////////////////////////////////////
 /////     EVERYTHING AFTER THIS IS IMPL DETAILS        ////////
 ///////////////////////////////////////////////////////////////
+
+/*
+                              /NN\
+                              :NN:
+                           ..-+NN+-..
+                      ./mmmNNNNNNNNNmmmm\.
+                   .mmNNNNNNNNNNNNNNNNNNNmm.
+                 .nNNNNNNNNNNNNNNNNNNNNNNNNNNn.
+               .nmNNNNNNNNNNNNNNNNNNNNNNNNNNNNmn.
+              .nNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNn.
+              .oydmmdhs+:`+NNNNNNNNNNh.-+shdmmdy+.
+                 .////shmd.-dNNNNNNN+.dmhs+/:/.
+                `dNdmdNNdmo `+mdNhs` ommdNNNdmd`
+                sNmdmmdmds`ss--sh--hs`ommNNNNNdo
+                dNmNNNmd:.yNNmy--ymmNd.:hNNNmmmm
+                dNNNds:-/`yNNNNmmNNNNh`/-:sdNNNd
+                -:-./ohmms`omNNNNNNmo`smmho/.-:-
+                   .mNNNNmh-:hNNNNh:-hmNNNNm.
+                   `mmmmmmmd `+dd+` dmmmmmmm`
+                    smmmmmd--d+--+d--dmmmmms
+                    `hmmms-/dmmddmmd/-smmmh`
+                     `o+. ommmmmmmmmmo .+o`
+                          .ymmmmmmmmy.
+                           `smmmmmms`
+                             \dmmd/
+                              -yy-
+                               ``
+                       | || |/ _ \| _ \
+                       | __ | (_) |  _/
+                       |_||_|\___/|_|
+*/
 #include <atomic>
 #include <memory>
 #include <chrono>
@@ -310,6 +314,13 @@ class ClientManager
        TimeStamp end,
        TLineNb_t lineNb,
        TGroup_t group );
+   static void EndProfileGlFinish(
+       const char* fileName,
+       const char* fctName,
+       TimeStamp start,
+       TimeStamp end,
+       TLineNb_t lineNb,
+       TGroup_t group );
    static void EndLockWait(
       void* mutexAddr,
       TimeStamp start,
@@ -345,6 +356,30 @@ class ProfGuard
    TGroup_t _group;
 };
 
+class ProfGuardGLFinish
+{
+  public:
+   ProfGuardGLFinish( const char* fileName, TLineNb_t lineNb, const char* fctName, TGroup_t groupId ) HOP_NOEXCEPT
+       : _start( getTimeStamp() ),
+         _fileName( fileName ),
+         _fctName( fctName ),
+         _lineNb( lineNb ),
+         _group( groupId )
+   {
+      ClientManager::StartProfile();
+   }
+   ~ProfGuardGLFinish()
+   {
+      ClientManager::EndProfileGlFinish( _fileName, _fctName, _start, getTimeStamp(), _lineNb, _group );
+   }
+
+  private:
+   TimeStamp _start;
+   const char *_fileName, *_fctName;
+   TLineNb_t _lineNb;
+   TGroup_t _group;
+};
+
 struct LockWaitGuard
 {
    LockWaitGuard( void* mutAddr )
@@ -364,6 +399,8 @@ struct LockWaitGuard
 #define HOP_COMBINE( X, Y ) X##Y
 #define HOP_PROF_GUARD_VAR( LINE, ARGS ) \
    hop::ProfGuard HOP_COMBINE( hopProfGuard, LINE ) ARGS
+#define HOP_PROF_GL_FINISH_GUARD_VAR( LINE, ARGS ) \
+   hop::ProfGuardGLFinish HOP_COMBINE( hopProfGuard, LINE ) ARGS
 #define HOP_MUTEX_LOCK_GUARD_VAR( LINE, ARGS ) \
    hop::LockWaitGuard HOP_COMBINE( hopMutexLock, LINE ) ARGS
 #define HOP_MUTEX_UNLOCK_EVENT( x ) \
@@ -429,6 +466,8 @@ void ringbuf_release( ringbuf_t*, size_t );
 #include <cstring> // memcpy
 #include <sys/mman.h> // shm_open
 #include <unistd.h> // ftruncate
+
+#include <dlfcn.h> //dlsym
 
 #endif
 
@@ -1083,6 +1122,46 @@ void ClientManager::EndProfile(
     TLineNb_t lineNb,
     TGroup_t group )
 {
+   const int remainingPushedTraces = --tl_traceLevel;
+   Client* client = ClientManager::Get();
+   if( end - start > 50 ) // Minimum trace time is 50 ns
+   {
+      client->addProfilingTrace( fileName, fctName, start, end, lineNb, group );
+   }
+   if ( remainingPushedTraces <= 0 )
+   {
+      client->flushToConsumer();
+   }
+}
+
+void ClientManager::EndProfileGlFinish(
+    const char* fileName,
+    const char* fctName,
+    TimeStamp start,
+    TimeStamp end,
+    TLineNb_t lineNb,
+    TGroup_t group )
+{
+   static void* libGL = NULL;
+   static void (*glFinishPtr)() = NULL;
+
+   // Load the symobl
+   if( !libGL )
+   {
+      libGL = dlopen("libGL.so", RTLD_LAZY);
+      glFinishPtr = (void (*)())dlsym( libGL, "glFinish" );
+   }
+
+   // Call the symbol
+   if( glFinishPtr )
+   {
+      (*glFinishPtr)();
+   }
+   else
+   {
+      printf("Error loading glFinish() symbol! glFinish() was not called!\n");
+   }
+
    const int remainingPushedTraces = --tl_traceLevel;
    Client* client = ClientManager::Get();
    if( end - start > 50 ) // Minimum trace time is 50 ns
