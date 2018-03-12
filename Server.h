@@ -19,6 +19,9 @@ class Server
    bool setRecording( bool recording );
    void stop();
 
+   bool useGlFinish() const noexcept;
+   void setUseGlFinish( bool );
+
    struct PendingData
    {
        std::mutex mutex;

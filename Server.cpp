@@ -202,6 +202,16 @@ void Server::stop()
    }
 }
 
+bool Server::useGlFinish() const noexcept
+{
+   return _sharedMem.isUsingGlFinish();
+}
+
+void Server::setUseGlFinish( bool useGlFinish )
+{
+   _sharedMem.setUseGlFinish( useGlFinish );
+}
+
 void Server::PendingData::clear()
 {
     traces.clear();

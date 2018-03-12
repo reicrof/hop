@@ -269,6 +269,7 @@ class SharedMemory
          CONNECTED_PRODUCER = 1 << 0,
          CONNECTED_CONSUMER = 1 << 1,
          LISTENING_CONSUMER = 1 << 2,
+         USE_GL_FINISH      = 1 << 3,
       };
       std::atomic< uint32_t > flags{0};
    };
@@ -279,6 +280,8 @@ class SharedMemory
    void setConnectedConsumer( bool ) HOP_NOEXCEPT;
    bool hasListeningConsumer() const HOP_NOEXCEPT;
    void setListeningConsumer( bool ) HOP_NOEXCEPT;
+   bool isUsingGlFinish() const HOP_NOEXCEPT;
+   void setUseGlFinish( bool ) HOP_NOEXCEPT;
    ringbuf_t* ringbuffer() const HOP_NOEXCEPT;
    uint8_t* data() const HOP_NOEXCEPT;
    sem_handle semaphore() const HOP_NOEXCEPT;
@@ -466,7 +469,6 @@ void ringbuf_release( ringbuf_t*, size_t );
 #include <cstring> // memcpy
 #include <sys/mman.h> // shm_open
 #include <unistd.h> // ftruncate
-
 #include <dlfcn.h> //dlsym
 
 #endif
@@ -614,16 +616,35 @@ namespace
 
    void closeSharedMemory( const char* name, shm_handle handle, void* dataPtr )
    {
-      #if defined( _MSC_VER )
-       UnmapViewOfFile(dataPtr);
-       CloseHandle(handle);
-      #else
-         (void)handle; // Remove unuesed warning
-         (void)dataPtr;
-         if ( shm_unlink( name ) != 0 ) perror( "Could not unlink shared memory" );
-      #endif
+#if defined( _MSC_VER )
+      UnmapViewOfFile( dataPtr );
+      CloseHandle( handle );
+#else
+      (void)handle;  // Remove unuesed warning
+      (void)dataPtr;
+      if ( shm_unlink( name ) != 0 ) perror( "Could not unlink shared memory" );
+#endif
    }
 
+   void* loadSymbol( const char* libraryName, const char* symbolName )
+   {
+      void* symbol = NULL;
+#if defined( _MSC_VER )
+      HMODULE module = LoadLibraryA( libraryName );
+      symbol = (void *)GetProcAddress( module, symbolName );
+#elif __APPLE__
+      (void)libraryName;  // Remove unused
+      char symbolNamePrefixed[256];
+      strcpy( symbolNamePrefixed + 1, symbolName );
+      symbolNamePrefixed[0] = '_';
+      symbol = dlsym( RTLD_DEFAULT, symbolName );
+#else // Linux case
+      void* lib = dlopen( libraryName, RTLD_LAZY );
+      symbol = dlsym( lib, symbolName );
+#endif
+
+      return symbol;
+   }
 }
 
 namespace hop
@@ -751,6 +772,19 @@ void SharedMemory::setListeningConsumer( bool listening ) HOP_NOEXCEPT
       _sharedMetaData->flags |= SharedMetaInfo::LISTENING_CONSUMER;
    else
       _sharedMetaData->flags &= ~(SharedMetaInfo::LISTENING_CONSUMER);
+}
+
+bool SharedMemory::isUsingGlFinish() const HOP_NOEXCEPT
+{
+   return (sharedMetaInfo()->flags & SharedMetaInfo::USE_GL_FINISH) > 0;
+}
+
+void SharedMemory::setUseGlFinish( bool useGlFinish ) HOP_NOEXCEPT
+{
+   if ( useGlFinish )
+      _sharedMetaData->flags |= SharedMetaInfo::USE_GL_FINISH;
+   else
+      _sharedMetaData->flags &= ~SharedMetaInfo::USE_GL_FINISH;
 }
 
 uint8_t* SharedMemory::data() const HOP_NOEXCEPT
@@ -1142,24 +1176,31 @@ void ClientManager::EndProfileGlFinish(
     TLineNb_t lineNb,
     TGroup_t group )
 {
-   static void* libGL = NULL;
+#ifdef _MSC_VER
+   static const char* glLibName = "opengl32.dll";
+#else
+   static const char* glLibName = "libGL.so";
+#endif
    static void (*glFinishPtr)() = NULL;
 
-   // Load the symobl
-   if( !libGL )
+   // If we request glFinish, load the symbol and call it
+   if( ClientManager::sharedMemory.isUsingGlFinish() )
    {
-      libGL = dlopen("libGL.so", RTLD_LAZY);
-      glFinishPtr = (void (*)())dlsym( libGL, "glFinish" );
-   }
+      // Load the symobl
+      if( !glFinishPtr )
+      {
+         glFinishPtr = (void (*)())loadSymbol( glLibName, "glFinish" );
+      }
 
-   // Call the symbol
-   if( glFinishPtr )
-   {
-      (*glFinishPtr)();
-   }
-   else
-   {
-      printf("Error loading glFinish() symbol! glFinish() was not called!\n");
+      // Call the symbol
+      if( glFinishPtr )
+      {
+         (*glFinishPtr)();
+      }
+      else
+      {
+         printf("Error loading glFinish() symbol! glFinish() was not called!\n");
+      }
    }
 
    const int remainingPushedTraces = --tl_traceLevel;

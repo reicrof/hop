@@ -497,7 +497,7 @@ void hop::Profiler::drawSearchWindow()
 
    if ( _searchWindowOpen )
    {
-      ImGui::PushStyleColor( ImGuiCol_WindowBg, ImVec4( 0.20f, 0.20f, 0.20f, 0.85f ) );
+      ImGui::PushStyleColor( ImGuiCol_WindowBg, ImVec4( 0.20f, 0.20f, 0.20f, 0.75f ) );
       ImGui::SetNextWindowSize( ImVec2( 600, 300 ), ImGuiSetCond_FirstUseEver );
       if ( ImGui::Begin( "Search Window", &_searchWindowOpen ) )
       {
@@ -573,9 +573,9 @@ void hop::Profiler::draw()
       return;
    }
 
-   handleHotkey();
-
    drawMenuBar();
+
+   handleHotkey();
 
    if( drawPlayStopButton( _recording ) )
    {
@@ -626,10 +626,16 @@ void hop::Profiler::drawMenuBar()
    const char* const menuSaveAsJason = "Save as JSON";
    const char* const menuHelp = "Help";
    const char* menuAction = NULL;
+   static bool useGlFinish = _server.useGlFinish();
+
    if ( ImGui::BeginMenuBar() )
    {
       if ( ImGui::BeginMenu( "Menu" ) )
       {
+         if( ImGui::Checkbox("Use glFinish()", &useGlFinish) )
+         {
+            _server.setUseGlFinish( useGlFinish );
+         }
          if ( ImGui::MenuItem( menuSaveAsJason, NULL ) )
          {
             menuAction = menuSaveAsJason;

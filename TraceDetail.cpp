@@ -110,7 +110,7 @@ TraceDetailDrawResult drawTraceDetails(
    {
       if (details.shouldFocusWindow) ImGui::SetNextWindowFocus();
 
-      ImGui::PushStyleColor(ImGuiCol_WindowBg, ImVec4(0.20f, 0.20f, 0.20f, 0.85f));
+      ImGui::PushStyleColor(ImGuiCol_WindowBg, ImVec4(0.20f, 0.20f, 0.20f, 0.75f));
       ImGui::SetNextWindowSize(ImVec2(600, 300), ImGuiSetCond_FirstUseEver);
       if ( ImGui::Begin( "Trace Details", &result.isWindowOpen ) )
       {

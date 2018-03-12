@@ -60,7 +60,7 @@ class Timeline
    void highlightLockOwner(const std::vector<ThreadInfo>& infos, uint32_t threadIndex, const hop::LockWait& highlightedLockWait, const float posX, const float posY );
 
    int64_t _timelineStart{0};
-   TimeDuration _timelineRange{50000000};
+   TimeDuration _timelineRange{500000000};
    uint64_t _stepSizeInNanos{1000000};
    TimeStamp _absoluteStartTime{0};
    TimeStamp _absolutePresentTime{0};
@@ -81,7 +81,7 @@ class Timeline
    struct AnimationState
    {
       int64_t targetTimelineStart{0};
-      TimeDuration targetTimelineRange{50000000};
+      TimeDuration targetTimelineRange{500000000};
       float highlightPercent{0};
    } _animationState;
 
