@@ -466,7 +466,6 @@ void Timeline::drawTraces(
    };
 
    static std::vector<DrawingInfo> tracesToDraw, lodTracesToDraw, highlightTraceToDraw;
-   DrawingInfo selTraceDrawingInfo{};
    tracesToDraw.clear();
    lodTracesToDraw.clear();
    highlightTraceToDraw.clear();
@@ -535,11 +534,6 @@ void Timeline::drawTraces(
              posY + curDepth * ( TRACE_HEIGHT + TRACE_VERTICAL_PADDING ) );
 
          tracesToDraw.push_back( DrawingInfo{tracePos, data.traces.deltas[i], i, traceLengthPxl} );
-
-         if( i == _selection.id )
-         {
-            selTraceDrawingInfo = DrawingInfo{tracePos, data.traces.deltas[i], i, traceLengthPxl};
-         }
 
          for( const auto& tid : _highlightedTraces )
          {
@@ -611,15 +605,9 @@ void Timeline::drawTraces(
                }
             }
          }
-
-         if( i == _selection.lodIds[lodLevel] )
-         {
-            selTraceDrawingInfo = DrawingInfo{tracePos, t.delta, i, traceLengthPxl};
-         }
       }
    }
 
-   const bool leftMouseClicked = ImGui::IsMouseReleased( 0 );
    const bool rightMouseClicked = ImGui::IsMouseReleased( 1 );
    const bool leftMouseDblClicked = ImGui::IsMouseDoubleClicked( 0 );
 
@@ -651,22 +639,6 @@ void Timeline::drawTraces(
             const TimeStamp traceEndTime =
                 pxlToNanos( windowWidthPxl, _timelineRange, t.posPxl.x - posX + t.lengthPxl );
             frameToTime( _timelineStart + ( traceEndTime - t.duration ), t.duration );
-         }
-         else if( leftMouseClicked )
-         {
-            // Find the non-loded trace that is the closest to the cursor and at the right depth
-            const auto& mousePos = ImGui::GetMousePos();
-            const TimeStamp mouseInAbsoluteTime =
-               firstTraceAbsoluteTime + pxlToNanos( windowWidthPxl, _timelineRange, mousePos.x - posX );
-            const auto it = std::lower_bound(
-               data.traces.ends.begin(), data.traces.ends.end(), mouseInAbsoluteTime );
-            const int depth = (t.posPxl.y - posY) / ( TRACE_HEIGHT + TRACE_VERTICAL_PADDING );
-            size_t traceIndex = std::distance( data.traces.ends.begin(), it );
-            while( traceIndex < data.traces.depths.size() && data.traces.depths[ traceIndex ] != depth )
-            {
-               ++traceIndex;
-            }
-            selectTrace( data, threadIndex, traceIndex );
          }
          else if ( rightMouseClicked && _rightClickStartPosInCanvas[0] == 0.0f)
          {
@@ -714,10 +686,6 @@ void Timeline::drawTraces(
             setStartTime(
                 ( data.traces.ends[traceIndex] - data.traces.deltas[traceIndex] - absoluteStart ) );
          }
-         else if( leftMouseClicked )
-         {
-            selectTrace( data, threadIndex, traceIndex );
-         }
          else if ( rightMouseClicked && _rightClickStartPosInCanvas[0] == 0.0f)
          {
             _traceDetails = createTraceDetails( data.traces, threadIndex, t.traceIndex );
@@ -725,17 +693,6 @@ void Timeline::drawTraces(
       }
    }
    ImGui::PopStyleColor( 3 );
-
-   // Draw selected trace
-   if( _selection.id != Timeline::Selection::NONE && _selection.threadIndex == threadIndex )
-   {
-      ImGui::PushStyleColor( ImGuiCol_Button, ImColor( 1.0f, 1.0f, 1.0f, 0.5f * _animationState.highlightPercent ) );
-      ImGui::PushStyleColor( ImGuiCol_ButtonHovered, ImColor( 1.0f, 1.0f, 1.0f, 0.4f * _animationState.highlightPercent ) );
-      ImGui::PushStyleColor( ImGuiCol_ButtonActive, ImColor( 1.0f, 1.0f, 1.0f, 0.4f * _animationState.highlightPercent ) );
-      ImGui::SetCursorScreenPos( selTraceDrawingInfo.posPxl );
-      ImGui::Button( "", ImVec2( selTraceDrawingInfo.lengthPxl, TRACE_HEIGHT ) );
-      ImGui::PopStyleColor( 3 );
-   }
 
    ImGui::PushStyleColor( ImGuiCol_Button, ImColor( 1.0f, 1.0f, 1.0f, 0.5f * _animationState.highlightPercent ) );
    ImGui::PushStyleColor( ImGuiCol_ButtonHovered, ImColor( 1.0f, 1.0f, 1.0f, 0.4f * _animationState.highlightPercent ) );
@@ -890,28 +847,6 @@ void Timeline::drawLockWaits(
       }
    }
    ImGui::PopStyleColor( 3 );
-}
-
-void Timeline::selectTrace( const ThreadInfo& data, uint32_t threadIndex, size_t traceIndex )
-{
-   _selection.threadIndex = threadIndex;
-   _selection.id = traceIndex;
-   int wantedDepth = data.traces.depths[ traceIndex ];
-   for ( int i = 0; i < LOD_COUNT; ++i )
-   {
-      const auto& lods = data.traces.lods[i];
-      auto lodIt = std::lower_bound(
-          lods.begin(), lods.end(), LodInfo{data.traces.ends[traceIndex], 0, 0, 0, false} );
-      while( lodIt != lods.end() && lodIt->depth != wantedDepth )
-      {
-         ++lodIt;
-      }
-      _selection.lodIds[i] = std::distance( lods.begin(), lodIt );
-   }
-
-   setRealtime( false );
-
-   g_stats.selectedTrace = traceIndex;
 }
 
 void Timeline::addTraceToHighlight( const std::pair< size_t, uint32_t >& trace )
