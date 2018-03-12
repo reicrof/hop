@@ -632,10 +632,6 @@ void hop::Profiler::drawMenuBar()
    {
       if ( ImGui::BeginMenu( "Menu" ) )
       {
-         if( ImGui::Checkbox("Use glFinish()", &useGlFinish) )
-         {
-            _server.setUseGlFinish( useGlFinish );
-         }
          if ( ImGui::MenuItem( menuSaveAsJason, NULL ) )
          {
             menuAction = menuSaveAsJason;
@@ -644,6 +640,12 @@ void hop::Profiler::drawMenuBar()
          {
             menuAction = menuHelp;
          }
+         ImGui::Separator();
+         if( ImGui::Checkbox("Use glFinish()", &useGlFinish) )
+         {
+            _server.setUseGlFinish( useGlFinish );
+         }
+         ImGui::Separator();
          if ( ImGui::MenuItem( "Exit", NULL ) )
          {
             exit(0);
