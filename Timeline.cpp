@@ -9,6 +9,8 @@
 #include "imgui/imgui.h"
 
 #include <cmath>
+#define __STDC_FORMAT_MACROS
+#include <inttypes.h>
 
 static constexpr float TRACE_HEIGHT = 20.0f;
 static constexpr float TRACE_VERTICAL_PADDING = 2.0f;
@@ -221,7 +223,7 @@ void Timeline::drawTimeline( const float posX, const float posY )
       for ( const auto& pos : textPos )
       {
          ImGui::SetCursorScreenPos( pos.first );
-         ImGui::Text( "%ld ns", pos.second );
+         ImGui::Text( "%" PRId64 " ns", pos.second );
       }
    }
    else if ( total < 1000000 )

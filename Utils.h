@@ -4,6 +4,9 @@
 #include <cassert>
 #include <algorithm>
 
+#define __STDC_FORMAT_MACROS
+#include <inttypes.h>
+
 //#define HOP_ASSERT_IS_SORTED
 
 namespace hop
@@ -42,7 +45,7 @@ inline int formatNanosDurationToDisplay( uint64_t duration, char* str, size_t st
 {
    if ( duration < 1000 )
    {
-      return snprintf( str, strSize, "%ld ns", duration );
+      return snprintf( str, strSize, "%" PRIu64 " ns", duration );
    }
    else if ( duration < 1000000 )
    {
@@ -62,7 +65,7 @@ inline void formatNanosTimepointToDisplay(int64_t timepoint, uint64_t totalNanos
 {
    if (totalNanosInScreen < 1000)
    {
-      snprintf(str, strSize, "%ld ns", timepoint);
+      snprintf(str, strSize, "%" PRId64 " ns", timepoint);
    }
    else if (totalNanosInScreen < 1000000)
    {
