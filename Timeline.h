@@ -36,7 +36,7 @@ class Timeline
    void moveToPresentTime( bool animate = true ) noexcept;
    // Move timeline so the specified time is in the middle
    void moveToTime( int64_t timeInMicro, bool animate = true ) noexcept;
-   void moveToAbsoluteTime( TimeStamp time, bool animate ) noexcept;
+   void moveToAbsoluteTime( TimeStamp time, bool animate = true ) noexcept;
    // Frame the timeline to display the specified range of time
    void frameToTime( int64_t time, TimeDuration duration ) noexcept;
    void frameToAbsoluteTime( TimeStamp time, TimeDuration duration ) noexcept;
@@ -46,6 +46,9 @@ class Timeline
 
    void addTraceToHighlight( const std::pair< size_t, uint32_t >& trace );
    void clearHighlightedTraces();
+
+   void nextBookmark() noexcept;
+   void previousBookmark() noexcept;
 
   private:
    void drawTimeline( const float posX, const float posY );
@@ -76,6 +79,11 @@ class Timeline
       TimeDuration targetTimelineRange{5000000000};
       float highlightPercent{0};
    } _animationState;
+
+   struct Bookmarks
+   {
+      std::vector< TimeStamp > times;
+   } _bookmarks;
 
    TraceDetails _traceDetails{};
 };

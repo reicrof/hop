@@ -34,6 +34,17 @@ static void drawHoveringTimelineLine(float posInScreenX, float timelineStartPosY
    drawList->PopClipRect();
 }
 
+static void drawBookmarks( float posXPxl, float posYPxl )
+{
+   auto drawList = ImGui::GetWindowDrawList();
+   drawList->PushClipRectFullScreen();
+   drawList->AddCircleFilled(
+       ImVec2( posXPxl, posYPxl + 10 ),
+       5.0f,
+       ImColor( 0, 0, 255, 200 ) );
+   drawList->PopClipRect();
+}
+
 namespace hop
 {
 
@@ -107,6 +118,15 @@ void Timeline::draw(
       const int64_t hoveredNano = _timelineStart + pxlToNanos(ImGui::GetWindowWidth(), _timelineRange, _timelineHoverPos - startDrawPos.x);
       hop::formatNanosTimepointToDisplay(hoveredNano, _timelineRange, text, sizeof(text));
       drawHoveringTimelineLine(_timelineHoverPos, startDrawPos.y, text);
+   }
+
+   if( !_bookmarks.times.empty() )
+   {
+      for( auto t : _bookmarks.times )
+      {
+         float posXPxl = nanosToPxl( ImGui::GetWindowWidth(), _timelineRange, t - _timelineStart );
+         drawBookmarks( posXPxl + startDrawPos.x, startDrawPos.y );
+      }
    }
 
    ImGui::EndChild(); // TimelineCanvas
@@ -260,6 +280,11 @@ void Timeline::drawTimeline( const float posX, const float posY )
    {
       const auto curMousePosInScreen = ImGui::GetMousePos();
       _timelineHoverPos = curMousePosInScreen.x;
+      if( ImGui::IsMouseClicked( 1 ) )
+      {
+         _bookmarks.times.push_back( _timelineStart + pxlToNanos(ImGui::GetWindowWidth(), _timelineRange, _timelineHoverPos - posX) );
+         std::sort( _bookmarks.times.begin(), _bookmarks.times.end() );
+      }
    }
    else
    {
@@ -857,6 +882,38 @@ void Timeline::addTraceToHighlight( const std::pair< size_t, uint32_t >& trace )
 void Timeline::clearHighlightedTraces()
 {
    _highlightedTraces.clear();
+}
+
+void Timeline::nextBookmark() noexcept
+{
+   const TimeStamp timelineCenter = _timelineStart + _timelineRange / 2;
+   const auto delta = std::abs( timelineCenter * 0.05 );
+   auto it = _bookmarks.times.begin();
+   while( it != _bookmarks.times.end() )
+   {
+      if( *it - delta > timelineCenter )
+      {
+         moveToTime( *it + (*it * 0.05) );
+         return;
+      }
+      ++it;
+   }
+}
+
+void Timeline::previousBookmark() noexcept
+{
+   const TimeStamp timelineCenter = _timelineStart + _timelineRange / 2;
+   const auto delta = std::abs( timelineCenter * 0.05 );
+   auto it = _bookmarks.times.rbegin();
+   while( it != _bookmarks.times.rend() )
+   {
+      if( ( *it + delta < timelineCenter ) )
+      {
+         moveToTime( *it );
+         return;
+      }
+      ++it;
+   }
 }
 
 } // namespace hop

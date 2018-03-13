@@ -719,11 +719,11 @@ void hop::Profiler::handleHotkey()
    }
    else if( ImGui::IsKeyPressed( SDL_SCANCODE_LEFT ) )
    {
-      printf("Left arrow\n");
+      _timeline.previousBookmark();
    }
    else if( ImGui::IsKeyPressed( SDL_SCANCODE_RIGHT ) )
    {
-      printf("Right arrow\n");
+      _timeline.nextBookmark();
    }
    else if( ImGui::IsKeyPressed( SDL_SCANCODE_UP ) )
    {
