@@ -26,4 +26,11 @@ void ThreadInfo::addUnlockEvents(const std::vector<UnlockEvent>& unlockEvents)
     _unlockEvents.insert(_unlockEvents.end(), unlockEvents.begin(), unlockEvents.end());
 }
 
+std::vector< char > serialize( const ThreadInfo& threadInfo )
+{
+   std::vector< char > data;
+
+   return data;
+}
+
 }

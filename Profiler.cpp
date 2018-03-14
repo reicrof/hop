@@ -181,6 +181,38 @@ void createResources()
    glBindTexture( GL_TEXTURE_2D, last_texture );
 }
 
+namespace
+{
+   struct SaveFileHeader
+   {
+      char magicChars[4];
+      uint32_t version;
+      uint32_t strDbSize;
+      uint32_t threadCount;
+   };
+}
+
+static bool saveAs( const char* path, const hop::StringDb& strDb, const std::vector< hop::ThreadInfo >& threadInfos )
+{
+   std::ofstream of( path, std::ofstream::binary );
+   std::vector< char > dbSerialized = serialize( strDb );
+   std::vector< std::vector< char > > serializedThreadInfos( threadInfos.size() );
+   for( size_t i = 0; i < threadInfos.size(); ++i )
+   {
+      serializedThreadInfos[i] = serialize( threadInfos[i] );
+   }
+   SaveFileHeader header = { 'D', 'I', 'P', 'A', 1, (uint32_t)dbSerialized.size(), (uint32_t)threadInfos.size() };
+   of.write( (const char*)&header, sizeof( header ) );
+   of.write( dbSerialized.data(), dbSerialized.size() );
+   for( const auto& sti : serializedThreadInfos )
+   {
+      of.write( sti.data(), sti.size() );
+   }
+
+   hop::StringDb db;
+   deserialize( dbSerialized, db );
+}
+
 bool saveAsJson( const char* path, const std::vector< hop::ThreadInfo >& /*threadTraces*/ )
 {
    using namespace rapidjson;
@@ -623,7 +655,7 @@ void hop::Profiler::draw()
 
 void hop::Profiler::drawMenuBar()
 {
-   const char* const menuSaveAsJason = "Save as JSON";
+   const char* const menuSaveAsHop = "Save as...";
    const char* const menuHelp = "Help";
    const char* menuAction = NULL;
    static bool useGlFinish = _server.useGlFinish();
@@ -632,9 +664,9 @@ void hop::Profiler::drawMenuBar()
    {
       if ( ImGui::BeginMenu( "Menu" ) )
       {
-         if ( ImGui::MenuItem( menuSaveAsJason, NULL ) )
+         if ( ImGui::MenuItem( menuSaveAsHop, NULL ) )
          {
-            menuAction = menuSaveAsJason;
+            menuAction = menuSaveAsHop;
          }
          if( ImGui::MenuItem( menuHelp, NULL ) )
          {
@@ -655,16 +687,16 @@ void hop::Profiler::drawMenuBar()
       ImGui::EndMenuBar();
    }
 
-   if ( menuAction == menuSaveAsJason )
+   if ( menuAction == menuSaveAsHop )
    {
-      ImGui::OpenPopup( menuSaveAsJason );
+      ImGui::OpenPopup( menuSaveAsHop );
    }
    else if( menuAction == menuHelp )
    {
       ImGui::OpenPopup( menuHelp );
    }
 
-   if ( ImGui::BeginPopupModal( menuSaveAsJason, NULL, ImGuiWindowFlags_AlwaysAutoResize ) )
+   if ( ImGui::BeginPopupModal( menuSaveAsHop, NULL, ImGuiWindowFlags_AlwaysAutoResize ) )
    {
       static char path[512] = {};
       ImGui::InputText( "Save to", path, sizeof( path ) );
@@ -672,7 +704,7 @@ void hop::Profiler::drawMenuBar()
 
       if ( ImGui::Button( "Save", ImVec2( 120, 0 ) ) )
       {
-         saveAsJson( path, _tracesPerThread );
+         saveAs( path, _strDb, _tracesPerThread );
          ImGui::CloseCurrentPopup();
       }
 

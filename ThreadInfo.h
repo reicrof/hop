@@ -18,6 +18,8 @@ struct ThreadInfo
    DisplayableTraces traces;
    std::vector<LockWait> _lockWaits;
    std::vector<UnlockEvent> _unlockEvents;
+
+   friend std::vector< char > serialize( const ThreadInfo& threadInfo );
 };
 }
 
