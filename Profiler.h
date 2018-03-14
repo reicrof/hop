@@ -34,6 +34,7 @@ private:
    void drawMenuBar();
    void drawSearchWindow();
    void drawTraceDetailsWindow();
+   bool openFile( const char* path );
 
    std::string _name;
    Timeline _timeline;

@@ -112,7 +112,7 @@ std::vector< char> serialize( const StringDb& strDb )
    return data;
 }
 
-size_t deserialize( const std::vector< char >& data, StringDb& strDb )
+size_t deserialize( const char* data, StringDb& strDb )
 {
    constexpr size_t keySize = sizeof( decltype(strDb._stringIndices)::key_type );
    constexpr size_t valueSize = sizeof( decltype(strDb._stringIndices)::mapped_type );
@@ -137,7 +137,7 @@ size_t deserialize( const std::vector< char >& data, StringDb& strDb )
    const size_t dataStart = mapStart + entryCount * mapEntrySize;
    memcpy( strDb._strData.data(), &data[ dataStart ], dataSize );
 
-   return dataSize + entryCount * mapEntrySize;
+   return 2 * sizeof( uint32_t ) + dataSize + entryCount * mapEntrySize;
 }
 
 }

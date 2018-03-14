@@ -25,7 +25,7 @@ public:
    std::vector< size_t > findStringIndexMatching( const char* ) const noexcept;
 
    friend std::vector< char > serialize( const StringDb& strDb );
-   friend size_t deserialize( const std::vector< char >& data, StringDb& strDb );
+   friend size_t deserialize( const char* data, StringDb& strDb );
 
 private:
    std::unordered_map< hop::TStrPtr_t, size_t > _stringIndices;

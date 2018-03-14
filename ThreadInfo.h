@@ -19,7 +19,10 @@ struct ThreadInfo
    std::vector<LockWait> _lockWaits;
    std::vector<UnlockEvent> _unlockEvents;
 
-   friend std::vector< char > serialize( const ThreadInfo& threadInfo );
+   // Right now the locks will not be serialized
+   friend std::vector< char > serialize( const ThreadInfo& ti );
+   friend size_t deserialize( const char* data, ThreadInfo& ti );
+
 };
 }
 

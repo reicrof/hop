@@ -183,9 +183,10 @@ void createResources()
 
 namespace
 {
+   const uint32_t MAGIC_NUMBER = 1095780676; // "DIPA"
    struct SaveFileHeader
    {
-      char magicChars[4];
+      uint32_t magicNumber;
       uint32_t version;
       uint32_t strDbSize;
       uint32_t threadCount;
@@ -201,16 +202,13 @@ static bool saveAs( const char* path, const hop::StringDb& strDb, const std::vec
    {
       serializedThreadInfos[i] = serialize( threadInfos[i] );
    }
-   SaveFileHeader header = { 'D', 'I', 'P', 'A', 1, (uint32_t)dbSerialized.size(), (uint32_t)threadInfos.size() };
+   SaveFileHeader header = { MAGIC_NUMBER, 1, (uint32_t)dbSerialized.size(), (uint32_t)threadInfos.size() };
    of.write( (const char*)&header, sizeof( header ) );
    of.write( dbSerialized.data(), dbSerialized.size() );
    for( const auto& sti : serializedThreadInfos )
    {
       of.write( sti.data(), sti.size() );
    }
-
-   hop::StringDb db;
-   deserialize( dbSerialized, db );
 }
 
 bool saveAsJson( const char* path, const std::vector< hop::ThreadInfo >& /*threadTraces*/ )
@@ -656,6 +654,7 @@ void hop::Profiler::draw()
 void hop::Profiler::drawMenuBar()
 {
    const char* const menuSaveAsHop = "Save as...";
+   const char* const menuOpenHopFile = "Open";
    const char* const menuHelp = "Help";
    const char* menuAction = NULL;
    static bool useGlFinish = _server.useGlFinish();
@@ -667,6 +666,10 @@ void hop::Profiler::drawMenuBar()
          if ( ImGui::MenuItem( menuSaveAsHop, NULL ) )
          {
             menuAction = menuSaveAsHop;
+         }
+         if( ImGui::MenuItem( menuOpenHopFile, NULL ) )
+         {
+           menuAction = menuOpenHopFile;
          }
          if( ImGui::MenuItem( menuHelp, NULL ) )
          {
@@ -691,6 +694,10 @@ void hop::Profiler::drawMenuBar()
    {
       ImGui::OpenPopup( menuSaveAsHop );
    }
+   else if( menuAction == menuOpenHopFile )
+   {
+      ImGui::OpenPopup( menuOpenHopFile );
+   }
    else if( menuAction == menuHelp )
    {
       ImGui::OpenPopup( menuHelp );
@@ -705,6 +712,27 @@ void hop::Profiler::drawMenuBar()
       if ( ImGui::Button( "Save", ImVec2( 120, 0 ) ) )
       {
          saveAs( path, _strDb, _tracesPerThread );
+         ImGui::CloseCurrentPopup();
+      }
+
+      ImGui::SameLine();
+
+      if ( ImGui::Button( "Cancel", ImVec2( 120, 0 ) ) )
+      {
+         ImGui::CloseCurrentPopup();
+      }
+
+      ImGui::EndPopup();
+   }
+   else if( ImGui::BeginPopupModal( menuOpenHopFile, NULL, ImGuiWindowFlags_AlwaysAutoResize ) )
+   {
+      static char path[512] = {};
+      ImGui::InputText( "Open file", path, sizeof( path ) );
+      ImGui::Separator();
+
+      if ( ImGui::Button( "Open", ImVec2( 120, 0 ) ) )
+      {
+         openFile( path );
          ImGui::CloseCurrentPopup();
       }
 
@@ -777,3 +805,31 @@ void hop::Profiler::setRecording(bool recording)
          _timeline.setRealtime(true);
    }
 }
+
+bool hop::Profiler::openFile( const char* path )
+{
+   std::ifstream input( path, std::ifstream::binary );
+   if ( input.is_open() )
+   {
+      std::vector<char> data(
+          ( std::istreambuf_iterator<char>( input ) ), ( std::istreambuf_iterator<char>() ) );
+      size_t i = 0;
+      SaveFileHeader* header = (SaveFileHeader*)&data[i];
+      i += sizeof( SaveFileHeader );
+      const size_t dbSize = deserialize( &data[i], _strDb );
+      assert( dbSize == header->strDbSize );
+      i += dbSize;
+
+      std::vector< ThreadInfo > threadInfos( header->threadCount );
+      for( uint32_t j = 0; j < header->threadCount; ++j )
+      {
+         size_t threadInfoSize = deserialize( &data[i], threadInfos[j] );
+         addTraces( threadInfos[j].traces, j );
+         i += threadInfoSize;
+      }
+
+      return true;
+   }
+   return false;
+}
+
