@@ -8,6 +8,8 @@
 
 #include "imgui/imgui.h"
 
+#include <SDL_keycode.h>
+
 #include <cmath>
 #define __STDC_FORMAT_MACROS
 #include <inttypes.h>
@@ -57,7 +59,7 @@ void Timeline::update( float deltaTimeMs ) noexcept
       {
          _timelineStart = _animationState.targetTimelineStart;
       }
-      _timelineStart += delta * deltaTimeMs * 0.01f;
+      _timelineStart += delta * deltaTimeMs / 100;
    }
 
    if( _timelineRange != _animationState.targetTimelineRange )
@@ -67,7 +69,7 @@ void Timeline::update( float deltaTimeMs ) noexcept
       {
          _timelineRange = _animationState.targetTimelineRange;
       }
-      _timelineRange += delta * deltaTimeMs * 0.01f;
+      _timelineRange += delta * deltaTimeMs / 100;
    }
 
    static float x = 0.0f;
@@ -300,11 +302,11 @@ void Timeline::handleMouseWheel( float mousePosX, float )
    ImGuiIO& io = ImGui::GetIO();
    if ( io.MouseWheel > 0 )
    {
-      zoomOn( pxlToNanos( windowWidthPxl, _timelineRange, mousePosX ) + _timelineStart, 0.9f );
+      zoomOn( pxlToNanos( windowWidthPxl, _timelineRange, mousePosX ) + _timelineStart, ImGui::IsKeyDown(SDL_SCANCODE_LSHIFT) ? 0.5 : 0.9f );
    }
    else if ( io.MouseWheel < 0 )
    {
-      zoomOn( pxlToNanos( windowWidthPxl, _timelineRange, mousePosX ) + _timelineStart, 1.1f );
+      zoomOn( pxlToNanos( windowWidthPxl, _timelineRange, mousePosX ) + _timelineStart, ImGui::IsKeyDown(SDL_SCANCODE_LSHIFT) ? 1.5 : 1.1f );
    }
 }
 
@@ -867,7 +869,7 @@ void Timeline::drawLockWaits(
          ImGui::Button( "Lock", ImVec2( lengthPxl, 20.f ) );
          if (ImGui::IsItemHovered())
          {
-             highlightLockOwner(infos, threadIndex, lw, posX, posY);
+            // highlightLockOwner(infos, threadIndex, lw, posX, posY);
          }
       }
    }

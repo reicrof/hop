@@ -8,6 +8,8 @@
 
 #include <rapidjson/document.h>
 
+#include <signal.h>
+
 #ifdef __APPLE__
 #include <OpenGL/gl.h>
 #else
@@ -17,6 +19,12 @@
 
 static bool g_run = true;
 static float g_mouseWheel = 0.0f;
+
+void terminateCallback( int sig )
+{
+   signal( sig, SIG_IGN );
+   g_run = false;
+}
 
 static void sdlImGuiInit()
 {
@@ -113,6 +121,10 @@ int main( int argc, const char* argv[] )
       printf("Usage : main_server <name_of_exec_to_profile>\n" );
       return -1;
    }
+
+   // Setup signal handlers
+   signal( SIGINT, terminateCallback );
+   signal( SIGTERM, terminateCallback );
 
    if ( SDL_Init( SDL_INIT_VIDEO ) != 0 )
    {
