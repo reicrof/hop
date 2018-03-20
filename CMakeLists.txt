@@ -34,6 +34,7 @@ add_definitions( -DHOP_ENABLED )
 file(GLOB hop_server_src
     "*.h"
     "*.cpp"
+    "*.c"
     "imgui/*.h"
     "imgui/*.cpp"
 )

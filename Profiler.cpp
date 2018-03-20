@@ -5,7 +5,7 @@
 #include "Utils.h"
 #include "TraceDetail.h"
 #include "TraceSearch.h"
-
+#include "miniz.h"
 #include <SDL_keycode.h>
 
 // Todo : I dont like this dependency
@@ -190,6 +190,7 @@ namespace
    {
       uint32_t magicNumber;
       uint32_t version;
+      size_t uncompressedSize;
       uint32_t strDbSize;
       uint32_t threadCount;
    };
@@ -217,10 +218,19 @@ static bool saveAs( const char* path, const hop::StringDb& strDb, const std::vec
       index += serialize( threadInfos[i], &data[ index ] );
    }
 
+   size_t compressedSize = compressBound( totalSerializedSize );
+   std::vector< char > compressedData( compressedSize );
+   int compressionStatus = compress( (unsigned char*)compressedData.data(), &compressedSize, (const unsigned char *)&data[0], totalSerializedSize);
+   if( compressionStatus != Z_OK )
+   {
+      printf("Compression failed. File not saved!\n");
+      return false;
+   }
+
    std::ofstream of( path, std::ofstream::binary );
-   SaveFileHeader header = { MAGIC_NUMBER, 1, (uint32_t)dbSerializedSize, (uint32_t)threadInfos.size() };
+   SaveFileHeader header = { MAGIC_NUMBER, 1, totalSerializedSize, (uint32_t)dbSerializedSize, (uint32_t)threadInfos.size() };
    of.write( (const char*)&header, sizeof( header ) );
-   of.write( &data[0], totalSerializedSize );
+   of.write( &compressedData[0], totalSerializedSize );
 
    return true;
 }
@@ -833,17 +843,33 @@ bool hop::Profiler::openFile( const char* path )
 
       std::vector<char> data(
           ( std::istreambuf_iterator<char>( input ) ), ( std::istreambuf_iterator<char>() ) );
+      
+      SaveFileHeader* header = (SaveFileHeader*)&data[0];
+
+      std::vector< char > uncompressedData( header->uncompressedSize );
+      size_t uncompressedSize = uncompressedData.size();
+
+      int uncompressStatus = uncompress(
+          (unsigned char*)uncompressedData.data(),
+          &uncompressedSize,
+          (unsigned char*)&data[ sizeof( SaveFileHeader ) ],
+          data.size() - sizeof( SaveFileHeader ) );
+
+      if( uncompressStatus != Z_OK )
+      {
+         printf("Error uncompressing file. Nothing will be loaded\n");
+         return false;
+      }
+
       size_t i = 0;
-      SaveFileHeader* header = (SaveFileHeader*)&data[i];
-      i += sizeof( SaveFileHeader );
-      const size_t dbSize = deserialize( &data[i], _strDb );
+      const size_t dbSize = deserialize( &uncompressedData[i], _strDb );
       assert( dbSize == header->strDbSize );
       i += dbSize;
 
       std::vector< ThreadInfo > threadInfos( header->threadCount );
       for( uint32_t j = 0; j < header->threadCount; ++j )
       {
-         size_t threadInfoSize = deserialize( &data[i], threadInfos[j] );
+         size_t threadInfoSize = deserialize( &uncompressedData[i], threadInfos[j] );
          addTraces( threadInfos[j].traces, j );
          i += threadInfoSize;
       }
