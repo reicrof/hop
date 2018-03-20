@@ -144,12 +144,16 @@ void Timeline::draw(
    {
       const auto& windowSize = ImGui::GetWindowSize();
       ImGui::PushClipRect( ImVec2( startDrawPos.x, startDrawPos.y ), ImVec2( startDrawPos.x + windowSize.x, startDrawPos.y + windowSize.y ), false );
+      ImGui::PushStyleColor( ImGuiCol_Button, ImColor( 0.0f, 0.0f, 0.8f ) );
+      ImGui::PushStyleColor( ImGuiCol_ButtonHovered, ImColor( 0.0f, 0.0f, 0.9f ));
+      ImGui::PushStyleColor( ImGuiCol_ButtonActive, ImColor( 0.0f, 0.0f, 1.0f ));
       for( auto t : _bookmarks.times )
       {
          float posXPxl = nanosToPxl( windowSize.x, _timelineRange, t - _timelineStart );
          drawBookmarks( posXPxl + startDrawPos.x, startDrawPos.y );
       }
       ImGui::PopClipRect();
+      ImGui::PopStyleColor(3);
    }
 
    ImGui::EndChild(); // TimelineCanvas
