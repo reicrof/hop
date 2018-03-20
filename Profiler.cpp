@@ -858,6 +858,8 @@ void hop::Profiler::clear()
    _strDb.clear();
    _tracesPerThread.clear();
    _timeline.setAbsoluteStartTime( 0 );
+   _timeline.clearTraceDetails();
+   _timeline.clearBookmarks();
    _recording = false;
 }
 

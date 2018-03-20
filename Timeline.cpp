@@ -956,6 +956,11 @@ void Timeline::previousBookmark() noexcept
    }
 }
 
+void Timeline::clearBookmarks()
+{
+   _bookmarks.times.clear();
+}
+
 void Timeline::pushNavigationState() noexcept
 {
    _undoPositionStates.push_back( AnimationState{

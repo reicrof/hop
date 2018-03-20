@@ -56,6 +56,7 @@ class Timeline
 
    void nextBookmark() noexcept;
    void previousBookmark() noexcept;
+   void clearBookmarks();
 
    void pushNavigationState() noexcept;
    void undoNavigation() noexcept;
