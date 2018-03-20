@@ -26,7 +26,7 @@ void ThreadInfo::addUnlockEvents(const std::vector<UnlockEvent>& unlockEvents)
     _unlockEvents.insert(_unlockEvents.end(), unlockEvents.begin(), unlockEvents.end());
 }
 
-std::vector< char > serialize( const ThreadInfo& ti )
+size_t serializedSize( const ThreadInfo& ti )
 {
    const size_t tracesCount = ti.traces.ends.size();
    const size_t serializedSize =
@@ -36,10 +36,17 @@ std::vector< char > serialize( const ThreadInfo& ti )
        sizeof( hop::TimeDuration ) * tracesCount +   // deltas
        sizeof( hop::TStrPtr_t ) * tracesCount * 2 +  // fileNameId and fctNameIds
        sizeof( hop::TLineNb_t ) * tracesCount +      // lineNbs
-       //sizeof( hop::TGroup_t ) * tracesCount +       // groups
-       sizeof( hop::TDepth_t ) * tracesCount;        // depths
+       // sizeof( hop::TGroup_t ) * tracesCount +       // groups
+       sizeof( hop::TDepth_t ) * tracesCount;  // depths
 
-   std::vector< char > data( serializedSize );
+   return serializedSize;
+}
+
+size_t serialize( const ThreadInfo& ti, char* data )
+{
+   const size_t serialSize = serializedSize( ti );
+   const size_t tracesCount = ti.traces.ends.size();
+
    size_t i = 0;
    // Traces count
    memcpy( &data[i], &tracesCount, sizeof( size_t ) );
@@ -77,7 +84,9 @@ std::vector< char > serialize( const ThreadInfo& ti )
    memcpy( &data[i], ti.traces.depths.data(), sizeof( hop::TDepth_t ) * tracesCount );
    i += sizeof( hop::TDepth_t ) * tracesCount;
 
-   return data;
+   assert( i == serialSize );
+
+   return i;
 }
 
 size_t deserialize( const char* data, ThreadInfo& ti )

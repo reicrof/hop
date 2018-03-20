@@ -29,6 +29,7 @@ struct Profiler
    void addUnlockEvents(const std::vector<UnlockEvent>& unlockEvents, uint32_t threadIndex);
    void handleHotkey();
    void setRecording( bool recording );
+   void clear();
 
 private:
    void drawMenuBar();

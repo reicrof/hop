@@ -270,6 +270,7 @@ class SharedMemory
          CONNECTED_CONSUMER = 1 << 1,
          LISTENING_CONSUMER = 1 << 2,
          USE_GL_FINISH      = 1 << 3,
+         RESEND_STRING_DATA = 1 << 4,
       };
       std::atomic< uint32_t > flags{0};
    };
@@ -282,6 +283,8 @@ class SharedMemory
    void setListeningConsumer( bool ) HOP_NOEXCEPT;
    bool isUsingGlFinish() const HOP_NOEXCEPT;
    void setUseGlFinish( bool ) HOP_NOEXCEPT;
+   bool shouldResendStringData() const HOP_NOEXCEPT;
+   void resetResendStringDataFlag() HOP_NOEXCEPT;
    ringbuf_t* ringbuffer() const HOP_NOEXCEPT;
    uint8_t* data() const HOP_NOEXCEPT;
    sem_handle semaphore() const HOP_NOEXCEPT;
@@ -720,10 +723,7 @@ bool SharedMemory::create( const char* path, size_t requestedSize, bool isConsum
       // effect would simply be that other consumer would stop listening. Not a
       // big deal as there should not be any other consumer...
       _sharedMetaData->flags &= ~(SharedMetaInfo::LISTENING_CONSUMER);
-
-      // Fake a disconnected consumer for a few ms so the producer can readjust.
-      _sharedMetaData->flags &= ~(SharedMetaInfo::CONNECTED_CONSUMER);
-      HOP_SLEEP_MS( 250 );
+      _sharedMetaData->flags |= SharedMetaInfo::RESEND_STRING_DATA;
    }
 
    if( isConsumer )
@@ -785,6 +785,16 @@ void SharedMemory::setUseGlFinish( bool useGlFinish ) HOP_NOEXCEPT
       _sharedMetaData->flags |= SharedMetaInfo::USE_GL_FINISH;
    else
       _sharedMetaData->flags &= ~SharedMetaInfo::USE_GL_FINISH;
+}
+
+bool SharedMemory::shouldResendStringData() const HOP_NOEXCEPT
+{
+   return (sharedMetaInfo()->flags & SharedMetaInfo::RESEND_STRING_DATA) > 0;
+}
+
+void SharedMemory::resetResendStringDataFlag() HOP_NOEXCEPT
+{
+   _sharedMetaData->flags &= ~SharedMetaInfo::RESEND_STRING_DATA;
 }
 
 uint8_t* SharedMemory::data() const HOP_NOEXCEPT
@@ -943,6 +953,13 @@ class Client
          addStringToDb( (const char*) t.fctNameId );
       }
 
+      // Reset sent string size if we are requested to re-send them
+      if( ClientManager::sharedMemory.shouldResendStringData() )
+      {
+         _sentStringDataSize = 0;
+         ClientManager::sharedMemory.resetResendStringDataFlag();
+      }
+
       // 1- Get size of profiling traces message
       const uint32_t stringDataSize = _stringData.size();
       assert( stringDataSize >= _sentStringDataSize );
@@ -989,7 +1006,6 @@ class Client
          // Copy string data into its array
          const auto itFrom = _stringData.begin() + _sentStringDataSize;
          std::copy( itFrom, itFrom + stringToSendSize, stringData );
-         //memcpy( stringData, _stringData.data() + _sentStringDataSize, stringToSendSize );
 
          // Copy trace information into buffer to send
          std::copy( _traces.begin(), _traces.end(), traceToSend );

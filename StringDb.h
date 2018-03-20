@@ -14,6 +14,7 @@ class StringDb
 public:
    StringDb();
    bool empty() const;
+   void clear();
    void addStringData( const std::vector<char>& inData );
    void addStringData( const char* inData, size_t count );
    size_t getStringIndex( hop::TStrPtr_t strId ) const;
@@ -24,7 +25,8 @@ public:
    }
    std::vector< size_t > findStringIndexMatching( const char* ) const noexcept;
 
-   friend std::vector< char > serialize( const StringDb& strDb );
+   friend size_t serializedSize( const StringDb& strDb );
+   friend size_t serialize( const StringDb& strDb, char* data );
    friend size_t deserialize( const char* data, StringDb& strDb );
 
 private:

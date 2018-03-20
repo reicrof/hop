@@ -5,6 +5,7 @@
 #include "Utils.h"
 #include "TraceDetail.h"
 #include "TraceSearch.h"
+
 #include <SDL_keycode.h>
 
 // Todo : I dont like this dependency
@@ -21,6 +22,7 @@
 #include <chrono>
 #include <vector>
 #include <algorithm>
+#include <numeric>
 #include <stdio.h>
 
 // Used to save the traces as json file
@@ -195,20 +197,32 @@ namespace
 
 static bool saveAs( const char* path, const hop::StringDb& strDb, const std::vector< hop::ThreadInfo >& threadInfos )
 {
-   std::ofstream of( path, std::ofstream::binary );
-   std::vector< char > dbSerialized = serialize( strDb );
-   std::vector< std::vector< char > > serializedThreadInfos( threadInfos.size() );
+   // Compute the size of the serialized data
+   const size_t dbSerializedSize = serializedSize( strDb );
+   std::vector< size_t > threadInfosSerializedSize( threadInfos.size() );
    for( size_t i = 0; i < threadInfos.size(); ++i )
    {
-      serializedThreadInfos[i] = serialize( threadInfos[i] );
+      threadInfosSerializedSize[ i ] = serializedSize( threadInfos[i] );
    }
-   SaveFileHeader header = { MAGIC_NUMBER, 1, (uint32_t)dbSerialized.size(), (uint32_t)threadInfos.size() };
-   of.write( (const char*)&header, sizeof( header ) );
-   of.write( dbSerialized.data(), dbSerialized.size() );
-   for( const auto& sti : serializedThreadInfos )
+
+   const size_t totalSerializedSize =
+       std::accumulate( threadInfosSerializedSize.begin(), threadInfosSerializedSize.end(), 0 ) +
+       dbSerializedSize;
+
+   std::vector< char > data( totalSerializedSize );
+
+   size_t index = serialize( strDb, &data[ 0 ] );
+   for( size_t i = 0; i < threadInfos.size(); ++i )
    {
-      of.write( sti.data(), sti.size() );
+      index += serialize( threadInfos[i], &data[ index ] );
    }
+
+   std::ofstream of( path, std::ofstream::binary );
+   SaveFileHeader header = { MAGIC_NUMBER, 1, (uint32_t)dbSerializedSize, (uint32_t)threadInfos.size() };
+   of.write( (const char*)&header, sizeof( header ) );
+   of.write( &data[0], totalSerializedSize );
+
+   return true;
 }
 
 bool saveAsJson( const char* path, const std::vector< hop::ThreadInfo >& /*threadTraces*/ )
@@ -329,99 +343,93 @@ Profiler::Profiler( const std::string& name ) : _name( name )
 
 void Profiler::addTraces( const DisplayableTraces& traces, uint32_t threadIndex )
 {
-   if ( _recording )
+   // Add new thread as they come
+   if ( threadIndex >= _tracesPerThread.size() )
    {
-      // Add new thread as they come
-      if ( threadIndex >= _tracesPerThread.size() )
-      {
-         _tracesPerThread.resize( threadIndex + 1 );
-      }
-
-     // Update the current time
-      if( traces.ends.back() > _timeline.absolutePresentTime() )
-        _timeline.setAbsolutePresentTime( traces.ends.back() );
-
-     // If this is the first traces received from the thread, update the
-      // start time as it may be earlier.
-      if( _tracesPerThread[threadIndex].traces.ends.empty() )
-      {
-         // Find the earliest trace
-         TimeStamp earliestTime = traces.ends[0] - traces.deltas[0];
-         for( size_t i = 1; i < traces.ends.size(); ++i )
-         {
-            earliestTime = std::min( earliestTime, traces.ends[i] - traces.deltas[i] );
-         }
-         // Set the timeline absolute start time to this new value
-         const auto startTime = _timeline.absoluteStartTime();
-         if( startTime == 0 || earliestTime < startTime )
-            _timeline.setAbsoluteStartTime( earliestTime );
-      }
-
-      _tracesPerThread[threadIndex].addTraces( traces );
+      _tracesPerThread.resize( threadIndex + 1 );
    }
+
+   // Update the current time
+   if ( traces.ends.back() > _timeline.absolutePresentTime() )
+      _timeline.setAbsolutePresentTime( traces.ends.back() );
+
+   // If this is the first traces received from the thread, update the
+   // start time as it may be earlier.
+   if ( _tracesPerThread[threadIndex].traces.ends.empty() )
+   {
+      // Find the earliest trace
+      TimeStamp earliestTime = traces.ends[0] - traces.deltas[0];
+      for ( size_t i = 1; i < traces.ends.size(); ++i )
+      {
+         earliestTime = std::min( earliestTime, traces.ends[i] - traces.deltas[i] );
+      }
+      // Set the timeline absolute start time to this new value
+      const auto startTime = _timeline.absoluteStartTime();
+      if ( startTime == 0 || earliestTime < startTime )
+         _timeline.setAbsoluteStartTime( earliestTime );
+   }
+
+   _tracesPerThread[threadIndex].addTraces( traces );
 }
 
 void Profiler::fetchClientData()
 {
    _server.getPendingData(_serverPendingData);
 
-   for( size_t i = 0; i <_serverPendingData.traces.size(); ++i )
+   if( _recording )
    {
-      addTraces(_serverPendingData.traces[i], _serverPendingData.tracesThreadIndex[i] );
-      addStringData(_serverPendingData.stringData[i], _serverPendingData.tracesThreadIndex[i] );
-   }
-   for( size_t i = 0; i < _serverPendingData.lockWaits.size(); ++i )
-   {
-      addLockWaits(_serverPendingData.lockWaits[i], _serverPendingData.lockWaitThreadIndex[i] );
-   }
-   for (size_t i = 0; i < _serverPendingData.unlockEvents.size(); ++i)
-   {
-       addUnlockEvents(_serverPendingData.unlockEvents[i], _serverPendingData.unlockEventsThreadIndex[i]);
+      for( size_t i = 0; i <_serverPendingData.traces.size(); ++i )
+      {
+         addTraces(_serverPendingData.traces[i], _serverPendingData.tracesThreadIndex[i] );
+         addStringData(_serverPendingData.stringData[i], _serverPendingData.tracesThreadIndex[i] );
+      }
+      for( size_t i = 0; i < _serverPendingData.lockWaits.size(); ++i )
+      {
+         addLockWaits(_serverPendingData.lockWaits[i], _serverPendingData.lockWaitThreadIndex[i] );
+      }
+      for (size_t i = 0; i < _serverPendingData.unlockEvents.size(); ++i)
+      {
+          addUnlockEvents(_serverPendingData.unlockEvents[i], _serverPendingData.unlockEventsThreadIndex[i]);
+      }
    }
 }
 
-void Profiler::addStringData( const std::vector<char>& strData, uint32_t threadIndex)
+void Profiler::addStringData( const std::vector<char>& strData, uint32_t threadIndex )
 {
    // We should read the string data even when not recording since the string data
    // is sent only once (the first time a function is used)
-   if( !strData.empty() )
+   if ( !strData.empty() )
    {
       // Check if new thread
-      if( threadIndex >= _tracesPerThread.size() )
+      if ( threadIndex >= _tracesPerThread.size() )
       {
-          _tracesPerThread.resize( threadIndex + 1 );
+         _tracesPerThread.resize( threadIndex + 1 );
       }
 
       _strDb.addStringData( strData );
    }
 }
 
-void Profiler::addLockWaits( const std::vector<LockWait>& lockWaits, uint32_t threadIndex)
+void Profiler::addLockWaits( const std::vector<LockWait>& lockWaits, uint32_t threadIndex )
 {
-   if ( _recording )
+   // Check if new thread
+   if ( threadIndex >= _tracesPerThread.size() )
    {
-       // Check if new thread
-       if (threadIndex >= _tracesPerThread.size())
-       {
-           _tracesPerThread.resize(threadIndex + 1);
-       }
-
-      _tracesPerThread[threadIndex].addLockWaits( lockWaits );
+      _tracesPerThread.resize( threadIndex + 1 );
    }
+
+   _tracesPerThread[threadIndex].addLockWaits( lockWaits );
 }
 
-void Profiler::addUnlockEvents(const std::vector<UnlockEvent>& unlockEvents, uint32_t threadIndex)
+void Profiler::addUnlockEvents( const std::vector<UnlockEvent>& unlockEvents, uint32_t threadIndex )
 {
-    if (_recording)
-    {
-        // Check if new thread
-        if (threadIndex >= _tracesPerThread.size())
-        {
-            _tracesPerThread.resize(threadIndex + 1);
-        }
+   // Check if new thread
+   if ( threadIndex >= _tracesPerThread.size() )
+   {
+      _tracesPerThread.resize( threadIndex + 1 );
+   }
 
-        _tracesPerThread[threadIndex].addUnlockEvents(unlockEvents);
-    }
+   _tracesPerThread[threadIndex].addUnlockEvents( unlockEvents );
 }
 
 Profiler::~Profiler()
@@ -811,6 +819,10 @@ bool hop::Profiler::openFile( const char* path )
    std::ifstream input( path, std::ifstream::binary );
    if ( input.is_open() )
    {
+      // TODO add popup to warn user and cancel operation
+      // Clear previsouly recorder traces.
+      clear();
+
       std::vector<char> data(
           ( std::istreambuf_iterator<char>( input ) ), ( std::istreambuf_iterator<char>() ) );
       size_t i = 0;
@@ -831,5 +843,13 @@ bool hop::Profiler::openFile( const char* path )
       return true;
    }
    return false;
+}
+
+void hop::Profiler::clear()
+{
+   _strDb.clear();
+   _tracesPerThread.clear();
+   _timeline.setAbsoluteStartTime( 0 );
+   _recording = false;
 }
 
