@@ -38,13 +38,11 @@ static void drawHoveringTimelineLine(float posInScreenX, float timelineStartPosY
 
 static void drawBookmarks( float posXPxl, float posYPxl )
 {
-   auto drawList = ImGui::GetWindowDrawList();
-   drawList->PushClipRectFullScreen();
-   drawList->AddCircleFilled(
-       ImVec2( posXPxl, posYPxl + 10 ),
-       5.0f,
-       ImColor( 0, 0, 255, 200 ) );
-   drawList->PopClipRect();
+   constexpr float BOOKMARK_WIDTH = 8.0f;
+   constexpr float BOOKMARK_HEIGHT = 20.0f;
+   constexpr float LINE_PADDING = 5.0f;
+   ImGui::SetCursorScreenPos( ImVec2( posXPxl - (BOOKMARK_WIDTH * 0.5f), posYPxl + LINE_PADDING ) );
+   ImGui::Button("", ImVec2( BOOKMARK_WIDTH, BOOKMARK_HEIGHT ) );
 }
 
 namespace hop
@@ -52,24 +50,44 @@ namespace hop
 
 void Timeline::update( float deltaTimeMs ) noexcept
 {
-   if( _timelineStart != _animationState.targetTimelineStart )
+   switch ( _animationState.type )
    {
-      int64_t delta = _animationState.targetTimelineStart - _timelineStart;
-      if( std::abs( delta ) < 3 )
-      {
+      case ANIMATION_TYPE_NONE:
          _timelineStart = _animationState.targetTimelineStart;
-      }
-      _timelineStart += delta * deltaTimeMs / 100;
-   }
-
-   if( _timelineRange != _animationState.targetTimelineRange )
-   {
-      int64_t delta = _animationState.targetTimelineRange - _timelineRange;
-      if( std::abs( delta ) < 3 )
-      {
          _timelineRange = _animationState.targetTimelineRange;
+         break;
+      case ANIMATION_TYPE_NORMAL:
+      case ANIMATION_TYPE_FAST:
+      {
+         int64_t speedFactor = _animationState.type == ANIMATION_TYPE_NORMAL ? 100 / deltaTimeMs : 90 / deltaTimeMs;
+         speedFactor = std::max( speedFactor, 1ll );
+         if ( std::abs( _timelineStart - _animationState.targetTimelineStart ) > 0.00001 )
+         {
+            int64_t delta = _animationState.targetTimelineStart - _timelineStart;
+            if ( std::abs( delta ) < 10 )
+            {
+               _timelineStart = _animationState.targetTimelineStart;
+            }
+            else
+            {
+               _timelineStart += delta / speedFactor;
+            }
+         }
+
+         if ( std::abs( _timelineRange - _animationState.targetTimelineRange ) > 0.00001 )
+         {
+            int64_t delta = _animationState.targetTimelineRange - _timelineRange;
+            if ( std::abs( delta ) < 10 )
+            {
+               _timelineRange = _animationState.targetTimelineRange;
+            }
+            else
+            {
+               _timelineRange += delta / speedFactor;
+            }
+         }
+         break;
       }
-      _timelineRange += delta * deltaTimeMs / 100;
    }
 
    static float x = 0.0f;
@@ -124,11 +142,14 @@ void Timeline::draw(
 
    if( !_bookmarks.times.empty() )
    {
+      const auto& windowSize = ImGui::GetWindowSize();
+      ImGui::PushClipRect( ImVec2( startDrawPos.x, startDrawPos.y ), ImVec2( startDrawPos.x + windowSize.x, startDrawPos.y + windowSize.y ), false );
       for( auto t : _bookmarks.times )
       {
-         float posXPxl = nanosToPxl( ImGui::GetWindowWidth(), _timelineRange, t - _timelineStart );
+         float posXPxl = nanosToPxl( windowSize.x, _timelineRange, t - _timelineStart );
          drawBookmarks( posXPxl + startDrawPos.x, startDrawPos.y );
       }
+      ImGui::PopClipRect();
    }
 
    ImGui::EndChild(); // TimelineCanvas
@@ -319,7 +340,7 @@ void Timeline::handleMouseDrag( float mouseInCanvasX, float mouseInCanvasY )
       const auto delta = ImGui::GetMouseDragDelta();
       const int64_t deltaXInNanos =
           pxlToNanos<int64_t>( windowWidthPxl, _timelineRange, delta.x );
-      setStartTime( _timelineStart - deltaXInNanos, false );
+      setStartTime( _timelineStart - deltaXInNanos, ANIMATION_TYPE_NONE );
 
       // Switch to the traces context to modify the scroll
       ImGui::BeginChild( "TimelineCanvas" );
@@ -353,13 +374,15 @@ void Timeline::handleMouseDrag( float mouseInCanvasX, float mouseInCanvasY )
    // Handle right mouse click up. (Finished right click selection zoom)
    if ( ImGui::IsMouseReleased( 1 ) && _rightClickStartPosInCanvas[0] != 0.0f )
    {
+      pushNavigationState();
+
       const float minX = std::min( _rightClickStartPosInCanvas[0], mouseInCanvasX );
       const float maxX = std::max( _rightClickStartPosInCanvas[0], mouseInCanvasX );
       const float windowWidthPxl = ImGui::GetWindowWidth();
       const int64_t minXinNanos =
-        pxlToNanos<int64_t>( windowWidthPxl, _timelineRange, minX );
+        pxlToNanos<int64_t>( windowWidthPxl, _timelineRange, minX - 2 );
       setStartTime( _timelineStart + minXinNanos );
-      setZoom( pxlToNanos<TimeDuration>( windowWidthPxl, _timelineRange, maxX - minX ) );
+      setZoom( pxlToNanos<TimeDuration>( windowWidthPxl, _timelineRange, maxX - minX) );
 
       // Reset position
       _rightClickStartPosInCanvas[0] = _rightClickStartPosInCanvas[1] = 0.0f;
@@ -407,32 +430,37 @@ void Timeline::setTraceDetailsDisplayed()
     _traceDetails.shouldFocusWindow = false;
 }
 
-void Timeline::setStartTime( int64_t time, bool withAnimation /*= true*/ ) noexcept
+void Timeline::setStartTime( int64_t time, AnimationType animType ) noexcept
 {
    _animationState.targetTimelineStart = time;
-   if( !withAnimation )
+   _animationState.type = animType;
+   if( animType == ANIMATION_TYPE_NONE )
+   {
+      // We need to update it immediately as subsequent call might need it updated
+      // before the next update
       _timelineStart = time;
+   }
 }
 
-void Timeline::moveToAbsoluteTime( TimeStamp time, bool animate ) noexcept
+void Timeline::moveToAbsoluteTime( TimeStamp time, AnimationType animType ) noexcept
 {
-   moveToTime( time - _absoluteStartTime, animate );
+   moveToTime( time - _absoluteStartTime, animType );
 }
 
-void Timeline::moveToTime( int64_t time, bool animate ) noexcept
+void Timeline::moveToTime( int64_t time, AnimationType animType ) noexcept
 {
-   setStartTime( time - ( _timelineRange * 0.5 ), animate );
+   setStartTime( time - ( _timelineRange * 0.5 ), animType );
 }
 
-void Timeline::moveToStart( bool animate ) noexcept
+void Timeline::moveToStart( AnimationType animType ) noexcept
 {
-   moveToTime( _timelineRange * 0.5f, animate );
+   moveToTime( _timelineRange * 0.5f, animType );
    setRealtime( false );
 }
 
-void Timeline::moveToPresentTime( bool animate ) noexcept
+void Timeline::moveToPresentTime( AnimationType animType ) noexcept
 {
-   moveToTime( ( _absolutePresentTime - _absoluteStartTime ), animate );
+   moveToTime( ( _absolutePresentTime - _absoluteStartTime ), animType );
 }
 
 void Timeline::frameToTime( int64_t time, TimeDuration duration ) noexcept
@@ -446,19 +474,25 @@ void Timeline::frameToAbsoluteTime( TimeStamp time, TimeDuration duration ) noex
    frameToTime( time - _absoluteStartTime, duration );
 }
 
-void Timeline::setZoom( TimeDuration timelineDuration, bool withAnimation /*= true*/ )
+void Timeline::setZoom( TimeDuration timelineDuration, AnimationType animType )
 {
    _animationState.targetTimelineRange = hop::clamp( timelineDuration, MIN_NANOS_TO_DISPLAY, MAX_NANOS_TO_DISPLAY );
-   if( !withAnimation )
-      _timelineRange = _animationState.targetTimelineRange;
+   _animationState.type = animType;
+   if( animType == ANIMATION_TYPE_NONE )
+   {
+      // We need to update it immediately as subsequent call might need it updated
+      // before the next update
+      _timelineRange = timelineDuration;
+   }
 }
 
 void Timeline::zoomOn( int64_t nanoToZoomOn, float zoomFactor )
 {
    const float windowWidthPxl = ImGui::GetWindowWidth();
    const int64_t nanoToZoom = nanoToZoomOn - _timelineStart;
+
    const auto prevTimelineRange = _timelineRange;
-   setZoom( _timelineRange * zoomFactor, false );
+   setZoom( _timelineRange * zoomFactor, ANIMATION_TYPE_NONE );
 
    const int64_t prevPxlPos = nanosToPxl( windowWidthPxl, prevTimelineRange, nanoToZoom );
    const int64_t newPxlPos = nanosToPxl( windowWidthPxl, _timelineRange, nanoToZoom );
@@ -467,7 +501,7 @@ void Timeline::zoomOn( int64_t nanoToZoomOn, float zoomFactor )
    if ( pxlDiff != 0 )
    {
       const int64_t timeDiff = pxlToNanos( windowWidthPxl, _timelineRange, pxlDiff );
-      setStartTime( _timelineStart + timeDiff, false );
+      setStartTime( _timelineStart + timeDiff, ANIMATION_TYPE_NONE );
    }
 }
 
@@ -665,7 +699,7 @@ void Timeline::drawTraces(
          {
             const TimeStamp traceEndTime =
                 pxlToNanos( windowWidthPxl, _timelineRange, t.posPxl.x - posX + t.lengthPxl );
-            frameToTime( _timelineStart + ( traceEndTime - t.duration ), t.duration );
+            frameToTime( _timelineStart + ( traceEndTime - t.duration ), ANIMATION_TYPE_NORMAL );
          }
          else if ( rightMouseClicked && _rightClickStartPosInCanvas[0] == 0.0f)
          {
@@ -895,7 +929,7 @@ void Timeline::nextBookmark() noexcept
    {
       if( *it - delta > timelineCenter )
       {
-         moveToTime( *it + (*it * 0.05) );
+         moveToTime( *it + (*it * 0.05), ANIMATION_TYPE_FAST );
          return;
       }
       ++it;
@@ -911,10 +945,42 @@ void Timeline::previousBookmark() noexcept
    {
       if( ( *it + delta < timelineCenter ) )
       {
-         moveToTime( *it );
+         moveToTime( *it, ANIMATION_TYPE_FAST );
          return;
       }
       ++it;
+   }
+}
+
+void Timeline::pushNavigationState() noexcept
+{
+   _undoPositionStates.push_back( AnimationState{
+       _animationState.targetTimelineStart, _animationState.targetTimelineRange, 0.0f, ANIMATION_TYPE_FAST} );
+}
+
+void Timeline::undoNavigation() noexcept
+{
+   if( !_undoPositionStates.empty() )
+   {
+      _redoPositionStates.push_back( _animationState );
+      const auto& state = _undoPositionStates.back();
+      _animationState.targetTimelineStart = state.targetTimelineStart;
+      _animationState.targetTimelineRange = state.targetTimelineRange;
+      _animationState.type = ANIMATION_TYPE_FAST;
+      _undoPositionStates.pop_back();
+   }
+}
+
+void Timeline::redoNavigation() noexcept
+{
+   if( !_redoPositionStates.empty() )
+   {
+      _undoPositionStates.push_back( _animationState );
+      const auto& state = _redoPositionStates.back();
+      _animationState.targetTimelineStart = state.targetTimelineStart;
+      _animationState.targetTimelineRange = state.targetTimelineRange;
+      _animationState.type = ANIMATION_TYPE_FAST;
+      _redoPositionStates.pop_back();
    }
 }
 

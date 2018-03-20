@@ -602,7 +602,7 @@ void hop::Profiler::draw()
       //  Move timeline to the most recent trace if Live mode is on
       if( _recording && _timeline.realtime() )
       {
-         _timeline.moveToPresentTime( false );
+         _timeline.moveToPresentTime( Timeline::ANIMATION_TYPE_NONE );
       }
 
       // Draw the search window. This must be done before drawing the traces as we need to highlight traces
@@ -716,6 +716,14 @@ void hop::Profiler::handleHotkey()
    {
       _searchWindowOpen = true;
       _focusSearchWindow = true;
+   }
+   else if( ImGui::GetIO().KeyCtrl && ImGui::IsKeyPressed( 'z' ) )
+   {
+      _timeline.undoNavigation();
+   }
+   else if( ImGui::GetIO().KeyCtrl && ImGui::IsKeyPressed( 'y' ) )
+   {
+      _timeline.redoNavigation();
    }
    else if( ImGui::IsKeyPressed( SDL_SCANCODE_LEFT ) )
    {
