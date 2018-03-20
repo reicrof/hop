@@ -18,6 +18,12 @@ struct ThreadInfo
    DisplayableTraces traces;
    std::vector<LockWait> _lockWaits;
    std::vector<UnlockEvent> _unlockEvents;
+
+   // Right now the locks will not be serialized
+   friend size_t serializedSize( const ThreadInfo& ti );
+   friend size_t serialize( const ThreadInfo& ti, char* );
+   friend size_t deserialize( const char* data, ThreadInfo& ti );
+
 };
 }
 

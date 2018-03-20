@@ -15,7 +15,13 @@ StringDb::StringDb()
 
 bool StringDb::empty() const
 {
-	return _stringIndices.empty();
+   return _stringIndices.empty();
+}
+
+void StringDb::clear()
+{
+   _strData.clear();
+   _stringIndices.clear();
 }
 
 void StringDb::addStringData( const char* inData, size_t count )
@@ -79,6 +85,75 @@ std::vector< size_t > StringDb::findStringIndexMatching( const char* substrToFin
       i += length + 1;
    }
    return indices;
+}
+
+static constexpr size_t keySize = sizeof( hop::TStrPtr_t );
+static constexpr size_t valueSize = sizeof( size_t );
+static constexpr size_t mapEntrySize = keySize + valueSize;
+
+size_t serializedSize( const StringDb& strDb )
+{
+   const uint32_t entryCount = (uint32_t)strDb._stringIndices.size();
+   const uint32_t dataSize = (uint32_t)strDb._strData.size();
+
+   return 2 * sizeof( uint32_t ) + entryCount * mapEntrySize + dataSize;
+}
+
+size_t serialize( const StringDb& strDb, char* data )
+{
+   const uint32_t entryCount = (uint32_t)strDb._stringIndices.size();
+   const uint32_t dataSize = (uint32_t)strDb._strData.size();
+
+   size_t i = 0;
+   // Copy the map entry size and the data array size first
+   memcpy( &data[i], &entryCount, sizeof( uint32_t ) );
+   i += sizeof( uint32_t );
+   memcpy( &data[i], &dataSize, sizeof( uint32_t ) );
+   i += sizeof( uint32_t );
+
+   // Then copy the map entries
+   for( const auto& entry : strDb._stringIndices )
+   {
+      memcpy( &data[i], &entry.first, keySize );
+      memcpy( &data[i+keySize], &entry.second, valueSize );
+      i += mapEntrySize;
+   }
+
+   // Finally, copy the char data
+   memcpy( &data[i], strDb._strData.data(), strDb._strData.size() );
+   i += strDb._strData.size();
+
+   assert( i == serializedSize(strDb ) );
+
+   return i;
+}
+
+size_t deserialize( const char* data, StringDb& strDb )
+{
+   constexpr size_t keySize = sizeof( decltype(strDb._stringIndices)::key_type );
+   constexpr size_t valueSize = sizeof( decltype(strDb._stringIndices)::mapped_type );
+   constexpr size_t mapEntrySize = keySize + valueSize;
+
+
+   const uint32_t entryCount = *(uint32_t*)&data[0];
+   const uint32_t dataSize = *(uint32_t*)&data[sizeof( uint32_t )];
+   strDb._stringIndices.reserve( entryCount );
+   strDb._strData.resize( dataSize );
+
+   // Read the map data
+   const size_t mapStart = 2 * sizeof( uint32_t );
+   for( uint32_t i = 0; i < entryCount; ++i )
+   {
+      hop::TStrPtr_t key = *(hop::TStrPtr_t*)&data[2*sizeof( uint32_t ) + i * mapEntrySize ];
+      size_t value = *(size_t*)&data[(2*sizeof( uint32_t ) + i * mapEntrySize) + keySize ];
+      strDb._stringIndices[ key ] = value;
+   }
+
+   // Read the data
+   const size_t dataStart = mapStart + entryCount * mapEntrySize;
+   memcpy( strDb._strData.data(), &data[ dataStart ], dataSize );
+
+   return 2 * sizeof( uint32_t ) + dataSize + entryCount * mapEntrySize;
 }
 
 }
