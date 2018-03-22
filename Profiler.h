@@ -38,7 +38,7 @@ private:
    void drawTraceDetailsWindow();
    bool openFile( const char* path );
    bool saveToFile( const char* path );
-   void displayWaitModalWindow();
+   void displayModalWindow();
 
    std::string _name;
    Timeline _timeline;
@@ -48,6 +48,7 @@ private:
    bool _searchWindowOpen{ false };
    bool _focusSearchWindow{ false };
 
+   const char* _errorModalWindowMsg{ nullptr };
    const char* _waitModalMessage{ nullptr };
    std::future< bool > _asyncJobDone;
 

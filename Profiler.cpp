@@ -586,7 +586,7 @@ void hop::Profiler::draw()
 
    handleHotkey();
 
-   displayWaitModalWindow();
+   displayModalWindow();
 
    if( drawPlayStopButton( _recording ) )
    {
@@ -687,10 +687,14 @@ void hop::Profiler::drawMenuBar()
    if ( ImGui::BeginPopupModal( menuSaveAsHop, NULL, ImGuiWindowFlags_AlwaysAutoResize ) )
    {
       static char path[512] = {};
-      ImGui::InputText( "Save to", path, sizeof( path ) );
+      bool shouldSave = ImGui::InputText(
+          "Save to",
+          path,
+          sizeof( path ),
+          ImGuiInputTextFlags_AutoSelectAll | ImGuiInputTextFlags_EnterReturnsTrue );
       ImGui::Separator();
 
-      if ( ImGui::Button( "Save", ImVec2( 120, 0 ) ) )
+      if ( ImGui::Button( "Save", ImVec2( 120, 0 ) ) || shouldSave )
       {
          setRecording( false );
          saveToFile( path );
@@ -706,13 +710,19 @@ void hop::Profiler::drawMenuBar()
 
       ImGui::EndPopup();
    }
-   else if( ImGui::BeginPopupModal( menuOpenHopFile, NULL, ImGuiWindowFlags_AlwaysAutoResize ) )
+   
+   if( ImGui::BeginPopupModal( menuOpenHopFile, NULL, ImGuiWindowFlags_AlwaysAutoResize ) )
    {
       static char path[512] = {};
-      ImGui::InputText( "Open file", path, sizeof( path ) );
+      const bool shouldOpen = ImGui::InputText(
+          "Open file",
+          path,
+          sizeof( path ),
+          ImGuiInputTextFlags_AutoSelectAll | ImGuiInputTextFlags_EnterReturnsTrue );
+
       ImGui::Separator();
 
-      if ( ImGui::Button( "Open", ImVec2( 120, 0 ) ) )
+      if ( ImGui::Button( "Open", ImVec2( 120, 0 ) ) || shouldOpen )
       {
          openFile( path );
          ImGui::CloseCurrentPopup();
@@ -739,7 +749,7 @@ void hop::Profiler::drawMenuBar()
    }
 }
 
-void hop::Profiler::displayWaitModalWindow()
+void hop::Profiler::displayModalWindow()
 {
    if ( _waitModalMessage )
    {
@@ -753,6 +763,20 @@ void hop::Profiler::displayWaitModalWindow()
          {
             ImGui::CloseCurrentPopup();
             _waitModalMessage = nullptr;
+         }
+         ImGui::EndPopup();
+      }
+   }
+   else if( _errorModalWindowMsg )
+   {
+      ImGui::OpenPopup( _errorModalWindowMsg );
+      if ( ImGui::BeginPopupModal( _errorModalWindowMsg ) )
+      {
+         ImGui::Text( "%s", _errorModalWindowMsg );
+         if (ImGui::Button("Close", ImVec2(120,0)))
+         {
+            ImGui::CloseCurrentPopup();
+            _errorModalWindowMsg = nullptr;
          }
          ImGui::EndPopup();
       }
@@ -849,7 +873,7 @@ bool hop::Profiler::saveToFile( const char* path )
           totalSerializedSize );
       if ( compressionStatus != Z_OK )
       {
-         printf( "Compression failed. File not saved!\n" );
+         _errorModalWindowMsg = "Compression failed. File not saved!";
          return false;
       }
 
@@ -896,7 +920,7 @@ bool hop::Profiler::openFile( const char* path )
 
          if ( uncompressStatus != Z_OK )
          {
-            printf( "Error uncompressing file. Nothing will be loaded\n" );
+            _errorModalWindowMsg = "Error uncompressing file. Nothing will be loaded";
             return false;
          }
 
@@ -917,6 +941,7 @@ bool hop::Profiler::openFile( const char* path )
 
       return true;
    }
+   _errorModalWindowMsg = "File not found";
    return false;
 }
 
