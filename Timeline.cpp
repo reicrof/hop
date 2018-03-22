@@ -354,6 +354,26 @@ void Timeline::handleMouseDrag( float mouseInCanvasX, float mouseInCanvasY )
       ImGui::ResetMouseDragDelta();
       setRealtime( false );
    }
+   // Ctrl + right mouse dragging
+   else if( ImGui::GetIO().KeyCtrl && ImGui::IsMouseDragging( 1 ) )
+   {
+      ImDrawList* DrawList = ImGui::GetWindowDrawList();
+      const auto delta = ImGui::GetMouseDragDelta( 1 );
+
+      const auto curMousePosInScreen = ImGui::GetMousePos();
+      DrawList->AddRectFilled(
+          ImVec2( curMousePosInScreen.x, 0 ),
+          ImVec2( curMousePosInScreen.x - delta.x, 9999 ),
+          ImColor( 64, 64, 255, 64 ) );
+
+      // If it is the first time we enter
+      if ( _ctrlRightClickStartPosInCanvas[0] == 0.0f )
+      {
+         _ctrlRightClickStartPosInCanvas[0] = mouseInCanvasX;
+         _ctrlRightClickStartPosInCanvas[1] = mouseInCanvasY;
+         setRealtime( false );
+      }
+   }
    // Right mouse button dragging
    else if ( ImGui::IsMouseDragging( 1 ) )
    {
@@ -703,7 +723,7 @@ void Timeline::drawTraces(
          {
             const TimeStamp traceEndTime =
                 pxlToNanos( windowWidthPxl, _timelineRange, t.posPxl.x - posX + t.lengthPxl );
-            frameToTime( _timelineStart + ( traceEndTime - t.duration ), ANIMATION_TYPE_NORMAL );
+            frameToTime( _timelineStart + ( traceEndTime - t.duration ), t.duration );
          }
          else if ( rightMouseClicked && _rightClickStartPosInCanvas[0] == 0.0f)
          {

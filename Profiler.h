@@ -11,6 +11,7 @@
 #include <chrono>
 #include <string>
 #include <vector>
+#include <future>
 
 namespace hop
 {
@@ -36,14 +37,19 @@ private:
    void drawSearchWindow();
    void drawTraceDetailsWindow();
    bool openFile( const char* path );
+   bool saveToFile( const char* path );
+   void displayWaitModalWindow();
 
    std::string _name;
    Timeline _timeline;
    std::vector< ThreadInfo > _tracesPerThread;
+   StringDb _strDb;
    bool _recording{ false };
    bool _searchWindowOpen{ false };
    bool _focusSearchWindow{ false };
-   StringDb _strDb;
+
+   const char* _waitModalMessage{ nullptr };
+   std::future< bool > _asyncJobDone;
 
    Server _server;
    Server::PendingData _serverPendingData;

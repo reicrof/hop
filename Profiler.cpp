@@ -196,45 +196,6 @@ namespace
    };
 }
 
-static bool saveAs( const char* path, const hop::StringDb& strDb, const std::vector< hop::ThreadInfo >& threadInfos )
-{
-   // Compute the size of the serialized data
-   const size_t dbSerializedSize = serializedSize( strDb );
-   std::vector< size_t > threadInfosSerializedSize( threadInfos.size() );
-   for( size_t i = 0; i < threadInfos.size(); ++i )
-   {
-      threadInfosSerializedSize[ i ] = serializedSize( threadInfos[i] );
-   }
-
-   const size_t totalSerializedSize =
-       std::accumulate( threadInfosSerializedSize.begin(), threadInfosSerializedSize.end(), 0 ) +
-       dbSerializedSize;
-
-   std::vector< char > data( totalSerializedSize );
-
-   size_t index = serialize( strDb, &data[ 0 ] );
-   for( size_t i = 0; i < threadInfos.size(); ++i )
-   {
-      index += serialize( threadInfos[i], &data[ index ] );
-   }
-
-   size_t compressedSize = compressBound( totalSerializedSize );
-   std::vector< char > compressedData( compressedSize );
-   int compressionStatus = compress( (unsigned char*)compressedData.data(), &compressedSize, (const unsigned char *)&data[0], totalSerializedSize);
-   if( compressionStatus != Z_OK )
-   {
-      printf("Compression failed. File not saved!\n");
-      return false;
-   }
-
-   std::ofstream of( path, std::ofstream::binary );
-   SaveFileHeader header = { MAGIC_NUMBER, 1, totalSerializedSize, (uint32_t)dbSerializedSize, (uint32_t)threadInfos.size() };
-   of.write( (const char*)&header, sizeof( header ) );
-   of.write( &compressedData[0], totalSerializedSize );
-
-   return true;
-}
-
 bool saveAsJson( const char* path, const std::vector< hop::ThreadInfo >& /*threadTraces*/ )
 {
    using namespace rapidjson;
@@ -625,6 +586,8 @@ void hop::Profiler::draw()
 
    handleHotkey();
 
+   displayWaitModalWindow();
+
    if( drawPlayStopButton( _recording ) )
    {
       setRecording( !_recording );
@@ -729,7 +692,8 @@ void hop::Profiler::drawMenuBar()
 
       if ( ImGui::Button( "Save", ImVec2( 120, 0 ) ) )
       {
-         saveAs( path, _strDb, _tracesPerThread );
+         setRecording( false );
+         saveToFile( path );
          ImGui::CloseCurrentPopup();
       }
 
@@ -772,6 +736,26 @@ void hop::Profiler::drawMenuBar()
          ImGui::CloseCurrentPopup();
       }
       ImGui::EndPopup();
+   }
+}
+
+void hop::Profiler::displayWaitModalWindow()
+{
+   if ( _waitModalMessage )
+   {
+      ImGui::OpenPopup( _waitModalMessage );
+      if ( ImGui::BeginPopupModal( _waitModalMessage ) )
+      {
+         char buf[64];
+         sprintf( buf, "%c %s", "|/-\\"[(int)(ImGui::GetTime()/0.25f)&3], _waitModalMessage );
+         ImGui::Text( "%s", buf );
+         if ( std::future_status::ready == _asyncJobDone.wait_for( std::chrono::microseconds(500) ) )
+         {
+            ImGui::CloseCurrentPopup();
+            _waitModalMessage = nullptr;
+         }
+         ImGui::EndPopup();
+      }
    }
 }
 
@@ -832,6 +816,58 @@ void hop::Profiler::setRecording(bool recording)
    }
 }
 
+bool hop::Profiler::saveToFile( const char* path )
+{
+   _waitModalMessage = "Saving...";
+   _asyncJobDone = std::async( std::launch::async, [this, path]() {
+      // Compute the size of the serialized data
+      const size_t dbSerializedSize = serializedSize( _strDb );
+      std::vector<size_t> threadInfosSerializedSize( _tracesPerThread.size() );
+      for ( size_t i = 0; i < _tracesPerThread.size(); ++i )
+      {
+         threadInfosSerializedSize[i] = serializedSize( _tracesPerThread[i] );
+      }
+
+      const size_t totalSerializedSize =
+          std::accumulate( threadInfosSerializedSize.begin(), threadInfosSerializedSize.end(), 0 ) +
+          dbSerializedSize;
+
+      std::vector<char> data( totalSerializedSize );
+
+      size_t index = serialize( _strDb, &data[0] );
+      for ( size_t i = 0; i < _tracesPerThread.size(); ++i )
+      {
+         index += serialize( _tracesPerThread[i], &data[index] );
+      }
+
+      size_t compressedSize = compressBound( totalSerializedSize );
+      std::vector<char> compressedData( compressedSize );
+      int compressionStatus = compress(
+          (unsigned char*)compressedData.data(),
+          &compressedSize,
+          (const unsigned char*)&data[0],
+          totalSerializedSize );
+      if ( compressionStatus != Z_OK )
+      {
+         printf( "Compression failed. File not saved!\n" );
+         return false;
+      }
+
+      std::ofstream of( path, std::ofstream::binary );
+      SaveFileHeader header = {MAGIC_NUMBER,
+                               1,
+                               totalSerializedSize,
+                               (uint32_t)dbSerializedSize,
+                               (uint32_t)_tracesPerThread.size()};
+      of.write( (const char*)&header, sizeof( header ) );
+      of.write( &compressedData[0], totalSerializedSize );
+
+      return true;
+   } );
+
+   return true;
+}
+
 bool hop::Profiler::openFile( const char* path )
 {
    std::ifstream input( path, std::ifstream::binary );
@@ -841,38 +877,43 @@ bool hop::Profiler::openFile( const char* path )
       // Clear previsouly recorder traces.
       clear();
 
-      std::vector<char> data(
-          ( std::istreambuf_iterator<char>( input ) ), ( std::istreambuf_iterator<char>() ) );
-      
-      SaveFileHeader* header = (SaveFileHeader*)&data[0];
+      _waitModalMessage = "Loading...";
+      _asyncJobDone = std::async( std::launch::async, [this, path]() {
+         std::ifstream input( path, std::ifstream::binary );
+         std::vector<char> data(
+             ( std::istreambuf_iterator<char>( input ) ), ( std::istreambuf_iterator<char>() ) );
 
-      std::vector< char > uncompressedData( header->uncompressedSize );
-      size_t uncompressedSize = uncompressedData.size();
+         SaveFileHeader* header = (SaveFileHeader*)&data[0];
 
-      int uncompressStatus = uncompress(
-          (unsigned char*)uncompressedData.data(),
-          &uncompressedSize,
-          (unsigned char*)&data[ sizeof( SaveFileHeader ) ],
-          data.size() - sizeof( SaveFileHeader ) );
+         std::vector<char> uncompressedData( header->uncompressedSize );
+         size_t uncompressedSize = uncompressedData.size();
 
-      if( uncompressStatus != Z_OK )
-      {
-         printf("Error uncompressing file. Nothing will be loaded\n");
-         return false;
-      }
+         int uncompressStatus = uncompress(
+             (unsigned char*)uncompressedData.data(),
+             &uncompressedSize,
+             (unsigned char*)&data[sizeof( SaveFileHeader )],
+             data.size() - sizeof( SaveFileHeader ) );
 
-      size_t i = 0;
-      const size_t dbSize = deserialize( &uncompressedData[i], _strDb );
-      assert( dbSize == header->strDbSize );
-      i += dbSize;
+         if ( uncompressStatus != Z_OK )
+         {
+            printf( "Error uncompressing file. Nothing will be loaded\n" );
+            return false;
+         }
 
-      std::vector< ThreadInfo > threadInfos( header->threadCount );
-      for( uint32_t j = 0; j < header->threadCount; ++j )
-      {
-         size_t threadInfoSize = deserialize( &uncompressedData[i], threadInfos[j] );
-         addTraces( threadInfos[j].traces, j );
-         i += threadInfoSize;
-      }
+         size_t i = 0;
+         const size_t dbSize = deserialize( &uncompressedData[i], _strDb );
+         assert( dbSize == header->strDbSize );
+         i += dbSize;
+
+         std::vector<ThreadInfo> threadInfos( header->threadCount );
+         for ( uint32_t j = 0; j < header->threadCount; ++j )
+         {
+            size_t threadInfoSize = deserialize( &uncompressedData[i], threadInfos[j] );
+            addTraces( threadInfos[j].traces, j );
+            i += threadInfoSize;
+         }
+         return true;
+      } );
 
       return true;
    }

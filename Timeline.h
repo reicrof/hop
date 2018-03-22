@@ -80,6 +80,7 @@ class Timeline
    TimeStamp _absoluteStartTime{0};
    TimeStamp _absolutePresentTime{0};
    float _rightClickStartPosInCanvas[2] = {};
+   float _ctrlRightClickStartPosInCanvas[2] = {};
    float _timelineHoverPos{-1.0f};
    bool _realtime{true};
 

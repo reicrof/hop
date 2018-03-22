@@ -197,7 +197,7 @@ int main()
           HOP_PROF( "Creating maclass2" );
           {
              std::this_thread::sleep_for(std::chrono::microseconds(250));
-             HOP_PROF( "Creating maclass3" );
+             HOP_PROF( "Creating MaClasselass3" );
              {
                 std::this_thread::sleep_for(std::chrono::microseconds(250));
                 HOP_PROF( "Creating maclass4" );
