@@ -947,7 +947,7 @@ void Timeline::clearHighlightedTraces()
 void Timeline::nextBookmark() noexcept
 {
    const TimeStamp timelineCenter = _timelineStart + _timelineRange / 2;
-   const auto delta = std::abs( _timelineRange * 0.05 );
+   const auto delta = std::abs( _timelineRange * 0.01 );
    auto it = _bookmarks.times.begin();
    while( it != _bookmarks.times.end() )
    {
@@ -963,7 +963,7 @@ void Timeline::nextBookmark() noexcept
 void Timeline::previousBookmark() noexcept
 {
    const TimeStamp timelineCenter = _timelineStart + _timelineRange / 2;
-   const auto delta = std::abs( _timelineRange * 0.05 );
+   const auto delta = std::abs( _timelineRange * 0.01 );
    auto it = _bookmarks.times.rbegin();
    while( it != _bookmarks.times.rend() )
    {
