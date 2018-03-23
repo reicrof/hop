@@ -846,6 +846,7 @@ bool hop::Profiler::saveToFile( const char* path )
    _asyncJobDone = std::async( std::launch::async, [this, path]() {
       // Compute the size of the serialized data
       const size_t dbSerializedSize = serializedSize( _strDb );
+      const size_t timelineSerializedSize = serializedSize( _timeline );
       std::vector<size_t> threadInfosSerializedSize( _tracesPerThread.size() );
       for ( size_t i = 0; i < _tracesPerThread.size(); ++i )
       {
@@ -854,11 +855,13 @@ bool hop::Profiler::saveToFile( const char* path )
 
       const size_t totalSerializedSize =
           std::accumulate( threadInfosSerializedSize.begin(), threadInfosSerializedSize.end(), 0 ) +
+          timelineSerializedSize +
           dbSerializedSize;
 
       std::vector<char> data( totalSerializedSize );
 
       size_t index = serialize( _strDb, &data[0] );
+      index += serialize( _timeline, &data[index] );
       for ( size_t i = 0; i < _tracesPerThread.size(); ++i )
       {
          index += serialize( _tracesPerThread[i], &data[index] );
@@ -909,6 +912,12 @@ bool hop::Profiler::openFile( const char* path )
 
          SaveFileHeader* header = (SaveFileHeader*)&data[0];
 
+         if( header->magicNumber != MAGIC_NUMBER )
+         {
+            _errorModalWindowMsg = "Not a valid hop file.";
+            return false;
+         }
+
          std::vector<char> uncompressedData( header->uncompressedSize );
          size_t uncompressedSize = uncompressedData.size();
 
@@ -928,6 +937,9 @@ bool hop::Profiler::openFile( const char* path )
          const size_t dbSize = deserialize( &uncompressedData[i], _strDb );
          assert( dbSize == header->strDbSize );
          i += dbSize;
+
+         const size_t timelineSize = deserialize( &uncompressedData[i], _timeline );
+         i += timelineSize;
 
          std::vector<ThreadInfo> threadInfos( header->threadCount );
          for ( uint32_t j = 0; j < header->threadCount; ++j )

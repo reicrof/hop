@@ -947,13 +947,13 @@ void Timeline::clearHighlightedTraces()
 void Timeline::nextBookmark() noexcept
 {
    const TimeStamp timelineCenter = _timelineStart + _timelineRange / 2;
-   const auto delta = std::abs( timelineCenter * 0.05 );
+   const auto delta = std::abs( _timelineRange * 0.05 );
    auto it = _bookmarks.times.begin();
    while( it != _bookmarks.times.end() )
    {
       if( *it - delta > timelineCenter )
       {
-         moveToTime( *it + (*it * 0.05), ANIMATION_TYPE_FAST );
+         moveToTime( *it, ANIMATION_TYPE_FAST );
          return;
       }
       ++it;
@@ -963,7 +963,7 @@ void Timeline::nextBookmark() noexcept
 void Timeline::previousBookmark() noexcept
 {
    const TimeStamp timelineCenter = _timelineStart + _timelineRange / 2;
-   const auto delta = std::abs( timelineCenter * 0.05 );
+   const auto delta = std::abs( _timelineRange * 0.05 );
    auto it = _bookmarks.times.rbegin();
    while( it != _bookmarks.times.rend() )
    {
@@ -1011,6 +1011,30 @@ void Timeline::redoNavigation() noexcept
       _animationState.type = ANIMATION_TYPE_FAST;
       _redoPositionStates.pop_back();
    }
+}
+
+size_t serializedSize( const Timeline& timeline )
+{
+   return sizeof( size_t ) + sizeof( TimeStamp ) * timeline._bookmarks.times.size();
+}
+
+size_t serialize( const Timeline& timeline, char* data )
+{
+   const size_t bookmarkCount = timeline._bookmarks.times.size();
+   const size_t bookmarksSize = sizeof( TimeStamp ) * bookmarkCount;
+   memcpy( &data[0], &bookmarkCount, sizeof( size_t ) );
+   memcpy( &data[0] + sizeof( size_t ), timeline._bookmarks.times.data(), bookmarksSize );
+   return serializedSize(timeline);
+}
+
+size_t deserialize( const char* data, Timeline& timeline )
+{
+   size_t i = 0;
+   const size_t* bookmarkCount = (size_t*)&data[i];
+   const size_t bookmarksSize = (*bookmarkCount) * sizeof( TimeStamp );
+   i += sizeof( size_t );
+   timeline._bookmarks.times.assign( (TimeStamp*)&data[i], (TimeStamp*)(&data[i] + bookmarksSize ) );
+   return bookmarksSize + sizeof( size_t );
 }
 
 } // namespace hop

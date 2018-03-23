@@ -62,6 +62,10 @@ class Timeline
    void undoNavigation() noexcept;
    void redoNavigation() noexcept;
 
+   friend size_t serializedSize( const Timeline& timeline );
+   friend size_t serialize( const Timeline& timeline, char* data );
+   friend size_t deserialize( const char* data, Timeline& timeline );
+
   private:
    void drawTimeline( const float posX, const float posY );
    void drawTraces( const ThreadInfo& traces, uint32_t threadIndex, const float posX, const float posY, const StringDb& strDb, const ImColor& color );
