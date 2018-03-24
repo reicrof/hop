@@ -152,8 +152,6 @@ int main( int argc, const char* argv[] )
 
    hop::init();
 
-   bool show_test_window = true;
-
    std::string exeName( HOP_SHARED_MEM_PREFIX );
    exeName += argv[1];
 
@@ -187,8 +185,6 @@ int main( int argc, const char* argv[] )
           buttonState & SDL_BUTTON( SDL_BUTTON_RIGHT ),
           g_mouseWheel );
       g_mouseWheel = 0;
-
-      ImGui::ShowTestWindow( &show_test_window );
 
       glViewport( 0, 0, w, h );
       glClearColor( 1.0f, 1.0f, 1.0f, 1.0f );
