@@ -133,11 +133,14 @@ size_t Server::handleNewMessage( uint8_t* data, size_t maxSize )
         assert( ( size_t )( bufPtr - data ) <= maxSize );
 
         static_assert(std::is_move_constructible<DisplayableTraces>::value, "Displayble Traces not moveable");
-        // TODO: Could lock later when we received all the messages
-        std::lock_guard<std::mutex> guard(_pendingData.mutex);
-        _pendingData.traces.emplace_back( std::move( dispTraces ) );
-        _pendingData.stringData.emplace_back( std::move( stringData ) );
-        _pendingData.tracesThreadIndex.push_back(threadIndex);
+        if ( traceCount > 0 )
+        {
+           // TODO: Could lock later when we received all the messages
+           std::lock_guard<std::mutex> guard( _pendingData.mutex );
+           _pendingData.traces.emplace_back( std::move( dispTraces ) );
+           _pendingData.tracesThreadIndex.push_back( threadIndex );
+           _pendingData.stringData.emplace_back( std::move( stringData ) );
+        }
         return ( size_t )( bufPtr - data );
       }
       case MsgType::PROFILER_WAIT_LOCK:

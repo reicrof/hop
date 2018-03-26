@@ -1137,6 +1137,7 @@ Client* ClientManager::Get()
       strncat(
           path, HOP_GET_PROG_NAME(), HOP_SHARED_MEM_MAX_NAME_SIZE - sizeof( HOP_SHARED_MEM_PREFIX ) - 1 );
       bool sucess = ClientManager::sharedMemory.create( path, HOP_SHARED_MEM_SIZE, false );
+      (void) sucess; // Removed unused warning
       assert( sucess && "Could not create shared memory" );
    }
 
