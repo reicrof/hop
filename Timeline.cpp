@@ -857,7 +857,8 @@ void Timeline::highlightLockOwner(
                // lower_bound returns the first that does not compare smaller than the unlock time.
                // Therefore, we need to start from this iterator and find the first one that matches
                // the highlighted mutex
-               --lockWaitIt;
+               if( lockWaitIt == infos[i]._lockWaits.cend() ) --lockWaitIt;
+
                while ( lockWaitIt != infos[i]._lockWaits.cbegin() &&
                        lockWaitIt->mutexAddress != highlightedLockWait.mutexAddress )
                {
@@ -925,7 +926,7 @@ void Timeline::drawLockWaits(
          ImGui::Button( "Lock", ImVec2( lengthPxl, 20.f ) );
          if (ImGui::IsItemHovered())
          {
-            // highlightLockOwner(infos, threadIndex, lw, posX, posY);
+             //highlightLockOwner(infos, threadIndex, lw, posX, posY);
          }
       }
    }
