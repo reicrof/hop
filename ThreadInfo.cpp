@@ -4,6 +4,7 @@
 
 #include <algorithm>
 #include <cassert>
+#include <cstring> // memcpy
 
 namespace hop
 {
@@ -45,6 +46,7 @@ size_t serializedSize( const ThreadInfo& ti )
 size_t serialize( const ThreadInfo& ti, char* data )
 {
    const size_t serialSize = serializedSize( ti );
+   (void)serialSize; // Removed unused warning
    const size_t tracesCount = ti.traces.ends.size();
 
    size_t i = 0;

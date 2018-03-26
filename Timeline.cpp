@@ -60,7 +60,7 @@ void Timeline::update( float deltaTimeMs ) noexcept
       case ANIMATION_TYPE_FAST:
       {
          int64_t speedFactor = _animationState.type == ANIMATION_TYPE_NORMAL ? 100 / deltaTimeMs : 90 / deltaTimeMs;
-         speedFactor = std::max( speedFactor, 1ll );
+         speedFactor = std::max( speedFactor, (int64_t)1 );
          if ( std::abs( _timelineStart - _animationState.targetTimelineStart ) > 0.00001 )
          {
             int64_t delta = _animationState.targetTimelineStart - _timelineStart;
@@ -983,8 +983,10 @@ void Timeline::clearBookmarks()
 
 void Timeline::pushNavigationState() noexcept
 {
-   _undoPositionStates.push_back( AnimationState{
-       _animationState.targetTimelineStart, _animationState.targetTimelineRange, 0.0f, ANIMATION_TYPE_FAST} );
+   AnimationState animState = _animationState;
+   animState.highlightPercent = 0.0f;
+   animState.type = ANIMATION_TYPE_FAST;
+   _undoPositionStates.push_back( animState );
 }
 
 void Timeline::undoNavigation() noexcept
