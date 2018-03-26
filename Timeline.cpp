@@ -897,8 +897,6 @@ void Timeline::drawLockWaits(
 
    const auto absoluteStart = _absoluteStartTime;
    const float windowWidthPxl = ImGui::GetWindowWidth();
-   const int64_t startNanosAsPxl =
-       nanosToPxl<int64_t>( windowWidthPxl, _timelineRange, _timelineStart );
 
    // The time range to draw in absolute time
    const TimeStamp firstTraceAbsoluteTime = absoluteStart + _timelineStart;
@@ -911,7 +909,7 @@ void Timeline::drawLockWaits(
    {
       if ( lw.end >= firstTraceAbsoluteTime && lw.start <= lastTraceAbsoluteTime )
       {
-         const int64_t startInNanos = ( lw.start - absoluteStart );
+         const int64_t startInNanos = ( lw.start - absoluteStart - _timelineStart );
 
          const auto startPxl =
              nanosToPxl<float>( windowWidthPxl, _timelineRange, startInNanos );
@@ -922,7 +920,7 @@ void Timeline::drawLockWaits(
          if ( lengthPxl < MIN_TRACE_LENGTH_PXL ) continue;
 
          ImGui::SetCursorScreenPos( ImVec2(
-             posX - startNanosAsPxl + startPxl,
+             posX + startPxl,
              posY + lw.depth * ( TRACE_HEIGHT + TRACE_VERTICAL_PADDING ) ) );
          ImGui::Button( "Lock", ImVec2( lengthPxl, 20.f ) );
          if (ImGui::IsItemHovered())
