@@ -8,9 +8,12 @@
 // Stubbing all profiling macros so they are disabled
 // when HOP_ENABLED is false
 #define HOP_PROF( x )
-#define HOP_PROF_GL_FINISH( x )
 #define HOP_PROF_FUNC()
 #define HOP_PROF_FUNC_WITH_GROUP( x )
+#define HOP_PROF_MUTEX_LOCK( x )
+#define HOP_PROF_MUTEX_UNLOCK( x )
+#define HOP_PROF_GL_FINISH( x )
+#define HOP_PROF_FUNC_GL_FINISH()
 
 #else  // We do want to profile
 
@@ -31,9 +34,6 @@
 // Create a new profiling trace for a free function
 #define HOP_PROF_FUNC() HOP_PROF_GUARD_VAR( __LINE__, ( __FILE__, __LINE__, __func__, 0 ) )
 
-// Create a new profiling trace that will call glFinish() before being destroyed
-#define HOP_PROF_GL_FINISH( x ) HOP_PROF_GL_FINISH_GUARD_VAR( __LINE__, ( __FILE__, __LINE__, (x), 0 ) )
-
 // Create a new profiling trace for a free function that falls under category x
 #define HOP_PROF_FUNC_WITH_GROUP( x ) HOP_PROF_GUARD_VAR(__LINE__,( __FILE__, __LINE__, __func__, (x) ) )
 
@@ -45,6 +45,12 @@
 // used to provide stall region. You should provide a pointer to the mutex that
 // is being unlocked.
 #define HOP_PROF_MUTEX_UNLOCK( x ) HOP_MUTEX_UNLOCK_EVENT( x )
+
+// Create a new profiling trace that will call glFinish() before being destroyed
+#define HOP_PROF_GL_FINISH( x ) HOP_PROF_GL_FINISH_GUARD_VAR( __LINE__, ( __FILE__, __LINE__, (x), 0 ) )
+
+// Create a new profiling trace for a free function that will call glFinish() before being destroyed
+#define HOP_PROF_FUNC_GL_FINISH() HOP_PROF_GL_FINISH_GUARD_VAR( __LINE__, ( __FILE__, __LINE__, __func__, 0 ) )
 
 ///////////////////////////////////////////////////////////////
 /////     EVERYTHING AFTER THIS IS IMPL DETAILS        ////////
@@ -324,7 +330,6 @@ class ClientManager
        const char* fileName,
        const char* fctName,
        TimeStamp start,
-       TimeStamp end,
        TLineNb_t lineNb,
        TGroup_t group );
    static void EndLockWait(
@@ -376,7 +381,7 @@ class ProfGuardGLFinish
    }
    ~ProfGuardGLFinish()
    {
-      ClientManager::EndProfileGlFinish( _fileName, _fctName, _start, getTimeStamp(), _lineNb, _group );
+      ClientManager::EndProfileGlFinish( _fileName, _fctName, _start, _lineNb, _group );
    }
 
   private:
@@ -776,7 +781,7 @@ void SharedMemory::setListeningConsumer( bool listening ) HOP_NOEXCEPT
 
 bool SharedMemory::isUsingGlFinish() const HOP_NOEXCEPT
 {
-   return (sharedMetaInfo()->flags & SharedMetaInfo::USE_GL_FINISH) > 0;
+   return _sharedMetaData && (_sharedMetaData->flags & SharedMetaInfo::USE_GL_FINISH) > 0;
 }
 
 void SharedMemory::setUseGlFinish( bool useGlFinish ) HOP_NOEXCEPT
@@ -789,7 +794,7 @@ void SharedMemory::setUseGlFinish( bool useGlFinish ) HOP_NOEXCEPT
 
 bool SharedMemory::shouldResendStringData() const HOP_NOEXCEPT
 {
-   return (sharedMetaInfo()->flags & SharedMetaInfo::RESEND_STRING_DATA) > 0;
+   return _sharedMetaData && (_sharedMetaData->flags & SharedMetaInfo::RESEND_STRING_DATA) > 0;
 }
 
 void SharedMemory::resetResendStringDataFlag() HOP_NOEXCEPT
@@ -1189,7 +1194,6 @@ void ClientManager::EndProfileGlFinish(
     const char* fileName,
     const char* fctName,
     TimeStamp start,
-    TimeStamp end,
     TLineNb_t lineNb,
     TGroup_t group )
 {
@@ -1220,6 +1224,7 @@ void ClientManager::EndProfileGlFinish(
       }
    }
 
+   const TimeStamp end = getTimeStamp();
    const int remainingPushedTraces = --tl_traceLevel;
    Client* client = ClientManager::Get();
    if( end - start > 50 ) // Minimum trace time is 50 ns
