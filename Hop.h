@@ -279,6 +279,7 @@ class SharedMemory
          RESEND_STRING_DATA = 1 << 4,
       };
       std::atomic< uint32_t > flags{0};
+      const size_t requestedSize{0};
    };
 
    bool hasConnectedProducer() const HOP_NOEXCEPT;
@@ -307,7 +308,6 @@ class SharedMemory
    // ----------------
    sem_handle _semaphore{NULL};
    bool _isConsumer;
-   size_t _size{0};
    shm_handle _sharedMemHandle{};
    char _sharedMemPath[HOP_SHARED_MEM_MAX_NAME_SIZE];
 };
@@ -476,6 +476,7 @@ void ringbuf_release( ringbuf_t*, size_t );
 #include <fcntl.h> //O_CREAT
 #include <cstring> // memcpy
 #include <sys/mman.h> // shm_open
+#include <sys/stat.h> // stat
 #include <unistd.h> // ftruncate
 #include <dlfcn.h> //dlsym
 
@@ -578,7 +579,7 @@ namespace
        return sharedMem;
    }
 
-   void* openSharedMemory(const char* path, size_t size, shm_handle* handle)
+   void* openSharedMemory(const char* path, shm_handle* handle, size_t* totalSize)
    {
        uint8_t* sharedMem = NULL;
 #if defined ( _MSC_VER )
@@ -608,15 +609,24 @@ namespace
       *handle = shm_open( path, O_RDWR, 0666 );
       if ( *handle < 0 )
       {
+         printErrorMsg( "Could open shared mem handle" );
          return NULL;
       }
 
-      ftruncate( *handle, size );
+      struct stat fileStat;
+      if(fstat(*handle,&fileStat) < 0)
+      {
+         printErrorMsg( "Could not retrieve shared mem size" );
+         return NULL;
+      }
 
-      sharedMem = (uint8_t*) mmap( NULL, size, PROT_READ | PROT_WRITE, MAP_SHARED, *handle, 0 );
+      *totalSize = fileStat.st_size;
+      ftruncate( *handle, fileStat.st_size );
+
+      sharedMem = (uint8_t*) mmap( NULL, fileStat.st_size, PROT_READ | PROT_WRITE, MAP_SHARED, *handle, 0 );
       if ( sharedMem == NULL )
       {
-		  printErrorMsg( "Could not map shared memory" );
+         printErrorMsg( "Could not map shared memory" );
       }
 #endif
       return sharedMem;
@@ -669,15 +679,25 @@ bool SharedMemory::create( const char* path, size_t requestedSize, bool isConsum
    // TODO handle signals
    // signal( SIGINT, sig_callback_handler );
    strncpy( _sharedMemPath, path, HOP_SHARED_MEM_MAX_NAME_SIZE - 1 );
-   _size = requestedSize;
 
    // First try to open semaphore
    _semaphore = openSemaphore( "/mysem" );
    if( _semaphore == NULL ) return false;
 
-   // Create the shared memory next
-   const size_t totalSize = ringBufSize + requestedSize + sizeof( SharedMetaInfo );
-   uint8_t* sharedMem = isConsumer ? (uint8_t*)openSharedMemory(path, totalSize, &_sharedMemHandle) : (uint8_t*)createSharedMemory(path, totalSize, &_sharedMemHandle);
+   // Create or open the shared memory next
+   uint8_t* sharedMem = NULL;
+   size_t totalSize = 0;
+   if( isConsumer )
+   {
+      sharedMem = (uint8_t*)openSharedMemory(path, &_sharedMemHandle, &totalSize);
+   }
+   else
+   {
+      totalSize = ringBufSize + requestedSize + sizeof( SharedMetaInfo );
+      sharedMem = (uint8_t*)createSharedMemory(path, totalSize, &_sharedMemHandle);
+   }
+
+
    if( !sharedMem )
    {
       if( !isConsumer )
@@ -698,6 +718,12 @@ bool SharedMemory::create( const char* path, size_t requestedSize, bool isConsum
        std::lock_guard< std::mutex > g(m);
        if (!memoryCreated)
        {
+           // Set the size of the shared memory in the meta data info. 
+           SharedMetaInfo* metaInfo = (SharedMetaInfo*) sharedMem;
+           size_t* shmReqSize = const_cast< size_t* >( &metaInfo->requestedSize );
+           *shmReqSize = HOP_SHARED_MEM_SIZE;
+
+           // Then setup the ring buffer
            memset(localRingBuf, 0, totalSize - sizeof(SharedMetaInfo));
            if (ringbuf_setup(localRingBuf, HOP_MAX_THREAD_NB, requestedSize) < 0)
            {
