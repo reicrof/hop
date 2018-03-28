@@ -128,7 +128,7 @@ void appendLods( LodsArray& dst, const LodsArray& src )
    {
       // First trace to insert
       auto newTraceIt = src[i].cbegin();
-      size_t sortFromIdx = dst[i].size();
+      long sortFromIdx = dst[i].size();
 
       // If there is already LOD in the dest, try to merge them
       if( dst[i].size() > 0 )
@@ -157,7 +157,7 @@ void appendLods( LodsArray& dst, const LodsArray& src )
                      sameDepthIt->end = newTraceIt->end;
                      sameDepthIt->delta += timeBetweenTrace + newTraceIt->delta;
                      sameDepthIt->isLoded = true;
-                     const size_t dist = (size_t)std::distance( dst[i].rend(), sameDepthIt);
+                     const auto dist = std::distance( sameDepthIt, dst[i].rend());
                      sortFromIdx = std::min( dist, sortFromIdx );
                   }
                }
@@ -176,7 +176,7 @@ void appendLods( LodsArray& dst, const LodsArray& src )
       dst[i].insert( dst[i].end(), nonLodedInfos.begin(), nonLodedInfos.end() );
       dst[i].insert( dst[i].end(), newTraceIt, src[i].end() );
 
-      std::sort( dst[i].begin() + sortFromIdx, dst[i].end() );
+      std::sort( dst[i].begin() + std::max( 0l, (sortFromIdx-1) ), dst[i].end() );
 
       assert_is_sorted( dst[i].begin(), dst[i].end() );
 
