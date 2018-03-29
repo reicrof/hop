@@ -19,7 +19,7 @@ namespace hop
 class Server;
 struct Profiler
 {
-   Profiler( const std::string& name );
+   Profiler( const char* name );
    ~Profiler();
    void update( float deltaTimeMs ) noexcept;
    void draw();

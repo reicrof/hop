@@ -152,10 +152,7 @@ int main( int argc, const char* argv[] )
 
    hop::init();
 
-   std::string exeName( HOP_SHARED_MEM_PREFIX );
-   exeName += argv[1];
-
-   auto profiler = std::unique_ptr< hop::Profiler >( new hop::Profiler( exeName ) );
+   auto profiler = std::unique_ptr< hop::Profiler >( new hop::Profiler( argv[1] ) );
    hop::addNewProfiler( profiler.get() );
    std::vector< uint32_t > profTrheadsId;
 

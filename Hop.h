@@ -28,20 +28,26 @@
 /////       THESE ARE THE MACROS YOU SHOULD USE     ///////////
 ///////////////////////////////////////////////////////////////
 
+#if defined(_MSC_VER)
+#define HOP_FCT_NAME __FUNCTION__
+#else
+#define HOP_FCT_NAME __PRETTY_FUNCTION__
+#endif
+
 // Create a new profiling trace with specified name
 #define HOP_PROF( x ) HOP_PROF_GUARD_VAR( __LINE__, ( __FILE__, __LINE__, (x), 0 ) )
 
 // Create a new profiling trace for a free function
-#define HOP_PROF_FUNC() HOP_PROF_GUARD_VAR( __LINE__, ( __FILE__, __LINE__, __func__, 0 ) )
+#define HOP_PROF_FUNC() HOP_PROF_GUARD_VAR( __LINE__, ( __FILE__, __LINE__, HOP_FCT_NAME, 0 ) )
 
 // Create a new profiling trace that will call glFinish() before being destroyed
 #define HOP_PROF_GL_FINISH( x ) HOP_PROF_GL_FINISH_GUARD_VAR( __LINE__, ( __FILE__, __LINE__, (x), 0 ) )
 
 // Create a new profiling trace for a free function
-#define HOP_PROF_FUNC_GL_FINISH() HOP_PROF_GL_FINISH_GUARD_VAR( __LINE__, ( __FILE__, __LINE__, __func__, 0 ) )
+#define HOP_PROF_FUNC_GL_FINISH() HOP_PROF_GL_FINISH_GUARD_VAR( __LINE__, ( __FILE__, __LINE__, HOP_FCT_NAME, 0 ) )
 
 // Create a new profiling trace for a free function that falls under category x
-#define HOP_PROF_FUNC_WITH_GROUP( x ) HOP_PROF_GUARD_VAR(__LINE__,( __FILE__, __LINE__, __func__, (x) ) )
+#define HOP_PROF_FUNC_WITH_GROUP( x ) HOP_PROF_GUARD_VAR(__LINE__,( __FILE__, __LINE__, HOP_FCT_NAME, (x) ) )
 
 // Create a trace that represent the time waiting for a mutex. You need to provide
 // a pointer to the mutex that is being locked
@@ -279,6 +285,7 @@ class SharedMemory
          RESEND_STRING_DATA = 1 << 4,
       };
       std::atomic< uint32_t > flags{0};
+      const uint32_t maxThreadNb{0};
       const size_t requestedSize{0};
    };
 
@@ -310,6 +317,7 @@ class SharedMemory
    bool _isConsumer;
    shm_handle _sharedMemHandle{};
    char _sharedMemPath[HOP_SHARED_MEM_MAX_NAME_SIZE];
+   char _sharedSemaphoreName[HOP_SHARED_MEM_MAX_NAME_SIZE];
 };
 // ------ end of SharedMemory.h ------------
 
@@ -492,7 +500,7 @@ namespace
         char err[512];
         FormatMessage(FORMAT_MESSAGE_FROM_SYSTEM, NULL, GetLastError(),
             MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT), err, 255, NULL);
-        printf("%s %s\n", msg, err);
+        printf("HOP - %s %s\n", msg, err);
         puts(err);
 #else
         perror(msg);
@@ -503,7 +511,7 @@ namespace
    {
       sem_handle sem = NULL;
 #if defined( _MSC_VER )
-        sem = CreateSemaphore(NULL, 0, LONG_MAX, name);
+         sem = CreateSemaphore(NULL, 0, LONG_MAX, name);
 #else
          sem = sem_open( name, O_CREAT, S_IRUSR | S_IWUSR, 1 );
 #endif
@@ -516,18 +524,18 @@ namespace
       return sem;
    }
 
-   void closeSemaphore( sem_handle sem )
+   void closeSemaphore( sem_handle sem, const char* semName )
    {
  #if defined ( _MSC_VER )
          BOOL success = CloseHandle(sem);
  #else
          if ( sem_close( sem ) != 0 )
          {
-            perror( "Could not close semaphore" );
+            perror( "HOP - Could not close semaphore" );
          }
-         if ( sem_unlink( "/mysem" ) < 0 )
+         if ( sem_unlink( semName ) < 0 )
          {
-            perror( "Could not unlink semaphore" );
+            perror( "HOP - Could not unlink semaphore" );
          }
  #endif
    }
@@ -642,7 +650,7 @@ namespace
 #else
       (void)handle;  // Remove unuesed warning
       (void)dataPtr;
-      if ( shm_unlink( name ) != 0 ) perror( "Could not unlink shared memory" );
+      if ( shm_unlink( name ) != 0 ) perror( " HOP - Could not unlink shared memory" );
 #endif
    }
 
@@ -671,19 +679,27 @@ namespace hop
 {
 
 // ------ SharedMemory.cpp------------
-bool SharedMemory::create( const char* path, size_t requestedSize, bool isConsumer )
+bool SharedMemory::create( const char* exeName, size_t requestedSize, bool isConsumer )
 {
    _isConsumer = isConsumer;
-   // Get the size needed for the ringbuf struct
-   size_t ringBufSize;
-   ringbuf_get_sizes(HOP_MAX_THREAD_NB, &ringBufSize, NULL);
 
-   // TODO handle signals
-   // signal( SIGINT, sig_callback_handler );
-   strncpy( _sharedMemPath, path, HOP_SHARED_MEM_MAX_NAME_SIZE - 1 );
+   // Create shared mem name
+   strncpy( _sharedMemPath, HOP_SHARED_MEM_PREFIX, sizeof( HOP_SHARED_MEM_PREFIX ) );
+   strncat(
+       _sharedMemPath,
+       exeName,
+       HOP_SHARED_MEM_MAX_NAME_SIZE - sizeof( HOP_SHARED_MEM_PREFIX ) - 1 );
+   strncpy( _sharedMemPath, _sharedMemPath, HOP_SHARED_MEM_MAX_NAME_SIZE - 1 );
+
+   // Create shared semaphore name
+   strncpy( _sharedSemaphoreName, "/hop_sem_", HOP_SHARED_MEM_MAX_NAME_SIZE - 1 );
+   strncat(
+       _sharedSemaphoreName,
+       exeName,
+       HOP_SHARED_MEM_MAX_NAME_SIZE - 1 - strlen( _sharedSemaphoreName ) );
 
    // First try to open semaphore
-   _semaphore = openSemaphore( "/mysem" );
+   _semaphore = openSemaphore( _sharedSemaphoreName );
    if( _semaphore == NULL ) return false;
 
    // Create or open the shared memory next
@@ -691,14 +707,15 @@ bool SharedMemory::create( const char* path, size_t requestedSize, bool isConsum
    size_t totalSize = 0;
    if( isConsumer )
    {
-      sharedMem = (uint8_t*)openSharedMemory(path, &_sharedMemHandle, &totalSize);
+      sharedMem = (uint8_t*)openSharedMemory(_sharedMemPath, &_sharedMemHandle, &totalSize);
    }
    else
    {
+      size_t ringBufSize;
+      ringbuf_get_sizes(HOP_MAX_THREAD_NB, &ringBufSize, NULL);
       totalSize = ringBufSize + requestedSize + sizeof( SharedMetaInfo );
-      sharedMem = (uint8_t*)createSharedMemory(path, totalSize, &_sharedMemHandle);
+      sharedMem = (uint8_t*)createSharedMemory(_sharedMemPath, totalSize, &_sharedMemHandle);
    }
-
 
    if( !sharedMem )
    {
@@ -708,9 +725,7 @@ bool SharedMemory::create( const char* path, size_t requestedSize, bool isConsum
       return false;
    }
 
-   // Take a local copy as we do not want to expose the ring buffer before it is
-   // actually initialized
-   ringbuf_t* localRingBuf = (ringbuf_t*) (sharedMem + sizeof( SharedMetaInfo ));
+   SharedMetaInfo* metaInfo = (SharedMetaInfo*)sharedMem;
 
    // If we are the first producer, we create the shared memory
    if (!isConsumer)
@@ -720,23 +735,32 @@ bool SharedMemory::create( const char* path, size_t requestedSize, bool isConsum
        std::lock_guard< std::mutex > g(m);
        if (!memoryCreated)
        {
-           // Set the size of the shared memory in the meta data info. 
-           SharedMetaInfo* metaInfo = (SharedMetaInfo*) sharedMem;
-           size_t* shmReqSize = const_cast< size_t* >( &metaInfo->requestedSize );
-           *shmReqSize = HOP_SHARED_MEM_SIZE;
+          // Set the size of the shared memory in the meta data info.
+          uint32_t* maxThreadNumber = const_cast<uint32_t*>( &metaInfo->maxThreadNb );
+          *maxThreadNumber = HOP_MAX_THREAD_NB;
+          size_t* shmReqSize = const_cast<size_t*>( &metaInfo->requestedSize );
+          *shmReqSize = HOP_SHARED_MEM_SIZE;
 
-           // Then setup the ring buffer
-           memset(localRingBuf, 0, totalSize - sizeof(SharedMetaInfo));
-           if (ringbuf_setup(localRingBuf, HOP_MAX_THREAD_NB, requestedSize) < 0)
-           {
-               assert(false && "Ring buffer creation failed");
-           }
-           else
-           {
-               memoryCreated = true;
-           }
+          // Take a local copy as we do not want to expose the ring buffer before it is
+          // actually initialized
+          ringbuf_t* localRingBuf = (ringbuf_t*)( sharedMem + sizeof( SharedMetaInfo ) );
+
+          // Then setup the ring buffer
+          memset( localRingBuf, 0, totalSize - sizeof( SharedMetaInfo ) );
+          if ( ringbuf_setup( localRingBuf, HOP_MAX_THREAD_NB, requestedSize ) < 0 )
+          {
+             assert( false && "Ring buffer creation failed" );
+          }
+          else
+          {
+             memoryCreated = true;
+          }
        }
    }
+
+   // Get the size needed for the ringbuf struct
+   size_t ringBufSize;
+   ringbuf_get_sizes(metaInfo->maxThreadNb, &ringBufSize, NULL);
 
    // Get pointers inside the shared memory once it has been initialized
    _sharedMetaData = (SharedMetaInfo*) sharedMem;
@@ -746,7 +770,7 @@ bool SharedMemory::create( const char* path, size_t requestedSize, bool isConsum
    // We can only have one consumer
    if( isConsumer && hasConnectedConsumer() )
    {
-      printf("/!\\ WARNING /!\\ \n"
+      printf("/!\\ HOP WARNING /!\\ \n"
              "Cannot have more than one instance of the consumer at a time."
              " You might be trying to run the consumer application twice or"
              " have a dangling shared memory segment. hop might be unstable"
@@ -886,8 +910,8 @@ void SharedMemory::destroy()
       if ( ( _sharedMetaData->flags &
              ( SharedMetaInfo::CONNECTED_PRODUCER | SharedMetaInfo::CONNECTED_CONSUMER ) ) == 0 )
       {
-         printf("Cleaning up shared resources...\n");
-         closeSemaphore( _semaphore );
+         printf("HOP - Cleaning up shared resources...\n");
+         closeSemaphore( _semaphore, _sharedSemaphoreName );
          closeSharedMemory( _sharedMemPath, _sharedMemHandle, _sharedMetaData );
       }
 
@@ -1011,8 +1035,8 @@ class Client
 
        if ( offset == -1 )
        {
-          printf("Failed to acquire enough shared memory. Consider increasing shared"
-                 " memory size if you see this message more than once\n");
+          printf("HOP - Failed to acquire enough shared memory. Consider increasing"
+                 "shared memory size if you see this message more than once\n");
           _traces.clear();
           return false;
        }
@@ -1066,7 +1090,7 @@ class Client
       const auto offset = ringbuf_acquire( ringbuf, _worker, lockMsgSize );
       if ( offset == -1 )
       {
-         printf("Failed to acquire enough shared memory. Consider increasing shared memory size\n");
+         printf("HOP - Failed to acquire enough shared memory. Consider increasing shared memory size\n");
          _lockWaits.clear();
          return false;
       }
@@ -1103,7 +1127,7 @@ class Client
       const auto offset = ringbuf_acquire( ringbuf, _worker, unlocksMsgSize );
       if ( offset == -1 )
       {
-         printf("Failed to acquire enough shared memory. Consider increasing shared memory size\n");
+         printf("HOP - Failed to acquire enough shared memory. Consider increasing shared memory size\n");
          _unlockEvents.clear();
          return false;
       }
@@ -1165,11 +1189,7 @@ Client* ClientManager::Get()
    // If we have not yet created our shared memory segment, do it here
    if( !ClientManager::sharedMemory.data() )
    {
-      char path[HOP_SHARED_MEM_MAX_NAME_SIZE] = {};
-      strncpy( path, HOP_SHARED_MEM_PREFIX, sizeof( HOP_SHARED_MEM_PREFIX ) );
-      strncat(
-          path, HOP_GET_PROG_NAME(), HOP_SHARED_MEM_MAX_NAME_SIZE - sizeof( HOP_SHARED_MEM_PREFIX ) - 1 );
-      bool sucess = ClientManager::sharedMemory.create( path, HOP_SHARED_MEM_SIZE, false );
+      bool sucess = ClientManager::sharedMemory.create( HOP_GET_PROG_NAME(), HOP_SHARED_MEM_SIZE, false );
       (void) sucess; // Removed unused warning
       assert( sucess && "Could not create shared memory" );
    }
@@ -1219,7 +1239,7 @@ void ClientManager::CallGlFinish()
       }
       else
       {
-         printf("Error loading glFinish() symbol! glFinish() was not called!\n");
+         printf(" HOP - Error loading glFinish() symbol! glFinish() was not called!\n");
       }
    }
 }
@@ -1403,8 +1423,7 @@ int ringbuf_setup( ringbuf_t* rbuf, unsigned nworkers, size_t length )
  */
 void ringbuf_get_sizes( const unsigned nworkers, size_t* ringbuf_size, size_t* ringbuf_worker_size )
 {
-   assert( nworkers == HOP_MAX_THREAD_NB );
-   if ( ringbuf_size ) *ringbuf_size = offsetof( ringbuf_t, workers[HOP_MAX_THREAD_NB] );
+   if ( ringbuf_size ) *ringbuf_size = offsetof( ringbuf_t, workers[nworkers] );
    if ( ringbuf_worker_size ) *ringbuf_worker_size = sizeof( ringbuf_worker_t );
 }
 

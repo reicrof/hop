@@ -307,9 +307,9 @@ void addNewProfiler( Profiler* profiler )
    _profilers.push_back( profiler );
 }
 
-Profiler::Profiler( const std::string& name ) : _name( name )
+Profiler::Profiler( const char* name ) : _name( name )
 {
-   _server.start( _name.c_str() );
+   _server.start( name );
 }
 
 void Profiler::addTraces( const DisplayableTraces& traces, uint32_t threadIndex )

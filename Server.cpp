@@ -23,7 +23,7 @@ bool Server::start( const char* name )
          // Try to get the shared memory
          if ( !_sharedMem.data() )
          {
-            bool success = _sharedMem.create( name, HOP_SHARED_MEM_SIZE, true );
+            bool success = _sharedMem.create( name, 0 /*will be define in shared metadata*/, true );
             if ( !success )
             {
                if (!_running) return; // We are done without even opening the shared mem :(
