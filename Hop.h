@@ -9,11 +9,11 @@
 // when HOP_ENABLED is false
 #define HOP_PROF( x )
 #define HOP_PROF_FUNC()
+#define HOP_PROF_GL_FINISH( x )
+#define HOP_PROF_FUNC_GL_FINISH()
 #define HOP_PROF_FUNC_WITH_GROUP( x )
 #define HOP_PROF_MUTEX_LOCK( x )
 #define HOP_PROF_MUTEX_UNLOCK( x )
-#define HOP_PROF_GL_FINISH( x )
-#define HOP_PROF_FUNC_GL_FINISH()
 
 #else  // We do want to profile
 
@@ -34,6 +34,12 @@
 // Create a new profiling trace for a free function
 #define HOP_PROF_FUNC() HOP_PROF_GUARD_VAR( __LINE__, ( __FILE__, __LINE__, __func__, 0 ) )
 
+// Create a new profiling trace that will call glFinish() before being destroyed
+#define HOP_PROF_GL_FINISH( x ) HOP_PROF_GL_FINISH_GUARD_VAR( __LINE__, ( __FILE__, __LINE__, (x), 0 ) )
+
+// Create a new profiling trace for a free function
+#define HOP_PROF_FUNC_GL_FINISH() HOP_PROF_GL_FINISH_GUARD_VAR( __LINE__, ( __FILE__, __LINE__, __func__, 0 ) )
+
 // Create a new profiling trace for a free function that falls under category x
 #define HOP_PROF_FUNC_WITH_GROUP( x ) HOP_PROF_GUARD_VAR(__LINE__,( __FILE__, __LINE__, __func__, (x) ) )
 
@@ -45,12 +51,6 @@
 // used to provide stall region. You should provide a pointer to the mutex that
 // is being unlocked.
 #define HOP_PROF_MUTEX_UNLOCK( x ) HOP_MUTEX_UNLOCK_EVENT( x )
-
-// Create a new profiling trace that will call glFinish() before being destroyed
-#define HOP_PROF_GL_FINISH( x ) HOP_PROF_GL_FINISH_GUARD_VAR( __LINE__, ( __FILE__, __LINE__, (x), 0 ) )
-
-// Create a new profiling trace for a free function that will call glFinish() before being destroyed
-#define HOP_PROF_FUNC_GL_FINISH() HOP_PROF_GL_FINISH_GUARD_VAR( __LINE__, ( __FILE__, __LINE__, __func__, 0 ) )
 
 ///////////////////////////////////////////////////////////////
 /////     EVERYTHING AFTER THIS IS IMPL DETAILS        ////////
@@ -118,11 +118,11 @@ inline const char* HOP_GET_PROG_NAME() HOP_NOEXCEPT
    static bool first = true;
    if (first)
    {
-	   DWORD size = GetModuleFileName(NULL, fullname, MAX_PATH);
-	   while (size > 0 && fullname[size] != '\\')
-		   --size;
-	   shortname = &fullname[size + 1];
-	   first = false;
+      DWORD size = GetModuleFileName(NULL, fullname, MAX_PATH);
+      while (size > 0 && fullname[size] != '\\')
+         --size;
+      shortname = &fullname[size + 1];
+      first = false;
    }
    return shortname;
 }
@@ -318,7 +318,9 @@ class ClientManager
 {
   public:
    static Client* Get();
+   static void CallGlFinish();
    static void StartProfile();
+   static void StartProfileGlFinish();
    static void EndProfile(
        const char* fileName,
        const char* fctName,
@@ -377,7 +379,7 @@ class ProfGuardGLFinish
          _lineNb( lineNb ),
          _group( groupId )
    {
-      ClientManager::StartProfile();
+      ClientManager::StartProfileGlFinish();
    }
    ~ProfGuardGLFinish()
    {
@@ -501,7 +503,7 @@ namespace
    {
       sem_handle sem = NULL;
 #if defined( _MSC_VER )
-	     sem = CreateSemaphore(NULL, 0, LONG_MAX, name);
+        sem = CreateSemaphore(NULL, 0, LONG_MAX, name);
 #else
          sem = sem_open( name, O_CREAT, S_IRUSR | S_IWUSR, 1 );
 #endif
@@ -1191,9 +1193,46 @@ Client* ClientManager::Get()
    return threadClient.get();
 }
 
+void ClientManager::CallGlFinish()
+{
+#ifdef _MSC_VER
+   static const char* glLibName = "opengl32.dll";
+#else
+   static const char* glLibName = "libGL.so";
+#endif
+
+   static void (*glFinishPtr)() = NULL;
+
+   // If we request glFinish, load the symbol and call it
+   if( ClientManager::sharedMemory.isUsingGlFinish() )
+   {
+      // Load the symobl
+      if( !glFinishPtr )
+      {
+         glFinishPtr = (void (*)())loadSymbol( glLibName, "glFinish" );
+      }
+
+      // Call the symbol
+      if( glFinishPtr )
+      {
+         (*glFinishPtr)();
+      }
+      else
+      {
+         printf("Error loading glFinish() symbol! glFinish() was not called!\n");
+      }
+   }
+}
+
 void ClientManager::StartProfile()
 {
    ++tl_traceLevel;
+}
+
+void ClientManager::StartProfileGlFinish()
+{
+   ++tl_traceLevel;
+   ClientManager::CallGlFinish();
 }
 
 void ClientManager::EndProfile(
@@ -1223,36 +1262,12 @@ void ClientManager::EndProfileGlFinish(
     TLineNb_t lineNb,
     TGroup_t group )
 {
-#ifdef _MSC_VER
-   static const char* glLibName = "opengl32.dll";
-#else
-   static const char* glLibName = "libGL.so";
-#endif
-   static void (*glFinishPtr)() = NULL;
-
-   // If we request glFinish, load the symbol and call it
-   if( ClientManager::sharedMemory.isUsingGlFinish() )
-   {
-      // Load the symobl
-      if( !glFinishPtr )
-      {
-         glFinishPtr = (void (*)())loadSymbol( glLibName, "glFinish" );
-      }
-
-      // Call the symbol
-      if( glFinishPtr )
-      {
-         (*glFinishPtr)();
-      }
-      else
-      {
-         printf("Error loading glFinish() symbol! glFinish() was not called!\n");
-      }
-   }
-
-   const TimeStamp end = getTimeStamp();
+   ClientManager::CallGlFinish();
+   
    const int remainingPushedTraces = --tl_traceLevel;
    Client* client = ClientManager::Get();
+   const TimeStamp end = getTimeStamp();
+   
    if( end - start > 50 ) // Minimum trace time is 50 ns
    {
       client->addProfilingTrace( fileName, fctName, start, end, lineNb, group );
