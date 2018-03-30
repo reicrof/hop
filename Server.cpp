@@ -192,6 +192,11 @@ void Server::stop()
 {
    if( _running )
    {
+      if( _sharedMem.data() )
+      {
+         _sharedMem.setListeningConsumer( false );
+         _sharedMem.setConnectedConsumer( false );
+      }
       _running = false;
       // Wake up semaphore to close properly
       if( _sharedMem.data() && _sharedMem.semaphore() )

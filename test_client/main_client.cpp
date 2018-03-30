@@ -10,6 +10,10 @@
 #define HOP_IMPLEMENTATION
 #include <Hop.h>
 
+
+#include <signal.h>
+bool g_run = true;
+
 int bug = -1;
 size_t count = 0;
 //std::mutex m;
@@ -172,6 +176,12 @@ void testMutex()
    HOP_PROF_MUTEX_UNLOCK( &m1 );
 }
 
+void terminateCallback(int sig)
+{
+   signal(sig, SIG_IGN);
+   g_run = false;
+}
+
 int main()
 {
    // srand (time(NULL));
@@ -179,11 +189,15 @@ int main()
 
    //const auto preDrawTime = std::chrono_literals::system_clock::now();
 
-    std::thread t1 ( [](){ while( true ) { func1(); } } );
-    std::thread t2 ( [](){ while( true ) { func1(); } } );
-    std::thread t3 ( [](){ while( true ) { func1(); } } );
+   // Setup signal handlers
+   signal(SIGINT, terminateCallback);
+   signal(SIGTERM, terminateCallback);
 
-    while(true)
+    std::thread t1 ( [](){ while(g_run) { func1(); } } );
+    std::thread t2 ( [](){ while(g_run) { func1(); } } );
+    std::thread t3 ( [](){ while(g_run) { func1(); } } );
+
+    while(g_run)
     {
        HOP_PROF_FUNC_WITH_GROUP(42);
        //std::lock_guard<std::mutex> g(m);
@@ -225,6 +239,9 @@ int main()
 	   l1();
     }
 
+   t1.join();
+   t2.join();
+   t3.join();
    // std::thread t ( [](){ while( true ) { testMutex(); } } );
    // //std::thread t1 ( [](){ while( true ) { testMutex(); } } );
    // std::this_thread::sleep_for(std::chrono::microseconds(25000));

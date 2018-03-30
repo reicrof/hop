@@ -6,8 +6,6 @@
 #include <SDL.h>
 #undef main
 
-#include <rapidjson/document.h>
-
 #include <signal.h>
 
 #ifdef __APPLE__

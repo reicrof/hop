@@ -24,12 +24,6 @@
 #include <algorithm>
 #include <numeric>
 #include <stdio.h>
-
-// Used to save the traces as json file
-#include <rapidjson/document.h>
-#include <rapidjson/writer.h>
-#include <rapidjson/prettywriter.h>
-#include <rapidjson/stringbuffer.h>
 #include <fstream>
 
 namespace
@@ -194,48 +188,6 @@ namespace
       uint32_t strDbSize;
       uint32_t threadCount;
    };
-}
-
-bool saveAsJson( const char* path, const std::vector< hop::ThreadInfo >& /*threadTraces*/ )
-{
-   using namespace rapidjson;
-
-   StringBuffer s;
-   PrettyWriter<StringBuffer> writer(s);
-
-   writer.StartObject();
-   writer.Key("traceEvents");
-   writer.StartArray();
-   // for( size_t i = 0; i < threadTraces.size(); ++i )
-   // {
-   //    const uint32_t threadId = threadsId[i];
-   //    const std::vector< char >& strData = threadTraces[i].stringData;
-   //    for( const auto& chunk : threadTraces[i].chunks )
-   //    {
-   //       for( const auto& t : chunk )
-   //       {
-   //          writer.StartObject();
-   //          writer.Key("ts");
-   //          writer.Uint64( (uint64_t)t.time );
-   //          writer.Key("ph");
-   //          writer.String( t.flags & hop::DisplayableTrace::START_TRACE ? "B" : "E" );
-   //          writer.Key("pid");
-   //          writer.Uint(threadId);
-   //          writer.Key("name");
-   //          writer.String( &strData[t.fctNameIdx] );
-   //          writer.EndObject();
-   //       }
-   //    }
-   // }
-   writer.EndArray();
-   writer.Key("displayTimeUnit");
-   writer.String("ms");
-   writer.EndObject();
-
-   std::ofstream of(path);
-   of << s.GetString();
-
-   return true;
 }
 
 } // end of anonymous namespace
