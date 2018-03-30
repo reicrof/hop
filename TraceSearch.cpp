@@ -5,6 +5,8 @@
 #include "Utils.h"
 #include "imgui/imgui.h"
 
+#include <functional> //std::greater   
+
 template <typename CMP>
 static void sortSearchResOnTime(
     hop::SearchResult& sr,

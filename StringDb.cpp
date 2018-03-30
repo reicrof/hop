@@ -3,6 +3,13 @@
 #include <cassert>
 #include <cstring>
 
+#if defined( _MSC_VER )
+#include <Shlwapi.h>
+#define HOP_STRCASESTR StrStrI
+#else
+#define HOP_STRCASESTR strcasestr
+#endif
+
 namespace hop
 {
 
@@ -78,7 +85,7 @@ std::vector< size_t > StringDb::findStringIndexMatching( const char* substrToFin
    while( i < _strData.size() )
    {
       const auto length = strlen( &_strData[i] );
-      if( strcasestr( &_strData[i], substrToFind ) )
+      if(HOP_STRCASESTR( &_strData[i], substrToFind ) )
       {
          indices.push_back( i );
       }

@@ -157,7 +157,7 @@ void appendLods( LodsArray& dst, const LodsArray& src )
                      sameDepthIt->end = newTraceIt->end;
                      sameDepthIt->delta += timeBetweenTrace + newTraceIt->delta;
                      sameDepthIt->isLoded = true;
-                     const auto dist = std::distance( sameDepthIt, dst[i].rend());
+                     const long dist = std::distance( sameDepthIt, dst[i].rend());
                      sortFromIdx = std::min( dist, sortFromIdx );
                   }
                }

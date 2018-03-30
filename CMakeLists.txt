@@ -9,12 +9,13 @@ if(UNIX)
         set( HOP_WRAP_SRC wrap_library/hop_wrap_macos.cpp )
    else()
         set( HOP_WRAP_SRC wrap_library/hop_wrap_linux.cpp )
-        set(HOP_LIBRT_FLAG "-lrt")
+        set( HOP_LIBRT_FLAG "-lrt" )
    endif()
    set( CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -Wextra -pedantic" )
 else()
    set( CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall" )
    set( HOP_WRAP_SRC wrap_library/hop_wrap_windows.cpp )
+   set( HOP_WINDOWS_LIB "Shlwapi.lib" )
 endif()
 
 set( CMAKE_CXX_STANDARD 14 )
@@ -25,7 +26,7 @@ find_package(SDL2 REQUIRED)
 find_package(OpenGL REQUIRED)
 
 #set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -g ")
-#set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} -O3 -ffast-math ")
+set(CMAKE_C_FLAGS_RELEASE "-ffast-math ${CMAKE_C_FLAGS_RELEASE}")
 
 #####################
 ### Main executable
@@ -41,7 +42,7 @@ file(GLOB hop_server_src
 add_executable(hop ${hop_server_src})
 
 target_include_directories( hop SYSTEM PRIVATE  ${OPENGL_INCLUDE_DIRS} ${SDL2_INCLUDE_DIR} )
-target_link_libraries( hop PUBLIC -lpthread ${HOP_LIBRT_FLAG} ${OPENGL_LIBRARIES} ${SDL2_LIBRARY} -ldl )
+target_link_libraries( hop PUBLIC -lpthread ${HOP_LIBRT_FLAG} ${HOP_WINDOWS_LIB} ${OPENGL_LIBRARIES} ${SDL2_LIBRARY} -ldl )
 
 #####################
 ### Library for function wrapping

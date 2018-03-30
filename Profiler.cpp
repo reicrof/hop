@@ -867,7 +867,7 @@ bool hop::Profiler::saveToFile( const char* path )
          index += serialize( _tracesPerThread[i], &data[index] );
       }
 
-      size_t compressedSize = compressBound( totalSerializedSize );
+      mz_ulong compressedSize = compressBound( totalSerializedSize );
       std::vector<char> compressedData( compressedSize );
       int compressionStatus = compress(
           (unsigned char*)compressedData.data(),
@@ -919,7 +919,7 @@ bool hop::Profiler::openFile( const char* path )
          }
 
          std::vector<char> uncompressedData( header->uncompressedSize );
-         size_t uncompressedSize = uncompressedData.size();
+         mz_ulong uncompressedSize = uncompressedData.size();
 
          int uncompressStatus = uncompress(
              (unsigned char*)uncompressedData.data(),

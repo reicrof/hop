@@ -600,6 +600,7 @@ namespace
 
        if (*handle == NULL)
        {
+           printErrorMsg("Could open shared mem handle");
            return NULL;
        }
 
@@ -608,13 +609,23 @@ namespace
            FILE_MAP_ALL_ACCESS, // read/write permission
            0,
            0,
-           size);
+           0);
 
        if (sharedMem == NULL)
        {
            CloseHandle(*handle);
            return NULL;
        }
+
+       MEMORY_BASIC_INFORMATION memInfo;
+       if (!VirtualQuery(sharedMem, &memInfo, sizeof(memInfo)))
+       {
+          printErrorMsg("Could not read shared memory size");
+          UnmapViewOfFile(sharedMem);
+          CloseHandle(*handle);
+          return NULL;
+       }
+       *totalSize = memInfo.RegionSize;
 #else
       *handle = shm_open( path, O_RDWR, 0666 );
       if ( *handle < 0 )
