@@ -506,7 +506,7 @@ void Timeline::setZoom( TimeDuration timelineDuration, AnimationType animType )
    {
       // We need to update it immediately as subsequent call might need it updated
       // before the next update
-      _timelineRange = timelineDuration;
+      _timelineRange = _animationState.targetTimelineRange;
    }
 }
 
