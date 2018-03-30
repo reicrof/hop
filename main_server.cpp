@@ -26,6 +26,19 @@ void terminateCallback( int sig )
    g_run = false;
 }
 
+const char* (*GetClipboardTextFn)(void* user_data);
+void(*SetClipboardTextFn)(void* user_data, const char* text);
+
+static const char* getClipboardText(void*)
+{
+   return SDL_GetClipboardText();
+}
+
+static void setClipboardText(void*, const char* text)
+{
+   SDL_SetClipboardText(text);
+}
+
 static void sdlImGuiInit()
 {
    ImGuiIO& io = ImGui::GetIO();
@@ -48,6 +61,10 @@ static void sdlImGuiInit()
    io.KeyMap[ImGuiKey_X] = SDLK_x;
    io.KeyMap[ImGuiKey_Y] = SDLK_y;
    io.KeyMap[ImGuiKey_Z] = SDLK_z;
+
+   io.SetClipboardTextFn = setClipboardText;
+   io.GetClipboardTextFn = getClipboardText;
+
    auto& style = ImGui::GetStyle();
    style.Colors[ImGuiCol_WindowBg]              = ImVec4(0.14f, 0.14f, 0.14f, 1.00f);
    style.Colors[ImGuiCol_TitleBg]               = ImVec4(0.24f, 0.24f, 0.24f, 1.00f);
