@@ -415,7 +415,15 @@ void Timeline::handleMouseDrag( float mouseInCanvasX, float mouseInCanvasY )
 
 bool Timeline::realtime() const noexcept { return _realtime; }
 
-void Timeline::setRealtime( bool isRealtime ) noexcept { _realtime = isRealtime; }
+void Timeline::setRealtime( bool isRealtime ) noexcept
+{
+   // If we are not realtime and we are going to, push undo
+   // state so we can go back to were we were.
+   if( !_realtime && isRealtime )
+      pushNavigationState();
+
+   _realtime = isRealtime;
+}
 
 hop::TimeStamp Timeline::absoluteStartTime() const noexcept
 {
@@ -982,6 +990,7 @@ void Timeline::clearBookmarks()
 
 void Timeline::pushNavigationState() noexcept
 {
+   _redoPositionStates.clear();
    AnimationState animState = _animationState;
    animState.highlightPercent = 0.0f;
    animState.type = ANIMATION_TYPE_FAST;

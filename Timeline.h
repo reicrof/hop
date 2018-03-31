@@ -73,7 +73,6 @@ class Timeline
    void handleMouseDrag( float mousePosX, float mousePosY );
    void handleMouseWheel( float mousePosX, float mousePosY );
    void zoomOn( int64_t microToZoomOn, float zoomFactor );
-   void selectTrace( const ThreadInfo& data, uint32_t threadIndex, size_t traceIndex );
    void setStartTime( int64_t timeInMicro, AnimationType animType = ANIMATION_TYPE_NORMAL ) noexcept;
    void setZoom( TimeDuration microsToDisplay, AnimationType animType = ANIMATION_TYPE_NORMAL );
    void highlightLockOwner(const std::vector<ThreadInfo>& infos, uint32_t threadIndex, const hop::LockWait& highlightedLockWait, const float posX, const float posY );
