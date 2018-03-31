@@ -135,7 +135,7 @@ TraceDetailDrawResult drawTraceDetails(
          for ( size_t i = 0; i < details.details.size(); ++i )
          {
             const size_t traceId = details.details[i].traceIds[0];
-            const TStrPtr_t fctIdx = threadInfo.traces.fctNameIds[traceId];
+            const TStrPtr_t fctIdx = threadInfo._traces.fctNameIds[traceId];
             snprintf( traceName, sizeof( traceName ), "%s", strDb.getString( fctIdx ) );
             if ( ImGui::Selectable(
                      traceName, selected == i, ImGuiSelectableFlags_SpanAllColumns ) )

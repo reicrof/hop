@@ -14,8 +14,6 @@
 #define __STDC_FORMAT_MACROS
 #include <inttypes.h>
 
-static constexpr float TRACE_HEIGHT = 20.0f;
-static constexpr float TRACE_VERTICAL_PADDING = 2.0f;
 static constexpr hop::TimeDuration MIN_NANOS_TO_DISPLAY = 500;
 static constexpr hop::TimeDuration MAX_NANOS_TO_DISPLAY = 900000000000;
 static constexpr float MIN_TRACE_LENGTH_PXL = 0.1f;
@@ -86,6 +84,19 @@ void Timeline::update( float deltaTimeMs ) noexcept
                _timelineRange += delta / speedFactor;
             }
          }
+
+         if (std::abs(_verticalPosPxl - _animationState.targetVerticalPosPxl) > 0.00001f)
+         {
+            float delta = _animationState.targetVerticalPosPxl - _verticalPosPxl;
+            if (std::abs(delta) < 0.01f)
+            {
+               _verticalPosPxl = _animationState.targetVerticalPosPxl;
+            }
+            else
+            {
+               _verticalPosPxl += delta * 0.1;
+            }
+         }
          break;
       }
    }
@@ -96,7 +107,7 @@ void Timeline::update( float deltaTimeMs ) noexcept
 }
 
 void Timeline::draw(
-    const std::vector<ThreadInfo>& tracesPerThread,
+    std::vector<ThreadInfo>& tracesPerThread,
     const StringDb& strDb )
 {
    ImGui::BeginChild("TimelineAndCanvas");
@@ -109,27 +120,39 @@ void Timeline::draw(
       false,
       ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
 
+   // Set the scroll and get it back from ImGui to have the clamped value
+   ImGui::SetScrollY(_verticalPosPxl);
+
    char threadName[128] = "Thread ";
    for ( size_t i = 0; i < tracesPerThread.size(); ++i )
    {
+      const bool threadHidden = tracesPerThread[i]._hidden;
       snprintf(
           threadName + sizeof( "Thread" ), sizeof( threadName ), "%lu", i );
       const auto traceColor = ImColor::HSV( i / 7.0f, 0.6f, 0.6f );
-      const auto threadHeaderColor = ImColor(
+      auto threadHeaderColor = ImColor(
           traceColor.Value.x - 0.2f, traceColor.Value.y - 0.2f, traceColor.Value.z - 0.2f );
+      if(threadHidden)
+         threadHeaderColor = ImColor(0.4f, 0.4f, 0.4f);
       ImGui::PushStyleColor( ImGuiCol_Button, threadHeaderColor );
       ImGui::PushStyleColor( ImGuiCol_ButtonHovered, threadHeaderColor );
       ImGui::PushStyleColor( ImGuiCol_ButtonActive, threadHeaderColor );
-      ImGui::Button( threadName );
+      if( ImGui::Button( threadName ) )
+         tracesPerThread[i]._hidden = !threadHidden;
       ImGui::PopStyleColor( 3 );
       ImGui::Separator();
 
-      ImVec2 curDrawPos = ImGui::GetCursorScreenPos();
-      drawTraces(tracesPerThread[i], i, curDrawPos.x, curDrawPos.y, strDb, traceColor);
-      drawLockWaits( tracesPerThread, i, curDrawPos.x, curDrawPos.y );
+      tracesPerThread[i]._tracesVerticalStartPos = ImGui::GetCursorPosY();
 
-      curDrawPos.y += tracesPerThread[i].traces.maxDepth * (TRACE_HEIGHT + TRACE_VERTICAL_PADDING) + 70;
-      ImGui::SetCursorScreenPos(curDrawPos);
+      if (!threadHidden)
+      {
+         ImVec2 curDrawPos = ImGui::GetCursorScreenPos();
+         drawTraces(tracesPerThread[i], i, curDrawPos.x, curDrawPos.y, strDb, traceColor);
+         drawLockWaits(tracesPerThread, i, curDrawPos.x, curDrawPos.y);
+
+         curDrawPos.y += tracesPerThread[i]._traces.maxDepth * PADDED_TRACE_SIZE + 70;
+         ImGui::SetCursorScreenPos(curDrawPos);
+      }
    }
 
    if (_timelineHoverPos > 0.0f)
@@ -345,11 +368,13 @@ void Timeline::handleMouseDrag( float mouseInCanvasX, float mouseInCanvasY )
       const int64_t deltaXInNanos =
           pxlToNanos<int64_t>( windowWidthPxl, _timelineRange, delta.x );
       setStartTime( _timelineStart - deltaXInNanos, ANIMATION_TYPE_NONE );
-
-      // Switch to the traces context to modify the scroll
-      ImGui::BeginChild( "TimelineCanvas" );
-      ImGui::SetScrollY( ImGui::GetScrollY() - delta.y );
+   
+      // Switch to the traces context to get scroll info
+      ImGui::BeginChild("TimelineCanvas");
+      const float maxScrollY = ImGui::GetScrollMaxY();
       ImGui::EndChild();
+
+      _verticalPosPxl = hop::clamp(_verticalPosPxl - delta.y, 0.0f, maxScrollY);
 
       ImGui::ResetMouseDragDelta();
       setRealtime( false );
@@ -447,6 +472,11 @@ void Timeline::setAbsolutePresentTime( TimeStamp time ) noexcept
 
 TimeDuration Timeline::timelineRange() const noexcept { return _timelineRange; }
 
+float Timeline::verticalPosPxl() const noexcept
+{
+   return _verticalPosPxl;
+}
+
 const TraceDetails& Timeline::getTraceDetails() const noexcept
 {
    return _traceDetails;
@@ -471,6 +501,16 @@ void Timeline::setStartTime( int64_t time, AnimationType animType ) noexcept
       // We need to update it immediately as subsequent call might need it updated
       // before the next update
       _timelineStart = time;
+   }
+}
+
+void Timeline::moveVerticalPositionPxl( float positionPxl, AnimationType animType )
+{
+   _animationState.targetVerticalPosPxl = positionPxl;
+   _animationState.type = animType;
+   if (animType == ANIMATION_TYPE_NONE)
+   {
+      _verticalPosPxl = positionPxl;
    }
 }
 
@@ -545,7 +585,7 @@ void Timeline::drawTraces(
     const StringDb& strDb,
     const ImColor& color )
 {
-   if ( data.traces.ends.empty() ) return;
+   if ( data._traces.ends.empty() ) return;
 
    const auto absoluteStart = _absoluteStartTime;
    const float windowWidthPxl = ImGui::GetWindowWidth();
@@ -585,61 +625,61 @@ void Timeline::drawTraces(
    if ( lodLevel == -1 )
    {
       const auto it1 = std::lower_bound(
-          data.traces.ends.begin(), data.traces.ends.end(), firstTraceAbsoluteTime );
+          data._traces.ends.begin(), data._traces.ends.end(), firstTraceAbsoluteTime );
       const auto it2 = std::upper_bound(
-          data.traces.ends.begin(), data.traces.ends.end(), lastTraceAbsoluteTime );
+          data._traces.ends.begin(), data._traces.ends.end(), lastTraceAbsoluteTime );
 
       // The last trace of the current thread does not reach the current time
-      if ( it1 == data.traces.ends.end() ) return;
+      if ( it1 == data._traces.ends.end() ) return;
 
-      size_t firstTraceId = std::distance( data.traces.ends.begin(), it1 );
-      size_t lastTraceId = std::distance( data.traces.ends.begin(), it2 );
+      size_t firstTraceId = std::distance( data._traces.ends.begin(), it1 );
+      size_t lastTraceId = std::distance( data._traces.ends.begin(), it2 );
 
       // Find the the first trace on the left and right that have a depth of 0. This prevents
       // traces that have a smaller depth than the one foune previously to vanish.
-      while ( firstTraceId > 0 && data.traces.depths[firstTraceId] != 0 )
+      while ( firstTraceId > 0 && data._traces.depths[firstTraceId] != 0 )
       {
          --firstTraceId;
       }
-      while ( lastTraceId < data.traces.depths.size() && data.traces.depths[lastTraceId] != 0 )
+      while ( lastTraceId < data._traces.depths.size() && data._traces.depths[lastTraceId] != 0 )
       {
          ++lastTraceId;
       }
-      if ( lastTraceId < data.traces.depths.size() )
+      if ( lastTraceId < data._traces.depths.size() )
       {
          ++lastTraceId;
       }  // We need to go one past the depth 0
 
       for ( size_t i = firstTraceId; i < lastTraceId; ++i )
       {
-         const TimeStamp traceEndTime = ( data.traces.ends[i] - absoluteStart );
+         const TimeStamp traceEndTime = ( data._traces.ends[i] - absoluteStart );
          const auto traceEndPxl = nanosToPxl<float>(
              windowWidthPxl, _timelineRange, traceEndTime - _timelineStart );
          const float traceLengthPxl =
-             nanosToPxl<float>( windowWidthPxl, _timelineRange, data.traces.deltas[i] );
+             nanosToPxl<float>( windowWidthPxl, _timelineRange, data._traces.deltas[i] );
 
          // Skip trace if it is way smaller than treshold
          if ( traceLengthPxl < MIN_TRACE_LENGTH_PXL ) continue;
 
-         const auto curDepth = data.traces.depths[i];
+         const auto curDepth = data._traces.depths[i];
          const auto tracePos = ImVec2(
              posX + traceEndPxl - traceLengthPxl,
-             posY + curDepth * ( TRACE_HEIGHT + TRACE_VERTICAL_PADDING ) );
+             posY + curDepth * PADDED_TRACE_SIZE);
 
-         tracesToDraw.push_back( DrawingInfo{tracePos, data.traces.deltas[i], i, traceLengthPxl} );
+         tracesToDraw.push_back( DrawingInfo{tracePos, data._traces.deltas[i], i, traceLengthPxl} );
 
          for( const auto& tid : _highlightedTraces )
          {
             if( threadIndex == tid.second && i == tid.first )
             {
-               highlightTraceToDraw.push_back( DrawingInfo{tracePos, data.traces.deltas[i], i, traceLengthPxl} );
+               highlightTraceToDraw.push_back( DrawingInfo{tracePos, data._traces.deltas[i], i, traceLengthPxl} );
             }
          }
       }
    }
    else
    {
-      const auto& lods = data.traces.lods[lodLevel];
+      const auto& lods = data._traces.lods[lodLevel];
       LodInfo firstInfo = {firstTraceAbsoluteTime, 0, 0, 0, false};
       LodInfo lastInfo = {lastTraceAbsoluteTime, 0, 0, 0, false};
       auto it1 = std::lower_bound( lods.begin(), lods.end(), firstInfo );
@@ -680,7 +720,7 @@ void Timeline::drawTraces(
 
          const auto tracePos = ImVec2(
              posX + traceEndPxl - traceLengthPxl,
-             posY + t.depth * ( TRACE_HEIGHT + TRACE_VERTICAL_PADDING ) );
+             posY + t.depth * PADDED_TRACE_SIZE);
          if ( t.isLoded )
          {
             lodTracesToDraw.push_back(
@@ -735,7 +775,7 @@ void Timeline::drawTraces(
          }
          else if ( rightMouseClicked && _rightClickStartPosInCanvas[0] == 0.0f)
          {
-            _traceDetails = createTraceDetails( data.traces, threadIndex, t.traceIndex );
+            _traceDetails = createTraceDetails( data._traces, threadIndex, t.traceIndex );
          }
       }
    }
@@ -750,7 +790,7 @@ void Timeline::drawTraces(
    for ( const auto& t : tracesToDraw )
    {
       const size_t traceIndex = t.traceIndex;
-      snprintf( curName, sizeof(curName), "%s", strDb.getString( data.traces.fctNameIds[traceIndex] ) );
+      snprintf( curName, sizeof(curName), "%s", strDb.getString( data._traces.fctNameIds[traceIndex] ) );
 
       ImGui::SetCursorScreenPos( t.posPxl );
       ImGui::Button( curName, ImVec2( t.lengthPxl, TRACE_HEIGHT ) );
@@ -767,8 +807,8 @@ void Timeline::drawTraces(
                 sizeof( curName ) - lastChar,
                 " (%s)\n   %s:%d ",
                 formattedTime,
-                strDb.getString( data.traces.fileNameIds[traceIndex] ),
-                data.traces.lineNbs[traceIndex] );
+                strDb.getString( data._traces.fileNameIds[traceIndex] ),
+                data._traces.lineNbs[traceIndex] );
             ImGui::TextUnformatted( curName );
             ImGui::EndTooltip();
          }
@@ -777,11 +817,11 @@ void Timeline::drawTraces(
          {
             setZoom( t.duration );
             setStartTime(
-                ( data.traces.ends[traceIndex] - data.traces.deltas[traceIndex] - absoluteStart ) );
+                ( data._traces.ends[traceIndex] - data._traces.deltas[traceIndex] - absoluteStart ) );
          }
          else if ( rightMouseClicked && _rightClickStartPosInCanvas[0] == 0.0f)
          {
-            _traceDetails = createTraceDetails( data.traces, threadIndex, t.traceIndex );
+            _traceDetails = createTraceDetails( data._traces, threadIndex, t.traceIndex );
          }
       }
    }
@@ -930,7 +970,7 @@ void Timeline::drawLockWaits(
 
          ImGui::SetCursorScreenPos( ImVec2(
              posX + startPxl,
-             posY + lw.depth * ( TRACE_HEIGHT + TRACE_VERTICAL_PADDING ) ) );
+             posY + lw.depth * PADDED_TRACE_SIZE) );
          ImGui::Button( "Lock", ImVec2( lengthPxl, 20.f ) );
          if (ImGui::IsItemHovered())
          {
@@ -1005,6 +1045,7 @@ void Timeline::undoNavigation() noexcept
       const auto& state = _undoPositionStates.back();
       _animationState.targetTimelineStart = state.targetTimelineStart;
       _animationState.targetTimelineRange = state.targetTimelineRange;
+      _animationState.targetVerticalPosPxl = state.targetVerticalPosPxl;
       _animationState.type = ANIMATION_TYPE_FAST;
       _undoPositionStates.pop_back();
    }
@@ -1018,6 +1059,7 @@ void Timeline::redoNavigation() noexcept
       const auto& state = _redoPositionStates.back();
       _animationState.targetTimelineStart = state.targetTimelineStart;
       _animationState.targetTimelineRange = state.targetTimelineRange;
+      _animationState.targetVerticalPosPxl = state.targetVerticalPosPxl;
       _animationState.type = ANIMATION_TYPE_FAST;
       _redoPositionStates.pop_back();
    }

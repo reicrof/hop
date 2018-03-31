@@ -19,8 +19,8 @@ static void sortSearchResOnTime(
        [&threadInfos, &cmp](
            const std::pair<size_t, uint32_t>& lhs, const std::pair<size_t, uint32_t>& rhs ) {
           return cmp(
-              threadInfos[lhs.second].traces.ends[lhs.first] - threadInfos[lhs.second].traces.deltas[lhs.first],
-              threadInfos[rhs.second].traces.ends[rhs.first] - threadInfos[rhs.second].traces.deltas[rhs.first] );
+              threadInfos[lhs.second]._traces.ends[lhs.first] - threadInfos[lhs.second]._traces.deltas[lhs.first],
+              threadInfos[rhs.second]._traces.ends[rhs.first] - threadInfos[rhs.second]._traces.deltas[rhs.first] );
        } );
 }
 
@@ -39,8 +39,8 @@ static void sortSearchResOnName(
            const std::pair<size_t, uint32_t>& lhs, const std::pair<size_t, uint32_t>& rhs ) {
           return cmp(
               strcmp(
-                  strDb.getString( threadInfos[lhs.second].traces.fctNameIds[lhs.first] ),
-                  strDb.getString( threadInfos[rhs.second].traces.fctNameIds[rhs.first] ) ),
+                  strDb.getString( threadInfos[lhs.second]._traces.fctNameIds[lhs.first] ),
+                  strDb.getString( threadInfos[rhs.second]._traces.fctNameIds[rhs.first] ) ),
               0 );
        } );
 }
@@ -57,8 +57,8 @@ static void sortSearchResOnDuration(
        [&threadInfos, &cmp](
            const std::pair<size_t, uint32_t>& lhs, const std::pair<size_t, uint32_t>& rhs ) {
           return cmp(
-              threadInfos[lhs.second].traces.deltas[lhs.first],
-              threadInfos[rhs.second].traces.deltas[rhs.first] );
+              threadInfos[lhs.second]._traces.deltas[lhs.first],
+              threadInfos[rhs.second]._traces.deltas[rhs.first] );
        } );
 }
 
@@ -76,9 +76,9 @@ void findTraces( const char* string, const hop::StringDb& strDb, const std::vect
    for( uint32_t threadIdx = 0; threadIdx < threadInfos.size(); ++threadIdx )
    {
        const auto& ti = threadInfos[ threadIdx ];
-       for( size_t idx = 0; idx < ti.traces.fctNameIds.size(); ++idx )
+       for( size_t idx = 0; idx < ti._traces.fctNameIds.size(); ++idx )
        {
-          const size_t fctNameId = ti.traces.fctNameIds[ idx ];
+          const size_t fctNameId = ti._traces.fctNameIds[ idx ];
           for( auto i : strIds )
           {
              if ( i == fctNameId )
@@ -174,10 +174,10 @@ SearchSelection drawSearchResult( SearchResult& searchRes, const Timeline& timel
        const auto& traceIdThreadId = searchRes.tracesIdxThreadIdx[i];
        const auto& ti = threadInfos[ traceIdThreadId.second ];
        const size_t traceId = traceIdThreadId.first;
-       const TimeStamp delta = ti.traces.deltas[ traceId ];
+       const TimeStamp delta = ti._traces.deltas[ traceId ];
 
        hop::formatNanosTimepointToDisplay(
-           ti.traces.ends[ traceId ] - delta - absoluteStartTime,
+           ti._traces.ends[ traceId ] - delta - absoluteStartTime,
            timelineRange,
            traceTime,
            sizeof( traceTime ) );
@@ -188,7 +188,7 @@ SearchSelection drawSearchResult( SearchResult& searchRes, const Timeline& timel
        }
        if( ImGui::IsItemHovered() ) { hoveredId = i; }
        ImGui::NextColumn();
-       ImGui::Text( "%s", strDb.getString( ti.traces.fctNameIds[ traceId ] ) );
+       ImGui::Text( "%s", strDb.getString( ti._traces.fctNameIds[ traceId ] ) );
        ImGui::NextColumn();
        hop::formatNanosDurationToDisplay(
            delta,

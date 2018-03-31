@@ -278,7 +278,7 @@ void Profiler::addTraces( const DisplayableTraces& traces, uint32_t threadIndex 
 
    // If this is the first traces received from the thread, update the
    // start time as it may be earlier.
-   if ( _tracesPerThread[threadIndex].traces.ends.empty() )
+   if ( _tracesPerThread[threadIndex]._traces.ends.empty() )
    {
       // Find the earliest trace
       TimeStamp earliestTime = traces.ends[0] - traces.deltas[0];
@@ -487,12 +487,19 @@ void hop::Profiler::drawSearchWindow()
 
          if ( selection.selectedTraceIdx != (size_t)-1 && selection.selectedThreadIdx != (uint32_t)-1 )
          {
-            const TimeStamp absEndTime =
-                _tracesPerThread[selection.selectedThreadIdx].traces.ends[selection.selectedTraceIdx];
-            const TimeStamp delta =
-                _tracesPerThread[selection.selectedThreadIdx].traces.deltas[selection.selectedTraceIdx];
+            const auto& threadInfo = _tracesPerThread[selection.selectedThreadIdx];
+            const TimeStamp absEndTime = threadInfo._traces.ends[selection.selectedTraceIdx];
+            const TimeStamp delta = threadInfo._traces.deltas[selection.selectedTraceIdx];
+            const TDepth_t depth = threadInfo._traces.depths[selection.selectedTraceIdx];
+
+            // If the thread was hidden, display it so we can see the selected trace
+            _tracesPerThread[selection.selectedThreadIdx]._hidden = false;
+
             const TimeStamp startTime = absEndTime - delta - _timeline.absoluteStartTime();
+            const float verticalPosPxl = threadInfo._tracesVerticalStartPos + (depth * Timeline::PADDED_TRACE_SIZE) - (3* Timeline::PADDED_TRACE_SIZE);
+            _timeline.pushNavigationState();
             _timeline.frameToTime( startTime, delta );
+            _timeline.moveVerticalPositionPxl( verticalPosPxl );
          }
 
          if( selection.hoveredTraceIdx != (size_t)-1 && selection.hoveredThreadIdx != (uint32_t)-1 )
@@ -897,7 +904,7 @@ bool hop::Profiler::openFile( const char* path )
          for ( uint32_t j = 0; j < header->threadCount; ++j )
          {
             size_t threadInfoSize = deserialize( &uncompressedData[i], threadInfos[j] );
-            addTraces( threadInfos[j].traces, j );
+            addTraces( threadInfos[j]._traces, j );
             i += threadInfoSize;
          }
          return true;

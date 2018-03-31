@@ -23,15 +23,20 @@ class Timeline
       ANIMATION_TYPE_FAST
    };
 
+   static constexpr float TRACE_HEIGHT = 20.0f;
+   static constexpr float TRACE_VERTICAL_PADDING = 2.0f;
+   static constexpr float PADDED_TRACE_SIZE = TRACE_HEIGHT + TRACE_VERTICAL_PADDING;
+
    void update( float deltaTimeMs ) noexcept;
    void draw(
-       const std::vector<ThreadInfo>& _tracesPerThread,
+       std::vector<ThreadInfo>& _tracesPerThread,
        const StringDb& strDb  );
    TimeStamp absoluteStartTime() const noexcept;
    TimeStamp absolutePresentTime() const noexcept;
    void setAbsoluteStartTime( TimeStamp time ) noexcept;
    void setAbsolutePresentTime( TimeStamp time ) noexcept;
    TimeDuration timelineRange() const noexcept;
+   float verticalPosPxl() const noexcept;
 
    const TraceDetails& getTraceDetails() const noexcept;
    void clearTraceDetails();
@@ -44,6 +49,8 @@ class Timeline
    // Move timeline so the specified time is in the middle
    void moveToTime( int64_t timeInMicro, AnimationType animType = ANIMATION_TYPE_NORMAL ) noexcept;
    void moveToAbsoluteTime( TimeStamp time, AnimationType animType = ANIMATION_TYPE_NORMAL ) noexcept;
+   // Move timeline vertically to specified pixel position
+   void moveVerticalPositionPxl( float positionPxl, AnimationType animType = ANIMATION_TYPE_NORMAL );
    // Frame the timeline to display the specified range of time
    void frameToTime( int64_t time, TimeDuration duration ) noexcept;
    void frameToAbsoluteTime( TimeStamp time, TimeDuration duration ) noexcept;
@@ -82,6 +89,7 @@ class Timeline
    uint64_t _stepSizeInNanos{1000000};
    TimeStamp _absoluteStartTime{0};
    TimeStamp _absolutePresentTime{0};
+   float _verticalPosPxl{0.0f};
    float _rightClickStartPosInCanvas[2] = {};
    float _ctrlRightClickStartPosInCanvas[2] = {};
    float _timelineHoverPos{-1.0f};
@@ -93,7 +101,8 @@ class Timeline
    {
       int64_t targetTimelineStart{0};
       TimeDuration targetTimelineRange{5000000000};
-      float highlightPercent{0};
+      float targetVerticalPosPxl{0.0f};
+      float highlightPercent{0.0f};
       AnimationType type;
    } _animationState;
 
