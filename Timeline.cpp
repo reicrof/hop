@@ -178,19 +178,29 @@ void Timeline::draw(
       {
          ImVec2 curDrawPos = ImGui::GetCursorScreenPos();
          drawTraces(tracesPerThread[i], i, curDrawPos.x, curDrawPos.y, strDb, traceColor);
-         drawLockWaits(tracesPerThread, i, curDrawPos.x, curDrawPos.y);
 
          curDrawPos.y += tracesPerThread[i]._traces.maxDepth * PADDED_TRACE_SIZE + 70;
          ImGui::SetCursorScreenPos(curDrawPos);
       }
    }
 
+   // Draw the overlay stuff after having drawn the traces
+   // Draw timeline mouse indicator
    if (_timelineHoverPos > 0.0f)
    {
       static char text[32] = {};
       const int64_t hoveredNano = _timelineStart + pxlToNanos(ImGui::GetWindowWidth(), _timelineRange, _timelineHoverPos - startDrawPos.x);
       hop::formatNanosTimepointToDisplay(hoveredNano, _timelineRange, text, sizeof(text));
       drawHoveringTimelineLine(_timelineHoverPos, startDrawPos.y, text);
+   }
+   // Draw the lockwait + highlights
+   for( size_t i = 0; i < tracesPerThread.size(); ++i)
+   {
+      if(!tracesPerThread[i]._hidden)
+      {
+         const float globalDrawPosY = tracesPerThread[i]._absoluteTracesVerticalStartPos;
+         drawLockWaits(tracesPerThread, i, startDrawPos.x, globalDrawPosY);
+      }
    }
 
    if( !_bookmarks.times.empty() )
@@ -880,7 +890,7 @@ void Timeline::highlightLockOwner(
     const auto absoluteStart = _absoluteStartTime;
     for (size_t i = 0; i < infos.size(); ++i)
     {
-        if (i == threadIndex) continue;
+        if (i == threadIndex || infos[i]._hidden) continue;
 
         const float startNanosAsPxl =
            nanosToPxl<float>(windowWidthPxl, _timelineRange, _timelineStart);
@@ -958,10 +968,6 @@ void Timeline::drawLockWaits(
    const TimeStamp firstTraceAbsoluteTime = absoluteStart + _timelineStart;
    const TimeStamp lastTraceAbsoluteTime = firstTraceAbsoluteTime + _timelineRange;
 
-   ImGui::PushStyleColor( ImGuiCol_Button, ImColor( 0.8f, 0.0f, 0.0f ) );
-   ImGui::PushStyleColor( ImGuiCol_ButtonHovered, ImColor( 0.9f, 0.0f, 0.0f ) );
-   ImGui::PushStyleColor( ImGuiCol_ButtonActive, ImColor( 1.0f, 0.0f, 0.0f ) );
-
    const auto firstLwToDraw = std::lower_bound(
       lockWaits.cbegin(),
       lockWaits.cend(),
@@ -979,12 +985,15 @@ void Timeline::drawLockWaits(
    while( lastLwToDraw != lockWaits.end() && lastLwToDraw->start < lastTraceAbsoluteTime )
       ++lastLwToDraw;
 
-   for ( auto it = firstLwToDraw; it != lockWaits.end(); ++it )
+   ImGui::PushStyleColor(ImGuiCol_Button, ImColor(0.8f, 0.0f, 0.0f));
+   ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImColor(1.0f, 0.3f, 0.3f));
+   ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImColor(1.0f, 0.0f, 0.0f));
+   for ( auto it = firstLwToDraw; it != lastLwToDraw; ++it )
    {
-      const int64_t startInNanos = ( it->start - absoluteStart - _timelineStart );
+      const int64_t endInNanos = ( it->end - absoluteStart - _timelineStart );
 
-      const auto startPxl =
-            nanosToPxl<float>( windowWidthPxl, _timelineRange, startInNanos );
+      const float endPxl =
+            nanosToPxl<float>( windowWidthPxl, _timelineRange, endInNanos);
       const float lengthPxl = nanosToPxl<float>(
             windowWidthPxl, _timelineRange, it->end - it->start );
 
@@ -992,12 +1001,12 @@ void Timeline::drawLockWaits(
       if ( lengthPxl < MIN_TRACE_LENGTH_PXL ) continue;
 
       ImGui::SetCursorScreenPos( ImVec2(
-            posX + startPxl,
+            posX + endPxl-lengthPxl,
             posY + it->depth * PADDED_TRACE_SIZE) );
-      ImGui::Button( "Acquiring Lock...", ImVec2( lengthPxl, Timeline::TRACE_HEIGHT ) );
+      ImGui::Button( "Waiting lock...", ImVec2( lengthPxl, Timeline::TRACE_HEIGHT ) );
       if (ImGui::IsItemHovered())
       {
-            highlightLockOwner(infos, threadIndex, *it, posX, posY);
+         highlightLockOwner(infos, threadIndex, *it, posX, posY);
       }
    }
    ImGui::PopStyleColor( 3 );
