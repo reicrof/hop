@@ -496,7 +496,7 @@ void hop::Profiler::drawSearchWindow()
             _tracesPerThread[selection.selectedThreadIdx]._hidden = false;
 
             const TimeStamp startTime = absEndTime - delta - _timeline.absoluteStartTime();
-            const float verticalPosPxl = threadInfo._tracesVerticalStartPos + (depth * Timeline::PADDED_TRACE_SIZE) - (3* Timeline::PADDED_TRACE_SIZE);
+            const float verticalPosPxl = threadInfo._localTracesVerticalStartPos + (depth * Timeline::PADDED_TRACE_SIZE) - (3* Timeline::PADDED_TRACE_SIZE);
             _timeline.pushNavigationState();
             _timeline.frameToTime( startTime, delta );
             _timeline.moveVerticalPositionPxl( verticalPosPxl );

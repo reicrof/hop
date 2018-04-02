@@ -167,6 +167,7 @@ void startRec()
 
 void testMutex()
 {
+
    HOP_PROF_FUNC_WITH_GROUP(42);
 
    const auto start = hop::getTimeStamp();
@@ -193,62 +194,65 @@ int main()
    signal(SIGINT, terminateCallback);
    signal(SIGTERM, terminateCallback);
 
-    std::thread t1 ( [](){ while(g_run) { func1(); } } );
-    std::thread t2 ( [](){ while(g_run) { func1(); } } );
-    std::thread t3 ( [](){ while(g_run) { func1(); } } );
+    //std::thread t1 ( [](){ while(g_run) { func1(); } } );
+    //std::thread t2 ( [](){ while(g_run) { func1(); } } );
+    //std::thread t3 ( [](){ while(g_run) { func1(); } } );
 
+    //while(g_run)
+    //{
+    //   HOP_PROF_FUNC_WITH_GROUP(42);
+    //   //std::lock_guard<std::mutex> g(m);
+    //   std::this_thread::sleep_for(std::chrono::milliseconds(3));
+    //   func1();
+    //   {
+    //   HOP_PROF_GL_FINISH( "GL finish" );
+    //   HOP_PROF( "Creating maclass1" );
+    //   {
+    //      std::this_thread::sleep_for(std::chrono::microseconds(250));
+    //      HOP_PROF( "Creating maclass2" );
+    //      {
+    //         std::this_thread::sleep_for(std::chrono::microseconds(250));
+    //         HOP_PROF( "Creating MaClasselass3" );
+    //         {
+    //            std::this_thread::sleep_for(std::chrono::microseconds(250));
+    //            HOP_PROF( "Creating maclass4" );
+    //            {
+    //               std::this_thread::sleep_for(std::chrono::microseconds(250));
+    //               HOP_PROF( "Creating maclass5" );
+    //               {
+    //                  //std::lock_guard<std::mutex> g(m1);
+    //                  std::this_thread::sleep_for(std::chrono::microseconds(250));
+    //                  startRec();
+    //                  startRec();
+    //                  startRec();
+    //                  HOP_PROF( "Creating maclass6" );
+
+    //               }
+    //            }
+    //         }
+    //      }
+    //   }
+    //   MaClasse a;
+    //   a.callBuggyFunction();
+    //   }
+    //   ++count;
+	   //l1();
+	   //l1();
+    //}
+   /*t1.join();
+   t2.join();
+   t3.join();*/
+
+    std::thread t ( [](){ while(g_run) { testMutex(); } } );
+    //std::thread t1 ( [](){ while(g_run) { testMutex(); } } );
+    //std::thread t2([]() { while (g_run) { testMutex(); } });
+    std::this_thread::sleep_for(std::chrono::microseconds(25000));
     while(g_run)
     {
-       HOP_PROF_FUNC_WITH_GROUP(42);
-       //std::lock_guard<std::mutex> g(m);
-       std::this_thread::sleep_for(std::chrono::milliseconds(3));
-       func1();
-       {
-       HOP_PROF_GL_FINISH( "GL finish" );
-       HOP_PROF( "Creating maclass1" );
-       {
-          std::this_thread::sleep_for(std::chrono::microseconds(250));
-          HOP_PROF( "Creating maclass2" );
-          {
-             std::this_thread::sleep_for(std::chrono::microseconds(250));
-             HOP_PROF( "Creating MaClasselass3" );
-             {
-                std::this_thread::sleep_for(std::chrono::microseconds(250));
-                HOP_PROF( "Creating maclass4" );
-                {
-                   std::this_thread::sleep_for(std::chrono::microseconds(250));
-                   HOP_PROF( "Creating maclass5" );
-                   {
-                      //std::lock_guard<std::mutex> g(m1);
-                      std::this_thread::sleep_for(std::chrono::microseconds(250));
-                      startRec();
-                      startRec();
-                      startRec();
-                      HOP_PROF( "Creating maclass6" );
-
-                   }
-                }
-             }
-          }
-       }
-       MaClasse a;
-       a.callBuggyFunction();
-       }
-       ++count;
-	   l1();
-	   l1();
+      testMutex();
     }
 
-   t1.join();
-   t2.join();
-   t3.join();
-   // std::thread t ( [](){ while( true ) { testMutex(); } } );
-   // //std::thread t1 ( [](){ while( true ) { testMutex(); } } );
-   // std::this_thread::sleep_for(std::chrono::microseconds(25000));
-   // while( true )
-   // {
-   //   testMutex();
-   // }
+
 
    // const auto postDrawTime = std::chrono::system_clock::now();
    // auto lastTime = std::chrono::duration< double, std::milli>( ( postDrawTime - preDrawTime ) ).count();

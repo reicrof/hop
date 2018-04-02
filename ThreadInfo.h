@@ -22,7 +22,8 @@ struct ThreadInfo
 
    // This is the position at which the traces for the current thread ifno
    // are being draw
-   float _tracesVerticalStartPos;
+   float _localTracesVerticalStartPos;
+   float _absoluteTracesVerticalStartPos;
    bool _hidden{false};
 
    // Right now the locks will not be serialized

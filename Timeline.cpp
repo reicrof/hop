@@ -43,6 +43,35 @@ static void drawBookmarks( float posXPxl, float posYPxl )
    ImGui::Button("", ImVec2( BOOKMARK_WIDTH, BOOKMARK_HEIGHT ) );
 }
 
+namespace
+{
+   struct unlock_events_less_cmp
+   {
+      bool operator()(const hop::UnlockEvent& ue, hop::TimeStamp time)
+      {
+         return ue.time < time;
+      }
+
+      bool operator()(hop::TimeStamp time, const hop::UnlockEvent& ue)
+      {
+         return time < ue.time;
+      }
+   };
+
+   struct lock_wait_less_cmp
+   {
+      bool operator()(const hop::LockWait& lw, hop::TimeStamp time)
+      {
+         return lw.end < time;
+      }
+
+      bool operator()(hop::TimeStamp time, const hop::LockWait& lw)
+      {
+         return time < lw.end;
+      }
+   };
+}
+
 namespace hop
 {
 
@@ -142,7 +171,8 @@ void Timeline::draw(
       ImGui::PopStyleColor( 3 );
       ImGui::Separator();
 
-      tracesPerThread[i]._tracesVerticalStartPos = ImGui::GetCursorPosY();
+      tracesPerThread[i]._localTracesVerticalStartPos= ImGui::GetCursorPosY();
+      tracesPerThread[i]._absoluteTracesVerticalStartPos = ImGui::GetCursorScreenPos().y;
 
       if (!threadHidden)
       {
@@ -843,35 +873,8 @@ void Timeline::highlightLockOwner(
     uint32_t threadIndex,
     const hop::LockWait& highlightedLockWait,
     const float posX,
-    const float /*posY*/ )
+    const float posY )
 {
-    struct unlock_events_less_cmp
-    {
-       bool operator()( const hop::UnlockEvent& ue, TimeStamp startTime )
-       {
-          return ue.time < startTime;
-       }
-
-       bool operator()( TimeStamp startTime, const hop::UnlockEvent& ue )
-       {
-          return startTime < ue.time;
-       }
-    };
-
-    struct lock_wait_less_cmp
-    {
-       bool operator()( const hop::LockWait& lw, TimeStamp startTime )
-       {
-          return lw.end < startTime;
-       }
-
-       bool operator()( TimeStamp startTime, const hop::LockWait& lw )
-       {
-          return startTime < lw.end;
-       }
-    };
-
-
     ImDrawList* DrawList = ImGui::GetWindowDrawList();
     const float windowWidthPxl = ImGui::GetWindowWidth();
     const auto absoluteStart = _absoluteStartTime;
@@ -879,33 +882,35 @@ void Timeline::highlightLockOwner(
     {
         if (i == threadIndex) continue;
 
-        auto last = std::upper_bound( infos[i]._unlockEvents.cbegin(), infos[i]._unlockEvents.cend(), highlightedLockWait.end, unlock_events_less_cmp() );
-
-        // upper_bound returns the first that is bigger. Thus we need the one just before that
-        --last;
-
         const float startNanosAsPxl =
-            nanosToPxl<float>( windowWidthPxl, _timelineRange, _timelineStart );
+           nanosToPxl<float>(windowWidthPxl, _timelineRange, _timelineStart);
 
-        while( last != infos[i]._unlockEvents.cbegin() )
+        auto lastUnlock = std::lower_bound( infos[i]._unlockEvents.cbegin(), infos[i]._unlockEvents.cend(), highlightedLockWait.end, unlock_events_less_cmp() );
+
+        // lower_bound returns the first that is not smaller. We need the one just before that
+        if(lastUnlock != infos[i]._unlockEvents.cbegin() ) --lastUnlock;
+
+        const int highlightAlpha = 70.0f * _animationState.highlightPercent;
+
+        while(lastUnlock != infos[i]._unlockEvents.cbegin() )
         {
-            if( last->mutexAddress == highlightedLockWait.mutexAddress )
+            if(lastUnlock->mutexAddress == highlightedLockWait.mutexAddress )
             {
                // We've gone to far, so early break
-               if( last->time < highlightedLockWait.start )
+               if(lastUnlock->time < highlightedLockWait.start )
                   break;
 
                // Find the associated lock wait
                auto lockWaitIt = std::lower_bound(
                    infos[i]._lockWaits.cbegin(),
                    infos[i]._lockWaits.cend(),
-                   last->time,
+                   lastUnlock->time,
                    lock_wait_less_cmp() );
 
                // lower_bound returns the first that does not compare smaller than the unlock time.
                // Therefore, we need to start from this iterator and find the first one that matches
                // the highlighted mutex
-               if( lockWaitIt == infos[i]._lockWaits.cend() ) --lockWaitIt;
+               if( lockWaitIt != infos[i]._lockWaits.cbegin() ) --lockWaitIt;
 
                while ( lockWaitIt != infos[i]._lockWaits.cbegin() &&
                        lockWaitIt->mutexAddress != highlightedLockWait.mutexAddress )
@@ -914,21 +919,23 @@ void Timeline::highlightLockOwner(
                }
 
                const int64_t lockTimeAsPxl = nanosToPxl<float>(
-                   windowWidthPxl,
-                   _timelineRange,
-                   ( lockWaitIt->end - absoluteStart ) );
+                  windowWidthPxl,
+                  _timelineRange,
+                  (lockWaitIt->end - absoluteStart));
                const int64_t unlockTimeAsPxl = nanosToPxl<float>(
-                   windowWidthPxl, _timelineRange, ( last->time - absoluteStart ) );
+                  windowWidthPxl, _timelineRange, (lastUnlock->time - absoluteStart));
+
+               const float tracesHeight = (infos[i]._traces.maxDepth + 1) * Timeline::PADDED_TRACE_SIZE;
 
                DrawList->AddRectFilled(
-                   ImVec2( posX - startNanosAsPxl + lockTimeAsPxl, 0 ),
-                   ImVec2(
-                       posX - startNanosAsPxl + unlockTimeAsPxl,
-                       999999 ),
-                   ImColor( 0, 255, 0, 64 ) );
+                  ImVec2(posX - startNanosAsPxl + lockTimeAsPxl, infos[i]._absoluteTracesVerticalStartPos),
+                  ImVec2(
+                     posX - startNanosAsPxl + unlockTimeAsPxl,
+                     infos[i]._absoluteTracesVerticalStartPos + tracesHeight),
+                  ImColor(0, 255, 0, 30 + highlightAlpha));
             }
 
-            --last;
+            --lastUnlock;
         }
     }
 }
@@ -954,28 +961,43 @@ void Timeline::drawLockWaits(
    ImGui::PushStyleColor( ImGuiCol_Button, ImColor( 0.8f, 0.0f, 0.0f ) );
    ImGui::PushStyleColor( ImGuiCol_ButtonHovered, ImColor( 0.9f, 0.0f, 0.0f ) );
    ImGui::PushStyleColor( ImGuiCol_ButtonActive, ImColor( 1.0f, 0.0f, 0.0f ) );
-   for ( const auto& lw : lockWaits )
+
+   const auto firstLwToDraw = std::lower_bound(
+      lockWaits.cbegin(),
+      lockWaits.cend(),
+      firstTraceAbsoluteTime,
+      lock_wait_less_cmp());
+
+   // We need to find the first trace that starts after the end of the timeline
+   // Since the LW are sorted according to the end time, we need to do a linear
+   // search from the first trace that ends at the timeline end time
+   auto lastLwToDraw = std::lower_bound(
+      lockWaits.cbegin(),
+      lockWaits.cend(),
+      lastTraceAbsoluteTime,
+      lock_wait_less_cmp());
+   while( lastLwToDraw != lockWaits.end() && lastLwToDraw->start < lastTraceAbsoluteTime )
+      ++lastLwToDraw;
+
+   for ( auto it = firstLwToDraw; it != lockWaits.end(); ++it )
    {
-      if ( lw.end >= firstTraceAbsoluteTime && lw.start <= lastTraceAbsoluteTime )
+      const int64_t startInNanos = ( it->start - absoluteStart - _timelineStart );
+
+      const auto startPxl =
+            nanosToPxl<float>( windowWidthPxl, _timelineRange, startInNanos );
+      const float lengthPxl = nanosToPxl<float>(
+            windowWidthPxl, _timelineRange, it->end - it->start );
+
+      // Skip if it is way smaller than treshold
+      if ( lengthPxl < MIN_TRACE_LENGTH_PXL ) continue;
+
+      ImGui::SetCursorScreenPos( ImVec2(
+            posX + startPxl,
+            posY + it->depth * PADDED_TRACE_SIZE) );
+      ImGui::Button( "Acquiring Lock...", ImVec2( lengthPxl, Timeline::TRACE_HEIGHT ) );
+      if (ImGui::IsItemHovered())
       {
-         const int64_t startInNanos = ( lw.start - absoluteStart - _timelineStart );
-
-         const auto startPxl =
-             nanosToPxl<float>( windowWidthPxl, _timelineRange, startInNanos );
-         const float lengthPxl = nanosToPxl<float>(
-             windowWidthPxl, _timelineRange, lw.end - lw.start );
-
-         // Skip if it is way smaller than treshold
-         if ( lengthPxl < MIN_TRACE_LENGTH_PXL ) continue;
-
-         ImGui::SetCursorScreenPos( ImVec2(
-             posX + startPxl,
-             posY + lw.depth * PADDED_TRACE_SIZE) );
-         ImGui::Button( "Lock", ImVec2( lengthPxl, 20.f ) );
-         if (ImGui::IsItemHovered())
-         {
-             //highlightLockOwner(infos, threadIndex, lw, posX, posY);
-         }
+            highlightLockOwner(infos, threadIndex, *it, posX, posY);
       }
    }
    ImGui::PopStyleColor( 3 );
