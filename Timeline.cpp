@@ -414,7 +414,7 @@ void Timeline::handleMouseDrag( float mouseInCanvasX, float mouseInCanvasY )
       const float maxScrollY = ImGui::GetScrollMaxY();
       ImGui::EndChild();
 
-      _verticalPosPxl = hop::clamp(_verticalPosPxl - delta.y, 0.0f, maxScrollY);
+      moveVerticalPositionPxl(hop::clamp(_verticalPosPxl - delta.y, 0.0f, maxScrollY), ANIMATION_TYPE_NONE);
 
       ImGui::ResetMouseDragDelta();
       setRealtime( false );
