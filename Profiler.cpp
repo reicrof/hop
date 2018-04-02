@@ -427,7 +427,7 @@ static bool drawPlayStopButton( bool& isRecording )
    ImDrawList* DrawList = ImGui::GetWindowDrawList();
 
    const auto& mousePos = ImGui::GetMousePos();
-   const bool hovering = ptInRect( mousePos, startDrawPos, ImVec2( startDrawPos.x + width, startDrawPos.y + height ) );
+   const bool hovering = ImGui::IsMouseHoveringWindow() && ptInRect( mousePos, startDrawPos, ImVec2( startDrawPos.x + width, startDrawPos.y + height ) );
 
    if( isRecording )
    {
