@@ -405,10 +405,13 @@ void Timeline::handleMouseDrag( float mouseInCanvasX, float mouseInCanvasY )
    {
       const float windowWidthPxl = ImGui::GetWindowWidth();
       const auto delta = ImGui::GetMouseDragDelta();
+
+      // Set horizontal position
       const int64_t deltaXInNanos =
           pxlToNanos<int64_t>( windowWidthPxl, _timelineRange, delta.x );
       setStartTime( _timelineStart - deltaXInNanos, ANIMATION_TYPE_NONE );
    
+      // Set vertical position
       // Switch to the traces context to get scroll info
       ImGui::BeginChild("TimelineCanvas");
       const float maxScrollY = ImGui::GetScrollMaxY();

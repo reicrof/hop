@@ -541,7 +541,10 @@ void hop::Profiler::draw()
       return;
    }
 
+   // Reset the style var so the popups can rescale properly
+   ImGui::PushStyleVar(ImGuiStyleVar_WindowMinSize, ImVec2(0, 0));
    drawMenuBar();
+   ImGui::PopStyleVar();
 
    handleHotkey();
 
