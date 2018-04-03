@@ -74,29 +74,6 @@ class Timeline
    friend size_t deserialize( const char* data, Timeline& timeline );
 
   private:
-   void drawTimeline( const float posX, const float posY );
-   void drawTraces( const ThreadInfo& traces, uint32_t threadIndex, const float posX, const float posY, const StringDb& strDb, const ImColor& color );
-   void drawLockWaits(const std::vector<ThreadInfo>& infos, uint32_t threadIndex, const float posX, const float posY );
-   void handleMouseDrag( float mousePosX, float mousePosY );
-   void handleMouseWheel( float mousePosX, float mousePosY );
-   void zoomOn( int64_t microToZoomOn, float zoomFactor );
-   void setStartTime( int64_t timeInMicro, AnimationType animType = ANIMATION_TYPE_NORMAL ) noexcept;
-   void setZoom( TimeDuration microsToDisplay, AnimationType animType = ANIMATION_TYPE_NORMAL );
-   void highlightLockOwner(const std::vector<ThreadInfo>& infos, uint32_t threadIndex, const hop::LockWait& highlightedLockWait, const float posX, const float posY );
-
-   int64_t _timelineStart{0};
-   TimeDuration _timelineRange{5000000000};
-   uint64_t _stepSizeInNanos{1000000};
-   TimeStamp _absoluteStartTime{0};
-   TimeStamp _absolutePresentTime{0};
-   float _verticalPosPxl{0.0f};
-   float _rightClickStartPosInCanvas[2] = {};
-   float _ctrlRightClickStartPosInCanvas[2] = {};
-   float _timelineHoverPos{-1.0f};
-   bool _realtime{true};
-
-   std::vector< std::pair< size_t, uint32_t > > _highlightedTraces;
-
    struct AnimationState
    {
       int64_t targetTimelineStart{0};
@@ -110,6 +87,36 @@ class Timeline
    {
       std::vector< TimeStamp > times;
    } _bookmarks;
+
+   struct LockOwnerInfo
+   {
+      LockOwnerInfo( TimeDuration dur, uint32_t tIdx ) : lockDuration(dur), threadIndex(tIdx){}
+      TimeDuration lockDuration{0};
+      uint32_t threadIndex{0};
+   };
+
+   void drawTimeline( const float posX, const float posY );
+   void drawTraces( const ThreadInfo& traces, uint32_t threadIndex, const float posX, const float posY, const StringDb& strDb, const ImColor& color );
+   void drawLockWaits(const std::vector<ThreadInfo>& infos, uint32_t threadIndex, const float posX, const float posY );
+   void handleMouseDrag( float mousePosX, float mousePosY );
+   void handleMouseWheel( float mousePosX, float mousePosY );
+   void zoomOn( int64_t microToZoomOn, float zoomFactor );
+   void setStartTime( int64_t timeInMicro, AnimationType animType = ANIMATION_TYPE_NORMAL ) noexcept;
+   void setZoom( TimeDuration microsToDisplay, AnimationType animType = ANIMATION_TYPE_NORMAL );
+   std::vector< LockOwnerInfo > highlightLockOwner(const std::vector<ThreadInfo>& infos, uint32_t threadIndex, const hop::LockWait& highlightedLockWait, const float posX, const float posY );
+
+   int64_t _timelineStart{0};
+   TimeDuration _timelineRange{5000000000};
+   uint64_t _stepSizeInNanos{1000000};
+   TimeStamp _absoluteStartTime{0};
+   TimeStamp _absolutePresentTime{0};
+   float _verticalPosPxl{0.0f};
+   float _rightClickStartPosInCanvas[2] = {};
+   float _ctrlRightClickStartPosInCanvas[2] = {};
+   float _timelineHoverPos{-1.0f};
+   bool _realtime{true};
+
+   std::vector< std::pair< size_t, uint32_t > > _highlightedTraces;
 
    TraceDetails _traceDetails{};
 

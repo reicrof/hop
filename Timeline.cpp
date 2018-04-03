@@ -881,13 +881,16 @@ void Timeline::drawTraces(
    ImGui::PopStyleColor( 3 );
 }
 
-void Timeline::highlightLockOwner(
+std::vector< Timeline::LockOwnerInfo > Timeline::highlightLockOwner(
     const std::vector<ThreadInfo>& infos,
     uint32_t threadIndex,
     const hop::LockWait& highlightedLockWait,
     const float posX,
-    const float posY )
+    const float /*posY*/ )
 {
+    std::vector< LockOwnerInfo > lockInfos;
+    lockInfos.reserve( 16 );
+
     ImDrawList* DrawList = ImGui::GetWindowDrawList();
     const float windowWidthPxl = ImGui::GetWindowWidth();
     const auto absoluteStart = _absoluteStartTime;
@@ -931,6 +934,20 @@ void Timeline::highlightLockOwner(
                   --lockWaitIt;
                }
 
+               // Add info to result vector
+               bool added = false;
+               for( auto& info : lockInfos )
+               {
+                  if( info.threadIndex == i )
+                  {
+                     info.lockDuration += lastUnlock->time - lockWaitIt->end;
+                     added = true;
+                     break;
+                  }
+               }
+               if( !added )
+                  lockInfos.emplace_back( lastUnlock->time - lockWaitIt->end, i );
+
                const int64_t lockTimeAsPxl = nanosToPxl<float>(
                   windowWidthPxl,
                   _timelineRange,
@@ -951,6 +968,8 @@ void Timeline::highlightLockOwner(
             --lastUnlock;
         }
     }
+
+    return lockInfos;
 }
 
 void Timeline::drawLockWaits(
@@ -1009,7 +1028,36 @@ void Timeline::drawLockWaits(
       ImGui::Button( "Waiting lock...", ImVec2( lengthPxl, Timeline::TRACE_HEIGHT ) );
       if (ImGui::IsItemHovered())
       {
-         highlightLockOwner(infos, threadIndex, *it, posX, posY);
+         const auto lockInfo = highlightLockOwner(infos, threadIndex, *it, posX, posY);
+         if ( lengthPxl > 3 )
+         {
+            char lockTooltip[256] = "Waiting lock for ";
+            ImGui::BeginTooltip();
+            formatNanosDurationToDisplay( it->end - it->start, lockTooltip + strlen(lockTooltip), sizeof( lockTooltip ) - strlen(lockTooltip) );
+
+            if( lockInfo.empty() )
+            {
+               // Set a message to warn the user than the thread owning the lock is not part of any profiled code
+               snprintf( lockTooltip + strlen(lockTooltip), sizeof(lockTooltip) - strlen(lockTooltip), "\n  Threads owning the lock were not profiled" );
+            }
+            else
+            {
+               // Print infos about which threads own the lock
+               char formattedLockTime[64] = {};
+               for( const auto& i : lockInfo )
+               {
+                  formatNanosDurationToDisplay( i.lockDuration, formattedLockTime, sizeof( formattedLockTime ) );
+                  snprintf( lockTooltip + strlen(lockTooltip), sizeof(lockTooltip) - strlen(lockTooltip), "\n  Thread #%u (%s)", i.threadIndex, formattedLockTime );
+               }
+            }
+            ImGui::TextUnformatted( lockTooltip );
+            ImGui::EndTooltip();
+         }
+
+         if ( ImGui::IsMouseDoubleClicked( 0 ) )
+         {
+            frameToAbsoluteTime( it->start, it->end - it->start );
+         }
       }
    }
    ImGui::PopStyleColor( 3 );
