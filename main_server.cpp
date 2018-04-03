@@ -14,6 +14,8 @@
 #include <GL/gl.h>
 #endif
 
+extern const float HOP_VIEWER_VERSION = 0.1f;
+
 
 static bool g_run = true;
 static float g_mouseWheel = 0.0f;
@@ -137,6 +139,13 @@ int main( int argc, const char* argv[] )
       return -1;
    }
 
+   // Dumb way of handling args
+   if( strcmp( argv[1], "-v" ) == 0 || strcmp( argv[1], "--version" ) == 0 )
+   {
+      printf("hop version %.1f \n", HOP_VIEWER_VERSION );
+      return 0;
+   }
+
    // Setup signal handlers
    signal( SIGINT, terminateCallback );
    signal( SIGTERM, terminateCallback );
@@ -148,7 +157,7 @@ int main( int argc, const char* argv[] )
    }
 
    SDL_Window* window = SDL_CreateWindow(
-       "hop", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, 1600, 1024, SDL_WINDOW_OPENGL | SDL_WINDOW_RESIZABLE );
+       "Hop", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, 1600, 1024, SDL_WINDOW_OPENGL | SDL_WINDOW_RESIZABLE );
 
    if ( window == NULL )
    {
@@ -169,7 +178,6 @@ int main( int argc, const char* argv[] )
 
    auto profiler = std::unique_ptr< hop::Profiler >( new hop::Profiler( argv[1] ) );
    hop::addNewProfiler( profiler.get() );
-   std::vector< uint32_t > profTrheadsId;
 
    while ( g_run )
    {

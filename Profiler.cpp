@@ -26,6 +26,8 @@
 #include <stdio.h>
 #include <fstream>
 
+extern const float HOP_VIEWER_VERSION;
+
 namespace
 {
 static std::chrono::time_point<std::chrono::system_clock> g_Time = std::chrono::system_clock::now();
@@ -702,7 +704,7 @@ void hop::Profiler::drawMenuBar()
 
    if( ImGui::BeginPopupModal( menuHelp, NULL, ImGuiWindowFlags_AlwaysAutoResize ) )
    {
-      ImGui::Text("This is a help menu\nPretty useful isnt it?\n\n");
+      ImGui::Text("Hop version %.1f\n\nThis is a help menu\nPretty useful isnt it?\n\n", HOP_VIEWER_VERSION);
       if ( ImGui::Button( "Yes indeed", ImVec2( 120, 0 ) ) )
       {
          ImGui::CloseCurrentPopup();
