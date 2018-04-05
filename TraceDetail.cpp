@@ -139,8 +139,25 @@ TraceDetailDrawResult drawTraceDetails(
             snprintf( traceName, sizeof( traceName ), "%s", strDb.getString( fctIdx ) );
             if ( ImGui::Selectable(
                      traceName, selected == i, ImGuiSelectableFlags_SpanAllColumns ) )
+            {
                selected = i;
-            if( ImGui::IsItemHovered() ) { hoveredId = i; }
+            }
+
+            if ( ImGui::IsItemHovered() )
+            {
+               char fileLineNbStr[128];
+               snprintf(
+                   fileLineNbStr,
+                   sizeof( fileLineNbStr ),
+                   "%s:%d",
+                   strDb.getString( threadInfo._traces.fileNameIds[traceId] ),
+                   threadInfo._traces.lineNbs[traceId] );
+               ImGui::BeginTooltip();
+               ImGui::TextUnformatted( fileLineNbStr );
+               ImGui::EndTooltip();
+
+               hoveredId = i;
+            }
             ImGui::NextColumn();
             ImGui::Text( "%3.2f", details.details[i].exclusivePct * 100.0f );
             ImGui::NextColumn();
