@@ -136,8 +136,8 @@ For more information, please refer to <http://unlicense.org/>
 #if defined(_MSC_VER)
 #define NOMINMAX
 #include <windows.h>
-#define sem_handle HANDLE
-#define shm_handle HANDLE
+typedef HANDLE sem_handle;
+typedef HANDLE shm_handle;
 
 #define likely(x)   x
 #define unlikely(x) x
@@ -177,8 +177,8 @@ inline const char* HOP_GET_PROG_NAME() HOP_NOEXCEPT
 #else
 #include <pthread.h>
 #include <semaphore.h>
-#define sem_handle sem_t*
-#define shm_handle int
+typedef sem_t* sem_handle;
+typedef int shm_handle;
 
 #define likely(x)       __builtin_expect(!!(x), 1)
 #define unlikely(x)     __builtin_expect(!!(x), 0)
