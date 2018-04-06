@@ -3,6 +3,7 @@
 #include "Profiler.h"
 #include "Stats.h"
 #include "imgui/imgui.h"
+#include "argtable3.h"
 #include <SDL.h>
 #undef main
 
@@ -14,8 +15,9 @@
 #include <GL/gl.h>
 #endif
 
-extern const float HOP_VIEWER_VERSION = 0.1f;
-
+#ifndef _MSC_VER
+#include <sys/wait.h>
+#endif
 
 static bool g_run = true;
 static float g_mouseWheel = 0.0f;
@@ -131,24 +133,147 @@ static void handleInput()
    }
 }
 
-int main( int argc, const char* argv[] )
+#if defined( _MSC_VER )
+typedef HANDLE processId_t;
+#else
+typedef int processId_t;
+#endif
+
+processId_t g_childProcess = 0;
+
+static bool startChildProcess( const char* path, const char* basename )
 {
-   if( argc < 2 )
+#if defined( _MSC_VER )
+   STARTUPINFO si = {0};
+   PROCESS_INFORMATION pi = {0};
+
+   si.cb = sizeof( si );
+   (void)basename;
+   if ( !CreateProcess( NULL, path, NULL, NULL, FALSE, 0, NULL, NULL, &si, &pi ) )
    {
-      printf("Usage : main_server <name_of_exec_to_profile>\n" );
+      return false;
+   }
+#else
+   g_childProcess = fork();
+   if ( g_childProcess == 0 )
+   {
+      char* processName = strdup( basename );
+      char* const subprocessArg[] = {processName, nullptr};
+      int res = execvp( path, subprocessArg );
+      if ( res < 0 )
+      {
+         perror( "Error starting executable" );
+         exit( 0 );
+      }
+   }
+#endif
+   return true;
+}
+
+bool processAlive( processId_t id )
+{
+#if defined( _MSC_VER )
+   DWORD exitCode;
+   GetExitCodeProcess( id, &exitCode );
+   return exitCode == STILL_ACTIVE;
+#else
+   return kill( id, 0 ) == 0;
+#endif
+}
+
+static void terminateProcess( processId_t id )
+{
+#if defined( _MSC_VER )
+   TerminateProcess( id, 0 );
+   WaitForSingleObject( id, INFINITE );
+   CloseHandle( id );
+#else
+   if ( processAlive( id ) )
+   {
+      kill( id, SIGINT );
+      int status, wpid;
+      while ((wpid = wait(&status)) > 0);
+   }
+#endif
+}
+
+struct ArgTableCleanerGuard
+{
+   ArgTableCleanerGuard( void** table, int count ) : _table(table), _count(count) {}
+   ~ArgTableCleanerGuard()
+   {
+      arg_freetable( _table, _count );
+   }
+   void** _table;
+   int _count;
+};
+
+struct arg_lit *help, *version;
+struct arg_file *exec, *input;
+struct arg_end *end;
+
+int main( int argc, char* argv[] )
+{
+   char progname[] = "hop";
+   void* argtable[] = {
+       input    = arg_filen(nullptr, nullptr, "<process name>", 0, 1, "Starts listening for specified process"),
+       exec      = arg_filen("eE", "execute", "executable", 0, 1, "Launch specified executable and start recording"),
+       help      = arg_litn( "h", "help", 0, 1, "Display this help and exit" ),
+       version   = arg_litn( "v", "version", 0, 1, "Display version info and exit" ),
+       end       = arg_end( 10 ),
+   };
+   ArgTableCleanerGuard cleaner( argtable, sizeof( argtable ) / sizeof( argtable[0] ) );
+
+   int nerrors = arg_parse( argc, argv, argtable );
+
+   /* special case: '--help' takes precedence over error reporting */
+   if ( help->count > 0 )
+   {
+      printf( "Usage: %s", progname );
+      arg_print_syntax( stdout, argtable, "\n" );
+      printf( "Available hop arguments : \n\n" );
+      arg_print_glossary( stdout, argtable, "  %-25s %s\n" );
+      
+      return 0;
+   }
+
+   /* If the parser returned any errors then display them and exit */
+   if ( nerrors > 0 )
+   {
+      /* Display the error details contained in the arg_end struct.*/
+      arg_print_errors( stdout, end, progname );
+      printf( "Try '%s --help' for more information.\n", progname );
       return -1;
    }
 
-   // Dumb way of handling args
-   if( strcmp( argv[1], "-v" ) == 0 || strcmp( argv[1], "--version" ) == 0 )
+   if( version->count > 0 )
    {
-      printf("hop version %.1f \n", HOP_VIEWER_VERSION );
+      printf("hop version %.1f \n", HOP_VERSION );
+      return 0;
+   }
+
+   const char* executablePath = nullptr;
+   const char* executableName = nullptr;
+
+   if( exec->count > 0 )
+   {
+      executablePath = exec->filename[0];
+      executableName = exec->basename[0];
+   }
+   else if( input->count > 0 )
+   {
+      executableName = input->filename[0];
+   }
+   else
+   {
+      arg_print_glossary( stdout, argtable, "  %-30s %s\n" );
       return 0;
    }
 
    // Setup signal handlers
    signal( SIGINT, terminateCallback );
    signal( SIGTERM, terminateCallback );
+   signal( SIGCHLD, SIG_IGN );
 
    if ( SDL_Init( SDL_INIT_VIDEO ) != 0 )
    {
@@ -176,8 +301,21 @@ int main( int argc, const char* argv[] )
 
    hop::init();
 
-   auto profiler = std::unique_ptr< hop::Profiler >( new hop::Profiler( argv[1] ) );
+   auto profiler = std::unique_ptr< hop::Profiler >( new hop::Profiler( executableName ) );
    hop::addNewProfiler( profiler.get() );
+
+   // If we want to launch an executable to profile, now is the time to do it
+   if( executablePath )
+   {
+      if( !startChildProcess( exec->filename[0], executableName ) )
+      {
+         exit(-1);
+      }
+
+      // Try to start recording until the shared memory is created
+      while( processAlive( g_childProcess ) && !profiler->setRecording( true ) )
+      {;}
+   }
 
    while ( g_run )
    {
@@ -219,6 +357,12 @@ int main( int argc, const char* argv[] )
 
       const auto frameEnd = std::chrono::system_clock::now();
       hop::g_stats.frameTimeMs = std::chrono::duration< double, std::milli>( ( frameEnd - frameStart ) ).count();
+   }
+
+   // We have launched a child process. Let's close it
+   if( executablePath )
+   {
+      terminateProcess( g_childProcess );
    }
 
    SDL_GL_DeleteContext( mainContext );

@@ -125,6 +125,7 @@ For more information, please refer to <http://unlicense.org/>
 
 // ------ platform.h ------------
 // This is most things that are potentially non-portable.
+#define HOP_VERSION 0.2f
 #define HOP_CONSTEXPR constexpr
 #define HOP_NOEXCEPT noexcept
 #define HOP_STATIC_ASSERT static_assert
@@ -310,6 +311,7 @@ class SharedMemory
          RESEND_STRING_DATA = 1 << 4,
       };
       std::atomic< uint32_t > flags{0};
+      const float clientVersion{0.0f};
       const uint32_t maxThreadNb{0};
       const size_t requestedSize{0};
    };
@@ -326,6 +328,7 @@ class SharedMemory
    void resetResendStringDataFlag() HOP_NOEXCEPT;
    ringbuf_t* ringbuffer() const HOP_NOEXCEPT;
    uint8_t* data() const HOP_NOEXCEPT;
+   bool valid() const HOP_NOEXCEPT;
    sem_handle semaphore() const HOP_NOEXCEPT;
    void waitSemaphore() const HOP_NOEXCEPT;
    void signalSemaphore() const HOP_NOEXCEPT;
@@ -342,7 +345,7 @@ class SharedMemory
    bool _isConsumer;
    shm_handle _sharedMemHandle{};
    char _sharedMemPath[HOP_SHARED_MEM_MAX_NAME_SIZE];
-   char _sharedSemaphoreName[HOP_SHARED_MEM_MAX_NAME_SIZE];
+   std::atomic< bool > _valid{false};
 };
 // ------ end of SharedMemory.h ------------
 
@@ -625,7 +628,7 @@ namespace
 
        if (*handle == NULL)
        {
-           printErrorMsg("Could open shared mem handle");
+           printErrorMsg("Could not open shared mem handle");
            return NULL;
        }
 
@@ -655,7 +658,7 @@ namespace
       *handle = shm_open( path, O_RDWR, 0666 );
       if ( *handle < 0 )
       {
-         printErrorMsg( "Could open shared mem handle" );
+         printErrorMsg( "Could not open shared mem handle" );
          return NULL;
       }
 
@@ -717,113 +720,120 @@ namespace hop
 // ------ SharedMemory.cpp------------
 bool SharedMemory::create( const char* exeName, size_t requestedSize, bool isConsumer )
 {
-   _isConsumer = isConsumer;
+   static std::mutex m;
+   std::lock_guard<std::mutex> g( m );
 
-   // Create shared mem name
-   strncpy( _sharedMemPath, HOP_SHARED_MEM_PREFIX, sizeof( HOP_SHARED_MEM_PREFIX ) );
-   strncat(
-       _sharedMemPath,
-       exeName,
-       HOP_SHARED_MEM_MAX_NAME_SIZE - sizeof( HOP_SHARED_MEM_PREFIX ) - 1 );
-   strncpy( _sharedMemPath, _sharedMemPath, HOP_SHARED_MEM_MAX_NAME_SIZE - 1 );
-
-   // Create shared semaphore name
-   strncpy( _sharedSemaphoreName, "/hop_sem_", HOP_SHARED_MEM_MAX_NAME_SIZE - 1 );
-   strncat(
-       _sharedSemaphoreName,
-       exeName,
-       HOP_SHARED_MEM_MAX_NAME_SIZE - 1 - strlen( _sharedSemaphoreName ) );
-
-   // First try to open semaphore
-   _semaphore = openSemaphore( _sharedSemaphoreName );
-   if( _semaphore == NULL ) return false;
-
-   // Create or open the shared memory next
-   uint8_t* sharedMem = NULL;
-   size_t totalSize = 0;
-   if( isConsumer )
+   // Create the shared data if it was not already created
+   if ( !_sharedMetaData )
    {
-      sharedMem = (uint8_t*)openSharedMemory(_sharedMemPath, &_sharedMemHandle, &totalSize);
-   }
-   else
-   {
-      size_t ringBufSize;
-      ringbuf_get_sizes(HOP_MAX_THREAD_NB, &ringBufSize, NULL);
-      totalSize = ringBufSize + requestedSize + sizeof( SharedMetaInfo );
-      sharedMem = (uint8_t*)createSharedMemory(_sharedMemPath, totalSize, &_sharedMemHandle);
-   }
+      _isConsumer = isConsumer;
 
-   if( !sharedMem )
-   {
+      // Create shared mem name
+      strncpy( _sharedMemPath, HOP_SHARED_MEM_PREFIX, sizeof( HOP_SHARED_MEM_PREFIX ) );
+      strncat(
+          _sharedMemPath,
+          exeName,
+          HOP_SHARED_MEM_MAX_NAME_SIZE - sizeof( HOP_SHARED_MEM_PREFIX ) - 1 );
+
+      // Open semaphore
+      _semaphore = openSemaphore( _sharedMemPath );
+      if ( _semaphore == NULL ) return false;
+
+      // Create or open the shared memory
+      uint8_t* sharedMem = NULL;
+      size_t totalSize = 0;
+      if ( isConsumer )
+      {
+         sharedMem = (uint8_t*)openSharedMemory( _sharedMemPath, &_sharedMemHandle, &totalSize );
+      }
+      else
+      {
+         size_t ringBufSize;
+         ringbuf_get_sizes( HOP_MAX_THREAD_NB, &ringBufSize, NULL );
+         totalSize = ringBufSize + requestedSize + sizeof( SharedMetaInfo );
+         sharedMem = (uint8_t*)createSharedMemory( _sharedMemPath, totalSize, &_sharedMemHandle );
+      }
+
+      if ( !sharedMem )
+      {
+         if ( !isConsumer ) printErrorMsg( "HOP - Could not shm_open shared memory" );
+         closeSemaphore( _semaphore, _sharedMemPath );
+         return false;
+      }
+
+      SharedMetaInfo* metaInfo = (SharedMetaInfo*)sharedMem;
+
+      // Only the first consumer setups the shared memory
       if( !isConsumer )
-          printErrorMsg( "Could not shm_open shared memory" );
+      {
+         // Set client's info in the shared memory for the viewer to access
+         float* clientVer = const_cast< float* >( &metaInfo->clientVersion );
+         *clientVer = HOP_VERSION;
+         uint32_t* maxThreadNumber = const_cast<uint32_t*>( &metaInfo->maxThreadNb );
+         *maxThreadNumber = HOP_MAX_THREAD_NB;
+         size_t* shmReqSize = const_cast<size_t*>( &metaInfo->requestedSize );
+         *shmReqSize = HOP_SHARED_MEM_SIZE;
 
-      return false;
-   }
+         // Take a local copy as we do not want to expose the ring buffer before it is
+         // actually initialized
+         ringbuf_t* localRingBuf = (ringbuf_t*)( sharedMem + sizeof( SharedMetaInfo ) );
 
-   SharedMetaInfo* metaInfo = (SharedMetaInfo*)sharedMem;
+         // Then setup the ring buffer
+         memset( localRingBuf, 0, totalSize - sizeof( SharedMetaInfo ) );
+         if ( ringbuf_setup( localRingBuf, HOP_MAX_THREAD_NB, requestedSize ) < 0 )
+         {
+            assert( false && "Ring buffer creation failed" );
+            closeSharedMemory( _sharedMemPath, _sharedMemHandle, sharedMem );
+            closeSemaphore( _semaphore, _sharedMemPath );
+            return false;
+         }
+      }
+      else // Check if client has compatible version
+      {
+         if ( metaInfo->clientVersion != HOP_VERSION )
+         {
+            printf(
+                "HOP - Client's version (%f) does not match HOP viewer version (%f)\n",
+                metaInfo->clientVersion,
+                HOP_VERSION );
+            closeSemaphore( _semaphore, _sharedMemPath );
+            closeSharedMemory( _sharedMemPath, _sharedMemHandle, sharedMem );
+            return false;
+         }
+      }
 
-   // If we are the first producer, we create the shared memory
-   if (!isConsumer)
-   {
-       static bool memoryCreated = false;
-       static std::mutex m;
-       std::lock_guard< std::mutex > g(m);
-       if (!memoryCreated)
-       {
-          // Set the size of the shared memory in the meta data info.
-          uint32_t* maxThreadNumber = const_cast<uint32_t*>( &metaInfo->maxThreadNb );
-          *maxThreadNumber = HOP_MAX_THREAD_NB;
-          size_t* shmReqSize = const_cast<size_t*>( &metaInfo->requestedSize );
-          *shmReqSize = HOP_SHARED_MEM_SIZE;
+      // Get the size needed for the ringbuf struct
+      size_t ringBufSize;
+      ringbuf_get_sizes( metaInfo->maxThreadNb, &ringBufSize, NULL );
 
-          // Take a local copy as we do not want to expose the ring buffer before it is
-          // actually initialized
-          ringbuf_t* localRingBuf = (ringbuf_t*)( sharedMem + sizeof( SharedMetaInfo ) );
+      // Get pointers inside the shared memory once it has been initialized
+      _sharedMetaData = (SharedMetaInfo*)sharedMem;
+      _ringbuf = (ringbuf_t*)( sharedMem + sizeof( SharedMetaInfo ) );
+      _data = sharedMem + sizeof( SharedMetaInfo ) + ringBufSize;
+      _valid = true;
 
-          // Then setup the ring buffer
-          memset( localRingBuf, 0, totalSize - sizeof( SharedMetaInfo ) );
-          if ( ringbuf_setup( localRingBuf, HOP_MAX_THREAD_NB, requestedSize ) < 0 )
-          {
-             assert( false && "Ring buffer creation failed" );
-          }
-          else
-          {
-             memoryCreated = true;
-          }
-       }
-   }
-
-   // Get the size needed for the ringbuf struct
-   size_t ringBufSize;
-   ringbuf_get_sizes(metaInfo->maxThreadNb, &ringBufSize, NULL);
-
-   // Get pointers inside the shared memory once it has been initialized
-   _sharedMetaData = (SharedMetaInfo*) sharedMem;
-   _ringbuf = (ringbuf_t*) (sharedMem + sizeof( SharedMetaInfo ));
-   _data = sharedMem + sizeof( SharedMetaInfo ) + ringBufSize ;
-
-   // We can only have one consumer
-   if( isConsumer && hasConnectedConsumer() )
-   {
-      printf("/!\\ HOP WARNING /!\\ \n"
+      // We can only have one consumer
+      if ( isConsumer && hasConnectedConsumer() )
+      {
+         printf(
+             "/!\\ HOP WARNING /!\\ \n"
              "Cannot have more than one instance of the consumer at a time."
              " You might be trying to run the consumer application twice or"
              " have a dangling shared memory segment. hop might be unstable"
              " in this state. You could consider manually removing the shared"
-             " memory, or restart this excutable cleanly.\n\n");
-      // Force resetting the listening state as this could cause crash. The side
-      // effect would simply be that other consumer would stop listening. Not a
-      // big deal as there should not be any other consumer...
-      _sharedMetaData->flags &= ~(SharedMetaInfo::LISTENING_CONSUMER);
-      _sharedMetaData->flags |= SharedMetaInfo::RESEND_STRING_DATA;
+             " memory, or restart this excutable cleanly.\n\n" );
+         // Force resetting the listening state as this could cause crash. The side
+         // effect would simply be that other consumer would stop listening. Not a
+         // big deal as there should not be any other consumer...
+         _sharedMetaData->flags &= ~( SharedMetaInfo::LISTENING_CONSUMER );
+         _sharedMetaData->flags |= SharedMetaInfo::RESEND_STRING_DATA;
+      }
+
+      if ( isConsumer )
+         setConnectedConsumer( true );
+      else
+         setConnectedProducer( true );
    }
-
-   if( isConsumer )
-      setConnectedConsumer( true );
-   else
-      setConnectedProducer( true );
-
    return true;
 }
 
@@ -895,6 +905,11 @@ uint8_t* SharedMemory::data() const HOP_NOEXCEPT
    return _data;
 }
 
+bool SharedMemory::valid() const HOP_NOEXCEPT
+{
+   return _valid;
+}
+
 ringbuf_t* SharedMemory::ringbuffer() const HOP_NOEXCEPT
 {
    return _ringbuf;
@@ -930,7 +945,7 @@ const SharedMemory::SharedMetaInfo* SharedMemory::sharedMetaInfo() const HOP_NOE
 
 void SharedMemory::destroy()
 {
-   if ( data() )
+   if ( valid() )
    {
       if( _isConsumer )
       {
@@ -946,14 +961,15 @@ void SharedMemory::destroy()
       if ( ( _sharedMetaData->flags &
              ( SharedMetaInfo::CONNECTED_PRODUCER | SharedMetaInfo::CONNECTED_CONSUMER ) ) == 0 )
       {
-         printf("HOP - Cleaning up shared resources...\n");
-         closeSemaphore( _semaphore, _sharedSemaphoreName );
+         printf("HOP - Cleaning up shared memory...\n");
+         closeSemaphore( _semaphore, _sharedMemPath );
          closeSharedMemory( _sharedMemPath, _sharedMemHandle, _sharedMetaData );
       }
 
       _data = NULL;
-      _semaphore = NULL;
       _ringbuf = NULL;
+      _semaphore = NULL;
+      _valid = false;
    }
 }
 
@@ -1223,7 +1239,7 @@ Client* ClientManager::Get()
    if( likely( threadClient.get() ) ) return threadClient.get();
 
    // If we have not yet created our shared memory segment, do it here
-   if( !ClientManager::sharedMemory.data() )
+   if( !ClientManager::sharedMemory.valid() )
    {
       bool sucess = ClientManager::sharedMemory.create( HOP_GET_PROG_NAME(), HOP_SHARED_MEM_SIZE, false );
       (void) sucess; // Removed unused warning
@@ -1354,13 +1370,13 @@ void ClientManager::UnlockEvent( void* mutexAddr, TimeStamp time )
 
 bool ClientManager::HasConnectedConsumer() HOP_NOEXCEPT
 {
-   return ClientManager::sharedMemory.data() &&
+   return ClientManager::sharedMemory.valid() &&
           ClientManager::sharedMemory.hasConnectedConsumer();
 }
 
 bool ClientManager::HasListeningConsumer() HOP_NOEXCEPT
 {
-   return ClientManager::sharedMemory.data() &&
+   return ClientManager::sharedMemory.valid() &&
           ClientManager::sharedMemory.hasListeningConsumer();
 }
 

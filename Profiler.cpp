@@ -26,8 +26,6 @@
 #include <stdio.h>
 #include <fstream>
 
-extern const float HOP_VIEWER_VERSION;
-
 namespace
 {
 static std::chrono::time_point<std::chrono::system_clock> g_Time = std::chrono::system_clock::now();
@@ -704,7 +702,7 @@ void hop::Profiler::drawMenuBar()
 
    if( ImGui::BeginPopupModal( menuHelp, NULL, ImGuiWindowFlags_AlwaysAutoResize ) )
    {
-      ImGui::Text("Hop version %.1f\n\nThis is a help menu\nPretty useful isnt it?\n\n", HOP_VIEWER_VERSION);
+      ImGui::Text("Hop version %.1f\n\nThis is a help menu\nPretty useful isnt it?\n\n", HOP_VERSION);
       if ( ImGui::Button( "Yes indeed", ImVec2( 120, 0 ) ) )
       {
          ImGui::CloseCurrentPopup();
@@ -793,7 +791,7 @@ void hop::Profiler::handleHotkey()
    }
 }
 
-void hop::Profiler::setRecording(bool recording)
+bool hop::Profiler::setRecording(bool recording)
 {
    bool success = _server.setRecording(recording);
    if (success)
@@ -802,6 +800,8 @@ void hop::Profiler::setRecording(bool recording)
       if (recording)
          _timeline.setRealtime(true);
    }
+
+   return success;
 }
 
 bool hop::Profiler::saveToFile( const char* path )
