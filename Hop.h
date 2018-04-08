@@ -119,6 +119,7 @@ For more information, please refer to <http://unlicense.org/>
 */
 #include <atomic>
 #include <memory>
+#include <mutex>
 #include <chrono>
 #include <stdint.h>
 #include <stdio.h>
@@ -345,7 +346,9 @@ class SharedMemory
    bool _isConsumer;
    shm_handle _sharedMemHandle{};
    char _sharedMemPath[HOP_SHARED_MEM_MAX_NAME_SIZE];
+   char _sharedSemPath[HOP_SHARED_MEM_MAX_NAME_SIZE+5];
    std::atomic< bool > _valid{false};
+   std::mutex _creationMutex;
 };
 // ------ end of SharedMemory.h ------------
 
@@ -720,8 +723,7 @@ namespace hop
 // ------ SharedMemory.cpp------------
 bool SharedMemory::create( const char* exeName, size_t requestedSize, bool isConsumer )
 {
-   static std::mutex m;
-   std::lock_guard<std::mutex> g( m );
+   std::lock_guard<std::mutex> g( _creationMutex );
 
    // Create the shared data if it was not already created
    if ( !_sharedMetaData )
@@ -735,8 +737,11 @@ bool SharedMemory::create( const char* exeName, size_t requestedSize, bool isCon
           exeName,
           HOP_SHARED_MEM_MAX_NAME_SIZE - sizeof( HOP_SHARED_MEM_PREFIX ) - 1 );
 
+      strcpy(_sharedSemPath, _sharedMemPath);
+      strcat(_sharedSemPath, "_sem");
+
       // Open semaphore
-      _semaphore = openSemaphore( _sharedMemPath );
+      _semaphore = openSemaphore(_sharedSemPath);
       if ( _semaphore == NULL ) return false;
 
       // Create or open the shared memory
@@ -757,7 +762,7 @@ bool SharedMemory::create( const char* exeName, size_t requestedSize, bool isCon
       if ( !sharedMem )
       {
          if ( !isConsumer ) printErrorMsg( "HOP - Could not shm_open shared memory" );
-         closeSemaphore( _semaphore, _sharedMemPath );
+         closeSemaphore( _semaphore, _sharedSemPath);
          return false;
       }
 
@@ -784,7 +789,7 @@ bool SharedMemory::create( const char* exeName, size_t requestedSize, bool isCon
          {
             assert( false && "Ring buffer creation failed" );
             closeSharedMemory( _sharedMemPath, _sharedMemHandle, sharedMem );
-            closeSemaphore( _semaphore, _sharedMemPath );
+            closeSemaphore( _semaphore, _sharedSemPath);
             return false;
          }
       }
@@ -796,7 +801,7 @@ bool SharedMemory::create( const char* exeName, size_t requestedSize, bool isCon
                 "HOP - Client's version (%f) does not match HOP viewer version (%f)\n",
                 metaInfo->clientVersion,
                 HOP_VERSION );
-            closeSemaphore( _semaphore, _sharedMemPath );
+            closeSemaphore( _semaphore, _sharedSemPath);
             closeSharedMemory( _sharedMemPath, _sharedMemHandle, sharedMem );
             return false;
          }
@@ -962,7 +967,7 @@ void SharedMemory::destroy()
              ( SharedMetaInfo::CONNECTED_PRODUCER | SharedMetaInfo::CONNECTED_CONSUMER ) ) == 0 )
       {
          printf("HOP - Cleaning up shared memory...\n");
-         closeSemaphore( _semaphore, _sharedMemPath );
+         closeSemaphore( _semaphore, _sharedSemPath);
          closeSharedMemory( _sharedMemPath, _sharedMemHandle, _sharedMetaData );
       }
 
@@ -1241,9 +1246,12 @@ Client* ClientManager::Get()
    // If we have not yet created our shared memory segment, do it here
    if( !ClientManager::sharedMemory.valid() )
    {
-      bool sucess = ClientManager::sharedMemory.create( HOP_GET_PROG_NAME(), HOP_SHARED_MEM_SIZE, false );
-      (void) sucess; // Removed unused warning
-      assert( sucess && "Could not create shared memory" );
+      bool success = ClientManager::sharedMemory.create( HOP_GET_PROG_NAME(), HOP_SHARED_MEM_SIZE, false );
+      if (!success)
+      {
+         printf("HOP - Could not create shared memory. HOP will not be able to run\n");
+         return NULL;
+      }
    }
 
    // Static variable that counts the total number of thread
@@ -1317,6 +1325,9 @@ void ClientManager::EndProfile(
 {
    const int remainingPushedTraces = --tl_traceLevel;
    Client* client = ClientManager::Get();
+
+   if( unlikely( !client ) ) return;
+
    if( end - start > 50 ) // Minimum trace time is 50 ns
    {
       client->addProfilingTrace( fileName, fctName, start, end, lineNb, group );
@@ -1338,6 +1349,9 @@ void ClientManager::EndProfileGlFinish(
    
    const int remainingPushedTraces = --tl_traceLevel;
    Client* client = ClientManager::Get();
+
+   if( unlikely( !client ) ) return;
+
    const TimeStamp end = getTimeStamp();
    
    if( end - start > 50 ) // Minimum trace time is 50 ns
@@ -1356,7 +1370,10 @@ void ClientManager::EndLockWait( void* mutexAddr, TimeStamp start, TimeStamp end
    // measured code
    if( tl_traceLevel > 0 )
    {
-      ClientManager::Get()->addWaitLockTrace( mutexAddr, start, end, tl_traceLevel );
+      auto client = ClientManager::Get();
+      if( unlikely( !client ) ) return;
+
+      client->addWaitLockTrace( mutexAddr, start, end, tl_traceLevel );
    }
 }
 
@@ -1364,7 +1381,10 @@ void ClientManager::UnlockEvent( void* mutexAddr, TimeStamp time )
 {
    if( tl_traceLevel > 0 )
    {
-      ClientManager::Get()->addUnlockEvent( mutexAddr, time );
+      auto client = ClientManager::Get();
+      if( unlikely( !client ) ) return;
+
+      client->addUnlockEvent( mutexAddr, time );
    }
 }
 

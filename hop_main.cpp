@@ -139,35 +139,36 @@ typedef HANDLE processId_t;
 typedef int processId_t;
 #endif
 
-processId_t g_childProcess = 0;
-
-static bool startChildProcess( const char* path, const char* basename )
+static processId_t startChildProcess( const char* path, const char* basename )
 {
+   processId_t newProcess = 0;
 #if defined( _MSC_VER )
    STARTUPINFO si = {0};
    PROCESS_INFORMATION pi = {0};
 
    si.cb = sizeof( si );
    (void)basename;
-   if ( !CreateProcess( NULL, path, NULL, NULL, FALSE, 0, NULL, NULL, &si, &pi ) )
+   if ( !CreateProcess( NULL, (LPSTR)path, NULL, NULL, FALSE, 0, NULL, NULL, &si, &pi ) )
    {
+      printErrorMsg("Error starting executable");
       return false;
    }
+   newProcess = pi.hProcess;
 #else
-   g_childProcess = fork();
-   if ( g_childProcess == 0 )
+   newProcess = fork();
+   if ( newProcess == 0 )
    {
       char* processName = strdup( basename );
       char* const subprocessArg[] = {processName, nullptr};
       int res = execvp( path, subprocessArg );
       if ( res < 0 )
       {
-         perror( "Error starting executable" );
+         printErrorMsg( "Error starting executable" );
          exit( 0 );
       }
    }
 #endif
-   return true;
+   return newProcess;
 }
 
 bool processAlive( processId_t id )
@@ -254,6 +255,7 @@ int main( int argc, char* argv[] )
 
    const char* executablePath = nullptr;
    const char* executableName = nullptr;
+   processId_t childProcess = 0;
 
    if( exec->count > 0 )
    {
@@ -273,7 +275,9 @@ int main( int argc, char* argv[] )
    // Setup signal handlers
    signal( SIGINT, terminateCallback );
    signal( SIGTERM, terminateCallback );
+#ifndef _MSC_VER
    signal( SIGCHLD, SIG_IGN );
+#endif
 
    if ( SDL_Init( SDL_INIT_VIDEO ) != 0 )
    {
@@ -307,13 +311,14 @@ int main( int argc, char* argv[] )
    // If we want to launch an executable to profile, now is the time to do it
    if( executablePath )
    {
-      if( !startChildProcess( exec->filename[0], executableName ) )
+      childProcess = startChildProcess(exec->filename[0], executableName);
+      if( childProcess == 0 )
       {
          exit(-1);
       }
 
       // Try to start recording until the shared memory is created
-      while( processAlive( g_childProcess ) && !profiler->setRecording( true ) )
+      while( processAlive( childProcess ) && !profiler->setRecording( true ) )
       {;}
    }
 
@@ -362,7 +367,7 @@ int main( int argc, char* argv[] )
    // We have launched a child process. Let's close it
    if( executablePath )
    {
-      terminateProcess( g_childProcess );
+      terminateProcess( childProcess );
    }
 
    SDL_GL_DeleteContext( mainContext );
