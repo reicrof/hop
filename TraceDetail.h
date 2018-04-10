@@ -12,7 +12,7 @@ class StringDb;
 struct DisplayableTraces;
 struct TraceDetail
 {
-   TraceDetail( size_t traceId, TimeStamp delta ) : deltaTimeInNanos( delta ), exclusivePct( 1.0f ), callCount( 1 )
+   TraceDetail( size_t traceId, TimeStamp delta ) : deltaTimeInNanos( delta ), exclusivePct( 1.0f )
    {
       traceIds.reserve( 32 );
       traceIds.push_back( traceId );
@@ -20,7 +20,6 @@ struct TraceDetail
    std::vector< size_t > traceIds;
    TimeStamp deltaTimeInNanos;
    float exclusivePct;
-   uint32_t callCount;
 };
 
 struct TraceDetails
@@ -39,6 +38,7 @@ struct TraceDetailDrawResult
 
 TraceDetails
 createTraceDetails( const DisplayableTraces& traces, uint32_t threadIndex, size_t traceId );
+TraceDetails createGlobalTraceDetails( const DisplayableTraces& traces, uint32_t threadIndex );
 TraceDetailDrawResult drawTraceDetails(
     const TraceDetails& details,
     const std::vector<ThreadInfo>& tracesPerThread,

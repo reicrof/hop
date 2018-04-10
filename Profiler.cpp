@@ -5,6 +5,7 @@
 #include "Utils.h"
 #include "TraceDetail.h"
 #include "TraceSearch.h"
+#include "DisplayableTraces.h"
 #include "miniz.h"
 #include <SDL_keycode.h>
 
@@ -518,9 +519,20 @@ void hop::Profiler::drawTraceDetailsWindow()
    if ( traceDetailRes.isWindowOpen )
    {
        _timeline.setTraceDetailsDisplayed();
-       for( const auto& traceHoveredIdx : traceDetailRes.hoveredTraceIds )
+
+       // Add the trace that will need to be highlighted
+       std::pair<size_t, size_t> span = visibleTracesIndexSpan(
+           _tracesPerThread[traceDetailRes.hoveredThreadIdx]._traces,
+           _timeline.absoluteTimelineStart(),
+           _timeline.absoluteTimelineEnd() );
+
+       for ( const auto& traceHoveredIdx : traceDetailRes.hoveredTraceIds )
        {
-          _timeline.addTraceToHighlight( std::make_pair( traceHoveredIdx, traceDetailRes.hoveredThreadIdx ) );
+          if ( traceHoveredIdx >= span.first && traceHoveredIdx <= span.second )
+          {
+             _timeline.addTraceToHighlight(
+                 std::make_pair( traceHoveredIdx, traceDetailRes.hoveredThreadIdx ) );
+          }
        }
    }
    else

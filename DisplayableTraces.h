@@ -4,9 +4,13 @@
 #include "Hop.h"
 #include "Lod.h"
 #include <vector>
+#include <utility>
+#include <limits>
 
 namespace hop
 {
+static constexpr size_t INVALID_IDX = std::numeric_limits<size_t>::max();
+
 struct DisplayableTraces
 {
    DisplayableTraces() = default;
@@ -40,6 +44,10 @@ struct DisplayableTraces
    TDepth_t maxDepth{ 0 };
 };
 
+std::pair<size_t, size_t> visibleTracesIndexSpan(
+    const DisplayableTraces& traces,
+    TimeStamp absoluteStart,
+    TimeStamp absoluteEnd );
 }
 
 #endif // DISPLAYABLE_TRACE_H_

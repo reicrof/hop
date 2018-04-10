@@ -5,15 +5,76 @@
 #include "imgui/imgui.h"
 
 #include <algorithm>
+#include <unordered_set>
 
 #include <cassert>
 #include <cmath>
 
-namespace hop
+namespace
 {
-TraceDetails
-createTraceDetails( const DisplayableTraces& traces, uint32_t threadIndex, size_t traceId )
+struct TraceVecSetItem
 {
+   TraceVecSetItem( hop::TLineNb_t l, hop::TStrPtr_t s, size_t index )
+       : strPtr( s ), indexInVec( index ), line( l )
+   {
+   }
+   friend bool operator==( const TraceVecSetItem& lhs, const TraceVecSetItem& rhs ) noexcept
+   {
+      return lhs.strPtr == rhs.strPtr && lhs.line == rhs.line;
+   }
+   hop::TStrPtr_t strPtr;
+   size_t indexInVec;
+   hop::TLineNb_t line;
+};
+}
+
+namespace std
+{
+   template <>
+   struct hash<TraceVecSetItem>
+   {
+      size_t operator()( const TraceVecSetItem& t ) const
+      {
+         return std::hash<hop::TLineNb_t>()( t.line ) ^ std::hash<hop::TStrPtr_t>()( t.strPtr );
+      }
+   };
+}
+
+static std::vector<hop::TraceDetail> mergeTraceDetails( const hop::DisplayableTraces& traces, const std::vector<hop::TraceDetail>& allDetails )
+{
+   using namespace hop;
+   std::vector<TraceDetail> mergedDetails;
+   mergedDetails.reserve( allDetails.size() / 2 );
+
+   std::unordered_set<TraceVecSetItem> uniqueTraces;
+   uniqueTraces.reserve( allDetails.size() / 2 );
+
+   for ( const auto& t : allDetails )
+   {
+      const auto insertRes = uniqueTraces.insert(
+          TraceVecSetItem( traces.lineNbs[t.traceIds[0]], traces.fileNameIds[t.traceIds[0]], mergedDetails.size() ) );
+      if ( insertRes.second )
+      {
+         // New entry
+         mergedDetails.emplace_back( t );
+      }
+      else
+      {
+         auto& d = mergedDetails[insertRes.first->indexInVec];
+         d.deltaTimeInNanos += t.deltaTimeInNanos;
+         d.traceIds.insert( d.traceIds.end(), t.traceIds.begin(), t.traceIds.end() );
+      }
+   }
+
+   return mergedDetails;
+}
+
+static std::vector<hop::TraceDetail>
+gatherTraceDetails( const hop::DisplayableTraces& traces, size_t traceId )
+{
+   using namespace hop;
+   std::vector<TraceDetail> traceDetails;
+
    // Find the traces to analyze
    const TimeStamp end = traces.ends[traceId];
    const TimeStamp totalDelta = traces.deltas[traceId];
@@ -24,10 +85,9 @@ createTraceDetails( const DisplayableTraces& traces, uint32_t threadIndex, size_
 
    ++firstTraceId;
 
-   std::vector<TraceDetail> traceDetails;
-   std::vector<std::pair<TLineNb_t, TStrPtr_t> > uniqueTraces;
+   //std::unordered_set< TraceVecSetItem > uniqueTraces;
    traceDetails.reserve( traceId - firstTraceId );
-   uniqueTraces.reserve( traceId - firstTraceId );
+   //uniqueTraces.reserve( traceId - firstTraceId );
 
    const TDepth_t maxDepth = *std::max_element(
        traces.depths.begin() + firstTraceId, traces.depths.begin() + traceId + 1 );
@@ -57,45 +117,73 @@ createTraceDetails( const DisplayableTraces& traces, uint32_t threadIndex, size_
 
       lastDepth = curDepth;
 
-      const auto traceId = std::make_pair( traces.lineNbs[i], traces.fileNameIds[i] );
-      auto it = std::find( uniqueTraces.begin(), uniqueTraces.end(), traceId );
-      if ( it == uniqueTraces.end() )
-      {
-         // New entry
-         uniqueTraces.emplace_back( traceId );
-         traceDetails.emplace_back( TraceDetail(i, traceDelta) );
-      }
-      else
-      {
-         size_t index = std::distance( uniqueTraces.begin(), it );
-         ++traceDetails[index].callCount;
-         traceDetails[index].deltaTimeInNanos += traceDelta;
-         traceDetails[index].traceIds.push_back( i );
-      }
+      traceDetails.emplace_back( TraceDetail( i, traceDelta ) );
    }
 
+   return traceDetails;
+}
+
+static void finalizeTraceDetails(
+    std::vector<hop::TraceDetail>& details,
+    hop::TimeDuration totalTime )
+{
+   using namespace hop;
    // Adjust the percentage
    float totalPct = 0.0f;
-   for ( auto& t : traceDetails )
+   for ( auto& t : details )
    {
-      t.exclusivePct = (double)t.deltaTimeInNanos / (double)totalDelta;
+      t.exclusivePct = (double)t.deltaTimeInNanos / (double)totalTime;
       totalPct += t.exclusivePct;
    }
 
    // Sort them by exclusive percent
-   std::sort(
-       traceDetails.begin(),
-       traceDetails.end(),
-       []( const TraceDetail& lhs, const TraceDetail& rhs ) {
-          return lhs.exclusivePct > rhs.exclusivePct;
-       } );
+   std::sort( details.begin(), details.end(), []( const TraceDetail& lhs, const TraceDetail& rhs ) {
+      return lhs.exclusivePct > rhs.exclusivePct;
+   } );
 
    assert( std::abs( totalPct - 1.0f ) < 0.01f );
+}
+
+namespace hop
+{
+TraceDetails
+createTraceDetails( const DisplayableTraces& traces, uint32_t threadIndex, size_t traceId )
+{
+   const TimeStamp totalDelta = traces.deltas[traceId];
+
+   std::vector<TraceDetail> traceDetails = mergeTraceDetails( traces, gatherTraceDetails( traces, traceId ) );
+   finalizeTraceDetails( traceDetails, totalDelta );
 
    TraceDetails details;
    details.shouldFocusWindow = true;
    details.threadIndex = threadIndex;
    std::swap( details.details, traceDetails );
+   return details;
+}
+
+TraceDetails createGlobalTraceDetails( const DisplayableTraces& traces, uint32_t threadIndex )
+{
+   TraceDetails details;
+
+   std::vector<hop::TraceDetail> traceDetails;
+   traceDetails.reserve( 1024 );
+
+   TimeDuration totalTime = 0;
+   for( size_t i = 0; i < traces.depths.size(); ++i )
+   {
+      if( traces.depths[i] == 0 )
+      {
+         totalTime += traces.deltas[i];
+         auto details = gatherTraceDetails( traces, i );
+         traceDetails.insert( traceDetails.end(), details.begin(), details.end() );
+      }
+   }
+
+   auto mergedDetails = mergeTraceDetails( traces, traceDetails );
+   finalizeTraceDetails( mergedDetails, totalTime );
+   details.shouldFocusWindow = true;
+   details.threadIndex = threadIndex;
+   std::swap( details.details, mergedDetails );
    return details;
 }
 
@@ -167,7 +255,7 @@ TraceDetailDrawResult drawTraceDetails(
                 sizeof( traceDuration ) );
             ImGui::Text( "%s", traceDuration );
             ImGui::NextColumn();
-            ImGui::Text( "%u", details.details[i].callCount );
+            ImGui::Text( "%zu", details.details[i].traceIds.size() );
             ImGui::NextColumn();
          }
          ImGui::Columns( 1 );

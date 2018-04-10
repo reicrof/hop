@@ -167,7 +167,13 @@ void Timeline::draw(
       ImGui::PushStyleColor( ImGuiCol_ButtonHovered, threadHeaderColor );
       ImGui::PushStyleColor( ImGuiCol_ButtonActive, threadHeaderColor );
       if( ImGui::Button( threadName ) )
-         tracesPerThread[i]._hidden = !threadHidden;
+      {
+            tracesPerThread[i]._hidden = !threadHidden;
+      }
+      else if( ImGui::IsMouseReleased( 1 ) && ImGui::IsItemHovered() )
+      {
+            _traceDetails = createGlobalTraceDetails( tracesPerThread[i]._traces, i );
+      }
       ImGui::PopStyleColor( 3 );
       ImGui::Separator();
 
@@ -514,6 +520,14 @@ void Timeline::setAbsolutePresentTime( TimeStamp time ) noexcept
 }
 
 TimeDuration Timeline::timelineRange() const noexcept { return _timelineRange; }
+TimeStamp Timeline::timelineStart() const noexcept { return _timelineStart; }
+
+TimeStamp Timeline::absoluteTimelineStart() const noexcept
+{
+   return _absoluteStartTime + _timelineStart;
+}
+
+TimeStamp Timeline::absoluteTimelineEnd() { return absoluteTimelineStart() + _timelineRange; }
 
 float Timeline::verticalPosPxl() const noexcept
 {
@@ -661,39 +675,19 @@ void Timeline::drawTraces(
    g_stats.currentLOD = lodLevel;
 
    // The time range to draw in absolute time
-   const TimeStamp firstTraceAbsoluteTime = absoluteStart + _timelineStart;
-   const TimeStamp lastTraceAbsoluteTime = firstTraceAbsoluteTime + _timelineRange;
+   const TimeStamp firstTraceAbsoluteTime = absoluteTimelineStart();
+   const TimeStamp lastTraceAbsoluteTime = absoluteTimelineEnd();
 
    // If we do not use LOD, draw the traces normally.
    if ( lodLevel == -1 )
    {
-      const auto it1 = std::lower_bound(
-          data._traces.ends.begin(), data._traces.ends.end(), firstTraceAbsoluteTime );
-      const auto it2 = std::upper_bound(
-          data._traces.ends.begin(), data._traces.ends.end(), lastTraceAbsoluteTime );
+      auto span =
+          visibleTracesIndexSpan( data._traces, firstTraceAbsoluteTime, lastTraceAbsoluteTime );
 
-      // The last trace of the current thread does not reach the current time
-      if ( it1 == data._traces.ends.end() ) return;
+      // // The last trace of the current thread does not reach the current time
+      if( span.first == hop::INVALID_IDX ) return;
 
-      size_t firstTraceId = std::distance( data._traces.ends.begin(), it1 );
-      size_t lastTraceId = std::distance( data._traces.ends.begin(), it2 );
-
-      // Find the the first trace on the left and right that have a depth of 0. This prevents
-      // traces that have a smaller depth than the one foune previously to vanish.
-      while ( firstTraceId > 0 && data._traces.depths[firstTraceId] != 0 )
-      {
-         --firstTraceId;
-      }
-      while ( lastTraceId < data._traces.depths.size() && data._traces.depths[lastTraceId] != 0 )
-      {
-         ++lastTraceId;
-      }
-      if ( lastTraceId < data._traces.depths.size() )
-      {
-         ++lastTraceId;
-      }  // We need to go one past the depth 0
-
-      for ( size_t i = firstTraceId; i < lastTraceId; ++i )
+      for ( size_t i = span.first; i < span.second; ++i )
       {
          const TimeStamp traceEndTime = ( data._traces.ends[i] - absoluteStart );
          const auto traceEndPxl = nanosToPxl<float>(
@@ -812,6 +806,7 @@ void Timeline::drawTraces(
 
          if ( leftMouseDblClicked )
          {
+            pushNavigationState();
             const TimeStamp traceEndTime =
                 pxlToNanos( windowWidthPxl, _timelineRange, t.posPxl.x - posX + t.lengthPxl );
             frameToTime( _timelineStart + ( traceEndTime - t.duration ), t.duration );
@@ -1056,6 +1051,7 @@ void Timeline::drawLockWaits(
 
          if ( ImGui::IsMouseDoubleClicked( 0 ) )
          {
+            pushNavigationState();
             frameToAbsoluteTime( it->start, it->end - it->start );
          }
       }

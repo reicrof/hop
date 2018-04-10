@@ -4,7 +4,7 @@
 namespace hop
 {
 
-Stats g_stats = {};
+Stats g_stats = { 0.0, 0.0, 0.0, 0.0, 0, 0 };
 
 void drawStatsWindow( const Stats& stats )
 {

@@ -35,6 +35,10 @@ class Timeline
    TimeStamp absolutePresentTime() const noexcept;
    void setAbsoluteStartTime( TimeStamp time ) noexcept;
    void setAbsolutePresentTime( TimeStamp time ) noexcept;
+
+   TimeStamp timelineStart() const noexcept;
+   TimeStamp absoluteTimelineStart() const noexcept;
+   TimeStamp absoluteTimelineEnd();
    TimeDuration timelineRange() const noexcept;
    float verticalPosPxl() const noexcept;
 
