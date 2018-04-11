@@ -6,6 +6,7 @@
 #include "TraceDetail.h"
 #include "TraceSearch.h"
 #include "DisplayableTraces.h"
+#include "ModalWindow.h"
 #include "miniz.h"
 #include <SDL_keycode.h>
 
@@ -302,10 +303,13 @@ void Profiler::fetchClientData()
 
    if( _recording )
    {
+      for( size_t i = 0; i <_serverPendingData.stringData.size(); ++i )
+      {
+         addStringData( _serverPendingData.stringData[i] );
+      }
       for( size_t i = 0; i <_serverPendingData.traces.size(); ++i )
       {
          addTraces(_serverPendingData.traces[i], _serverPendingData.tracesThreadIndex[i] );
-         addStringData(_serverPendingData.stringData[i], _serverPendingData.tracesThreadIndex[i] );
       }
       for( size_t i = 0; i < _serverPendingData.lockWaits.size(); ++i )
       {
@@ -318,18 +322,12 @@ void Profiler::fetchClientData()
    }
 }
 
-void Profiler::addStringData( const std::vector<char>& strData, uint32_t threadIndex )
+void Profiler::addStringData( const std::vector<char>& strData )
 {
    // We should read the string data even when not recording since the string data
    // is sent only once (the first time a function is used)
    if ( !strData.empty() )
    {
-      // Check if new thread
-      if ( threadIndex >= _tracesPerThread.size() )
-      {
-         _tracesPerThread.resize( threadIndex + 1 );
-      }
-
       _strDb.addStringData( strData );
    }
 }
@@ -556,11 +554,11 @@ void hop::Profiler::draw()
    // Reset the style var so the popups can rescale properly
    ImGui::PushStyleVar(ImGuiStyleVar_WindowMinSize, ImVec2(0, 0));
    drawMenuBar();
+   renderModalWindow();
    ImGui::PopStyleVar();
 
    handleHotkey();
 
-   displayModalWindow();
 
    if( drawPlayStopButton( _recording ) )
    {
@@ -723,40 +721,6 @@ void hop::Profiler::drawMenuBar()
    }
 }
 
-void hop::Profiler::displayModalWindow()
-{
-   if ( _waitModalMessage )
-   {
-      ImGui::OpenPopup( _waitModalMessage );
-      if ( ImGui::BeginPopupModal( _waitModalMessage ) )
-      {
-         char buf[64];
-         sprintf( buf, "%c %s", "|/-\\"[(int)(ImGui::GetTime()/0.25f)&3], _waitModalMessage );
-         ImGui::Text( "%s", buf );
-         if ( std::future_status::ready == _asyncJobDone.wait_for( std::chrono::microseconds(500) ) )
-         {
-            ImGui::CloseCurrentPopup();
-            _waitModalMessage = nullptr;
-         }
-         ImGui::EndPopup();
-      }
-   }
-   else if( _errorModalWindowMsg )
-   {
-      ImGui::OpenPopup( _errorModalWindowMsg );
-      if ( ImGui::BeginPopupModal( _errorModalWindowMsg ) )
-      {
-         ImGui::Text( "%s", _errorModalWindowMsg );
-         if (ImGui::Button("Close", ImVec2(120,0)))
-         {
-            ImGui::CloseCurrentPopup();
-            _errorModalWindowMsg = nullptr;
-         }
-         ImGui::EndPopup();
-      }
-   }
-}
-
 void hop::Profiler::handleHotkey()
 {
    if( ImGui::IsKeyReleased( SDL_SCANCODE_HOME ) )
@@ -818,8 +782,8 @@ bool hop::Profiler::setRecording(bool recording)
 
 bool hop::Profiler::saveToFile( const char* path )
 {
-   _waitModalMessage = "Saving...";
-   _asyncJobDone = std::async( std::launch::async, [this, path]() {
+   displayModalWindow( "Saving...", false );
+   std::thread t( [this, path]() {
       // Compute the size of the serialized data
       const size_t dbSerializedSize = serializedSize( _strDb );
       const size_t timelineSerializedSize = serializedSize( _timeline );
@@ -852,7 +816,8 @@ bool hop::Profiler::saveToFile( const char* path )
           totalSerializedSize );
       if ( compressionStatus != Z_OK )
       {
-         _errorModalWindowMsg = "Compression failed. File not saved!";
+         closeModalWindow();
+         displayModalWindow( "Compression failed. File not saved!", true );
          return false;
       }
 
@@ -865,8 +830,11 @@ bool hop::Profiler::saveToFile( const char* path )
       of.write( (const char*)&header, sizeof( header ) );
       of.write( &compressedData[0], totalSerializedSize );
 
+      closeModalWindow();
       return true;
    } );
+
+   t.detach();
 
    return true;
 }
@@ -876,12 +844,10 @@ bool hop::Profiler::openFile( const char* path )
    std::ifstream input( path, std::ifstream::binary );
    if ( input.is_open() )
    {
-      // TODO add popup to warn user and cancel operation
-      // Clear previsouly recorder traces.
       clear();
 
-      _waitModalMessage = "Loading...";
-      _asyncJobDone = std::async( std::launch::async, [this, path]() {
+      displayModalWindow( "Loading...", false );
+      std::thread t( [this, path]() {
          std::ifstream input( path, std::ifstream::binary );
          std::vector<char> data(
              ( std::istreambuf_iterator<char>( input ) ), ( std::istreambuf_iterator<char>() ) );
@@ -890,7 +856,8 @@ bool hop::Profiler::openFile( const char* path )
 
          if( header->magicNumber != MAGIC_NUMBER )
          {
-            _errorModalWindowMsg = "Not a valid hop file.";
+            closeModalWindow();
+            displayModalWindow( "Not a valid hop file.", true );
             return false;
          }
 
@@ -905,7 +872,8 @@ bool hop::Profiler::openFile( const char* path )
 
          if ( uncompressStatus != Z_OK )
          {
-            _errorModalWindowMsg = "Error uncompressing file. Nothing will be loaded";
+            closeModalWindow();
+            displayModalWindow( "Error uncompressing file. Nothing will be loaded", true );
             return false;
          }
 
@@ -924,12 +892,15 @@ bool hop::Profiler::openFile( const char* path )
             addTraces( threadInfos[j]._traces, j );
             i += threadInfoSize;
          }
+         closeModalWindow();
          return true;
       } );
 
+      t.detach();
+
       return true;
    }
-   _errorModalWindowMsg = "File not found";
+   displayModalWindow( "File not found", true );
    return false;
 }
 
