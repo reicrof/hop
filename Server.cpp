@@ -30,7 +30,7 @@ bool Server::start( const char* name )
                std::this_thread::sleep_for( std::chrono::milliseconds( 500 ) );
                continue;
             }
-            printf( "Connection to shared data succesful.\n" );
+            printf( "Connection to shared data successful.\n" );
          }
 
          _sharedMem.waitSemaphore();
@@ -86,62 +86,73 @@ size_t Server::handleNewMessage( uint8_t* data, size_t maxSize )
 
     switch ( msgType )
     {
-      case MsgType::PROFILER_TRACE:
-      {
-         // Copy string and add it to database
-         std::vector< char > stringData( msgInfo->traces.stringDataSize );
-         if( stringData.size() > 0 )
-         {
-            memcpy( stringData.data(), bufPtr, stringData.size() );
-            _stringDb.addStringData( stringData );
-            bufPtr += stringData.size();
-         }
-         // If our string table is emtpy and we did not received any strings,
-         // it means these messages are pending messages from previous execution.
-         // Ignore them until we receive string data. This can happen after an
-         // unclean exit.
-         else if ( _stringDb.empty() )
-         {
-            return maxSize;
-         }
-         assert( (size_t)(bufPtr - data) <= maxSize );
+       case MsgType::PROFILER_STRING_DATA:
+       {
+          // Copy string and add it to database
+          std::vector<char> stringData( msgInfo->stringData.size );
+          if ( stringData.size() > 0 )
+          {
+             memcpy( stringData.data(), bufPtr, stringData.size() );
+             _stringDb.addStringData( stringData );
+             bufPtr += stringData.size();
+          }
+          // If our string table is emtpy and we did not received any strings,
+          // it means these messages are pending messages from previous execution.
+          // Ignore them until we receive string data. This can happen after an
+          // unclean exit.
+          else if ( _stringDb.empty() )
+          {
+             return maxSize;
+          }
+          assert( ( size_t )( bufPtr - data ) <= maxSize );
 
-        const Trace* traces = (const Trace*) bufPtr;
-        const size_t traceCount = msgInfo->traces.traceCount;
+          if ( stringData.size() > 0 )
+          {
+             // TODO: Could lock later when we received all the messages
+             std::lock_guard<std::mutex> guard( _pendingData.mutex );
+             _pendingData.stringData.emplace_back( std::move( stringData ) );
+          }
+          return ( size_t )( bufPtr - data );
+       }
+       case MsgType::PROFILER_TRACE:
+       {
+          const Trace* traces = (const Trace*)bufPtr;
+          const size_t traceCount = msgInfo->traces.count;
 
-        DisplayableTraces dispTraces;
-        dispTraces.reserve( traceCount );
-        TDepth_t maxDepth = 0;
-        for( size_t i = 0; i < traceCount; ++i )
-        {
-            const auto& t = traces[i];
-            dispTraces.ends.push_back( t.end );
-            dispTraces.deltas.push_back( t.end - t.start );
-            dispTraces.fileNameIds.push_back( _stringDb.getStringIndex( t.fileNameId ) );
-            dispTraces.fctNameIds.push_back(  _stringDb.getStringIndex( t.fctNameId ) );
-            dispTraces.lineNbs.push_back( t.lineNumber );
-            dispTraces.depths.push_back( t.depth );
-            maxDepth = std::max(maxDepth, t.depth);
-            dispTraces.groups.push_back( t.group );
-        }
-        dispTraces.maxDepth = maxDepth;
+          DisplayableTraces dispTraces;
+          dispTraces.reserve( traceCount );
+          TDepth_t maxDepth = 0;
+          for ( size_t i = 0; i < traceCount; ++i )
+          {
+             const auto& t = traces[i];
+             dispTraces.ends.push_back( t.end );
+             dispTraces.deltas.push_back( t.end - t.start );
+             dispTraces.fileNameIds.push_back( _stringDb.getStringIndex( t.fileNameId ) );
+             dispTraces.fctNameIds.push_back( _stringDb.getStringIndex( t.fctNameId ) );
+             dispTraces.lineNbs.push_back( t.lineNumber );
+             dispTraces.depths.push_back( t.depth );
+             maxDepth = std::max( maxDepth, t.depth );
+             dispTraces.groups.push_back( t.group );
+          }
+          dispTraces.maxDepth = maxDepth;
 
-        // The ends time should already be sorted
-        assert_is_sorted( dispTraces.ends.begin(), dispTraces.ends.end() );
+          // The ends time should already be sorted
+          assert_is_sorted( dispTraces.ends.begin(), dispTraces.ends.end() );
 
-        bufPtr += ( traceCount * sizeof( Trace ) );
-        assert( ( size_t )( bufPtr - data ) <= maxSize );
+          bufPtr += ( traceCount * sizeof( Trace ) );
+          assert( ( size_t )( bufPtr - data ) <= maxSize );
 
-        static_assert(std::is_move_constructible<DisplayableTraces>::value, "Displayble Traces not moveable");
-        if ( traceCount > 0 )
-        {
-           // TODO: Could lock later when we received all the messages
-           std::lock_guard<std::mutex> guard( _pendingData.mutex );
-           _pendingData.traces.emplace_back( std::move( dispTraces ) );
-           _pendingData.tracesThreadIndex.push_back( threadIndex );
-           _pendingData.stringData.emplace_back( std::move( stringData ) );
-        }
-        return ( size_t )( bufPtr - data );
+          static_assert(
+              std::is_move_constructible<DisplayableTraces>::value,
+              "Displayble Traces not moveable" );
+          if ( traceCount > 0 )
+          {
+             // TODO: Could lock later when we received all the messages
+             std::lock_guard<std::mutex> guard( _pendingData.mutex );
+             _pendingData.traces.emplace_back( std::move( dispTraces ) );
+             _pendingData.tracesThreadIndex.push_back( threadIndex );
+          }
+          return ( size_t )( bufPtr - data );
       }
       case MsgType::PROFILER_WAIT_LOCK:
       {

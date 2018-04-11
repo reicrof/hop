@@ -24,8 +24,8 @@ struct Profiler
    void update( float deltaTimeMs ) noexcept;
    void draw();
    void fetchClientData();
+   void addStringData( const std::vector< char >& stringData );
    void addTraces( const DisplayableTraces& traces, uint32_t threadIndex );
-   void addStringData( const std::vector< char >& stringData, uint32_t threadIndex);
    void addLockWaits( const std::vector< LockWait >& lockWaits, uint32_t threadIndex);
    void addUnlockEvents(const std::vector<UnlockEvent>& unlockEvents, uint32_t threadIndex);
    void handleHotkey();
@@ -38,7 +38,6 @@ private:
    void drawTraceDetailsWindow();
    bool openFile( const char* path );
    bool saveToFile( const char* path );
-   void displayModalWindow();
 
    std::string _name;
    Timeline _timeline;
@@ -47,10 +46,6 @@ private:
    bool _recording{ false };
    bool _searchWindowOpen{ false };
    bool _focusSearchWindow{ false };
-
-   const char* _errorModalWindowMsg{ nullptr };
-   const char* _waitModalMessage{ nullptr };
-   std::future< bool > _asyncJobDone;
 
    Server _server;
    Server::PendingData _serverPendingData;
