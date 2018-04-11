@@ -216,9 +216,12 @@ inline decltype( std::chrono::duration_cast<Precision>( Clock::now().time_since_
 using TimeStamp = decltype( getTimeStamp() );
 using TimeDuration = int64_t;
 
+HOP_STATIC_ASSERT( HOP_SHARED_MEM_SIZE >= 64000, "Shared memory size must be bigger than 64kb" );
+
 enum class MsgType : uint32_t
 {
    PROFILER_TRACE,
+   PROFILER_STRING_DATA,
    PROFILER_WAIT_LOCK,
    PROFILER_UNLOCK_EVENT,
    INVALID_MESSAGE,
@@ -226,8 +229,12 @@ enum class MsgType : uint32_t
 
 struct TracesMsgInfo
 {
-   uint32_t stringDataSize;
-   uint32_t traceCount;
+   uint32_t count;
+};
+
+struct StringDataMsgInfo
+{
+   uint32_t size;
 };
 
 struct LockWaitsMsgInfo
@@ -250,6 +257,7 @@ struct MsgInfo
    // Specific message data
    union {
       TracesMsgInfo traces;
+      StringDataMsgInfo stringData;
       LockWaitsMsgInfo lockwaits;
       UnlockEventsMsgInfo unlockEvents;
    };
@@ -309,12 +317,12 @@ class SharedMemory
          CONNECTED_CONSUMER = 1 << 1,
          LISTENING_CONSUMER = 1 << 2,
          USE_GL_FINISH      = 1 << 3,
-         RESEND_STRING_DATA = 1 << 4,
       };
       std::atomic< uint32_t > flags{0};
       const float clientVersion{0.0f};
       const uint32_t maxThreadNb{0};
       const size_t requestedSize{0};
+      std::atomic< uint32_t > strDbResetCount{0};
    };
 
    bool hasConnectedProducer() const HOP_NOEXCEPT;
@@ -325,8 +333,9 @@ class SharedMemory
    void setListeningConsumer( bool ) HOP_NOEXCEPT;
    bool isUsingGlFinish() const HOP_NOEXCEPT;
    void setUseGlFinish( bool ) HOP_NOEXCEPT;
-   bool shouldResendStringData() const HOP_NOEXCEPT;
-   void resetResendStringDataFlag() HOP_NOEXCEPT;
+   uint32_t strDbResetCount() const HOP_NOEXCEPT;
+   uint32_t localStrDbResetCount() const HOP_NOEXCEPT;
+   void incrementStrDbResetCount() HOP_NOEXCEPT;
    ringbuf_t* ringbuffer() const HOP_NOEXCEPT;
    uint8_t* data() const HOP_NOEXCEPT;
    bool valid() const HOP_NOEXCEPT;
@@ -817,21 +826,24 @@ bool SharedMemory::create( const char* exeName, size_t requestedSize, bool isCon
       _data = sharedMem + sizeof( SharedMetaInfo ) + ringBufSize;
       _valid = true;
 
-      // We can only have one consumer
-      if ( isConsumer && hasConnectedConsumer() )
+      if ( isConsumer )
       {
-         printf(
-             "/!\\ HOP WARNING /!\\ \n"
-             "Cannot have more than one instance of the consumer at a time."
-             " You might be trying to run the consumer application twice or"
-             " have a dangling shared memory segment. hop might be unstable"
-             " in this state. You could consider manually removing the shared"
-             " memory, or restart this excutable cleanly.\n\n" );
-         // Force resetting the listening state as this could cause crash. The side
-         // effect would simply be that other consumer would stop listening. Not a
-         // big deal as there should not be any other consumer...
-         _sharedMetaData->flags &= ~( SharedMetaInfo::LISTENING_CONSUMER );
-         _sharedMetaData->flags |= SharedMetaInfo::RESEND_STRING_DATA;
+         incrementStrDbResetCount();
+         // We can only have one consumer
+         if( hasConnectedConsumer() )
+         {
+            printf(
+                "/!\\ HOP WARNING /!\\ \n"
+                "Cannot have more than one instance of the consumer at a time."
+                " You might be trying to run the consumer application twice or"
+                " have a dangling shared memory segment. hop might be unstable"
+                " in this state. You could consider manually removing the shared"
+                " memory, or restart this excutable cleanly.\n\n" );
+            // Force resetting the listening state as this could cause crash. The side
+            // effect would simply be that other consumer would stop listening. Not a
+            // big deal as there should not be any other consumer...
+            _sharedMetaData->flags &= ~( SharedMetaInfo::LISTENING_CONSUMER );
+         }
       }
 
       if ( isConsumer )
@@ -895,14 +907,14 @@ void SharedMemory::setUseGlFinish( bool useGlFinish ) HOP_NOEXCEPT
       _sharedMetaData->flags &= ~SharedMetaInfo::USE_GL_FINISH;
 }
 
-bool SharedMemory::shouldResendStringData() const HOP_NOEXCEPT
+uint32_t SharedMemory::strDbResetCount() const HOP_NOEXCEPT
 {
-   return _sharedMetaData && (_sharedMetaData->flags & SharedMetaInfo::RESEND_STRING_DATA) > 0;
+   return _sharedMetaData->strDbResetCount.load();
 }
 
-void SharedMemory::resetResendStringDataFlag() HOP_NOEXCEPT
+void SharedMemory::incrementStrDbResetCount() HOP_NOEXCEPT
 {
-   _sharedMetaData->flags &= ~SharedMetaInfo::RESEND_STRING_DATA;
+   _sharedMetaData->strDbResetCount.fetch_add( 1 );
 }
 
 uint8_t* SharedMemory::data() const HOP_NOEXCEPT
@@ -1009,10 +1021,7 @@ class Client
       _stringPtr.reserve( 256 );
       _stringData.reserve( 256 * 32 );
 
-      // Push back first name as empty string
-      _stringPtr.insert( 0 );
-      for( size_t i = 0; i < sizeof( TStrPtr_t ); ++i )
-         _stringData.push_back('\0');
+      resetStringData();
    }
 
    void addProfilingTrace(
@@ -1028,7 +1037,7 @@ class Client
 
    void addWaitLockTrace( void* mutexAddr, TimeStamp start, TimeStamp end, TDepth_t depth )
    {
-      _lockWaits.push_back( LockWait{ mutexAddr, start, end, depth } );
+      _lockWaits.push_back( LockWait{ mutexAddr, start, end, depth, 0 /*padding*/ } );
    }
 
    void addUnlockEvent( void* mutexAddr, TimeStamp time )
@@ -1057,9 +1066,30 @@ class Client
       return res.second;
    }
 
-
-   bool sendTraces()
+   void resetStringData()
    {
+      _stringPtr.clear();
+      _stringData.clear();
+      _sentStringDataSize = 0;
+
+      // Push back first name as empty string
+      _stringPtr.insert( 0 );
+      for( size_t i = 0; i < sizeof( TStrPtr_t ); ++i )
+         _stringData.push_back('\0');
+   }
+
+   bool sendStringData()
+   {
+      // If the shared memory reset count is bigger than our local reset count
+      // it means we need to clear our string table. Otherwise it means we
+      // already took care of it.
+      uint32_t curStrDbResetCount = ClientManager::sharedMemory.strDbResetCount();
+      if( _localStrDbResetCount < curStrDbResetCount )
+      {
+         _localStrDbResetCount = curStrDbResetCount;
+         resetStringData();
+      }
+
       // Add all strings to the database
       for( const auto& t : _traces  )
       {
@@ -1067,25 +1097,67 @@ class Client
          addStringToDb( (const char*) t.fctNameId );
       }
 
-      // Reset sent string size if we are requested to re-send them
-      if( ClientManager::sharedMemory.shouldResendStringData() )
-      {
-         _sentStringDataSize = 0;
-         ClientManager::sharedMemory.resetResendStringDataFlag();
-      }
-
-      // 1- Get size of profiling traces message
       const uint32_t stringDataSize = _stringData.size();
       assert( stringDataSize >= _sentStringDataSize );
       const uint32_t stringToSendSize = stringDataSize - _sentStringDataSize;
-      const size_t profilerMsgSize =
-          sizeof( MsgInfo ) + stringToSendSize + sizeof( Trace ) * _traces.size();
+      const size_t msgSize = sizeof( MsgInfo ) + stringToSendSize;
 
       // Allocate big enough buffer from the shared memory
       ringbuf_t* ringbuf = ClientManager::sharedMemory.ringbuffer();
-      const bool messageWayToBig = profilerMsgSize > HOP_SHARED_MEM_SIZE;
+      const bool msgWayToBig = msgSize > HOP_SHARED_MEM_SIZE;
       ssize_t offset = -1;
-      if( !messageWayToBig )
+      if( !msgWayToBig )
+      {
+         offset = ringbuf_acquire( ringbuf, _worker, msgSize );
+      }
+
+      if ( offset == -1 )
+      {
+         printf("HOP - String to send are bigger than shared memory size. Consider"
+                " increasing shared memory size \n");
+         return false;
+      }
+
+      uint8_t* bufferPtr = &ClientManager::sharedMemory.data()[offset];
+
+      // Fill the buffer with the string data
+      {
+         // The data layout is as follow:
+         // =========================================================
+         // msgInfo     = Profiler specific infos  - Information about the message sent
+         // stringData  = String Data              - Array with all strings referenced by the traces
+         MsgInfo* msgInfo = (MsgInfo*)bufferPtr;
+         char* stringData = (char*)( bufferPtr + sizeof( MsgInfo ) );
+
+         msgInfo->type = MsgType::PROFILER_STRING_DATA;
+         msgInfo->threadId = tl_threadId;
+         msgInfo->threadIndex = tl_threadIndex;
+         msgInfo->stringData.size = stringToSendSize;
+
+         // Copy string data into its array
+         const auto itFrom = _stringData.begin() + _sentStringDataSize;
+         std::copy( itFrom, itFrom + stringToSendSize, stringData );
+      }
+
+      ringbuf_produce( ringbuf, _worker );
+      ClientManager::sharedMemory.signalSemaphore();
+
+      // Update sent array size
+      _sentStringDataSize = stringDataSize;
+
+      return true;
+   }
+
+   bool sendTraces()
+   {
+      // Get size of profiling traces message
+      const size_t profilerMsgSize = sizeof( MsgInfo ) + sizeof( Trace ) * _traces.size();
+
+      // Allocate big enough buffer from the shared memory
+      ringbuf_t* ringbuf = ClientManager::sharedMemory.ringbuffer();
+      const bool msgWayToBig = profilerMsgSize > HOP_SHARED_MEM_SIZE;
+      ssize_t offset = -1;
+      if( !msgWayToBig )
       {
          offset = ringbuf_acquire( ringbuf, _worker, profilerMsgSize );
       }
@@ -1104,22 +1176,15 @@ class Client
       {
          // The data layout is as follow:
          // =========================================================
-         // tracesInfo  = Profiler specific infos  - Information about the profiling traces sent
-         // stringData  = String Data              - Array with all strings referenced by the traces
+         // msgInfo     = Profiler specific infos  - Information about the message sent
          // traceToSend = Traces                   - Array containing all of the traces
          MsgInfo* tracesInfo = (MsgInfo*)bufferPtr;
-         char* stringData = (char*)( bufferPtr + sizeof( MsgInfo ) );
-         Trace* traceToSend = (Trace*)( bufferPtr + sizeof( MsgInfo ) + stringToSendSize );
+         Trace* traceToSend = (Trace*)( bufferPtr + sizeof( MsgInfo ) );
 
          tracesInfo->type = MsgType::PROFILER_TRACE;
          tracesInfo->threadId = tl_threadId;
          tracesInfo->threadIndex = tl_threadIndex;
-         tracesInfo->traces.stringDataSize = stringToSendSize;
-         tracesInfo->traces.traceCount = (uint32_t)_traces.size();
-
-         // Copy string data into its array
-         const auto itFrom = _stringData.begin() + _sentStringDataSize;
-         std::copy( itFrom, itFrom + stringToSendSize, stringData );
+         tracesInfo->traces.count = (uint32_t)_traces.size();
 
          // Copy trace information into buffer to send
          std::copy( _traces.begin(), _traces.end(), traceToSend );
@@ -1128,8 +1193,6 @@ class Client
       ringbuf_produce( ringbuf, _worker );
       ClientManager::sharedMemory.signalSemaphore();
 
-      // Update sent array size
-      _sentStringDataSize = stringDataSize;
       // Free the buffers
       _traces.clear();
 
@@ -1223,6 +1286,7 @@ class Client
          return;
       }
 
+      sendStringData(); // Always send string data first
       sendTraces();
       sendLockWaits();
       sendUnlockEvents();
@@ -1233,6 +1297,7 @@ class Client
    std::vector< UnlockEvent > _unlockEvents;
    std::unordered_set< TStrPtr_t > _stringPtr;
    std::vector< char > _stringData;
+   uint32_t _localStrDbResetCount{0};
    ringbuf_worker_t* _worker{NULL};
    uint32_t _sentStringDataSize{0}; // The size of the string array on the server side
 };

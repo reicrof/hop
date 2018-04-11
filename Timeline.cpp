@@ -2,6 +2,7 @@
 #include "ThreadInfo.h"
 #include "Utils.h"
 #include "Lod.h"
+#include "ModalWindow.h"
 #include "Stats.h"
 #include "StringDb.h"
 #include "TraceDetail.h"
@@ -10,6 +11,7 @@
 
 #include <SDL_keycode.h>
 
+#include <thread>
 #include <cmath>
 #define __STDC_FORMAT_MACROS
 #include <inttypes.h>
@@ -166,13 +168,19 @@ void Timeline::draw(
       ImGui::PushStyleColor( ImGuiCol_Button, threadHeaderColor );
       ImGui::PushStyleColor( ImGuiCol_ButtonHovered, threadHeaderColor );
       ImGui::PushStyleColor( ImGuiCol_ButtonActive, threadHeaderColor );
-      if( ImGui::Button( threadName ) )
+      if ( ImGui::Button( threadName ) )
       {
-            tracesPerThread[i]._hidden = !threadHidden;
+         tracesPerThread[i]._hidden = !threadHidden;
       }
-      else if( ImGui::IsMouseReleased( 1 ) && ImGui::IsItemHovered() )
+      else if ( ImGui::IsMouseReleased( 1 ) && ImGui::IsItemHovered() )
       {
-            _traceDetails = createGlobalTraceDetails( tracesPerThread[i]._traces, i );
+         displayModalWindow( "Computing total trace size...", false );
+         //auto dispTrace = ;
+         std::thread t( [this, i, dispTrace = std::move( tracesPerThread[i]._traces.copy() )]() {
+            _traceDetails = createGlobalTraceDetails( dispTrace, i );
+            closeModalWindow();
+         } );
+         t.detach();
       }
       ImGui::PopStyleColor( 3 );
       ImGui::Separator();

@@ -24,6 +24,9 @@ struct DisplayableTraces
       START_TRACE = 1,
    };
 
+   // Explicit copy to avoid accidental one
+   DisplayableTraces copy() const;
+
    void append( const DisplayableTraces& newTraces );
    void reserve( size_t size );
    void clear();
