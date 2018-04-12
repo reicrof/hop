@@ -745,8 +745,8 @@ bool SharedMemory::create( const char* exeName, size_t requestedSize, bool isCon
           exeName,
           HOP_SHARED_MEM_MAX_NAME_SIZE - sizeof( HOP_SHARED_MEM_PREFIX ) - 1 );
 
-      strcpy(_sharedSemPath, _sharedMemPath);
-      strcat(_sharedSemPath, "_sem");
+      strncpy( _sharedSemPath, _sharedMemPath, sizeof( _sharedSemPath ) );
+      strncat( _sharedSemPath, "_sem", sizeof( _sharedSemPath ) - strlen( _sharedMemPath ) -1 );
 
       // Open semaphore
       _semaphore = openSemaphore(_sharedSemPath);
@@ -845,10 +845,7 @@ bool SharedMemory::create( const char* exeName, size_t requestedSize, bool isCon
          }
       }
 
-      if ( isConsumer )
-         setConnectedConsumer( true );
-      else
-         setConnectedProducer( true );
+      isConsumer ? setConnectedConsumer( true ) : setConnectedProducer( true );
    }
    return true;
 }
