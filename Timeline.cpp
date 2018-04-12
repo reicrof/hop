@@ -175,8 +175,7 @@ void Timeline::draw(
       else if ( ImGui::IsMouseReleased( 1 ) && ImGui::IsItemHovered() )
       {
          displayModalWindow( "Computing total trace size...", false );
-         //auto dispTrace = ;
-         std::thread t( [this, i, dispTrace = std::move( tracesPerThread[i]._traces.copy() )]() {
+         std::thread t( [this, i, dispTrace = tracesPerThread[i]._traces.copy() ]() {
             _traceDetails = createGlobalTraceDetails( dispTrace, i );
             closeModalWindow();
          } );
