@@ -34,6 +34,7 @@ For more information, please refer to <http://unlicense.org/>
 // when HOP_ENABLED is false
 #define HOP_PROF( x )
 #define HOP_PROF_FUNC()
+#define HOP_PROF_DYN_NAME( x )
 #define HOP_PROF_GL_FINISH( x )
 #define HOP_PROF_FUNC_GL_FINISH()
 #define HOP_PROF_FUNC_WITH_GROUP( x )
@@ -46,7 +47,11 @@ For more information, please refer to <http://unlicense.org/>
 /////       THESE ARE THE MACROS YOU CAN MODIFY     ///////////
 ///////////////////////////////////////////////////////////////
 
+// Total maximum of thread being traced
 #define HOP_MAX_THREAD_NB 64
+
+// Total size of the shared memory ring buffer. This does not
+// include the meta-data size
 #define HOP_SHARED_MEM_SIZE 32000000
 
 ///////////////////////////////////////////////////////////////
@@ -59,11 +64,14 @@ For more information, please refer to <http://unlicense.org/>
 #define HOP_FCT_NAME __PRETTY_FUNCTION__
 #endif
 
-// Create a new profiling trace with specified name
+// Create a new profiling trace with specified name. Name must be static
 #define HOP_PROF( x ) HOP_PROF_GUARD_VAR( __LINE__, ( __FILE__, __LINE__, (x), 0 ) )
 
-// Create a new profiling trace for a free function
+// Create a new profiling trace with the compiler provided name
 #define HOP_PROF_FUNC() HOP_PROF_GUARD_VAR( __LINE__, ( __FILE__, __LINE__, HOP_FCT_NAME, 0 ) )
+
+// Create a new profiling trace for dynamic strings. Please use sparingly as they will incur more slowdown
+#define HOP_PROF_DYN_NAME( x ) HOP_PROF_DYN_STRING_GUARD_VAR( __LINE__, ( __FILE__, __LINE__, (x), 0 ) )
 
 // Create a new profiling trace that will call glFinish() before being destroyed
 #define HOP_PROF_GL_FINISH( x ) HOP_PROF_GL_FINISH_GUARD_VAR( __LINE__, ( __FILE__, __LINE__, (x), 0 ) )
@@ -368,6 +376,7 @@ class ClientManager
    static void CallGlFinish();
    static void StartProfile();
    static void StartProfileGlFinish();
+   static TStrPtr_t StartProfileDynString( const char* );
    static void EndProfile(
        const char* fileName,
        const char* fctName,
@@ -396,7 +405,7 @@ class ProfGuard
 {
   public:
    ProfGuard( const char* fileName, TLineNb_t lineNb, const char* fctName, TGroup_t groupId ) HOP_NOEXCEPT
-       : _start( getTimeStamp() ),
+       : _start( getTimeStamp() | 1 ),
          _fileName( fileName ),
          _fctName( fctName ),
          _lineNb( lineNb ),
@@ -420,7 +429,7 @@ class ProfGuardGLFinish
 {
   public:
    ProfGuardGLFinish( const char* fileName, TLineNb_t lineNb, const char* fctName, TGroup_t groupId ) HOP_NOEXCEPT
-       : _start( getTimeStamp() ),
+       : _start( getTimeStamp() | 1 ),
          _fileName( fileName ),
          _fctName( fctName ),
          _lineNb( lineNb ),
@@ -440,10 +449,11 @@ class ProfGuardGLFinish
    TGroup_t _group;
 };
 
-struct LockWaitGuard
+class LockWaitGuard
 {
+  public:
    LockWaitGuard( void* mutAddr )
-       : start( getTimeStamp() ),
+       : start( getTimeStamp() | 1 ),
          mutexAddr( mutAddr )
    {
    }
@@ -456,11 +466,38 @@ struct LockWaitGuard
    void* mutexAddr;
 };
 
+class ProfGuardDynamicString
+{
+  public:
+   ProfGuardDynamicString( const char* fileName, TLineNb_t lineNb, const char* fctName, TGroup_t groupId ) HOP_NOEXCEPT
+       : _start( getTimeStamp() & ~1 ),
+         _fileName( fileName ),
+         _lineNb( lineNb ),
+         _group( 666 )
+   {
+      _fctName = ClientManager::StartProfileDynString( fctName );
+   }
+   ~ProfGuardDynamicString()
+   {
+      ClientManager::EndProfile( _fileName, (const char*) _fctName, _start, getTimeStamp(), _lineNb, _group );
+   }
+
+  private:
+   TimeStamp _start;
+   const char *_fileName;
+   TStrPtr_t _fctName;
+   TLineNb_t _lineNb;
+   TGroup_t _group;
+};
+
+
 #define HOP_COMBINE( X, Y ) X##Y
 #define HOP_PROF_GUARD_VAR( LINE, ARGS ) \
    hop::ProfGuard HOP_COMBINE( hopProfGuard, LINE ) ARGS
 #define HOP_PROF_GL_FINISH_GUARD_VAR( LINE, ARGS ) \
    hop::ProfGuardGLFinish HOP_COMBINE( hopProfGuard, LINE ) ARGS
+#define HOP_PROF_DYN_STRING_GUARD_VAR( LINE, ARGS ) \
+   hop::ProfGuardDynamicString HOP_COMBINE( hopProfGuard, LINE ) ARGS
 #define HOP_MUTEX_LOCK_GUARD_VAR( LINE, ARGS ) \
    hop::LockWaitGuard HOP_COMBINE( hopMutexLock, LINE ) ARGS
 #define HOP_MUTEX_UNLOCK_EVENT( x ) \
@@ -723,6 +760,7 @@ namespace
 
       return symbol;
    }
+
 }
 
 namespace hop
@@ -995,6 +1033,23 @@ SharedMemory::~SharedMemory()
 // Following is the impelementation specific to client side (not server side)
 #ifndef HOP_SERVER_IMPLEMENTATION
 
+namespace
+{
+   // C-style string hash inspired by Stackoverflow question
+   // based on the Java string hash fct. If its good enough
+   // for java, it should be good enough for me...
+   size_t cStringHash( const char* str, size_t strLen )
+   {
+      size_t result = 0;
+      HOP_CONSTEXPR size_t prime = 31;
+      for ( size_t i = 0; i < strLen; ++i )
+      {
+         result = str[i] + ( result * prime );
+      }
+      return result;
+   }
+}
+
 // ------ cdbg_client.cpp------------
 
 // The shared memory that will be created by the client process to communicate
@@ -1041,11 +1096,35 @@ class Client
       _unlockEvents.push_back( UnlockEvent{ mutexAddr, time } );
    }
 
+   TStrPtr_t addDynamicStringToDb( const char* dynStr )
+   {
+      // Should not have null as dyn string, but just in case...
+      if ( dynStr == NULL ) return 0;
+
+      const size_t strLen = strlen( dynStr );
+
+      TStrPtr_t hash = (TStrPtr_t)cStringHash( dynStr, strLen );
+
+      auto res = _stringPtr.insert( hash );
+      // If the string was inserted (meaning it was not already there),
+      // add it to the database, otherwise return its hash
+      if ( res.second )
+      {
+         const size_t newEntryPos = _stringData.size();
+         _stringData.resize( newEntryPos + sizeof( TStrPtr_t ) + strLen + 1 );
+         TStrPtr_t* strIdPtr = (TStrPtr_t*)&_stringData[newEntryPos];
+         *strIdPtr = hash;
+         strcpy( &_stringData[newEntryPos + sizeof( TStrPtr_t )], dynStr );
+      }
+
+      return hash;
+   }
+
    bool addStringToDb( const char* strId )
    {
       // Early return on NULL. The db should always contains NULL as first
       // entry
-      if( strId == NULL ) return 0;
+      if( strId == NULL ) return false;
 
       auto res = _stringPtr.insert( (TStrPtr_t) strId );
       // If the string was inserted (meaning it was not already there),
@@ -1064,33 +1143,44 @@ class Client
 
    void resetStringData()
    {
-      _stringPtr.clear();
-      _stringData.clear();
-      _sentStringDataSize = 0;
+      if( _stringPtr.size() > 1 )
+      {
+         _stringPtr.clear();
+         _stringData.clear();
+         _sentStringDataSize = 0;
 
-      // Push back first name as empty string
-      _stringPtr.insert( 0 );
-      for( size_t i = 0; i < sizeof( TStrPtr_t ); ++i )
-         _stringData.push_back('\0');
+         // Push back first name as empty string
+         _stringPtr.insert( 0 );
+         for( size_t i = 0; i < sizeof( TStrPtr_t ); ++i )
+            _stringData.push_back('\0');
+      }
+   }
+
+   void resetPendingTraces()
+   {
+      _traces.clear();
+      _lockWaits.clear();
+      _unlockEvents.clear();
+      resetStringData();
    }
 
    bool sendStringData()
    {
-      // If the shared memory reset count is bigger than our local reset count
-      // it means we need to clear our string table. Otherwise it means we
-      // already took care of it.
-      uint32_t curStrDbResetCount = ClientManager::sharedMemory.strDbResetCount();
-      if( _localStrDbResetCount < curStrDbResetCount )
-      {
-         _localStrDbResetCount = curStrDbResetCount;
-         resetStringData();
-      }
-
       // Add all strings to the database
       for( const auto& t : _traces  )
       {
          addStringToDb( (const char*) t.fileNameId );
-         addStringToDb( (const char*) t.fctNameId );
+
+         // String that were added dynamically are already in the
+         // db and are flaged with the first bit being 1
+
+         if( (t.start & 1) == 0 )
+            assert( t.group == 666 );
+         else
+            assert( t.group != 666 );
+
+         if( (t.start & 1) != 0 )
+            addStringToDb( (const char*) t.fctNameId );
       }
 
       const uint32_t stringDataSize = _stringData.size();
@@ -1271,14 +1361,23 @@ class Client
 
    void flushToConsumer()
    {
+      // If no one is there to listen, no need to send anything
       if( !ClientManager::HasListeningConsumer() )
       {
-         _traces.clear();
-         _lockWaits.clear();
-         _unlockEvents.clear();
-         // Also reset the string data that was sent since we might
-         // have lost the connection with the consumer
-         _sentStringDataSize = 0;
+         resetPendingTraces();
+         return;
+      }
+
+      // If the shared memory reset count is bigger than our local reset count
+      // it means we need to clear our string table. Otherwise it means we
+      // already took care of it. Since some traces might depend on strings
+      // that were added dynamiccally (ie before clearing the db), we cannot
+      // consider them.
+      uint32_t curStrDbResetCount = ClientManager::sharedMemory.strDbResetCount();
+      if( _localStrDbResetCount < curStrDbResetCount )
+      {
+         _localStrDbResetCount = curStrDbResetCount;
+         resetPendingTraces();
          return;
       }
 
@@ -1374,6 +1473,16 @@ void ClientManager::StartProfileGlFinish()
 {
    ++tl_traceLevel;
    ClientManager::CallGlFinish();
+}
+
+TStrPtr_t ClientManager::StartProfileDynString( const char* str )
+{
+   ++tl_traceLevel;
+   Client* client = ClientManager::Get();
+
+   if( unlikely( !client ) ) return 0;
+
+   return client->addDynamicStringToDb( str );
 }
 
 void ClientManager::EndProfile(

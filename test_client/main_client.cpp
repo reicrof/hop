@@ -61,6 +61,13 @@ void func1()
    HOP_PROF_FUNC_WITH_GROUP(42);
    //std::lock_guard<std::mutex> g(m1);
    func2();
+   char dynName[ 100 ];
+   for( int i = 0; i < 100; ++i )
+   {
+      snprintf(
+          dynName , sizeof( dynName ), "Test number %d", i );
+      HOP_PROF_DYN_NAME( dynName );
+   }
    //++i;
    //printf( "%lu\n", i );
 }

@@ -14,15 +14,16 @@ namespace
 {
 struct TraceVecSetItem
 {
-   TraceVecSetItem( hop::TLineNb_t l, hop::TStrPtr_t s, size_t index )
-       : strPtr( s ), indexInVec( index ), line( l )
+   TraceVecSetItem( hop::TStrPtr_t fName, hop::TLineNb_t lineNb, hop::TStrPtr_t tName, size_t index )
+       : fileName( fName ), traceName( tName ), indexInVec( index ), line( lineNb )
    {
    }
    friend bool operator==( const TraceVecSetItem& lhs, const TraceVecSetItem& rhs ) noexcept
    {
-      return lhs.strPtr == rhs.strPtr && lhs.line == rhs.line;
+      return lhs.fileName == rhs.fileName && lhs.traceName == rhs.traceName && lhs.line == rhs.line;
    }
-   hop::TStrPtr_t strPtr;
+   hop::TStrPtr_t fileName;
+   hop::TStrPtr_t traceName;
    size_t indexInVec;
    hop::TLineNb_t line;
 };
@@ -35,7 +36,7 @@ namespace std
    {
       size_t operator()( const TraceVecSetItem& t ) const
       {
-         return std::hash<hop::TLineNb_t>()( t.line ) ^ std::hash<hop::TStrPtr_t>()( t.strPtr );
+         return std::hash<hop::TLineNb_t>()( t.line ) ^ std::hash<hop::TStrPtr_t>()( t.traceName ) ^ std::hash<hop::TStrPtr_t>()( t.fileName );
       }
    };
 }
@@ -51,8 +52,11 @@ static std::vector<hop::TraceDetail> mergeTraceDetails( const hop::DisplayableTr
 
    for ( const auto& t : allDetails )
    {
-      const auto insertRes = uniqueTraces.insert(
-          TraceVecSetItem( traces.lineNbs[t.traceIds[0]], traces.fileNameIds[t.traceIds[0]], mergedDetails.size() ) );
+      const auto insertRes = uniqueTraces.insert( TraceVecSetItem(
+          traces.fileNameIds[t.traceIds[0]],
+          traces.lineNbs[t.traceIds[0]],
+          traces.fctNameIds[t.traceIds[0]],
+          mergedDetails.size() ) );
       if ( insertRes.second )
       {
          // New entry
