@@ -11,6 +11,8 @@ namespace hop
       double searchTimeMs;
       int currentLOD;
       long long selectedTrace;
+      size_t stringDbSize;
+      size_t traceSize;
    };
 
    extern Stats g_stats;

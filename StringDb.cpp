@@ -1,4 +1,5 @@
 #include "StringDb.h"
+#include "Stats.h"
 
 #include <cassert>
 #include <cstring>
@@ -60,6 +61,8 @@ void StringDb::addStringData( const char* inData, size_t count )
 
       i += stringLen + 1;
    }
+
+   g_stats.stringDbSize = _strData.size();
 }
 
 void StringDb::addStringData( const std::vector<char>& inData )
