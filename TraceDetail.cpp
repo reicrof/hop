@@ -65,9 +65,32 @@ static std::vector<hop::TraceDetail> mergeTraceDetails( const hop::DisplayableTr
       else
       {
          auto& d = mergedDetails[insertRes.first->indexInVec];
-         d.deltaTimeInNanos += t.deltaTimeInNanos;
+         d.exclusiveTimeInNanos += t.exclusiveTimeInNanos;
+         d.inclusiveTimeInNanos += t.inclusiveTimeInNanos;
          d.traceIds.insert( d.traceIds.end(), t.traceIds.begin(), t.traceIds.end() );
       }
+   }
+
+   // Compute the inclusive time. We want to get the sum of time for the top most
+   // call to a function
+   TDepth_t minDepth = 9999;
+   for( auto& t : mergedDetails )
+   {
+      TimeStamp inclusiveTime = 0;
+      for( auto idx : t.traceIds )
+      {
+         const TDepth_t curDepth = traces.depths[ idx ];
+         if( curDepth < minDepth )
+         {
+            inclusiveTime = 0;
+            inclusiveTime += traces.deltas[idx];
+         }
+         else if( curDepth == minDepth )
+         {
+            inclusiveTime += traces.deltas[idx];
+         }
+      }
+      t.inclusiveTimeInNanos = inclusiveTime;
    }
 
    return mergedDetails;
@@ -102,28 +125,28 @@ gatherTraceDetails( const hop::DisplayableTraces& traces, size_t traceId )
    TDepth_t lastDepth = traces.depths[firstTraceId];
    for ( size_t i = firstTraceId; i <= traceId; ++i )
    {
-      TimeStamp traceDelta = traces.deltas[i];
+      TimeStamp excTime = traces.deltas[i];
       const TDepth_t curDepth = traces.depths[i];
 
       if ( curDepth == lastDepth )
       {
-         accumulatedTimePerDepth[curDepth] += traceDelta;
+         accumulatedTimePerDepth[curDepth] += excTime;
       }
       else if ( curDepth > lastDepth )
       {
          for ( auto i = lastDepth + 1; i < curDepth; ++i ) accumulatedTimePerDepth[i] = 0;
 
-         accumulatedTimePerDepth[curDepth] = traceDelta;
+         accumulatedTimePerDepth[curDepth] = excTime;
       }
       else if ( curDepth < lastDepth )
       {
-         traceDelta -= accumulatedTimePerDepth[lastDepth];
+         excTime -= accumulatedTimePerDepth[lastDepth];
          accumulatedTimePerDepth[curDepth] += traces.deltas[i];
       }
 
       lastDepth = curDepth;
 
-      traceDetails.emplace_back( TraceDetail( i, traceDelta ) );
+      traceDetails.emplace_back( TraceDetail( i, excTime ) );
    }
 
    return traceDetails;
@@ -138,7 +161,8 @@ static void finalizeTraceDetails(
    float totalPct = 0.0f;
    for ( auto& t : details )
    {
-      t.exclusivePct = (double)t.deltaTimeInNanos / (double)totalTime;
+      t.exclusivePct = (double)t.exclusiveTimeInNanos / (double)totalTime;
+      t.inclusivePct = (double)t.inclusiveTimeInNanos / (double)totalTime;
       totalPct += t.exclusivePct;
    }
 
@@ -210,9 +234,13 @@ TraceDetailDrawResult drawTraceDetails(
       {
          const auto& threadInfo = tracesPerThread[details.threadIndex];
 
-         ImGui::Columns( 4, "TraceDetailsTable" );  // 4-ways, with border
+         ImGui::Columns( 6, "TraceDetailsTable" );  // 4-ways, with border
          ImGui::Separator();
          ImGui::Text( "Trace" );
+         ImGui::NextColumn();
+         ImGui::Text( "Incl. %%" );
+         ImGui::NextColumn();
+         ImGui::Text( "Incl Time" );
          ImGui::NextColumn();
          ImGui::Text( "Excl. %%" );
          ImGui::NextColumn();
@@ -253,10 +281,18 @@ TraceDetailDrawResult drawTraceDetails(
                hoveredId = i;
             }
             ImGui::NextColumn();
+            ImGui::Text( "%3.2f", details.details[i].inclusivePct * 100.0f );
+            ImGui::NextColumn();
+            formatNanosDurationToDisplay(
+                details.details[i].inclusiveTimeInNanos,
+                traceDuration,
+                sizeof( traceDuration ) );
+            ImGui::Text( "%s", traceDuration );
+            ImGui::NextColumn();
             ImGui::Text( "%3.2f", details.details[i].exclusivePct * 100.0f );
             ImGui::NextColumn();
             formatNanosDurationToDisplay(
-                details.details[i].deltaTimeInNanos,
+                details.details[i].exclusiveTimeInNanos,
                 traceDuration,
                 sizeof( traceDuration ) );
             ImGui::Text( "%s", traceDuration );
