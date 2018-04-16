@@ -1,6 +1,8 @@
 #ifndef STATS_H_
 #define STATS_H_
 
+#include <cstddef>
+
 namespace hop
 {
    struct Stats
@@ -12,6 +14,7 @@ namespace hop
       int currentLOD;
       long long selectedTrace;
       size_t stringDbSize;
+      size_t traceCount;
       size_t traceSize;
    };
 

@@ -219,7 +219,10 @@ using Clock = std::chrono::steady_clock;
 using Precision = std::chrono::nanoseconds;
 inline decltype( std::chrono::duration_cast<Precision>( Clock::now().time_since_epoch() ).count() ) getTimeStamp()
 {
-   return std::chrono::duration_cast<Precision>( Clock::now().time_since_epoch() ).count();
+   // We return the timestamp with the first bit set to 0. We do not require this last nanosecond
+   // of precision. It will instead be used to flag if a trace uses dynamic strings or not in its
+   // start time. See hop::StartProfileDynString
+   return std::chrono::duration_cast<Precision>( Clock::now().time_since_epoch() ).count() & ~1;
 }
 using TimeStamp = decltype( getTimeStamp() );
 using TimeDuration = int64_t;
@@ -405,7 +408,7 @@ class ProfGuard
 {
   public:
    ProfGuard( const char* fileName, TLineNb_t lineNb, const char* fctName, TGroup_t groupId ) HOP_NOEXCEPT
-       : _start( getTimeStamp() | 1 ),
+       : _start( getTimeStamp() ),
          _fileName( fileName ),
          _fctName( fctName ),
          _lineNb( lineNb ),
@@ -429,7 +432,7 @@ class ProfGuardGLFinish
 {
   public:
    ProfGuardGLFinish( const char* fileName, TLineNb_t lineNb, const char* fctName, TGroup_t groupId ) HOP_NOEXCEPT
-       : _start( getTimeStamp() | 1 ),
+       : _start( getTimeStamp() ),
          _fileName( fileName ),
          _fctName( fctName ),
          _lineNb( lineNb ),
@@ -453,7 +456,7 @@ class LockWaitGuard
 {
   public:
    LockWaitGuard( void* mutAddr )
-       : start( getTimeStamp() | 1 ),
+       : start( getTimeStamp() ),
          mutexAddr( mutAddr )
    {
    }
@@ -470,10 +473,10 @@ class ProfGuardDynamicString
 {
   public:
    ProfGuardDynamicString( const char* fileName, TLineNb_t lineNb, const char* fctName, TGroup_t groupId ) HOP_NOEXCEPT
-       : _start( getTimeStamp() & ~1 ),
+       : _start( getTimeStamp() | 1 ), // Set the first bit to 1 to flag the use of dynamic strings
          _fileName( fileName ),
          _lineNb( lineNb ),
-         _group( 666 )
+         _group( groupId )
    {
       _fctName = ClientManager::StartProfileDynString( fctName );
    }
@@ -1172,14 +1175,10 @@ class Client
          addStringToDb( (const char*) t.fileNameId );
 
          // String that were added dynamically are already in the
-         // db and are flaged with the first bit being 1
-
+         // database and are flaged with the first bit of their start
+         // time being 1. Therefore we only need to add the
+         // non-dynamic strings. (first bit of start time being 0)
          if( (t.start & 1) == 0 )
-            assert( t.group == 666 );
-         else
-            assert( t.group != 666 );
-
-         if( (t.start & 1) != 0 )
             addStringToDb( (const char*) t.fctNameId );
       }
 
