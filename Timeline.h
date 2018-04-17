@@ -23,9 +23,9 @@ class Timeline
       ANIMATION_TYPE_FAST
    };
 
-   static constexpr float TRACE_HEIGHT = 20.0f;
-   static constexpr float TRACE_VERTICAL_PADDING = 2.0f;
-   static constexpr float PADDED_TRACE_SIZE = TRACE_HEIGHT + TRACE_VERTICAL_PADDING;
+   static float TRACE_HEIGHT;
+   static float TRACE_VERTICAL_PADDING;
+   static float PADDED_TRACE_SIZE;
 
    void update( float deltaTimeMs ) noexcept;
    void draw(

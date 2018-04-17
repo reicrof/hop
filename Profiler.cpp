@@ -8,6 +8,7 @@
 #include "DisplayableTraces.h"
 #include "ModalWindow.h"
 #include "miniz.h"
+#include "Options.h"
 #include <SDL_keycode.h>
 
 // Todo : I dont like this dependency
@@ -559,6 +560,7 @@ void hop::Profiler::draw()
 
    handleHotkey();
 
+   drawOptionsWindow( g_options );
 
    if( drawPlayStopButton( _recording ) )
    {
@@ -627,6 +629,10 @@ void hop::Profiler::drawMenuBar()
          if( ImGui::MenuItem( menuHelp, NULL ) )
          {
             menuAction = menuHelp;
+         }
+         if( ImGui::MenuItem( "Options", NULL ) )
+         {
+            g_options.optionWindowOpened = true;
          }
          ImGui::Separator();
          if( ImGui::Checkbox("Use glFinish()", &useGlFinish) )

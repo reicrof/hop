@@ -6,6 +6,7 @@
 #include "Stats.h"
 #include "StringDb.h"
 #include "TraceDetail.h"
+#include "Options.h"
 
 #include "imgui/imgui.h"
 
@@ -19,6 +20,8 @@
 static constexpr hop::TimeDuration MIN_NANOS_TO_DISPLAY = 500;
 static constexpr hop::TimeDuration MAX_NANOS_TO_DISPLAY = 900000000000;
 static constexpr float MIN_TRACE_LENGTH_PXL = 0.1f;
+static constexpr float MAX_TRACE_HEIGHT = 50.0f;
+static constexpr float MIN_TRACE_HEIGHT = 5.0f;
 
 static void drawHoveringTimelineLine(float posInScreenX, float timelineStartPosY, const char* text )
 {
@@ -77,6 +80,10 @@ namespace
 namespace hop
 {
 
+float Timeline::TRACE_HEIGHT = 20.0f;
+float Timeline::TRACE_VERTICAL_PADDING = 2.0f;
+float Timeline::PADDED_TRACE_SIZE = TRACE_HEIGHT + TRACE_VERTICAL_PADDING;
+
 void Timeline::update( float deltaTimeMs ) noexcept
 {
    switch ( _animationState.type )
@@ -132,9 +139,14 @@ void Timeline::update( float deltaTimeMs ) noexcept
       }
    }
 
+   // Update the highlight factor
    static float x = 0.0f;
    x += 0.007f * deltaTimeMs;
    _animationState.highlightPercent = (std::sin( x ) + 1.3f) / 2.0f;
+
+   // Update according to options
+   TRACE_HEIGHT = hop::clamp( g_options.traceHeight, MIN_TRACE_HEIGHT, MAX_TRACE_HEIGHT );
+   PADDED_TRACE_SIZE = TRACE_HEIGHT + TRACE_VERTICAL_PADDING;
 }
 
 void Timeline::draw(
