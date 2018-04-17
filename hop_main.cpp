@@ -4,6 +4,7 @@
 #include "Stats.h"
 #include "imgui/imgui.h"
 #include "argtable3.h"
+#include "Options.h"
 #include <SDL.h>
 #undef main
 
@@ -285,8 +286,10 @@ int main( int argc, char* argv[] )
       return -1;
    }
 
+   hop::loadOptions();
+
    SDL_Window* window = SDL_CreateWindow(
-       "Hop", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, 1600, 1024, SDL_WINDOW_OPENGL | SDL_WINDOW_RESIZABLE );
+       "Hop", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, 1600, 1024, SDL_WINDOW_OPENGL | SDL_WINDOW_RESIZABLE | SDL_WINDOW_MAXIMIZED );
 
    if ( window == NULL )
    {
@@ -363,6 +366,8 @@ int main( int argc, char* argv[] )
       const auto frameEnd = std::chrono::system_clock::now();
       hop::g_stats.frameTimeMs = std::chrono::duration< double, std::milli>( ( frameEnd - frameStart ) ).count();
    }
+
+   hop::saveOptions();
 
    // We have launched a child process. Let's close it
    if( executablePath )
