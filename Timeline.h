@@ -41,6 +41,7 @@ class Timeline
    TimeStamp absoluteTimelineEnd();
    TimeDuration timelineRange() const noexcept;
    float verticalPosPxl() const noexcept;
+   float maxVerticalPosPxl() const noexcept;
 
    const TraceDetails& getTraceDetails() const noexcept;
    void clearTraceDetails();
