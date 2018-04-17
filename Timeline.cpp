@@ -21,7 +21,7 @@ static constexpr hop::TimeDuration MIN_NANOS_TO_DISPLAY = 500;
 static constexpr hop::TimeDuration MAX_NANOS_TO_DISPLAY = 900000000000;
 static constexpr float MIN_TRACE_LENGTH_PXL = 0.1f;
 static constexpr float MAX_TRACE_HEIGHT = 50.0f;
-static constexpr float MIN_TRACE_HEIGHT = 5.0f;
+static constexpr float MIN_TRACE_HEIGHT = 15.0f;
 
 static void drawHoveringTimelineLine(float posInScreenX, float timelineStartPosY, const char* text )
 {
@@ -161,7 +161,7 @@ void Timeline::draw(
       "TimelineCanvas",
       ImVec2(0, 0),
       false,
-      ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
+      ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse | ImGuiWindowFlags_NoMove );
 
    // Set the scroll and get it back from ImGui to have the clamped value
    ImGui::SetScrollY(_verticalPosPxl);
@@ -172,14 +172,14 @@ void Timeline::draw(
       const bool threadHidden = tracesPerThread[i]._hidden;
       snprintf(
           threadName + sizeof( "Thread" ), sizeof( threadName ), "%lu", i );
-      const auto traceColor = ImColor::HSV( i / 7.0f, 0.6f, 0.6f );
-      auto threadHeaderColor = ImColor(
-          traceColor.Value.x - 0.2f, traceColor.Value.y - 0.2f, traceColor.Value.z - 0.2f );
+
+      uint32_t traceColor = getColorForThread( g_options, i );
       if(threadHidden)
-         threadHeaderColor = ImColor(0.4f, 0.4f, 0.4f);
-      ImGui::PushStyleColor( ImGuiCol_Button, threadHeaderColor.Value );
-      ImGui::PushStyleColor( ImGuiCol_ButtonHovered, threadHeaderColor.Value );
-      ImGui::PushStyleColor( ImGuiCol_ButtonActive, threadHeaderColor.Value );
+         traceColor = 0xFF505050;
+
+      ImGui::PushStyleColor( ImGuiCol_Button, traceColor );
+      ImGui::PushStyleColor( ImGuiCol_ButtonHovered, traceColor );
+      ImGui::PushStyleColor( ImGuiCol_ButtonActive, traceColor );
       if ( ImGui::Button( threadName ) )
       {
          tracesPerThread[i]._hidden = !threadHidden;
@@ -683,7 +683,7 @@ void Timeline::drawTraces(
     const float posX,
     const float posY,
     const StringDb& strDb,
-    const ImColor& color )
+    uint32_t color )
 {
    if ( data._traces.ends.empty() ) return;
 
@@ -824,9 +824,9 @@ void Timeline::drawTraces(
    const bool rightMouseClicked = ImGui::IsMouseReleased( 1 );
    const bool leftMouseDblClicked = ImGui::IsMouseDoubleClicked( 0 );
 
-   ImGui::PushStyleColor( ImGuiCol_Button, ImVec4( color.Value.x, color.Value.y, color.Value.z, 1.0f ) );
-   ImGui::PushStyleColor( ImGuiCol_ButtonHovered, ImVec4(color.Value.x + 0.1f, color.Value.y + 0.1f, color.Value.z + 0.1f, 1.0f));
-   ImGui::PushStyleColor( ImGuiCol_ButtonActive, ImVec4(color.Value.x + 0.2f, color.Value.y + 0.2f, color.Value.z + 0.2f, 1.0f));
+   ImGui::PushStyleColor( ImGuiCol_Button, color );
+   ImGui::PushStyleColor( ImGuiCol_ButtonHovered, color );
+   ImGui::PushStyleColor( ImGuiCol_ButtonActive, color );
 
    // Draw the loded traces
    char curName[512] = "<Multiple Elements> ~";
@@ -863,9 +863,9 @@ void Timeline::drawTraces(
 
    ImGui::PopStyleColor( 3 );
 
-   ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(color.Value.x, color.Value.y, color.Value.z, 1.0f));
-   ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(color.Value.x + 0.1f, color.Value.y + 0.1f, color.Value.z + 0.1f, 1.0f));
-   ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(color.Value.x + 0.2f, color.Value.y + 0.2f, color.Value.z + 0.2f, 1.0f));
+   ImGui::PushStyleColor(ImGuiCol_Button, color );
+   ImGui::PushStyleColor(ImGuiCol_ButtonHovered, color );
+   ImGui::PushStyleColor(ImGuiCol_ButtonActive, color );
    char formattedTime[64] = {};
    // Draw the non-loded traces
    for ( const auto& t : tracesToDraw )

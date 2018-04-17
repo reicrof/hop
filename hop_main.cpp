@@ -361,7 +361,7 @@ int main( int argc, char* argv[] )
       glClearColor( 1.0f, 1.0f, 1.0f, 1.0f );
       glClear( GL_COLOR_BUFFER_BIT );
 
-      hop::draw();
+      hop::draw( w, h );
 
       const auto drawEnd = std::chrono::system_clock::now();
       hop::g_stats.drawingTimeMs = std::chrono::duration< double, std::milli>( ( drawEnd - drawStart ) ).count();

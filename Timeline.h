@@ -101,7 +101,7 @@ class Timeline
    };
 
    void drawTimeline( const float posX, const float posY );
-   void drawTraces( const ThreadInfo& traces, uint32_t threadIndex, const float posX, const float posY, const StringDb& strDb, const ImColor& color );
+   void drawTraces( const ThreadInfo& traces, uint32_t threadIndex, const float posX, const float posY, const StringDb& strDb, uint32_t color );
    void drawLockWaits(const std::vector<ThreadInfo>& infos, uint32_t threadIndex, const float posX, const float posY );
    void handleMouseDrag( float mousePosX, float mousePosY );
    void handleMouseWheel( float mousePosX, float mousePosY );

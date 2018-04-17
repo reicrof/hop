@@ -22,7 +22,7 @@ struct Profiler
    Profiler( const char* name );
    ~Profiler();
    void update( float deltaTimeMs ) noexcept;
-   void draw();
+   void draw( uint32_t windowWidth, uint32_t windowHeight );
    void fetchClientData();
    void addStringData( const std::vector< char >& stringData );
    void addTraces( const DisplayableTraces& traces, uint32_t threadIndex );
@@ -58,7 +58,7 @@ void addNewProfiler( Profiler* profiler );
 // Updates the imgui data. Should be called each frame
 void onNewFrame( int width, int height, int mouseX, int mouseY, bool lmbPressed, bool rmbPressed, float mouseWheel );
 // Draw the ui
-void draw();
+void draw( uint32_t windowWidth, uint32_t windowHeight );
 
 } // namespace hop
 

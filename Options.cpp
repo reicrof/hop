@@ -7,6 +7,14 @@
 
 static const char* startFullScreenStr = "start_full_screen";
 static const char* traceHeights = "trace_height";
+static const char* threadColors = "thread_colors";
+
+static const uint32_t DEFAULT_COLORS[] = {
+    0xffe6194b, 0xff3cb44b, 0xffffe119, 0xff0082c8, 0xfff58231, 0xff911eb4, 0xff46f0f0, 0xfff032e6,
+    0xffd2f53c, 0xfffabebe, 0xff008080, 0xffe6beff, 0xffaa6e28, 0xfffffac8, 0xff800000, 0xffaaffc3,
+    0xff808000, 0xffffd8b1, 0xff000080, 0xff808080, 0xffFFFFFF, 0xff000000};
+
+static constexpr uint32_t DEFAULT_COLORS_SIZE = sizeof(DEFAULT_COLORS) / sizeof( DEFAULT_COLORS[0] );
 
 namespace hop
 {
@@ -20,6 +28,11 @@ bool saveOptions()
    {
       outOptions << startFullScreenStr << " " << (g_options.startFullScreen ? 1 : 0) << '\n';
       outOptions << traceHeights << " " << g_options.traceHeight << '\n';
+      outOptions << threadColors << " ";
+      for( size_t i = 0; i < g_options.threadColors.size(); ++i )
+      {
+         outOptions << i << " " << g_options.threadColors[i];
+      }
       return true;
    }
 
@@ -28,6 +41,9 @@ bool saveOptions()
 
 bool loadOptions()
 {
+   // Even without a config file we load the default thread colors first
+   g_options.threadColors.assign( DEFAULT_COLORS, DEFAULT_COLORS+DEFAULT_COLORS_SIZE );
+
    std::ifstream inOptions( "hop.conf" );
    std::string token;
    if( inOptions.is_open() )
@@ -59,11 +75,16 @@ void drawOptionsWindow( Options& opt )
    if ( ImGui::Begin( "Options", &opt.optionWindowOpened ) )
    {
       ImGui::Checkbox( "Start in Fullscreen", &opt.startFullScreen );
-      ImGui::SliderFloat( "Trace Height", &opt.traceHeight, 5.0f, 50.0f );
+      ImGui::SliderFloat( "Trace Height", &opt.traceHeight, 15.0f, 50.0f );
       ImGui::ColorEdit4( "Color test", (float*)&col );
    }
    ImGui::End();
    ImGui::PopStyleColor();
+}
+
+uint32_t getColorForThread( const Options& opt, uint32_t threadIdx )
+{
+   return opt.threadColors[ threadIdx % opt.threadColors.size() ];
 }
 
 } // namespace hop

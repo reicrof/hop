@@ -228,7 +228,7 @@ void onNewFrame( int width, int height, int mouseX, int mouseY, bool lmbPressed,
    ImGui::NewFrame();
 }
 
-void draw()
+void draw( uint32_t windowWidth, uint32_t windowHeight )
 {
    for( auto p : _profilers )
    {
@@ -237,7 +237,7 @@ void draw()
 
    for ( auto p : _profilers )
    {
-      p->draw();
+      p->draw( windowWidth, windowHeight );
    }
 
    hop::drawStatsWindow( g_stats );
@@ -540,10 +540,10 @@ void hop::Profiler::drawTraceDetailsWindow()
    }
 }
 
-void hop::Profiler::draw()
+void hop::Profiler::draw( uint32_t windowWidth, uint32_t windowHeight )
 {
-   ImGui::SetNextWindowSize(ImVec2(1000,500), ImGuiSetCond_FirstUseEver);
-   ImGui::PushStyleVar( ImGuiStyleVar_WindowMinSize, ImVec2( 300, 300 ) );
+   ImGui::SetNextWindowSize(ImVec2( windowWidth * 0.9, windowHeight * 0.9 ), ImGuiSetCond_FirstUseEver);
+   ImGui::PushStyleVar( ImGuiStyleVar_WindowMinSize, ImVec2( 600, 300 ) );
    if ( !ImGui::Begin( _name.c_str(), nullptr, ImGuiWindowFlags_NoScrollWithMouse | ImGuiWindowFlags_MenuBar | ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoCollapse ) )
    {
       // Early out
