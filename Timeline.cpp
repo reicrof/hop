@@ -177,9 +177,9 @@ void Timeline::draw(
           traceColor.Value.x - 0.2f, traceColor.Value.y - 0.2f, traceColor.Value.z - 0.2f );
       if(threadHidden)
          threadHeaderColor = ImColor(0.4f, 0.4f, 0.4f);
-      ImGui::PushStyleColor( ImGuiCol_Button, threadHeaderColor );
-      ImGui::PushStyleColor( ImGuiCol_ButtonHovered, threadHeaderColor );
-      ImGui::PushStyleColor( ImGuiCol_ButtonActive, threadHeaderColor );
+      ImGui::PushStyleColor( ImGuiCol_Button, threadHeaderColor.Value );
+      ImGui::PushStyleColor( ImGuiCol_ButtonHovered, threadHeaderColor.Value );
+      ImGui::PushStyleColor( ImGuiCol_ButtonActive, threadHeaderColor.Value );
       if ( ImGui::Button( threadName ) )
       {
          tracesPerThread[i]._hidden = !threadHidden;
@@ -232,9 +232,9 @@ void Timeline::draw(
    {
       const auto& windowSize = ImGui::GetWindowSize();
       ImGui::PushClipRect( ImVec2( startDrawPos.x, startDrawPos.y ), ImVec2( startDrawPos.x + windowSize.x, startDrawPos.y + windowSize.y ), false );
-      ImGui::PushStyleColor( ImGuiCol_Button, ImColor( 0.0f, 0.0f, 0.8f ) );
-      ImGui::PushStyleColor( ImGuiCol_ButtonHovered, ImColor( 0.0f, 0.0f, 0.9f ));
-      ImGui::PushStyleColor( ImGuiCol_ButtonActive, ImColor( 0.0f, 0.0f, 1.0f ));
+      ImGui::PushStyleColor( ImGuiCol_Button, ImVec4( 0.0f, 0.0f, 0.8f, 1.0f ) );
+      ImGui::PushStyleColor( ImGuiCol_ButtonHovered, ImVec4( 0.0f, 0.0f, 0.9f, 1.0f ));
+      ImGui::PushStyleColor( ImGuiCol_ButtonActive, ImVec4( 0.0f, 0.0f, 1.0f, 1.0f ));
       for( auto t : _bookmarks.times )
       {
          float posXPxl = nanosToPxl( windowSize.x, _timelineRange, t - _timelineStart );
@@ -824,9 +824,9 @@ void Timeline::drawTraces(
    const bool rightMouseClicked = ImGui::IsMouseReleased( 1 );
    const bool leftMouseDblClicked = ImGui::IsMouseDoubleClicked( 0 );
 
-   ImGui::PushStyleColor( ImGuiCol_Button, ImColor( color.Value.x, color.Value.y, color.Value.z ) );
-   ImGui::PushStyleColor( ImGuiCol_ButtonHovered, ImColor(color.Value.x + 0.1f, color.Value.y + 0.1f, color.Value.z + 0.1f));
-   ImGui::PushStyleColor( ImGuiCol_ButtonActive, ImColor(color.Value.x + 0.2f, color.Value.y + 0.2f, color.Value.z + 0.2f));
+   ImGui::PushStyleColor( ImGuiCol_Button, ImVec4( color.Value.x, color.Value.y, color.Value.z, 1.0f ) );
+   ImGui::PushStyleColor( ImGuiCol_ButtonHovered, ImVec4(color.Value.x + 0.1f, color.Value.y + 0.1f, color.Value.z + 0.1f, 1.0f));
+   ImGui::PushStyleColor( ImGuiCol_ButtonActive, ImVec4(color.Value.x + 0.2f, color.Value.y + 0.2f, color.Value.z + 0.2f, 1.0f));
 
    // Draw the loded traces
    char curName[512] = "<Multiple Elements> ~";
@@ -863,9 +863,9 @@ void Timeline::drawTraces(
 
    ImGui::PopStyleColor( 3 );
 
-   ImGui::PushStyleColor(ImGuiCol_Button, ImColor(color.Value.x, color.Value.y, color.Value.z));
-   ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImColor(color.Value.x + 0.1f, color.Value.y + 0.1f, color.Value.z + 0.1f));
-   ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImColor(color.Value.x + 0.2f, color.Value.y + 0.2f, color.Value.z + 0.2f));
+   ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(color.Value.x, color.Value.y, color.Value.z, 1.0f));
+   ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(color.Value.x + 0.1f, color.Value.y + 0.1f, color.Value.z + 0.1f, 1.0f));
+   ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(color.Value.x + 0.2f, color.Value.y + 0.2f, color.Value.z + 0.2f, 1.0f));
    char formattedTime[64] = {};
    // Draw the non-loded traces
    for ( const auto& t : tracesToDraw )
@@ -908,9 +908,9 @@ void Timeline::drawTraces(
    }
    ImGui::PopStyleColor( 3 );
 
-   ImGui::PushStyleColor( ImGuiCol_Button, ImColor( 1.0f, 1.0f, 1.0f, 0.5f * _animationState.highlightPercent ) );
-   ImGui::PushStyleColor( ImGuiCol_ButtonHovered, ImColor( 1.0f, 1.0f, 1.0f, 0.4f * _animationState.highlightPercent ) );
-   ImGui::PushStyleColor( ImGuiCol_ButtonActive, ImColor( 1.0f, 1.0f, 1.0f, 0.4f * _animationState.highlightPercent ) );
+   ImGui::PushStyleColor( ImGuiCol_Button, ImColor( 1.0f, 1.0f, 1.0f, 0.5f * _animationState.highlightPercent ).Value );
+   ImGui::PushStyleColor( ImGuiCol_ButtonHovered, ImColor( 1.0f, 1.0f, 1.0f, 0.4f * _animationState.highlightPercent ).Value );
+   ImGui::PushStyleColor( ImGuiCol_ButtonActive, ImColor( 1.0f, 1.0f, 1.0f, 0.4f * _animationState.highlightPercent ).Value );
    for( const auto& t : highlightTraceToDraw )
    {
       ImGui::SetCursorScreenPos( t.posPxl );
@@ -1045,9 +1045,9 @@ void Timeline::drawLockWaits(
    while( lastLwToDraw != lockWaits.end() && lastLwToDraw->start < lastTraceAbsoluteTime )
       ++lastLwToDraw;
 
-   ImGui::PushStyleColor(ImGuiCol_Button, ImColor(0.8f, 0.0f, 0.0f));
-   ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImColor(1.0f, 0.3f, 0.3f));
-   ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImColor(1.0f, 0.0f, 0.0f));
+   ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.8f, 0.0f, 0.0f, 1.0f));
+   ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(1.0f, 0.3f, 0.3f, 1.0f));
+   ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(1.0f, 0.0f, 0.0f, 1.0f));
    for ( auto it = firstLwToDraw; it != lastLwToDraw; ++it )
    {
       const int64_t endInNanos = ( it->end - absoluteStart - _timelineStart );

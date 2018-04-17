@@ -438,7 +438,7 @@ static bool drawPlayStopButton( bool& isRecording )
       ImVec2 pts[] = {startDrawPos,
                       ImVec2( startDrawPos.x + width, startDrawPos.y + ( height * 0.5 ) ),
                       ImVec2( startDrawPos.x, startDrawPos.y + width )};
-      DrawList->AddConvexPolyFilled( pts, 3, hovering ? ImColor( 0.0f, 0.9f, 0.0f ) : ImColor( 0.0f, 0.7f, 0.0f ), true );
+      DrawList->AddConvexPolyFilled( pts, 3, hovering ? ImColor( 0.0f, 0.9f, 0.0f ) : ImColor( 0.0f, 0.7f, 0.0f ) );
    }
 
    ImGui::SetCursorScreenPos( ImVec2(startDrawPos.x, startDrawPos.y + height + padding) );

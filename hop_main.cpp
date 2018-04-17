@@ -44,6 +44,8 @@ static void setClipboardText(void*, const char* text)
 
 static void sdlImGuiInit()
 {
+   ImGui::CreateContext();
+
    ImGuiIO& io = ImGui::GetIO();
    io.KeyMap[ImGuiKey_Tab] = SDLK_TAB; // Keyboard mapping. ImGui will use those indices to peek into the io.KeyDown[] array.
    io.KeyMap[ImGuiKey_LeftArrow] = SDL_SCANCODE_LEFT;
@@ -288,8 +290,11 @@ int main( int argc, char* argv[] )
 
    hop::loadOptions();
 
+   uint32_t createWindowFlags = SDL_WINDOW_OPENGL | SDL_WINDOW_RESIZABLE;
+   if( hop::g_options.startFullScreen ) createWindowFlags |= SDL_WINDOW_MAXIMIZED;
+
    SDL_Window* window = SDL_CreateWindow(
-       "Hop", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, 1600, 1024, SDL_WINDOW_OPENGL | SDL_WINDOW_RESIZABLE | SDL_WINDOW_MAXIMIZED );
+       "Hop", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, 1600, 1024, createWindowFlags );
 
    if ( window == NULL )
    {
@@ -374,6 +379,8 @@ int main( int argc, char* argv[] )
    {
       terminateProcess( childProcess );
    }
+
+   ImGui::DestroyContext();
 
    SDL_GL_DeleteContext( mainContext );
    SDL_DestroyWindow( window );

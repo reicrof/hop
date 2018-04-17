@@ -60,7 +60,7 @@ void drawOptionsWindow( Options& opt )
    {
       ImGui::Checkbox( "Start in Fullscreen", &opt.startFullScreen );
       ImGui::SliderFloat( "Trace Height", &opt.traceHeight, 5.0f, 50.0f );
-      ImGui::ColorEdit4( "Color test", col );
+      ImGui::ColorEdit4( "Color test", (float*)&col );
    }
    ImGui::End();
    ImGui::PopStyleColor();
