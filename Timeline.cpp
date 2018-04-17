@@ -541,7 +541,7 @@ float Timeline::verticalPosPxl() const noexcept
    return _verticalPosPxl;
 }
 
-const TraceDetails& Timeline::getTraceDetails() const noexcept
+TraceDetails& Timeline::getTraceDetails() noexcept
 {
    return _traceDetails;
 }

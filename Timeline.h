@@ -42,7 +42,7 @@ class Timeline
    TimeDuration timelineRange() const noexcept;
    float verticalPosPxl() const noexcept;
 
-   const TraceDetails& getTraceDetails() const noexcept;
+   TraceDetails& getTraceDetails() noexcept;
    void clearTraceDetails();
    void setTraceDetailsDisplayed();
 

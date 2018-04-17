@@ -46,7 +46,7 @@ TraceDetails
 createTraceDetails( const DisplayableTraces& traces, uint32_t threadIndex, size_t traceId );
 TraceDetails createGlobalTraceDetails( const DisplayableTraces& traces, uint32_t threadIndex );
 TraceDetailDrawResult drawTraceDetails(
-    const TraceDetails& details,
+    TraceDetails& details,
     const std::vector<ThreadInfo>& tracesPerThread,
     const StringDb& strDb );
 }
