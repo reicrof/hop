@@ -116,4 +116,17 @@ uint32_t getColorForThread( const Options& opt, uint32_t threadIdx )
    return opt.threadColors[ threadIdx % opt.threadColors.size() ];
 }
 
+void setThreadCount( Options& opt, uint32_t threadCount )
+{
+   const uint32_t curThreadCount = opt.threadColors.size();
+   if( threadCount > curThreadCount )
+   {
+      opt.threadColors.resize( threadCount );
+      for( uint32_t i = curThreadCount; i < threadCount; ++i )
+      {
+         opt.threadColors[ i ] = opt.threadColors[ i % DEFAULT_COLORS_SIZE ];
+      }
+   }
+}
+
 } // namespace hop

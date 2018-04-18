@@ -22,6 +22,7 @@ bool saveOptions();
 bool loadOptions();
 void drawOptionsWindow( Options& opt );
 uint32_t getColorForThread( const Options& opt, uint32_t threadIdx );
+void setThreadCount( Options& opt, uint32_t threadCount );
 
 }
 

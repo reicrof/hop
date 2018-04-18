@@ -194,9 +194,14 @@ int main()
    signal(SIGINT, terminateCallback);
    signal(SIGTERM, terminateCallback);
 
-    std::thread t1 ( [](){ while(g_run) { func1(); } } );
-    std::thread t2 ( [](){ while(g_run) { func1(); } } );
-    std::thread t3 ( [](){ while(g_run) { func1(); } } );
+
+    for( int i = 0; i < 10; ++i )
+    {
+       std::thread t1 ( [](){ while(g_run) { func1(); } } );
+       std::thread t2 ( [](){ while(g_run) { func1(); } } );
+       std::thread t3 ( [](){ while(g_run) { func1(); } } );
+       t1.detach(); t2.detach(); t3.detach();
+    }
 
     while(g_run)
     {
@@ -239,9 +244,9 @@ int main()
 	   l1();
 	   l1();
     }
-   t1.join();
-   t2.join();
-   t3.join();
+   // t1.join();
+   // t2.join();
+   // t3.join();
 
     // std::thread t ( [](){ while(g_run) { testMutex(); } } );
     // //std::thread t1 ( [](){ while(g_run) { testMutex(); } } );

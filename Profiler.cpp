@@ -410,6 +410,7 @@ Profiler::~Profiler()
 void hop::Profiler::update( float deltaTimeMs ) noexcept
 {
    _timeline.update( deltaTimeMs );
+   setThreadCount( g_options, _tracesPerThread.size() );
 }
 
 static bool ptInRect( const ImVec2& pt, const ImVec2& a, const ImVec2& b )
