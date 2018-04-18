@@ -26,12 +26,17 @@ bool saveOptions()
    std::ofstream outOptions( "hop.conf" );
    if( outOptions.is_open() )
    {
+      // Full screen option
       outOptions << startFullScreenStr << " " << (g_options.startFullScreen ? 1 : 0) << '\n';
+
+      // Trace height option
       outOptions << traceHeights << " " << g_options.traceHeight << '\n';
-      outOptions << threadColors << " ";
-      for( size_t i = 0; i < g_options.threadColors.size(); ++i )
+
+      // Thread colors options
+      outOptions << threadColors << " " << g_options.threadColors.size() << " " ;
+      for( auto c : g_options.threadColors )
       {
-         outOptions << i << " " << g_options.threadColors[i];
+         outOptions << c << " ";
       }
       return true;
    }
@@ -58,6 +63,16 @@ bool loadOptions()
          {
             inOptions >> g_options.traceHeight;
          }
+         else if( strcmp( token.c_str(), threadColors ) == 0 )
+         {
+            size_t colorCount = 0;
+            inOptions >> colorCount;
+            g_options.threadColors.resize( colorCount, 0 );
+            for( size_t i = 0; i < colorCount; ++i )
+            {
+               inOptions >> g_options.threadColors[i];
+            }
+         }
       }
 
       return true;
@@ -67,16 +82,30 @@ bool loadOptions()
 
 void drawOptionsWindow( Options& opt )
 {
-   if( !opt.optionWindowOpened )
-      return;
+   if ( !opt.optionWindowOpened ) return;
 
-   static float col[4] = {};
-   ImGui::PushStyleColor(ImGuiCol_WindowBg, ImVec4(0.20f, 0.20f, 0.20f, 0.75f));
+   ImGui::PushStyleColor( ImGuiCol_WindowBg, ImVec4( 0.20f, 0.20f, 0.20f, 0.75f ) );
    if ( ImGui::Begin( "Options", &opt.optionWindowOpened ) )
    {
       ImGui::Checkbox( "Start in Fullscreen", &opt.startFullScreen );
       ImGui::SliderFloat( "Trace Height", &opt.traceHeight, 15.0f, 50.0f );
-      ImGui::ColorEdit4( "Color test", (float*)&col );
+
+      ImGui::Spacing();
+
+      if ( ImGui::CollapsingHeader( "Thread Colors" ) )
+      {
+         ImColor color;
+         for( size_t i = 0; i < opt.threadColors.size(); ++i )
+         {
+            color = opt.threadColors[i];
+            ImGui::PushID( i );
+            ImGui::Text( "Thread #%d", (int)i );
+            ImGui::SameLine();
+            ImGui::ColorEdit3( "Color test", (float*)&color.Value );
+            ImGui::PopID();
+            opt.threadColors[i] = color;
+         }
+      }
    }
    ImGui::End();
    ImGui::PopStyleColor();
