@@ -81,6 +81,26 @@ inline void formatNanosTimepointToDisplay(int64_t timepoint, uint64_t totalNanos
    }
 }
 
+inline void formatSizeInBytesToDisplay( size_t sizeInBytes, char* str, size_t strSize )
+{
+   if (sizeInBytes < 1000)
+   {
+      snprintf(str, strSize, "%d B", (int)sizeInBytes);
+   }
+   else if (sizeInBytes < 1000000)
+   {
+      snprintf(str, strSize, "%.3f kB", sizeInBytes / 1000.0f);
+   }
+   else if (sizeInBytes < 1000000000)
+   {
+      snprintf(str, strSize, "%.3f MB",  sizeInBytes / 1000000.0f);
+   }
+   else
+   {
+      snprintf(str, strSize, "%.3f GB",  sizeInBytes / 1000000000.0f);
+   }
+}
+
 }
 
 #endif  // UTILS_H_
