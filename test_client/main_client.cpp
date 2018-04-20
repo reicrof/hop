@@ -203,7 +203,7 @@ int main()
    signal(SIGTERM, terminateCallback);
 
 
-    for( int i = 0; i < 10; ++i )
+    for( int i = 0; i < 1; ++i )
     {
        std::string nb = std::to_string( i );
        std::string tname = "thread #" + nb;

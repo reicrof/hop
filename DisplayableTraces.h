@@ -4,6 +4,7 @@
 #include "Hop.h"
 #include "Lod.h"
 #include <vector>
+#include <deque>
 #include <utility>
 #include <limits>
 
@@ -31,17 +32,17 @@ struct DisplayableTraces
    void reserve( size_t size );
    void clear();
 
-   std::vector< TimeStamp > ends; // in ns
-   std::vector< TimeDuration > deltas; // in ns
+   std::deque< TimeStamp > ends; // in ns
+   std::deque< TimeDuration > deltas; // in ns
 
    //Indexes of the name in the string database
-   std::vector< TStrPtr_t > fileNameIds;
-   std::vector< TStrPtr_t > fctNameIds;
+   std::deque< TStrPtr_t > fileNameIds;
+   std::deque< TStrPtr_t > fctNameIds;
 
-   std::vector< TLineNb_t > lineNbs;
-   std::vector< TGroup_t > groups;
-   std::vector< TDepth_t > depths;
-   std::vector< uint32_t > flags;
+   std::deque< TLineNb_t > lineNbs;
+   std::deque< TGroup_t > groups;
+   std::deque< TDepth_t > depths;
+   std::deque< uint32_t > flags;
 
    LodsArray lods;
    TDepth_t maxDepth{ 0 };

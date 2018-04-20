@@ -5,6 +5,10 @@
 
 #include <algorithm>
 
+static constexpr float MIN_TRACE_LENGTH_PXL = 3.0f;
+static constexpr float MIN_GAP_PXL = 2.0f;
+static hop::TimeDuration LOD_MIN_GAP_PXL[hop::LOD_COUNT] = {0};
+static hop::TimeDuration LOD_MIN_TRACE_LENGTH_PXL[hop::LOD_COUNT] = {0};
 
 static bool canBeLoded(
     int lodLevel,
@@ -12,16 +16,28 @@ static bool canBeLoded(
     hop::TimeDuration lastTraceDelta,
     hop::TimeDuration newTraceDelta )
 {
-   const hop::TimeDuration minTraceSize = hop::LOD_MIN_SIZE_NANOS[lodLevel];
-   const hop::TimeDuration maxTimeBetweenTrace = minTraceSize;
+   const hop::TimeDuration minTraceSize = LOD_MIN_TRACE_LENGTH_PXL[lodLevel];
+   const hop::TimeDuration minTimeBetweenTrace = LOD_MIN_GAP_PXL[lodLevel];
    return lastTraceDelta < minTraceSize && newTraceDelta < minTraceSize &&
-        timeBetweenTrace < maxTimeBetweenTrace;
+        timeBetweenTrace < minTimeBetweenTrace;
 }
 
 namespace hop
 {
+   
+void setupLODResolution( uint32_t sreenResolutionX )
+{
+   for( uint32_t i = 0; i < LOD_COUNT; ++i )
+   {
+      LOD_MIN_TRACE_LENGTH_PXL[i] = pxlToNanos( sreenResolutionX, LOD_NANOS[i], MIN_TRACE_LENGTH_PXL );
+      LOD_MIN_GAP_PXL[i] = pxlToNanos( sreenResolutionX, LOD_NANOS[i], MIN_GAP_PXL );
+   }
+}
+
 LodsArray computeLods( const DisplayableTraces& traces, size_t idOffset )
 {
+   assert( LOD_MIN_GAP_PXL[LOD_COUNT-1] > 0 && "LOD resolution was not setup" );
+
    std::array<std::vector<LodInfo>, LOD_COUNT> resLods;
    for ( auto& lodInfo : resLods ) lodInfo.reserve( 256 );
 

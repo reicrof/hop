@@ -313,6 +313,11 @@ int main( int argc, char* argv[] )
    SDL_GL_SetAttribute(SDL_GL_DOUBLEBUFFER, 1);
    SDL_GL_SetSwapInterval(1);
 
+   // Setup the LOD granularity based on screen resolution
+   SDL_DisplayMode DM;
+   SDL_GetCurrentDisplayMode(0, &DM);
+   hop::setupLODResolution( DM.w );
+
    hop::init();
 
    auto profiler = std::unique_ptr< hop::Profiler >( new hop::Profiler( executableName ) );

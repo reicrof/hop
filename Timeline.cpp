@@ -20,7 +20,7 @@
 
 static constexpr hop::TimeDuration MIN_NANOS_TO_DISPLAY = 500;
 static constexpr hop::TimeDuration MAX_NANOS_TO_DISPLAY = 900000000000;
-static constexpr float MIN_TRACE_LENGTH_PXL = 0.1f;
+static constexpr float MIN_TRACE_LENGTH_PXL = 2.0f;
 static constexpr float MAX_TRACE_HEIGHT = 50.0f;
 static constexpr float MIN_TRACE_HEIGHT = 15.0f;
 static constexpr uint32_t DISABLED_COLOR = 0xFF505050;
@@ -739,11 +739,9 @@ void Timeline::drawTraces(
          const TimeStamp traceEndTime = ( data._traces.ends[i] - absoluteStart );
          const auto traceEndPxl = nanosToPxl<float>(
              windowWidthPxl, _timelineRange, traceEndTime - _timelineStart );
-         const float traceLengthPxl =
-             nanosToPxl<float>( windowWidthPxl, _timelineRange, data._traces.deltas[i] );
-
-         // Skip trace if it is way smaller than treshold
-         if ( traceLengthPxl < MIN_TRACE_LENGTH_PXL ) continue;
+         const float traceLengthPxl = std::max(
+             MIN_TRACE_LENGTH_PXL,
+             nanosToPxl<float>( windowWidthPxl, _timelineRange, data._traces.deltas[i] ) );
 
          const auto curDepth = data._traces.depths[i];
          const auto tracePos = ImVec2(
@@ -796,11 +794,8 @@ void Timeline::drawTraces(
          const TimeStamp traceEndTime = ( t.end - absoluteStart );
          const auto traceEndPxl = nanosToPxl<float>(
              windowWidthPxl, _timelineRange, traceEndTime - _timelineStart );
-         const float traceLengthPxl =
-             nanosToPxl<float>( windowWidthPxl, _timelineRange, t.delta );
-
-         // Skip trace if it is way smaller than treshold
-         if ( traceLengthPxl < MIN_TRACE_LENGTH_PXL ) continue;
+         const float traceLengthPxl = std::max(
+             MIN_TRACE_LENGTH_PXL, nanosToPxl<float>( windowWidthPxl, _timelineRange, t.delta ) );
 
          const auto tracePos = ImVec2(
              posX + traceEndPxl - traceLengthPxl,
@@ -1058,8 +1053,9 @@ void Timeline::drawLockWaits(
 
       const float endPxl =
             nanosToPxl<float>( windowWidthPxl, _timelineRange, endInNanos);
-      const float lengthPxl = nanosToPxl<float>(
-            windowWidthPxl, _timelineRange, it->end - it->start );
+      const float lengthPxl = std::max(
+          MIN_TRACE_LENGTH_PXL,
+          nanosToPxl<float>( windowWidthPxl, _timelineRange, it->end - it->start ) );
 
       // Skip if it is way smaller than treshold
       if ( lengthPxl < MIN_TRACE_LENGTH_PXL ) continue;

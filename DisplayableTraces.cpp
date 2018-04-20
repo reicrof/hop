@@ -26,14 +26,14 @@ void DisplayableTraces::append( const DisplayableTraces& newTraces )
 
 void DisplayableTraces::reserve( size_t size )
 {
-   ends.reserve( size );
-   deltas.reserve( size );
-   flags.reserve( size );
-   fileNameIds.reserve( size );
-   fctNameIds.reserve( size );
-   lineNbs.reserve( size );
-   groups.reserve( size );
-   depths.reserve( size );
+   // ends.reserve( size );
+   // deltas.reserve( size );
+   // flags.reserve( size );
+   // fileNameIds.reserve( size );
+   // fctNameIds.reserve( size );
+   // lineNbs.reserve( size );
+   // groups.reserve( size );
+   // depths.reserve( size );
 }
 
 void DisplayableTraces::clear()
