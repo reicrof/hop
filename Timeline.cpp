@@ -400,14 +400,32 @@ void Timeline::drawTimeline( const float posX, const float posY )
 void Timeline::handleMouseWheel( float mousePosX, float )
 {
    const float windowWidthPxl = ImGui::GetWindowWidth();
-   ImGuiIO& io = ImGui::GetIO();
-   if ( io.MouseWheel > 0 )
+   const float mouseWheel = ImGui::GetIO().MouseWheel;
+
+   // Handle vertical scroll
+   if( ImGui::IsKeyDown( SDL_SCANCODE_LSHIFT ) )
    {
-      zoomOn( pxlToNanos( windowWidthPxl, _timelineRange, mousePosX ) + _timelineStart, ImGui::IsKeyDown(SDL_SCANCODE_LSHIFT) ? 0.5 : 0.9f );
+      const float maxScrollY = maxVerticalPosPxl();
+      constexpr float scrollAmount = 50.0f;
+      if( mouseWheel > 0)
+      {
+         moveVerticalPositionPxl(hop::clamp( verticalPosPxl() - scrollAmount, 0.0f, maxScrollY), ANIMATION_TYPE_NONE);
+      }
+      else if( mouseWheel < 0 )
+      {
+         moveVerticalPositionPxl(hop::clamp( verticalPosPxl() + scrollAmount, 0.0f, maxScrollY), ANIMATION_TYPE_NONE);
+      }
    }
-   else if ( io.MouseWheel < 0 )
+   else // Handle zoom
    {
-      zoomOn( pxlToNanos( windowWidthPxl, _timelineRange, mousePosX ) + _timelineStart, ImGui::IsKeyDown(SDL_SCANCODE_LSHIFT) ? 1.5 : 1.1f );
+      if( mouseWheel > 0)
+      {
+         zoomOn( pxlToNanos( windowWidthPxl, _timelineRange, mousePosX ) + _timelineStart, ImGui::IsKeyDown(SDL_SCANCODE_LCTRL) ? 0.5 : 0.9f );
+      }
+      else if( mouseWheel < 0 )
+      {
+         zoomOn( pxlToNanos( windowWidthPxl, _timelineRange, mousePosX ) + _timelineStart, ImGui::IsKeyDown(SDL_SCANCODE_LCTRL) ? 1.5 : 1.1f );
+      }
    }
 }
 
@@ -424,11 +442,7 @@ void Timeline::handleMouseDrag( float mouseInCanvasX, float mouseInCanvasY )
           pxlToNanos<int64_t>( windowWidthPxl, _timelineRange, delta.x );
       setStartTime( _timelineStart - deltaXInNanos, ANIMATION_TYPE_NONE );
    
-      // Set vertical position
-      // Switch to the traces context to get scroll info
-      ImGui::BeginChild("TimelineCanvas");
-      const float maxScrollY = ImGui::GetScrollMaxY();
-      ImGui::EndChild();
+      const float maxScrollY = maxVerticalPosPxl();
 
       moveVerticalPositionPxl(hop::clamp(_verticalPosPxl - delta.y, 0.0f, maxScrollY), ANIMATION_TYPE_NONE);
 
@@ -539,6 +553,16 @@ TimeStamp Timeline::absoluteTimelineEnd() { return absoluteTimelineStart() + _ti
 float Timeline::verticalPosPxl() const noexcept
 {
    return _verticalPosPxl;
+}
+
+float Timeline::maxVerticalPosPxl() const noexcept
+{
+   // Set vertical position
+   // Switch to the traces context to get scroll info
+   ImGui::BeginChild( "TimelineCanvas" );
+   const float maxScrollY = ImGui::GetScrollMaxY();
+   ImGui::EndChild();
+   return maxScrollY;
 }
 
 const TraceDetails& Timeline::getTraceDetails() const noexcept

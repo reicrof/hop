@@ -85,9 +85,11 @@ gatherTraceDetails( const hop::DisplayableTraces& traces, size_t traceId )
 
    ++firstTraceId;
 
-   //std::unordered_set< TraceVecSetItem > uniqueTraces;
+   // Early return to prevent crash.
+   // TODO : investigate why it sometimes happen...
+   if( firstTraceId > traceId ) return traceDetails;
+
    traceDetails.reserve( traceId - firstTraceId );
-   //uniqueTraces.reserve( traceId - firstTraceId );
 
    const TDepth_t maxDepth = *std::max_element(
        traces.depths.begin() + firstTraceId, traces.depths.begin() + traceId + 1 );
