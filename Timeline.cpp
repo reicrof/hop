@@ -565,7 +565,7 @@ float Timeline::maxVerticalPosPxl() const noexcept
    return maxScrollY;
 }
 
-const TraceDetails& Timeline::getTraceDetails() const noexcept
+TraceDetails& Timeline::getTraceDetails() noexcept
 {
    return _traceDetails;
 }

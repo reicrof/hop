@@ -12,13 +12,19 @@ class StringDb;
 struct DisplayableTraces;
 struct TraceDetail
 {
-   TraceDetail( size_t traceId, TimeStamp delta ) : deltaTimeInNanos( delta ), exclusivePct( 1.0f )
+   TraceDetail( size_t traceId, TimeStamp excTime )
+       : inclusiveTimeInNanos( 0 ),
+         exclusiveTimeInNanos( excTime ),
+         inclusivePct( 1.0f ),
+         exclusivePct( 1.0f )
    {
       traceIds.reserve( 32 );
       traceIds.push_back( traceId );
    }
    std::vector< size_t > traceIds;
-   TimeStamp deltaTimeInNanos;
+   TimeStamp inclusiveTimeInNanos;
+   TimeStamp exclusiveTimeInNanos;
+   float inclusivePct;
    float exclusivePct;
 };
 
@@ -40,7 +46,7 @@ TraceDetails
 createTraceDetails( const DisplayableTraces& traces, uint32_t threadIndex, size_t traceId );
 TraceDetails createGlobalTraceDetails( const DisplayableTraces& traces, uint32_t threadIndex );
 TraceDetailDrawResult drawTraceDetails(
-    const TraceDetails& details,
+    TraceDetails& details,
     const std::vector<ThreadInfo>& tracesPerThread,
     const StringDb& strDb );
 }
