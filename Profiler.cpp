@@ -264,7 +264,7 @@ void addNewProfiler( Profiler* profiler )
 
 Profiler::Profiler( const char* name ) : _name( name )
 {
-   _server.start( name );
+   _server.start( name, g_options.glFinishByDefault );
 }
 
 void Profiler::addTraces( const DisplayableTraces& traces, uint32_t threadIndex )

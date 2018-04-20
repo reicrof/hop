@@ -11,13 +11,13 @@
 
 namespace hop
 {
-bool Server::start( const char* name )
+bool Server::start( const char* name, bool useGlFinishByDefault )
 {
    assert( name != nullptr );
 
    _running = true;
 
-   _thread = std::thread( [this, name]() {
+   _thread = std::thread( [this, name, useGlFinishByDefault]() {
       while ( true )
       {
          // Try to get the shared memory
@@ -32,6 +32,7 @@ bool Server::start( const char* name )
             }
             // Clear any remaining messages from previous execution now
             clearPendingMessages();
+            setUseGlFinish( useGlFinishByDefault );
             printf( "Connection to shared data successful.\n" );
          }
 

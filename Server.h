@@ -15,7 +15,7 @@ namespace hop
 class Server
 {
   public:
-   bool start( const char* name );
+   bool start( const char* name, bool useGlFinishByDefault );
    bool setRecording( bool recording );
    void stop();
 

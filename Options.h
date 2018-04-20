@@ -11,6 +11,7 @@ struct Options
 {
    float traceHeight{20.0f};
    bool startFullScreen{true};
+   bool glFinishByDefault{false};
    std::vector< uint32_t > threadColors;
 
    bool optionWindowOpened{false};
