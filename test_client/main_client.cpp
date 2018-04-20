@@ -61,6 +61,13 @@ void func1()
    HOP_PROF_FUNC_WITH_GROUP(42);
    //std::lock_guard<std::mutex> g(m1);
    func2();
+   char dynName[ 100 ];
+   for( int i = 0; i < 200; ++i )
+   {
+      snprintf(
+          dynName , sizeof( dynName ), "Test number %d", i );
+      HOP_PROF_DYN_NAME( dynName );
+   }
    //++i;
    //printf( "%lu\n", i );
 }
@@ -197,9 +204,11 @@ int main()
 
     for( int i = 0; i < 10; ++i )
     {
-       std::thread t1 ( [](){ while(g_run) { func1(); } } );
-       std::thread t2 ( [](){ while(g_run) { func1(); } } );
-       std::thread t3 ( [](){ while(g_run) { func1(); } } );
+       std::string nb = std::to_string( i );
+       std::string tname = "thread #" + nb;
+       std::thread t1 ( [tname](){ while(g_run) { HOP_PROF_DYN_NAME( tname.c_str() ); func1(); } } );
+       std::thread t2 ( [tname](){ while(g_run) { HOP_PROF_DYN_NAME( tname.c_str() ); func1(); } } );
+       std::thread t3 ( [tname](){ while(g_run) { HOP_PROF_DYN_NAME( tname.c_str() ); func1(); } } );
        t1.detach(); t2.detach(); t3.detach();
     }
 

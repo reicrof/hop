@@ -280,11 +280,10 @@
 	"buffers":
 	[
 		{
-			"file": "Timeline.cpp",
+			"contents": "",
 			"settings":
 			{
-				"buffer_size": 35908,
-				"encoding": "UTF-8",
+				"buffer_size": 0,
 				"line_ending": "Unix"
 			}
 		},
@@ -292,7 +291,7 @@
 			"file": "Hop.h",
 			"settings":
 			{
-				"buffer_size": 48952,
+				"buffer_size": 59182,
 				"line_ending": "Unix"
 			}
 		}
@@ -341,19 +340,19 @@
 	],
 	"file_history":
 	[
+		"/DLlocal/landrych/workspaces/experiments/hop/Hop.h",
+		"/DLlocal/landrych/workspaces/experiments/hop/Timeline.cpp",
+		"/DLlocal/landrych/workspaces/experiments/hop/.git/COMMIT_EDITMSG",
 		"/DLlocal/landrych/workspaces/experiments/hop/imgui/imgui.h",
 		"/DLlocal/landrych/workspaces/experiments/hop/Timeline.h",
 		"/DLlocal/landrych/workspaces/experiments/hop/StringDb.h",
-		"/DLlocal/landrych/workspaces/experiments/hop/Timeline.cpp",
 		"/DLlocal/landrych/workspaces/experiments/hop/Server.cpp",
-		"/DLlocal/landrych/workspaces/experiments/hop/Hop.h",
 		"/DLlocal/landrych/workspaces/experiments/hop/Profiler.cpp",
 		"/DLlocal/landrych/workspaces/experiments/hop/ThreadInfo.h",
 		"/DLlocal/landrych/workspaces/experiments/hop/wrap_library/hop_wrap_linux.cpp",
 		"/DLlocal/landrych/workspaces/experiments/hop/ThreadInfo.cpp",
 		"/DLlocal/landrych/workspaces/experiments/hop/DisplayableTraces.h",
 		"/DLlocal/landrych/workspaces/experiments/hop/main_server.cpp",
-		"/DLlocal/landrych/workspaces/experiments/hop/.git/COMMIT_EDITMSG",
 		"/DLlocal/landrych/workspaces/experiments/hop/StringDb.cpp",
 		"/DLlocal/landrych/workspaces/experiments/hop/Server.h",
 		"/DLlocal/landrych/workspaces/experiments/hop/SDL2/SDL_keycode.h",
@@ -643,197 +642,35 @@
 			[
 				{
 					"buffer": 0,
-					"file": "Timeline.cpp",
 					"semi_transient": false,
 					"settings":
 					{
-						"buffer_size": 35908,
+						"buffer_size": 0,
 						"regions":
 						{
 						},
 						"selection":
 						[
 							[
-								32708,
-								32708
+								0,
+								0
 							]
 						],
 						"settings":
 						{
+							"auto_name": "",
 							"bracket_highlighter.busy": false,
-							"bracket_highlighter.clone": 493,
-							"bracket_highlighter.clone_locations":
-							{
-								"close":
-								{
-									"1":
-									[
-										32773,
-										32774
-									]
-								},
-								"icon":
-								{
-									"1":
-									[
-										"Packages/BracketHighlighter/icons/curly_bracket.png",
-										"region.purplish"
-									]
-								},
-								"open":
-								{
-									"1":
-									[
-										32691,
-										32692
-									]
-								},
-								"unmatched":
-								{
-								}
-							},
-							"bracket_highlighter.clone_regions":
-							[
-								"bh_round",
-								"bh_round_center",
-								"bh_round_open",
-								"bh_round_close",
-								"bh_round_content",
-								"bh_single_quote",
-								"bh_single_quote_center",
-								"bh_single_quote_open",
-								"bh_single_quote_close",
-								"bh_single_quote_content",
-								"bh_curly",
-								"bh_curly_center",
-								"bh_curly_open",
-								"bh_curly_close",
-								"bh_curly_content",
-								"bh_square",
-								"bh_square_center",
-								"bh_square_open",
-								"bh_square_close",
-								"bh_square_content",
-								"bh_angle",
-								"bh_angle_center",
-								"bh_angle_open",
-								"bh_angle_close",
-								"bh_angle_content",
-								"bh_c_define",
-								"bh_c_define_center",
-								"bh_c_define_open",
-								"bh_c_define_close",
-								"bh_c_define_content",
-								"bh_unmatched",
-								"bh_unmatched_center",
-								"bh_unmatched_open",
-								"bh_unmatched_close",
-								"bh_unmatched_content",
-								"bh_double_quote",
-								"bh_double_quote_center",
-								"bh_double_quote_open",
-								"bh_double_quote_close",
-								"bh_double_quote_content",
-								"bh_regex",
-								"bh_regex_center",
-								"bh_regex_open",
-								"bh_regex_close",
-								"bh_regex_content",
-								"bh_tag",
-								"bh_tag_center",
-								"bh_tag_open",
-								"bh_tag_close",
-								"bh_tag_content",
-								"bh_default",
-								"bh_default_center",
-								"bh_default_open",
-								"bh_default_close",
-								"bh_default_content"
-							],
-							"bracket_highlighter.locations":
-							{
-								"close":
-								{
-								},
-								"icon":
-								{
-								},
-								"open":
-								{
-								},
-								"unmatched":
-								{
-								}
-							},
-							"bracket_highlighter.regions":
-							[
-								"bh_round",
-								"bh_round_center",
-								"bh_round_open",
-								"bh_round_close",
-								"bh_round_content",
-								"bh_single_quote",
-								"bh_single_quote_center",
-								"bh_single_quote_open",
-								"bh_single_quote_close",
-								"bh_single_quote_content",
-								"bh_curly",
-								"bh_curly_center",
-								"bh_curly_open",
-								"bh_curly_close",
-								"bh_curly_content",
-								"bh_square",
-								"bh_square_center",
-								"bh_square_open",
-								"bh_square_close",
-								"bh_square_content",
-								"bh_angle",
-								"bh_angle_center",
-								"bh_angle_open",
-								"bh_angle_close",
-								"bh_angle_content",
-								"bh_c_define",
-								"bh_c_define_center",
-								"bh_c_define_open",
-								"bh_c_define_close",
-								"bh_c_define_content",
-								"bh_unmatched",
-								"bh_unmatched_center",
-								"bh_unmatched_open",
-								"bh_unmatched_close",
-								"bh_unmatched_content",
-								"bh_double_quote",
-								"bh_double_quote_center",
-								"bh_double_quote_open",
-								"bh_double_quote_close",
-								"bh_double_quote_content",
-								"bh_regex",
-								"bh_regex_center",
-								"bh_regex_open",
-								"bh_regex_close",
-								"bh_regex_content",
-								"bh_tag",
-								"bh_tag_center",
-								"bh_tag_open",
-								"bh_tag_close",
-								"bh_tag_content",
-								"bh_default",
-								"bh_default_center",
-								"bh_default_open",
-								"bh_default_close",
-								"bh_default_content"
-							],
+							"bracket_highlighter.clone": 1713,
 							"function_name_status_row": 0,
 							"origPos":
 							[
 								0.0,
-								16085.0
+								0.0
 							],
-							"syncScroll": false,
-							"syntax": "Packages/C++/C++.sublime-syntax"
+							"syntax": "Packages/Text/Plain text.tmLanguage"
 						},
 						"translation.x": 0.0,
-						"translation.y": 16085.0,
+						"translation.y": 0.0,
 						"zoom_level": 1.0
 					},
 					"stack_index": 1,
@@ -845,46 +682,34 @@
 					"semi_transient": false,
 					"settings":
 					{
-						"buffer_size": 48952,
+						"buffer_size": 59182,
 						"regions":
 						{
 						},
 						"selection":
 						[
 							[
-								8281,
-								8281
+								0,
+								59182
 							]
 						],
 						"settings":
 						{
+							"SL.1717.region_keys":
+							[
+							],
 							"bracket_highlighter.busy": false,
 							"bracket_highlighter.clone": -1,
 							"bracket_highlighter.locations":
 							{
 								"close":
 								{
-									"1":
-									[
-										8287,
-										8288
-									]
 								},
 								"icon":
 								{
-									"1":
-									[
-										"Packages/BracketHighlighter/icons/round_bracket.png",
-										"region.yellowish"
-									]
 								},
 								"open":
 								{
-									"1":
-									[
-										8280,
-										8281
-									]
 								},
 								"unmatched":
 								{
@@ -892,73 +717,73 @@
 							},
 							"bracket_highlighter.regions":
 							[
-								"bh_round",
-								"bh_round_center",
-								"bh_round_open",
-								"bh_round_close",
-								"bh_round_content",
-								"bh_single_quote",
-								"bh_single_quote_center",
-								"bh_single_quote_open",
-								"bh_single_quote_close",
-								"bh_single_quote_content",
-								"bh_curly",
-								"bh_curly_center",
-								"bh_curly_open",
-								"bh_curly_close",
-								"bh_curly_content",
+								"bh_default",
+								"bh_default_center",
+								"bh_default_open",
+								"bh_default_close",
+								"bh_default_content",
 								"bh_square",
 								"bh_square_center",
 								"bh_square_open",
 								"bh_square_close",
 								"bh_square_content",
-								"bh_angle",
-								"bh_angle_center",
-								"bh_angle_open",
-								"bh_angle_close",
-								"bh_angle_content",
 								"bh_c_define",
 								"bh_c_define_center",
 								"bh_c_define_open",
 								"bh_c_define_close",
 								"bh_c_define_content",
+								"bh_round",
+								"bh_round_center",
+								"bh_round_open",
+								"bh_round_close",
+								"bh_round_content",
 								"bh_unmatched",
 								"bh_unmatched_center",
 								"bh_unmatched_open",
 								"bh_unmatched_close",
 								"bh_unmatched_content",
-								"bh_double_quote",
-								"bh_double_quote_center",
-								"bh_double_quote_open",
-								"bh_double_quote_close",
-								"bh_double_quote_content",
 								"bh_regex",
 								"bh_regex_center",
 								"bh_regex_open",
 								"bh_regex_close",
 								"bh_regex_content",
+								"bh_double_quote",
+								"bh_double_quote_center",
+								"bh_double_quote_open",
+								"bh_double_quote_close",
+								"bh_double_quote_content",
 								"bh_tag",
 								"bh_tag_center",
 								"bh_tag_open",
 								"bh_tag_close",
 								"bh_tag_content",
-								"bh_default",
-								"bh_default_center",
-								"bh_default_open",
-								"bh_default_close",
-								"bh_default_content"
+								"bh_angle",
+								"bh_angle_center",
+								"bh_angle_open",
+								"bh_angle_close",
+								"bh_angle_content",
+								"bh_curly",
+								"bh_curly_center",
+								"bh_curly_open",
+								"bh_curly_close",
+								"bh_curly_content",
+								"bh_single_quote",
+								"bh_single_quote_center",
+								"bh_single_quote_open",
+								"bh_single_quote_close",
+								"bh_single_quote_content"
 							],
-							"function_name_status_row": 278,
+							"function_name_status_row": 0,
 							"origPos":
 							[
 								0.0,
-								12369.0
+								0.0
 							],
 							"syncScroll": false,
 							"syntax": "Packages/C++/C++.sublime-syntax"
 						},
 						"translation.x": 0.0,
-						"translation.y": 12369.0,
+						"translation.y": 0.0,
 						"zoom_level": 1.0
 					},
 					"stack_index": 0,
@@ -1018,6 +843,10 @@
 	{
 		"height": 0.0
 	},
+	"output.unsaved_changes":
+	{
+		"height": 100.0
+	},
 	"pinned_build_system": "",
 	"project": "imdbg.sublime-project",
 	"replace":
@@ -1034,6 +863,10 @@
 			[
 				"hop.h",
 				"Hop.h"
+			],
+			[
+				"timel",
+				"Timeline.cpp"
 			],
 			[
 				"timeline",
@@ -1066,10 +899,6 @@
 			[
 				"imgui",
 				"imgui/imgui.h"
-			],
-			[
-				"timel",
-				"Timeline.cpp"
 			],
 			[
 				"imguicon",
@@ -1557,6 +1386,14 @@
 				"/DLlocal/landrych/workspaces/primaryMain/primaryMain.sublime-project"
 			],
 			[
+				"vkc",
+				"/DLlocal/landrych/workspaces/experiments/vk_cf_render/vk_cf_render.sublime-project"
+			],
+			[
+				"vk",
+				"/DLlocal/landrych/workspaces/experiments/vk_cf_render/vk_cf_render.sublime-project"
+			],
+			[
 				"secon",
 				"/DLlocal/landrych/workspaces/secondaryMain/secondaryMain.sublime-project"
 			],
@@ -1567,10 +1404,6 @@
 			[
 				"primar",
 				"/DLlocal/landrych/workspaces/primaryMain/primaryMain.sublime-project"
-			],
-			[
-				"vk",
-				"/DLlocal/landrych/workspaces/experiments/vk_cf_render/vk_cf_render.sublime-project"
 			],
 			[
 				"se",

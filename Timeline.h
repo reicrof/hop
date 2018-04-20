@@ -43,7 +43,7 @@ class Timeline
    float verticalPosPxl() const noexcept;
    float maxVerticalPosPxl() const noexcept;
 
-   const TraceDetails& getTraceDetails() const noexcept;
+   TraceDetails& getTraceDetails() noexcept;
    void clearTraceDetails();
    void setTraceDetailsDisplayed();
 

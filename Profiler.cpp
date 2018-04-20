@@ -296,6 +296,13 @@ void Profiler::addTraces( const DisplayableTraces& traces, uint32_t threadIndex 
    }
 
    _tracesPerThread[threadIndex].addTraces( traces );
+
+   size_t totalTracesCount = 0;
+   for( const auto& t : _tracesPerThread )
+   {
+      totalTracesCount += t._traces.ends.size();
+   }
+   g_stats.traceCount = totalTracesCount;
 }
 
 void Profiler::fetchClientData()

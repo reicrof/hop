@@ -366,6 +366,11 @@ int main( int argc, char* argv[] )
       const auto drawEnd = std::chrono::system_clock::now();
       hop::g_stats.drawingTimeMs = std::chrono::duration< double, std::milli>( ( drawEnd - drawStart ) ).count();
 
+      if (std::chrono::duration< double, std::milli>((drawEnd - frameStart)).count() < 10.0)
+      {
+         profiler->fetchClientData();
+      }
+
       SDL_GL_SwapWindow( window );
 
       const auto frameEnd = std::chrono::system_clock::now();
