@@ -190,7 +190,7 @@ void Timeline::draw(
       }
       else if ( ImGui::IsMouseReleased( 1 ) && ImGui::IsItemHovered() )
       {
-         displayModalWindow( "Computing total trace size...", false );
+         displayModalWindow( "Computing total trace size...", MODAL_TYPE_NO_CLOSE );
          std::thread t( [this, i, dispTrace = tracesPerThread[i]._traces.copy() ]() {
             _traceDetails = createGlobalTraceDetails( dispTrace, i );
             closeModalWindow();

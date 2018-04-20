@@ -771,14 +771,6 @@ void hop::Profiler::handleHotkey()
    {
       _timeline.nextBookmark();
    }
-   else if( ImGui::IsKeyPressed( SDL_SCANCODE_UP ) )
-   {
-      printf("Up arrow\n");
-   }
-   else if( ImGui::IsKeyPressed( SDL_SCANCODE_DOWN ) )
-   {
-      printf("Down arrow\n");
-   }
 }
 
 bool hop::Profiler::setRecording(bool recording)
@@ -796,7 +788,7 @@ bool hop::Profiler::setRecording(bool recording)
 
 bool hop::Profiler::saveToFile( const char* path )
 {
-   displayModalWindow( "Saving...", false );
+   displayModalWindow( "Saving...", MODAL_TYPE_NO_CLOSE );
    std::thread t( [this, path]() {
       // Compute the size of the serialized data
       const size_t dbSerializedSize = serializedSize( _strDb );
@@ -831,7 +823,7 @@ bool hop::Profiler::saveToFile( const char* path )
       if ( compressionStatus != Z_OK )
       {
          closeModalWindow();
-         displayModalWindow( "Compression failed. File not saved!", true );
+         displayModalWindow( "Compression failed. File not saved!", MODAL_TYPE_CLOSE );
          return false;
       }
 
@@ -860,7 +852,7 @@ bool hop::Profiler::openFile( const char* path )
    {
       clear();
 
-      displayModalWindow( "Loading...", false );
+      displayModalWindow( "Loading...", MODAL_TYPE_NO_CLOSE );
       std::thread t( [this, path]() {
          std::ifstream input( path, std::ifstream::binary );
          std::vector<char> data(
@@ -871,7 +863,7 @@ bool hop::Profiler::openFile( const char* path )
          if( header->magicNumber != MAGIC_NUMBER )
          {
             closeModalWindow();
-            displayModalWindow( "Not a valid hop file.", true );
+            displayModalWindow( "Not a valid hop file.", MODAL_TYPE_CLOSE );
             return false;
          }
 
@@ -887,7 +879,7 @@ bool hop::Profiler::openFile( const char* path )
          if ( uncompressStatus != Z_OK )
          {
             closeModalWindow();
-            displayModalWindow( "Error uncompressing file. Nothing will be loaded", true );
+            displayModalWindow( "Error uncompressing file. Nothing will be loaded", MODAL_TYPE_CLOSE );
             return false;
          }
 
@@ -914,7 +906,7 @@ bool hop::Profiler::openFile( const char* path )
 
       return true;
    }
-   displayModalWindow( "File not found", true );
+   displayModalWindow( "File not found", MODAL_TYPE_CLOSE );
    return false;
 }
 

@@ -5,6 +5,7 @@
 #include "imgui/imgui.h"
 #include "argtable3.h"
 #include "Options.h"
+#include "ModalWindow.h"
 #include <SDL.h>
 #undef main
 
@@ -118,7 +119,8 @@ static void handleInput()
          {
             if ( event.key.keysym.sym == SDLK_ESCAPE )
             {
-               g_run = false;
+               if( !hop::modalWindowShowing() )
+                  hop::displayModalWindow( "Exit ?", hop::MODAL_TYPE_YES_NO, [&](){ ::g_run = false; } );
                break;
             }
             int key = event.key.keysym.sym & ~SDLK_SCANCODE_MASK;
