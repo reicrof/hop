@@ -30,6 +30,8 @@ bool Server::start( const char* name )
                std::this_thread::sleep_for( std::chrono::milliseconds( 500 ) );
                continue;
             }
+            // Clear any remaining messages from previous execution now
+            clearPendingMessages();
             printf( "Connection to shared data successful.\n" );
          }
 
@@ -95,14 +97,6 @@ size_t Server::handleNewMessage( uint8_t* data, size_t maxSize )
              memcpy( stringData.data(), bufPtr, stringData.size() );
              _stringDb.addStringData( stringData );
              bufPtr += stringData.size();
-          }
-          // If our string table is emtpy and we did not received any strings,
-          // it means these messages are pending messages from previous execution.
-          // Ignore them until we receive string data. This can happen after an
-          // unclean exit.
-          else if ( _stringDb.empty() )
-          {
-             return maxSize;
           }
           assert( ( size_t )( bufPtr - data ) <= maxSize );
 
@@ -196,6 +190,15 @@ size_t Server::handleNewMessage( uint8_t* data, size_t maxSize )
       default:
          assert( false );
          return (size_t)(bufPtr - data);
+   }
+}
+
+void Server::clearPendingMessages()
+{
+   size_t offset = 0;
+   while ( size_t bytesToRead = ringbuf_consume( _sharedMem.ringbuffer(), &offset ) )
+   {
+      ringbuf_release( _sharedMem.ringbuffer(), bytesToRead );
    }
 }
 

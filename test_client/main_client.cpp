@@ -1,6 +1,7 @@
 #include <cstring>
 #include <chrono>
 #include <thread>
+#include <string>
 
 #include <stdio.h>
 #include <stdlib.h>

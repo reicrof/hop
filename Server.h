@@ -45,6 +45,8 @@ class Server
    // Returns the number of bytes processed
    size_t handleNewMessage( uint8_t* data, size_t maxSize );
 
+   void clearPendingMessages();
+
    std::thread _thread;
    std::atomic< bool > _running{false};
    SharedMemory _sharedMem;
