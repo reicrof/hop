@@ -94,6 +94,7 @@ size_t serialize( const ThreadInfo& ti, char* data )
    // assert( i == serialSize );
 
    // return i;
+return 0;
 }
 
 size_t deserialize( const char* data, ThreadInfo& ti )
@@ -137,6 +138,7 @@ size_t deserialize( const char* data, ThreadInfo& ti )
    // i += sizeof( hop::TDepth_t ) * tracesCount;
 
    // return i;
+return 0;
 }
 
 }

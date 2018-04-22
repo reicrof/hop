@@ -1,6 +1,7 @@
 #include "Options.h"
 
 #include <cstring>
+#include <string>
 #include <fstream>
 
 #include "imgui/imgui.h"

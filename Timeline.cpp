@@ -170,6 +170,8 @@ void Timeline::draw(
    // Set the scroll and get it back from ImGui to have the clamped value
    ImGui::SetScrollY(_verticalPosPxl);
 
+   const float windowHeight = ImGui::GetWindowHeight();
+
    char threadName[128] = "Thread ";
    for ( size_t i = 0; i < tracesPerThread.size(); ++i )
    {
@@ -206,7 +208,13 @@ void Timeline::draw(
       if (!threadHidden)
       {
          ImVec2 curDrawPos = ImGui::GetCursorScreenPos();
-         drawTraces( tracesPerThread[i], i, curDrawPos.x, curDrawPos.y, strDb, traceColor );
+   
+         const bool tracesVisible = 
+            ImGui::GetCursorStartPos().y < _verticalPosPxl + windowHeight &&
+            curDrawPos.y + tracesPerThread[i]._traces.maxDepth * PADDED_TRACE_SIZE > 0;
+
+         if( tracesVisible )
+            drawTraces( tracesPerThread[i], i, curDrawPos.x, curDrawPos.y, strDb, traceColor );
 
          curDrawPos.y += tracesPerThread[i]._traces.maxDepth * PADDED_TRACE_SIZE + 70;
          ImGui::SetCursorScreenPos(curDrawPos);
