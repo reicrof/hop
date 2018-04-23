@@ -800,7 +800,7 @@ bool hop::Profiler::saveToFile( const char* path )
       }
 
       const size_t totalSerializedSize =
-          std::accumulate( threadInfosSerializedSize.begin(), threadInfosSerializedSize.end(), 0 ) +
+          std::accumulate( threadInfosSerializedSize.begin(), threadInfosSerializedSize.end(), size_t{0} ) +
           timelineSerializedSize +
           dbSerializedSize;
 

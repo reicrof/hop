@@ -113,7 +113,7 @@ namespace hop
       std::lock_guard<std::mutex> g( modalWindowLock );
 
       // Call to display modal window while it is already open
-      assert( modalWindowOpen == false );
+      assert( modalWindowOpen == false && shouldCloseModalWindow != true );
 
       modalWindowOpen = true;
       modalType = type;
