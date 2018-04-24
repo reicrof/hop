@@ -584,7 +584,7 @@ float Timeline::maxVerticalPosPxl() const noexcept
    // Set vertical position
    // Switch to the traces context to get scroll info
    ImGui::BeginChild( "TimelineCanvas" );
-   const float maxScrollY = ImGui::GetScrollMaxY();
+   const float maxScrollY = ImGui::GetScrollMaxY() - ImGui::GetWindowHeight();
    ImGui::EndChild();
    return maxScrollY;
 }
