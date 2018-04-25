@@ -28,6 +28,7 @@ namespace hop
 
       if ( isOpen )
       {
+         const bool enterPressed = ImGui::IsKeyPressed( ImGuiKey_Enter );
          switch ( type )
          {
             case MODAL_TYPE_NO_CLOSE:
@@ -56,7 +57,7 @@ namespace hop
                   if ( ImGui::BeginPopupModal(
                            modalWindowMessage, NULL, ImGuiWindowFlags_AlwaysAutoResize ) )
                   {
-                     if ( ImGui::Button( "Close", ImVec2( 120, 0 ) ) )
+                     if ( ImGui::Button( "Close", ImVec2( 120, 0 ) ) || enterPressed )
                      {
                         ImGui::CloseCurrentPopup();
                         std::lock_guard<std::mutex> g( modalWindowLock );
@@ -77,7 +78,7 @@ namespace hop
                   {
                      bool closing = false;
                      bool execCallback = false;
-                     if ( ImGui::Button( "Yes", ImVec2( 120, 0 ) ) )
+                     if ( ImGui::Button( "Yes", ImVec2( 120, 0 ) ) || enterPressed )
                      {
                         closing = true;
                         execCallback = true;
