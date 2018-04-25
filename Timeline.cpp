@@ -29,6 +29,8 @@ static constexpr uint32_t ACTIVE_COLOR_DELTA = 0x00333333;
 
 static void drawHoveringTimelineLine(float posInScreenX, float timelineStartPosY, const char* text )
 {
+   HOP_PROF_FUNC();
+
    constexpr float LINE_PADDING = 5.0f;
    constexpr float TEXT_PADDING = 10.0f;
    
@@ -45,6 +47,8 @@ static void drawHoveringTimelineLine(float posInScreenX, float timelineStartPosY
 
 static void drawBookmarks( float posXPxl, float posYPxl )
 {
+   HOP_PROF_FUNC();
+
    constexpr float BOOKMARK_WIDTH = 8.0f;
    constexpr float BOOKMARK_HEIGHT = 20.0f;
    constexpr float LINE_PADDING = 5.0f;
@@ -90,6 +94,8 @@ float Timeline::PADDED_TRACE_SIZE = TRACE_HEIGHT + TRACE_VERTICAL_PADDING;
 
 void Timeline::update( float deltaTimeMs ) noexcept
 {
+   HOP_PROF_FUNC();
+
    switch ( _animationState.type )
    {
       case ANIMATION_TYPE_NONE:
@@ -157,6 +163,8 @@ void Timeline::draw(
     std::vector<ThreadInfo>& tracesPerThread,
     const StringDb& strDb )
 {
+   HOP_PROF_FUNC();
+
    ImGui::BeginChild("TimelineAndCanvas");
    const auto startDrawPos = ImGui::GetCursorScreenPos();
    drawTimeline(startDrawPos.x, startDrawPos.y + 5);
@@ -178,6 +186,8 @@ void Timeline::draw(
       const bool threadHidden = tracesPerThread[i]._hidden;
       snprintf(
           threadName + sizeof( "Thread" ), sizeof( threadName ), "%lu", i );
+
+      HOP_PROF_DYN_NAME( threadName );
 
       uint32_t traceColor = getColorForThread( g_options, i );
       if(threadHidden)
@@ -275,6 +285,8 @@ void Timeline::draw(
 
 void Timeline::drawTimeline( const float posX, const float posY )
 {
+   HOP_PROF_FUNC();
+
    constexpr float TIMELINE_TOTAL_HEIGHT = 50.0f;
    constexpr uint64_t minStepSize = 10;
    constexpr uint64_t minStepCount = 20;
@@ -1061,9 +1073,8 @@ void Timeline::drawLockWaits(
 
       const float endPxl =
             nanosToPxl<float>( windowWidthPxl, _timelineRange, endInNanos);
-      const float lengthPxl = std::max(
-          MIN_TRACE_LENGTH_PXL,
-          nanosToPxl<float>( windowWidthPxl, _timelineRange, it->end - it->start ) );
+      const float lengthPxl =
+         nanosToPxl<float>( windowWidthPxl, _timelineRange, it->end - it->start );
 
       // Skip if it is way smaller than treshold
       if ( lengthPxl < MIN_TRACE_LENGTH_PXL ) continue;

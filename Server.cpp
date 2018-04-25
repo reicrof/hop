@@ -41,6 +41,7 @@ bool Server::start( const char* name, bool useGlFinishByDefault )
          // We are done running.
          if ( !_running ) break;
 
+         HOP_PROF( "Handle messages" );
          size_t offset = 0;
          const size_t bytesToRead = ringbuf_consume( _sharedMem.ringbuffer(), &offset );
          if ( bytesToRead > 0 )
@@ -72,6 +73,7 @@ bool Server::setRecording( bool recording )
 
 void Server::getPendingData(PendingData & data)
 {
+    HOP_PROF_FUNC();
     std::lock_guard<std::mutex> guard(_pendingData.mutex);
     _pendingData.swap(data);
     _pendingData.clear();
@@ -248,6 +250,7 @@ void Server::PendingData::clear()
 
 void Server::PendingData::swap(PendingData & rhs)
 {
+    HOP_PROF_FUNC();
     using std::swap;
     swap(traces, rhs.traces);
     swap(stringData, rhs.stringData);

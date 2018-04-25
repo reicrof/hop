@@ -307,6 +307,8 @@ void Profiler::addTraces( const DisplayableTraces& traces, uint32_t threadIndex 
 
 void Profiler::fetchClientData()
 {
+   HOP_PROF_FUNC();
+
    _server.getPendingData(_serverPendingData);
 
    if( _recording )
@@ -332,6 +334,7 @@ void Profiler::fetchClientData()
 
 void Profiler::addStringData( const std::vector<char>& strData )
 {
+   HOP_PROF_FUNC();
    // We should read the string data even when not recording since the string data
    // is sent only once (the first time a function is used)
    if ( !strData.empty() )
@@ -342,6 +345,7 @@ void Profiler::addStringData( const std::vector<char>& strData )
 
 void Profiler::addLockWaits( const std::vector<LockWait>& lockWaits, uint32_t threadIndex )
 {
+   HOP_PROF_FUNC();
    // Check if new thread
    if ( threadIndex >= _tracesPerThread.size() )
    {
@@ -353,6 +357,7 @@ void Profiler::addLockWaits( const std::vector<LockWait>& lockWaits, uint32_t th
 
 void Profiler::addUnlockEvents( const std::vector<UnlockEvent>& unlockEvents, uint32_t threadIndex )
 {
+   HOP_PROF_FUNC();
    // Check if new thread
    if ( threadIndex >= _tracesPerThread.size() )
    {
@@ -430,6 +435,7 @@ static bool ptInRect( const ImVec2& pt, const ImVec2& a, const ImVec2& b )
 
 static bool drawPlayStopButton( bool& isRecording )
 {
+   HOP_PROF_FUNC();
    constexpr float height = 15.0f, width = 15.0f, padding = 5.0f;
    const auto startDrawPos = ImGui::GetCursorScreenPos();
    ImDrawList* DrawList = ImGui::GetWindowDrawList();
@@ -456,6 +462,7 @@ static bool drawPlayStopButton( bool& isRecording )
 
 void hop::Profiler::drawSearchWindow()
 {
+   HOP_PROF_FUNC();
    bool inputFocus = false;
    if ( _focusSearchWindow && _searchWindowOpen )
    {
@@ -522,6 +529,7 @@ void hop::Profiler::drawSearchWindow()
 
 void hop::Profiler::drawTraceDetailsWindow()
 {
+   HOP_PROF_FUNC();
    const auto traceDetailRes = drawTraceDetails( _timeline.getTraceDetails(), _tracesPerThread, _strDb );
    if ( traceDetailRes.isWindowOpen )
    {
@@ -550,6 +558,7 @@ void hop::Profiler::drawTraceDetailsWindow()
 
 void hop::Profiler::draw( uint32_t windowWidth, uint32_t windowHeight )
 {
+   HOP_PROF_FUNC();
    ImGui::SetNextWindowSize(ImVec2( windowWidth * 0.9, windowHeight * 0.9 ), ImGuiSetCond_FirstUseEver);
    ImGui::PushStyleVar( ImGuiStyleVar_WindowMinSize, ImVec2( 600, 300 ) );
    if ( !ImGui::Begin( _name.c_str(), nullptr, ImGuiWindowFlags_NoScrollWithMouse | ImGuiWindowFlags_MenuBar | ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoCollapse ) )
@@ -616,6 +625,7 @@ void hop::Profiler::draw( uint32_t windowWidth, uint32_t windowHeight )
 
 void hop::Profiler::drawMenuBar()
 {
+   HOP_PROF_FUNC();
    const char* const menuSaveAsHop = "Save as...";
    const char* const menuOpenHopFile = "Open";
    const char* const menuHelp = "Help";
