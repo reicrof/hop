@@ -345,7 +345,7 @@ void Profiler::addStringData( const std::vector<char>& strData )
    }
 }
 
-void Profiler::addLockWaits( const std::vector<LockWait>& lockWaits, uint32_t threadIndex )
+void Profiler::addLockWaits( const DisplayableLockWaits& lockWaits, uint32_t threadIndex )
 {
    HOP_PROF_FUNC();
    // Check if new thread

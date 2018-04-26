@@ -11,13 +11,12 @@ namespace hop
 
 struct ThreadInfo
 {
-   ThreadInfo();
    void addTraces( const DisplayableTraces& traces );
-   void addLockWaits( const std::vector<LockWait>& lockWaits );
+   void addLockWaits( const DisplayableLockWaits& lockWaits );
    void addUnlockEvents(const std::vector<UnlockEvent>& unlockEvents);
    TDepth_t maxDepth() const noexcept;
    DisplayableTraces _traces;
-   std::vector<LockWait> _lockWaits;
+   DisplayableLockWaits _lockWaits;
    std::vector<UnlockEvent> _unlockEvents;
 
    // This is the position at which the traces for the current thread ifno

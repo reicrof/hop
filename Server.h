@@ -29,7 +29,7 @@ class Server
        std::vector<std::vector<char> > stringData;
        std::vector<uint32_t> tracesThreadIndex;
 
-       std::vector<std::vector<LockWait> > lockWaits;
+       std::vector< DisplayableLockWaits > lockWaits;
        std::vector<uint32_t> lockWaitThreadIndex;
 
        std::vector<std::vector<UnlockEvent> > unlockEvents;

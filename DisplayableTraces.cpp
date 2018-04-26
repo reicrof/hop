@@ -24,18 +24,6 @@ void DisplayableTraces::append( const DisplayableTraces& newTraces )
    appendLods( lods, computeLods( newTraces, prevSize ) );
 }
 
-void DisplayableTraces::reserve( size_t size )
-{
-   // ends.reserve( size );
-   // deltas.reserve( size );
-   // flags.reserve( size );
-   // fileNameIds.reserve( size );
-   // fctNameIds.reserve( size );
-   // lineNbs.reserve( size );
-   // groups.reserve( size );
-   // depths.reserve( size );
-}
-
 void DisplayableTraces::clear()
 {
    ends.clear();
@@ -98,4 +86,25 @@ std::pair<size_t, size_t> visibleTracesIndexSpan(
 
    return span;
 }
+
+void DisplayableLockWaits::append( const DisplayableLockWaits& newLockWaits )
+{
+   //const size_t prevSize = deltas.size();
+
+   ends.insert( ends.end(), newLockWaits.ends.begin(), newLockWaits.ends.end() );
+   starts.insert( starts.end(), newLockWaits.starts.begin(), newLockWaits.starts.end() );
+   depths.insert( depths.end(), newLockWaits.depths.begin(), newLockWaits.depths.end() );
+
+   //lockWaits.insert( lockWaits.end(), newLockWaits.begin(), newLockWaits.end() );
+
+   //appendLods( lods, computeLods( newLockWaits, prevSize ) );
+}
+
+void DisplayableLockWaits::clear()
+{
+   ends.clear();
+   starts.clear();
+   depths.clear();
+}
+
 }

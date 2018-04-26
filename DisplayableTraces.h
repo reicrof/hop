@@ -19,17 +19,10 @@ struct DisplayableTraces
    DisplayableTraces(const DisplayableTraces& ) = delete;
    DisplayableTraces& operator=(const DisplayableTraces& ) = delete;
 
-   enum Flags
-   {
-      END_TRACE = 0,
-      START_TRACE = 1,
-   };
-
    // Explicit copy to avoid accidental one
    DisplayableTraces copy() const;
 
    void append( const DisplayableTraces& newTraces );
-   void reserve( size_t size );
    void clear();
 
    std::deque< TimeStamp > ends; // in ns
@@ -52,6 +45,24 @@ std::pair<size_t, size_t> visibleTracesIndexSpan(
     const DisplayableTraces& traces,
     TimeStamp absoluteStart,
     TimeStamp absoluteEnd );
+
+struct DisplayableLockWaits
+{
+   DisplayableLockWaits() = default;
+   DisplayableLockWaits(DisplayableLockWaits&& ) = default;
+   DisplayableLockWaits(const DisplayableLockWaits& ) = delete;
+   DisplayableLockWaits& operator=(const DisplayableLockWaits& ) = delete;
+
+   void append( const DisplayableLockWaits& newLockWaits );
+   void clear();
+
+   std::deque< TimeStamp > ends; // in ns
+   std::deque< TimeDuration > starts; // in ns
+   std::deque< TDepth_t > depths;
+
+   LodsArray lods;
+};
+
 }
 
 #endif // DISPLAYABLE_TRACE_H_

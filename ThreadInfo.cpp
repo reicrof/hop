@@ -7,9 +7,7 @@
 #include <cstring> // memcpy
 
 namespace hop
-{
-ThreadInfo::ThreadInfo() { _traces.reserve( 2048 ); }
-
+{  
 void ThreadInfo::addTraces( const DisplayableTraces& newTraces )
 {
    _traces.append( newTraces );
@@ -17,9 +15,9 @@ void ThreadInfo::addTraces( const DisplayableTraces& newTraces )
    assert_is_sorted(_traces.ends.begin(), _traces.ends.end() );
 }
 
-void ThreadInfo::addLockWaits( const std::vector<LockWait>& lockWaits )
+void ThreadInfo::addLockWaits( const DisplayableLockWaits& lockWaits )
 {
-   _lockWaits.insert( _lockWaits.end(), lockWaits.begin(), lockWaits.end() );
+   _lockWaits.append( lockWaits );
 }
 
 void ThreadInfo::addUnlockEvents(const std::vector<UnlockEvent>& unlockEvents)

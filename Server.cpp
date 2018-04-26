@@ -117,7 +117,6 @@ size_t Server::handleNewMessage( uint8_t* data, size_t maxSize )
           const size_t traceCount = msgInfo->traces.count;
 
           DisplayableTraces dispTraces;
-          dispTraces.reserve( traceCount );
           TDepth_t maxDepth = 0;
           for ( size_t i = 0; i < traceCount; ++i )
           {
@@ -153,21 +152,24 @@ size_t Server::handleNewMessage( uint8_t* data, size_t maxSize )
       }
       case MsgType::PROFILER_WAIT_LOCK:
       {
-         std::vector< LockWait > lockwaits( msgInfo->lockwaits.count );
-         memcpy( lockwaits.data(), bufPtr, lockwaits.size() * sizeof(LockWait) );
+         const LockWait* lws = (const LockWait*)bufPtr;
+         const uint32_t lwCount = msgInfo->lockwaits.count;
 
-         bufPtr += lockwaits.size() * sizeof(LockWait);
-         assert( (size_t)(bufPtr - data) <= maxSize );
+         DisplayableLockWaits dispLw;
+         for( uint32_t i = 0; i < lwCount; ++i )
+         {
+            dispLw.starts.push_back( lws[i].start );
+            dispLw.ends.push_back( lws[i].end );
+            dispLw.depths.push_back( lws[i].depth );
+         }
 
-         std::sort(
-             lockwaits.begin(), lockwaits.end(), []( const LockWait& lhs, const LockWait& rhs ) {
-                return lhs.end < rhs.end;
-             } );
+         // The ends time should already be sorted
+         assert_is_sorted( dispLw.ends.begin(), dispLw.ends.end() );
 
          // TODO: Could lock later when we received all the messages
          std::lock_guard<std::mutex> guard( _pendingData.mutex );
-         _pendingData.lockWaits.emplace_back( std::move( lockwaits ) );
-         _pendingData.lockWaitThreadIndex.push_back(threadIndex);
+         _pendingData.lockWaits.emplace_back( std::move( dispLw ) );
+         _pendingData.lockWaitThreadIndex.push_back( threadIndex );
 
          return (size_t)(bufPtr - data);
       }
