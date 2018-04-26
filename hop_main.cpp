@@ -21,7 +21,7 @@
 #include <sys/wait.h>
 #endif
 
-static bool g_run = true;
+bool g_run = true;
 static float g_mouseWheel = 0.0f;
 
 void terminateCallback( int sig )

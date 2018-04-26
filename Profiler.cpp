@@ -29,6 +29,8 @@
 #include <stdio.h>
 #include <fstream>
 
+extern bool g_run;
+
 namespace
 {
 static std::chrono::time_point<std::chrono::system_clock> g_Time = std::chrono::system_clock::now();
@@ -660,7 +662,7 @@ void hop::Profiler::drawMenuBar()
          ImGui::Separator();
          if ( ImGui::MenuItem( "Exit", NULL ) )
          {
-            exit(0);
+            g_run = false;
          }
          ImGui::EndMenu();
       }
