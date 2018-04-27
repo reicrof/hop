@@ -59,6 +59,7 @@ struct DisplayableLockWaits
    std::deque< TimeStamp > ends; // in ns
    std::deque< TimeDuration > starts; // in ns
    std::deque< TDepth_t > depths;
+   std::deque< void* > mutexAddrs;
 
    LodsArray lods;
 };

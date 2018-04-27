@@ -161,7 +161,10 @@ size_t Server::handleNewMessage( uint8_t* data, size_t maxSize )
             dispLw.starts.push_back( lws[i].start );
             dispLw.ends.push_back( lws[i].end );
             dispLw.depths.push_back( lws[i].depth );
+            dispLw.mutexAddrs.push_back( lws[i].mutexAddress );
          }
+
+         bufPtr += ( lwCount * sizeof( LockWait ) );
 
          // The ends time should already be sorted
          assert_is_sorted( dispLw.ends.begin(), dispLw.ends.end() );

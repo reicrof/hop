@@ -108,7 +108,7 @@ class Timeline
    void zoomOn( int64_t microToZoomOn, float zoomFactor );
    void setStartTime( int64_t timeInMicro, AnimationType animType = ANIMATION_TYPE_NORMAL ) noexcept;
    void setZoom( TimeDuration microsToDisplay, AnimationType animType = ANIMATION_TYPE_NORMAL );
-   std::vector< LockOwnerInfo > highlightLockOwner(const std::vector<ThreadInfo>& infos, uint32_t threadIndex, const hop::LockWait& highlightedLockWait, const float posX, const float posY );
+   std::vector< LockOwnerInfo > highlightLockOwner(const std::vector<ThreadInfo>& infos, uint32_t threadIndex, uint32_t hoveredLwIndex, const float posX, const float posY );
 
    int64_t _timelineStart{0};
    TimeDuration _timelineRange{5000000000};
