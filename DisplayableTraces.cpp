@@ -89,12 +89,14 @@ std::pair<size_t, size_t> visibleTracesIndexSpan(
 
 void DisplayableLockWaits::append( const DisplayableLockWaits& newLockWaits )
 {
+   const size_t prevSize = ends.size();
+
    ends.insert( ends.end(), newLockWaits.ends.begin(), newLockWaits.ends.end() );
    starts.insert( starts.end(), newLockWaits.starts.begin(), newLockWaits.starts.end() );
    depths.insert( depths.end(), newLockWaits.depths.begin(), newLockWaits.depths.end() );
    mutexAddrs.insert( mutexAddrs.end(), newLockWaits.mutexAddrs.begin(), newLockWaits.mutexAddrs.end() );
 
-   //appendLods( lods, computeLods( newLockWaits, prevSize ) );
+   appendLods( lods, computeLods( newLockWaits, prevSize ) );
 }
 
 void DisplayableLockWaits::clear()

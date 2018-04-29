@@ -938,6 +938,11 @@ std::vector< Timeline::LockOwnerInfo > Timeline::highlightLockOwner(
     ImDrawList* DrawList = ImGui::GetWindowDrawList();
     const float windowWidthPxl = ImGui::GetWindowWidth();
     const auto absoluteStart = _absoluteStartTime;
+    const int highlightAlpha = 70.0f * _animationState.highlightPercent;
+
+    const void* highlightedMutexAddr = infos[threadIndex]._lockWaits.mutexAddrs[hoveredLwIndex];
+    const TimeStamp highlightedLWStartTime = infos[threadIndex]._lockWaits.starts[hoveredLwIndex];
+    const TimeStamp highlightedLWEndTime = infos[threadIndex]._lockWaits.ends[hoveredLwIndex];
     for (size_t i = 0; i < infos.size(); ++i)
     {
         if (i == threadIndex || infos[i]._hidden) continue;
@@ -950,20 +955,18 @@ std::vector< Timeline::LockOwnerInfo > Timeline::highlightLockOwner(
         auto lastUnlock = std::lower_bound(
             infos[i]._unlockEvents.cbegin(),
             infos[i]._unlockEvents.cend(),
-            lockWaits.ends[hoveredLwIndex],
+            highlightedLWEndTime,
             unlock_events_less_cmp() );
 
         // lower_bound returns the first that is not smaller. We need the one just before that
         if(lastUnlock != infos[i]._unlockEvents.cbegin() ) --lastUnlock;
 
-        const int highlightAlpha = 70.0f * _animationState.highlightPercent;
-
         while( lastUnlock != infos[i]._unlockEvents.cbegin() )
         {
-            if(lastUnlock->mutexAddress == lockWaits.mutexAddrs[hoveredLwIndex] )
+            if(lastUnlock->mutexAddress == highlightedMutexAddr )
             {
                // We've gone to far, so early break
-               if(lastUnlock->time < lockWaits.starts[hoveredLwIndex] )
+               if(lastUnlock->time < highlightedLWStartTime )
                   break;
 
                // Find the associated lock wait
@@ -974,10 +977,10 @@ std::vector< Timeline::LockOwnerInfo > Timeline::highlightLockOwner(
                // lower_bound returns the first that does not compare smaller than the unlock time.
                // Therefore, we need to start from this iterator and find the first one that matches
                // the highlighted mutex
-               if( lockWaitIdx == lockWaits.ends.size() ) --lockWaitIdx;
+               if( lockWaitIdx > 0 ) --lockWaitIdx;
 
                while ( lockWaitIdx > 0 &&
-                       lockWaits.mutexAddrs[lockWaitIdx] != lockWaits.mutexAddrs[hoveredLwIndex] )
+                       lockWaits.mutexAddrs[lockWaitIdx] != highlightedMutexAddr )
                {
                   --lockWaitIdx;
                }
