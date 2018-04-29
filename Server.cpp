@@ -158,8 +158,8 @@ size_t Server::handleNewMessage( uint8_t* data, size_t maxSize )
          DisplayableLockWaits dispLw;
          for( uint32_t i = 0; i < lwCount; ++i )
          {
-            dispLw.starts.push_back( lws[i].start );
             dispLw.ends.push_back( lws[i].end );
+            dispLw.deltas.push_back( lws[i].end - lws[i].start );
             dispLw.depths.push_back( lws[i].depth );
             dispLw.mutexAddrs.push_back( lws[i].mutexAddress );
          }

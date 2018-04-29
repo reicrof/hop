@@ -41,11 +41,6 @@ struct DisplayableTraces
    TDepth_t maxDepth{ 0 };
 };
 
-std::pair<size_t, size_t> visibleTracesIndexSpan(
-    const DisplayableTraces& traces,
-    TimeStamp absoluteStart,
-    TimeStamp absoluteEnd );
-
 struct DisplayableLockWaits
 {
    DisplayableLockWaits() = default;
@@ -57,12 +52,19 @@ struct DisplayableLockWaits
    void clear();
 
    std::deque< TimeStamp > ends; // in ns
-   std::deque< TimeDuration > starts; // in ns
+   std::deque< TimeDuration > deltas; // in ns
    std::deque< TDepth_t > depths;
    std::deque< void* > mutexAddrs;
 
    LodsArray lods;
 };
+
+template <typename Ts>
+std::pair<size_t, size_t>
+visibleIndexSpan( const Ts& traces, TimeStamp absoluteStart, TimeStamp absoluteEnd );
+
+std::pair<size_t, size_t>
+visibleIndexSpan( const LodsArray& lodsArr, TimeStamp absoluteStart, TimeStamp absoluteEnd, int lodLvl );
 
 }
 

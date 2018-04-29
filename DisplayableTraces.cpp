@@ -53,8 +53,40 @@ DisplayableTraces DisplayableTraces::copy() const
    return copy;
 }
 
-std::pair<size_t, size_t> visibleTracesIndexSpan(
+void DisplayableLockWaits::append( const DisplayableLockWaits& newLockWaits )
+{
+   const size_t prevSize = ends.size();
+
+   ends.insert( ends.end(), newLockWaits.ends.begin(), newLockWaits.ends.end() );
+   deltas.insert( deltas.end(), newLockWaits.deltas.begin(), newLockWaits.deltas.end() );
+   depths.insert( depths.end(), newLockWaits.depths.begin(), newLockWaits.depths.end() );
+   mutexAddrs.insert( mutexAddrs.end(), newLockWaits.mutexAddrs.begin(), newLockWaits.mutexAddrs.end() );
+
+   appendLods( lods, computeLods( newLockWaits, prevSize ) );
+}
+
+void DisplayableLockWaits::clear()
+{
+   ends.clear();
+   deltas.clear();
+   depths.clear();
+}
+
+
+
+template std::pair<size_t, size_t> visibleIndexSpan<DisplayableTraces>(
     const DisplayableTraces& traces,
+    TimeStamp absoluteStart,
+    TimeStamp absoluteEnd );
+
+template std::pair<size_t, size_t> visibleIndexSpan<DisplayableLockWaits>(
+    const DisplayableLockWaits& traces,
+    TimeStamp absoluteStart,
+    TimeStamp absoluteEnd );
+
+template< typename Ts >
+std::pair<size_t, size_t> visibleIndexSpan(
+    const Ts& traces,
     TimeStamp absoluteStart,
     TimeStamp absoluteEnd )
 {
@@ -78,7 +110,7 @@ std::pair<size_t, size_t> visibleTracesIndexSpan(
    {
       ++span.second;
    }
-    // We need to go one past the depth 0
+   // We need to go one past the depth 0
    if ( span.second < traces.depths.size() )
    {
       ++span.second;
@@ -87,23 +119,40 @@ std::pair<size_t, size_t> visibleTracesIndexSpan(
    return span;
 }
 
-void DisplayableLockWaits::append( const DisplayableLockWaits& newLockWaits )
+std::pair<size_t, size_t> visibleIndexSpan(
+    const LodsArray& lodsArr,
+    TimeStamp absoluteStart,
+    TimeStamp absoluteEnd,
+    int lodLvl )
 {
-   const size_t prevSize = ends.size();
+   auto span = std::make_pair( hop::INVALID_IDX, hop::INVALID_IDX );
 
-   ends.insert( ends.end(), newLockWaits.ends.begin(), newLockWaits.ends.end() );
-   starts.insert( starts.end(), newLockWaits.starts.begin(), newLockWaits.starts.end() );
-   depths.insert( depths.end(), newLockWaits.depths.begin(), newLockWaits.depths.end() );
-   mutexAddrs.insert( mutexAddrs.end(), newLockWaits.mutexAddrs.begin(), newLockWaits.mutexAddrs.end() );
+   const auto& lods = lodsArr[lodLvl];
+   const LodInfo firstInfo = {absoluteStart, 0, 0, 0, false};
+   const LodInfo lastInfo = {absoluteEnd, 0, 0, 0, false};
+   auto it1 = std::lower_bound( lods.begin(), lods.end(), firstInfo );
+   auto it2 = std::upper_bound( lods.begin(), lods.end(), lastInfo );
 
-   appendLods( lods, computeLods( newLockWaits, prevSize ) );
+   // The last trace of the current thread does not reach the current time
+   if ( it1 == lods.end() ) return span;
+
+   // Find the the first trace on the left and right that have a depth of 0. This prevents
+   // traces that have a smaller depth than the one foune previously to vanish.
+   while ( it1 != lods.begin() && it1->depth != 0 )
+   {
+      --it1;
+   }
+   while ( it2 != lods.end() && it2->depth != 0 )
+   {
+      ++it2;
+   }
+   if ( it2 != lods.end() )
+   {
+      ++it2;
+   }  // We need to go one past the depth 0
+
+   span.first = std::distance( lods.begin(), it1 );
+   span.second = std::distance( lods.begin(), it2 );
+   return span;
 }
-
-void DisplayableLockWaits::clear()
-{
-   ends.clear();
-   starts.clear();
-   depths.clear();
-}
-
 }

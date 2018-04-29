@@ -538,7 +538,7 @@ void hop::Profiler::drawTraceDetailsWindow()
        _timeline.setTraceDetailsDisplayed();
 
        // Add the trace that will need to be highlighted
-       std::pair<size_t, size_t> span = visibleTracesIndexSpan(
+       std::pair<size_t, size_t> span = visibleIndexSpan(
            _tracesPerThread[traceDetailRes.hoveredThreadIdx]._traces,
            _timeline.absoluteTimelineStart(),
            _timeline.absoluteTimelineEnd() );

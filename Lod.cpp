@@ -217,7 +217,7 @@ LodsArray computeLods( const DisplayableLockWaits& lockwaits, size_t idOffset )
    for ( size_t i = 0; i < lockwaits.ends.size(); ++i )
    {
       const TDepth_t curDepth = lockwaits.depths[i];
-      const TimeDuration curDelta = lockwaits.ends[i] - lockwaits.starts[i];
+      const TimeDuration curDelta = lockwaits.deltas[i];
       if ( lods[curDepth].empty() )
       {
          lods[curDepth].push_back( LodInfo{lockwaits.ends[i], curDelta, idOffset + i, curDepth, false} );
@@ -225,7 +225,7 @@ LodsArray computeLods( const DisplayableLockWaits& lockwaits, size_t idOffset )
       }
 
       auto& lastTrace = lods[curDepth].back();
-      const TimeDuration timeBetweenTrace = lockwaits.starts[i] - lastTrace.end;
+      const TimeDuration timeBetweenTrace = (lockwaits.ends[i] - lockwaits.deltas[i]) - lastTrace.end;
       if( canBeLoded( lodLvl, timeBetweenTrace, lastTrace.delta, curDelta ) )
       {
          assert( lastTrace.depth == curDepth );
