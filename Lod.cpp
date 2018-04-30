@@ -9,7 +9,7 @@ static constexpr float MIN_TRACE_LENGTH_PXL = 3.0f;
 static constexpr float MIN_GAP_PXL = 2.0f;
 static hop::TimeDuration LOD_MIN_GAP_PXL[hop::LOD_COUNT] = {0};
 static hop::TimeDuration LOD_MIN_TRACE_LENGTH_PXL[hop::LOD_COUNT] = {0};
-
+ 
 static bool canBeLoded(
     int lodLevel,
     hop::TimeDuration timeBetweenTrace,
@@ -24,7 +24,7 @@ static bool canBeLoded(
 
 namespace hop
 {
-   
+
 void setupLODResolution( uint32_t sreenResolutionX )
 {
    for( uint32_t i = 0; i < LOD_COUNT; ++i )

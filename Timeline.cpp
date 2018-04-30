@@ -128,6 +128,13 @@ void Timeline::update( float deltaTimeMs ) noexcept
    // Update according to options
    TRACE_HEIGHT = hop::clamp( g_options.traceHeight, MIN_TRACE_HEIGHT, MAX_TRACE_HEIGHT );
    PADDED_TRACE_SIZE = TRACE_HEIGHT + TRACE_VERTICAL_PADDING;
+
+   // Update current lod level
+   _lodLevel = 0;
+   while ( _lodLevel < LOD_COUNT - 1 && _timelineRange > LOD_NANOS[_lodLevel] )
+   {
+      ++_lodLevel;
+   }
 }
 
 void Timeline::draw(
@@ -572,6 +579,11 @@ float Timeline::maxVerticalPosPxl() const noexcept
    return maxScrollY;
 }
 
+int Timeline::currentLodLevel() const noexcept
+{
+   return _lodLevel;
+}
+
 TraceDetails& Timeline::getTraceDetails() noexcept
 {
    return _traceDetails;
@@ -699,16 +711,7 @@ void Timeline::drawTraces(
    highlightTraceToDraw.clear();
 
    // Find the best lodLevel for our current zoom
-   const int lodLevel = [this]() {
-      if ( _timelineRange < LOD_NANOS[0] / 2 ) return -1;
-
-      int lodLevel = 0;
-      while ( lodLevel < LOD_COUNT - 1 && _timelineRange > LOD_NANOS[lodLevel] )
-      {
-         ++lodLevel;
-      }
-      return lodLevel;
-   }();
+   const int lodLevel = currentLodLevel();
 
    g_stats.currentLOD = lodLevel;
 
@@ -716,73 +719,37 @@ void Timeline::drawTraces(
    const TimeStamp firstTraceAbsoluteTime = absoluteTimelineStart();
    const TimeStamp lastTraceAbsoluteTime = absoluteTimelineEnd();
 
-   // If we do not use LOD, draw the traces normally.
-   if ( lodLevel == -1 )
+   const auto span = visibleIndexSpan(
+       data._traces.lods, firstTraceAbsoluteTime, lastTraceAbsoluteTime, lodLevel );
+
+   if( span.first == hop::INVALID_IDX ) return;
+
+   for ( size_t i = span.first; i < span.second; ++i )
    {
-      auto span = visibleIndexSpan( data._traces, firstTraceAbsoluteTime, lastTraceAbsoluteTime );
+      const auto& t = data._traces.lods[lodLevel][i];
+      const TimeStamp traceEndTime = ( t.end - absoluteStart );
+      const auto traceEndPxl = nanosToPxl<float>(
+          windowWidthPxl, _timelineRange, traceEndTime - _timelineStart );
+      const float traceLengthPxl = std::max(
+          MIN_TRACE_LENGTH_PXL, nanosToPxl<float>( windowWidthPxl, _timelineRange, t.delta ) );
 
-      // // The last trace of the current thread does not reach the current time
-      if( span.first == hop::INVALID_IDX ) return;
-
-      for ( size_t i = span.first; i < span.second; ++i )
+      const auto tracePos = ImVec2(
+          posX + traceEndPxl - traceLengthPxl,
+          posY + t.depth * PADDED_TRACE_SIZE);
+      if ( t.isLoded )
       {
-         const TimeStamp traceEndTime = ( data._traces.ends[i] - absoluteStart );
-         const auto traceEndPxl = nanosToPxl<float>(
-             windowWidthPxl, _timelineRange, traceEndTime - _timelineStart );
-         const float traceLengthPxl = std::max(
-             MIN_TRACE_LENGTH_PXL,
-             nanosToPxl<float>( windowWidthPxl, _timelineRange, data._traces.deltas[i] ) );
-
-         const auto curDepth = data._traces.depths[i];
-         const auto tracePos = ImVec2(
-             posX + traceEndPxl - traceLengthPxl,
-             posY + curDepth * PADDED_TRACE_SIZE);
-
-         tracesToDraw.push_back( DrawingInfo{tracePos, data._traces.deltas[i], i, traceLengthPxl} );
-
+         lodTracesToDraw.push_back(
+             DrawingInfo{tracePos, t.delta, t.traceIndex, traceLengthPxl} );
+      }
+      else
+      {
+         tracesToDraw.push_back(
+             DrawingInfo{tracePos, t.delta, t.traceIndex, traceLengthPxl} );
          for( const auto& tid : _highlightedTraces )
          {
-            if( threadIndex == tid.second && i == tid.first )
+            if( threadIndex == tid.second && t.traceIndex == tid.first )
             {
-               highlightTraceToDraw.push_back( DrawingInfo{tracePos, data._traces.deltas[i], i, traceLengthPxl} );
-            }
-         }
-      }
-   }
-   else
-   {
-      const auto span = visibleIndexSpan(
-          data._traces.lods, firstTraceAbsoluteTime, lastTraceAbsoluteTime, lodLevel );
-
-      if( span.first == hop::INVALID_IDX ) return;
-
-      for ( size_t i = span.first; i < span.second; ++i )
-      {
-         const auto& t = data._traces.lods[lodLevel][i];
-         const TimeStamp traceEndTime = ( t.end - absoluteStart );
-         const auto traceEndPxl = nanosToPxl<float>(
-             windowWidthPxl, _timelineRange, traceEndTime - _timelineStart );
-         const float traceLengthPxl = std::max(
-             MIN_TRACE_LENGTH_PXL, nanosToPxl<float>( windowWidthPxl, _timelineRange, t.delta ) );
-
-         const auto tracePos = ImVec2(
-             posX + traceEndPxl - traceLengthPxl,
-             posY + t.depth * PADDED_TRACE_SIZE);
-         if ( t.isLoded )
-         {
-            lodTracesToDraw.push_back(
-                DrawingInfo{tracePos, t.delta, t.traceIndex, traceLengthPxl} );
-         }
-         else
-         {
-            tracesToDraw.push_back(
-                DrawingInfo{tracePos, t.delta, t.traceIndex, traceLengthPxl} );
-            for( const auto& tid : _highlightedTraces )
-            {
-               if( threadIndex == tid.second && t.traceIndex == tid.first )
-               {
-                  highlightTraceToDraw.push_back( DrawingInfo{tracePos, t.delta, t.traceIndex, traceLengthPxl} );
-               }
+               highlightTraceToDraw.push_back( DrawingInfo{tracePos, t.delta, t.traceIndex, traceLengthPxl} );
             }
          }
       }
@@ -1018,97 +985,138 @@ void Timeline::drawLockWaits(
    // The time range to draw in absolute time
    const TimeStamp firstTraceAbsoluteTime = absoluteStart + _timelineStart;
    const TimeStamp lastTraceAbsoluteTime = firstTraceAbsoluteTime + _timelineRange;
-   const auto span = visibleIndexSpan( lockWaits, firstTraceAbsoluteTime, lastTraceAbsoluteTime );
 
-   if( span.first == hop::INVALID_IDX ) return;
+   // Find the best lodLevel for our current zoom
+   const int lodLevel = currentLodLevel();
 
-   // // Find the best lodLevel for our current zoom
-   // const int lodLevel = [this]() {
-   //    if ( _timelineRange < LOD_NANOS[0] / 2 ) return -1;
+   struct DrawingInfo
+   {
+      ImVec2 posPxl;
+      TimeDuration duration;
+      size_t traceIndex;
+      float lengthPxl;
+   };
 
-   //    int lodLevel = 0;
-   //    while ( lodLevel < LOD_COUNT - 1 && _timelineRange > LOD_NANOS[lodLevel] )
-   //    {
-   //       ++lodLevel;
-   //    }
-   //    return lodLevel;
-   // }();
+   const auto span =
+       visibleIndexSpan( lockWaits.lods, firstTraceAbsoluteTime, lastTraceAbsoluteTime, lodLevel );
 
-   // // No LOD
-   // if ( lodLevel == -1 )
-   // {
+   if ( span.first == hop::INVALID_IDX ) return;
 
-      ImGui::PushStyleColor( ImGuiCol_Button, ImVec4( 0.8f, 0.0f, 0.0f, 1.0f ) );
-      ImGui::PushStyleColor( ImGuiCol_ButtonHovered, ImVec4( 1.0f, 0.3f, 0.3f, 1.0f ) );
-      ImGui::PushStyleColor( ImGuiCol_ButtonActive, ImVec4( 1.0f, 0.0f, 0.0f, 1.0f ) );
-      for ( size_t i = span.first/*firstIdx*/; i < span.second; ++i )
+   static std::vector<DrawingInfo> tracesToDraw, lodTracesToDraw;
+   tracesToDraw.clear();
+   lodTracesToDraw.clear();
+
+   for ( size_t i = span.first; i < span.second; ++i )
+   {
+      const auto& t = lockWaits.lods[lodLevel][i];
+      const TimeStamp traceEndTime = ( t.end - absoluteStart );
+      const auto traceEndPxl =
+          nanosToPxl<float>( windowWidthPxl, _timelineRange, traceEndTime - _timelineStart );
+      const float traceLengthPxl = std::max(
+          MIN_TRACE_LENGTH_PXL, nanosToPxl<float>( windowWidthPxl, _timelineRange, t.delta ) );
+
+      const auto tracePos =
+          ImVec2( posX + traceEndPxl - traceLengthPxl, posY + t.depth * PADDED_TRACE_SIZE );
+      if ( t.isLoded )
       {
-         const int64_t endInNanos = ( lockWaits.ends[i] - absoluteStart - _timelineStart );
+         lodTracesToDraw.push_back( DrawingInfo{tracePos, t.delta, t.traceIndex, traceLengthPxl} );
+      }
+      else
+      {
+         tracesToDraw.push_back( DrawingInfo{tracePos, t.delta, t.traceIndex, traceLengthPxl} );
+      }
+   }
 
-         const TimeStamp delta = lockWaits.deltas[i];
+   ImGui::PushStyleColor( ImGuiCol_Button, ImVec4( 0.8f, 0.0f, 0.0f, 1.0f ) );
+   ImGui::PushStyleColor( ImGuiCol_ButtonHovered, ImVec4( 1.0f, 0.3f, 0.3f, 1.0f ) );
+   ImGui::PushStyleColor( ImGuiCol_ButtonActive, ImVec4( 1.0f, 0.0f, 0.0f, 1.0f ) );
 
-         const float endPxl = nanosToPxl<float>( windowWidthPxl, _timelineRange, endInNanos );
-         const float lengthPxl = nanosToPxl<float>( windowWidthPxl, _timelineRange, delta );
-
-         // Skip if it is way smaller than treshold
-         if ( lengthPxl < MIN_TRACE_LENGTH_PXL ) continue;
-
-         ImGui::SetCursorScreenPos(
-             ImVec2( posX + endPxl - lengthPxl, posY + lockWaits.depths[i] * PADDED_TRACE_SIZE ) );
-         ImGui::Button( "Waiting lock...", ImVec2( lengthPxl, Timeline::TRACE_HEIGHT ) );
-         if ( ImGui::IsItemHovered() )
+   for ( const auto& t : lodTracesToDraw )
+   {
+      ImGui::SetCursorScreenPos( t.posPxl );
+      ImGui::Button( "", ImVec2( t.lengthPxl, TRACE_HEIGHT ) );
+      if ( ImGui::IsItemHovered() )
+      {
+         const auto lockInfo = highlightLockOwner( infos, threadIndex, t.traceIndex, posX, posY );
+         (void)lockInfo.empty();
+         if ( t.lengthPxl > 3 )
          {
-            const auto lockInfo = highlightLockOwner( infos, threadIndex, i, posX, posY );
-            if ( lengthPxl > 3 )
-            {
-               char lockTooltip[256] = "Waiting lock for ";
-               ImGui::BeginTooltip();
-               formatNanosDurationToDisplay(
-                   delta,
-                   lockTooltip + strlen( lockTooltip ),
-                   sizeof( lockTooltip ) - strlen( lockTooltip ) );
+            char lockTooltip[256] = "Waiting lock for ~";
+            ImGui::BeginTooltip();
+            formatNanosDurationToDisplay(
+                t.duration,
+                lockTooltip + strlen( lockTooltip ),
+                sizeof( lockTooltip ) - strlen( lockTooltip ) );
 
-               if ( lockInfo.empty() )
+            ImGui::TextUnformatted( lockTooltip );
+            ImGui::EndTooltip();
+         }
+
+         if ( ImGui::IsMouseDoubleClicked( 0 ) )
+         {
+            pushNavigationState();
+            const TimeDuration delta = lockWaits.deltas[t.traceIndex];
+            frameToAbsoluteTime( lockWaits.ends[t.traceIndex] - delta, delta );
+         }
+      }
+   }
+
+   for ( const auto& t : tracesToDraw )
+   {
+      ImGui::SetCursorScreenPos( t.posPxl );
+      ImGui::Button( "Waiting lock...", ImVec2( t.lengthPxl, TRACE_HEIGHT ) );
+      if ( ImGui::IsItemHovered() )
+      {
+         const auto lockInfo = highlightLockOwner( infos, threadIndex, t.traceIndex, posX, posY );
+         (void)lockInfo.empty();
+         if ( t.lengthPxl > 3 )
+         {
+            char lockTooltip[256] = "Waiting lock for ";
+            ImGui::BeginTooltip();
+            formatNanosDurationToDisplay(
+                t.duration,
+                lockTooltip + strlen( lockTooltip ),
+                sizeof( lockTooltip ) - strlen( lockTooltip ) );
+
+            if ( lockInfo.empty() )
+            {
+               // Set a message to warn the user than the thread owning the lock is not part of
+               // any profiled code
+               snprintf(
+                   lockTooltip + strlen( lockTooltip ),
+                   sizeof( lockTooltip ) - strlen( lockTooltip ),
+                   "\n  Threads owning the lock were not profiled" );
+            }
+            else
+            {
+               // Print infos about which threads own the lock
+               char formattedLockTime[64] = {};
+               for ( const auto& i : lockInfo )
                {
-                  // Set a message to warn the user than the thread owning the lock is not part of
-                  // any profiled code
+                  formatNanosDurationToDisplay(
+                      i.lockDuration, formattedLockTime, sizeof( formattedLockTime ) );
                   snprintf(
                       lockTooltip + strlen( lockTooltip ),
                       sizeof( lockTooltip ) - strlen( lockTooltip ),
-                      "\n  Threads owning the lock were not profiled" );
+                      "\n  Thread #%u (%s)",
+                      i.threadIndex,
+                      formattedLockTime );
                }
-               else
-               {
-                  // Print infos about which threads own the lock
-                  char formattedLockTime[64] = {};
-                  for ( const auto& i : lockInfo )
-                  {
-                     formatNanosDurationToDisplay(
-                         i.lockDuration, formattedLockTime, sizeof( formattedLockTime ) );
-                     snprintf(
-                         lockTooltip + strlen( lockTooltip ),
-                         sizeof( lockTooltip ) - strlen( lockTooltip ),
-                         "\n  Thread #%u (%s)",
-                         i.threadIndex,
-                         formattedLockTime );
-                  }
-               }
-               ImGui::TextUnformatted( lockTooltip );
-               ImGui::EndTooltip();
             }
+            ImGui::TextUnformatted( lockTooltip );
+            ImGui::EndTooltip();
+         }
 
-            if ( ImGui::IsMouseDoubleClicked( 0 ) )
-            {
-               pushNavigationState();
-               frameToAbsoluteTime( lockWaits.ends[i] - lockWaits.deltas[i], delta );
-            }
+         if ( ImGui::IsMouseDoubleClicked( 0 ) )
+         {
+            pushNavigationState();
+            const TimeDuration delta = lockWaits.deltas[t.traceIndex];
+            frameToAbsoluteTime( lockWaits.ends[t.traceIndex] - delta, delta );
          }
       }
-      ImGui::PopStyleColor( 3 );
-   //}
-   // else  // Draw with lod
-   // {
-   // }
+   }
+
+   ImGui::PopStyleColor( 3 );
 }
 
 void Timeline::addTraceToHighlight( const std::pair< size_t, uint32_t >& trace )

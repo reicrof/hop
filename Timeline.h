@@ -42,6 +42,7 @@ class Timeline
    TimeDuration timelineRange() const noexcept;
    float verticalPosPxl() const noexcept;
    float maxVerticalPosPxl() const noexcept;
+   int currentLodLevel() const noexcept;
 
    TraceDetails& getTraceDetails() noexcept;
    void clearTraceDetails();
@@ -119,6 +120,7 @@ class Timeline
    float _rightClickStartPosInCanvas[2] = {};
    float _ctrlRightClickStartPosInCanvas[2] = {};
    float _timelineHoverPos{-1.0f};
+   int _lodLevel;
    bool _realtime{true};
 
    std::vector< std::pair< size_t, uint32_t > > _highlightedTraces;
