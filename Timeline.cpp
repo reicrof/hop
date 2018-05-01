@@ -20,7 +20,7 @@
 
 static constexpr hop::TimeDuration MIN_NANOS_TO_DISPLAY = 500;
 static constexpr hop::TimeDuration MAX_NANOS_TO_DISPLAY = 900000000000;
-static constexpr float MIN_TRACE_LENGTH_PXL = 2.0f;
+static constexpr float MIN_TRACE_LENGTH_PXL = 1.0f;
 static constexpr float MAX_TRACE_HEIGHT = 50.0f;
 static constexpr float MIN_TRACE_HEIGHT = 15.0f;
 static constexpr uint32_t DISABLED_COLOR = 0xFF505050;
@@ -191,11 +191,15 @@ void Timeline::draw(
       ImGui::Separator();
 
       tracesPerThread[i]._localTracesVerticalStartPos= ImGui::GetCursorPosY();
-      tracesPerThread[i]._absoluteTracesVerticalStartPos = ImGui::GetCursorScreenPos().y;
+      const float absTracesVerticalStartPos = ImGui::GetCursorScreenPos().y;
+      tracesPerThread[i]._absoluteTracesVerticalStartPos = absTracesVerticalStartPos;
 
       if (!threadHidden)
       {
          ImVec2 curDrawPos = ImGui::GetCursorScreenPos();
+
+         // Draw the lock waits (before traces so that they are not hiding them)
+         drawLockWaits(tracesPerThread, i, startDrawPos.x, absTracesVerticalStartPos);
    
          const bool tracesVisible = 
             ImGui::GetCursorStartPos().y < _verticalPosPxl + windowHeight &&
@@ -217,15 +221,6 @@ void Timeline::draw(
       const int64_t hoveredNano = _timelineStart + pxlToNanos(ImGui::GetWindowWidth(), _timelineRange, _timelineHoverPos - startDrawPos.x);
       hop::formatNanosTimepointToDisplay(hoveredNano, _timelineRange, text, sizeof(text));
       drawHoveringTimelineLine(_timelineHoverPos, startDrawPos.y, text);
-   }
-   // Draw the lockwait + highlights
-   for( size_t i = 0; i < tracesPerThread.size(); ++i)
-   {
-      if(!tracesPerThread[i]._hidden)
-      {
-         const float globalDrawPosY = tracesPerThread[i]._absoluteTracesVerticalStartPos;
-         drawLockWaits(tracesPerThread, i, startDrawPos.x, globalDrawPosY);
-      }
    }
 
    if( !_bookmarks.times.empty() )
