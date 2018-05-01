@@ -435,31 +435,93 @@ static bool ptInRect( const ImVec2& pt, const ImVec2& a, const ImVec2& b )
    return true;
 }
 
-static bool drawPlayStopButton( bool& isRecording )
+static constexpr float TOOLBAR_BUTTON_HEIGHT = 15.0f;
+static constexpr float TOOLBAR_BUTTON_WIDTH = 15.0f;
+static constexpr float TOOLBAR_BUTTON_PADDING = 5.0f;
+
+static bool drawPlayStopButton( const ImVec2& drawPos, bool isRecording )
 {
    HOP_PROF_FUNC();
-   constexpr float height = 15.0f, width = 15.0f, padding = 5.0f;
-   const auto startDrawPos = ImGui::GetCursorScreenPos();
    ImDrawList* DrawList = ImGui::GetWindowDrawList();
 
    const auto& mousePos = ImGui::GetMousePos();
-   const bool hovering = ImGui::IsMouseHoveringWindow() && ptInRect( mousePos, startDrawPos, ImVec2( startDrawPos.x + width, startDrawPos.y + height ) );
+   const bool hovering =
+       ImGui::IsMouseHoveringWindow() &&
+       ptInRect(
+           mousePos,
+           drawPos,
+           ImVec2( drawPos.x + TOOLBAR_BUTTON_WIDTH, drawPos.y + TOOLBAR_BUTTON_HEIGHT ) );
 
-   if( isRecording )
+   if ( isRecording )
    {
-      DrawList->AddRectFilled( startDrawPos, ImVec2( startDrawPos.x + width, startDrawPos.y + height ), hovering ? ImColor(0.9f,0.0f,0.0f) : ImColor(0.7f,0.0f,.0f) );
+      DrawList->AddRectFilled(
+          drawPos,
+          ImVec2( drawPos.x + TOOLBAR_BUTTON_WIDTH, drawPos.y + TOOLBAR_BUTTON_HEIGHT ),
+          hovering ? ImColor( 0.9f, 0.0f, 0.0f ) : ImColor( 0.7f, 0.0f, .0f ) );\
+      if( hovering )
+      {
+         ImGui::BeginTooltip();
+         ImGui::Text("Stop recording traces ('r')");
+         ImGui::EndTooltip();
+      }
    }
    else
    {
-      ImVec2 pts[] = {startDrawPos,
-                      ImVec2( startDrawPos.x + width, startDrawPos.y + ( height * 0.5 ) ),
-                      ImVec2( startDrawPos.x, startDrawPos.y + width )};
-      DrawList->AddConvexPolyFilled( pts, 3, hovering ? ImColor( 0.0f, 0.9f, 0.0f ) : ImColor( 0.0f, 0.7f, 0.0f ) );
+      ImVec2 pts[] = {
+          drawPos,
+          ImVec2( drawPos.x + TOOLBAR_BUTTON_WIDTH, drawPos.y + ( TOOLBAR_BUTTON_HEIGHT * 0.5 ) ),
+          ImVec2( drawPos.x, drawPos.y + TOOLBAR_BUTTON_WIDTH )};
+      DrawList->AddConvexPolyFilled(
+          pts, 3, hovering ? ImColor( 0.0f, 0.9f, 0.0f ) : ImColor( 0.0f, 0.7f, 0.0f ) );
+
+      if( hovering )
+      {
+         ImGui::BeginTooltip();
+         ImGui::Text("Start recording traces ('r')");
+         ImGui::EndTooltip();
+      }
    }
 
-   ImGui::SetCursorScreenPos( ImVec2(startDrawPos.x, startDrawPos.y + height + padding) );
+   ImGui::SetCursorScreenPos(
+       ImVec2( drawPos.x, drawPos.y + TOOLBAR_BUTTON_HEIGHT + TOOLBAR_BUTTON_PADDING ) );
 
-   return hovering && ImGui::IsMouseClicked(0);
+   return hovering && ImGui::IsMouseClicked( 0 );
+}
+
+static bool drawDeleteTracesButton( const ImVec2& drawPos, bool active )
+{
+   ImDrawList* DrawList = ImGui::GetWindowDrawList();
+
+   const auto& mousePos = ImGui::GetMousePos();
+   const bool hovering =
+       ImGui::IsMouseHoveringWindow() &&
+       ptInRect(
+           mousePos,
+           drawPos,
+           ImVec2( drawPos.x + TOOLBAR_BUTTON_WIDTH, drawPos.y + TOOLBAR_BUTTON_HEIGHT ) );
+
+   ImColor col = active ? ( hovering ? ImColor( 0.9f, 0.0f, 0.0f ) : ImColor( 0.7f, 0.0f, 0.0f ) )
+                        : ImColor( 0.5f, 0.5f, 0.5f );
+
+   DrawList->AddLine(
+       drawPos,
+       ImVec2( drawPos.x + TOOLBAR_BUTTON_WIDTH, drawPos.y + TOOLBAR_BUTTON_HEIGHT ),
+       col,
+       3.0f );
+   DrawList->AddLine(
+       ImVec2( drawPos.x + TOOLBAR_BUTTON_WIDTH, drawPos.y ),
+       ImVec2( drawPos.x, drawPos.y + TOOLBAR_BUTTON_HEIGHT ),
+       col,
+       3.0f );
+
+   if( active && hovering )
+   {
+      ImGui::BeginTooltip();
+      ImGui::Text("Delete all recorded traces ('Del')");
+      ImGui::EndTooltip();
+   }
+
+   return hovering && active && ImGui::IsMouseClicked( 0 );
 }
 
 void hop::Profiler::drawSearchWindow()
@@ -581,25 +643,34 @@ void hop::Profiler::draw( uint32_t windowWidth, uint32_t windowHeight )
 
    drawOptionsWindow( g_options );
 
-   if( drawPlayStopButton( _recording ) )
+   auto toolbarDrawPos = ImGui::GetCursorScreenPos();
+   if( drawPlayStopButton( toolbarDrawPos, _recording ) )
    {
       setRecording( !_recording );
+   }
+   toolbarDrawPos.x += (2.0f*TOOLBAR_BUTTON_PADDING) + TOOLBAR_BUTTON_WIDTH;
+   if( drawDeleteTracesButton( toolbarDrawPos, !_tracesPerThread.empty() ) )
+   {
+      hop::displayModalWindow( "Delete all traces?", hop::MODAL_TYPE_YES_NO, [&](){ clear(); } );
    }
 
    if( _tracesPerThread.empty() && !_recording )
    {
-      const char* record = "-------------- Hop --------------\n\n"
+      const char* helpTxt = "-------------- Hop --------------\n\n"
                            "Press 'R' to start/stop recording\n"
                            "Right mouse click to get traces details\n"
                            "Double click on a trace to focus it\n"
                            "Right mouse drag to zoom on a region\n"
-                           "Use CTRL+F to search traces\n";
+                           "Right click on the timeline to create a bookmark\n"
+                           "Use arrow keys <-/-> to navigate bookmarks\n"
+                           "Use CTRL+F to search traces\n"
+                           "Use Del to delete traces\n";
       const auto pos = ImGui::GetWindowPos();
       const float windowWidthPxl = ImGui::GetWindowWidth();
       const float windowHeightPxl = ImGui::GetWindowHeight();
       ImDrawList* DrawList = ImGui::GetWindowDrawList();
-      auto size = ImGui::CalcTextSize( record );
-      DrawList->AddText( ImGui::GetIO().Fonts->Fonts[0], 30.0f, ImVec2(pos.x + windowWidthPxl/2 - (size.x), pos.y + windowHeightPxl/2 - size.y),ImGui::GetColorU32( ImGuiCol_TextDisabled ), record );
+      auto size = ImGui::CalcTextSize( helpTxt );
+      DrawList->AddText( ImGui::GetIO().Fonts->Fonts[0], 30.0f, ImVec2(pos.x + windowWidthPxl/2 - (size.x), pos.y + windowHeightPxl/2 - size.y),ImGui::GetColorU32( ImGuiCol_TextDisabled ), helpTxt );
    }
    else
    {
@@ -782,6 +853,11 @@ void hop::Profiler::handleHotkey()
    else if( ImGui::IsKeyPressed( SDL_SCANCODE_RIGHT ) )
    {
       _timeline.nextBookmark();
+   }
+   else if( ImGui::IsKeyDown( SDLK_DELETE ) && !_tracesPerThread.empty() )
+   {
+      if( ImGui::IsWindowFocused( ImGuiFocusedFlags_RootAndChildWindows ) && !hop::modalWindowShowing() )
+         hop::displayModalWindow( "Delete all traces?", hop::MODAL_TYPE_YES_NO, [&](){ clear(); } );
    }
 }
 
