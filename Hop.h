@@ -34,6 +34,7 @@ For more information, please refer to <http://unlicense.org/>
 // when HOP_ENABLED is false
 #define HOP_PROF( x )
 #define HOP_PROF_FUNC()
+#define HOP_PROF_SPLIT( x )
 #define HOP_PROF_DYN_NAME( x )
 #define HOP_PROF_GL_FINISH( x )
 #define HOP_PROF_FUNC_GL_FINISH()
@@ -68,7 +69,10 @@ For more information, please refer to <http://unlicense.org/>
 #define HOP_PROF( x ) HOP_PROF_GUARD_VAR( __LINE__, ( __FILE__, __LINE__, (x), 0 ) )
 
 // Create a new profiling trace with the compiler provided name
-#define HOP_PROF_FUNC() HOP_PROF_GUARD_VAR( __LINE__, ( __FILE__, __LINE__, HOP_FCT_NAME, 0 ) )
+#define HOP_PROF_FUNC() HOP_PROF_ID_GUARD( hop__, ( __FILE__, __LINE__, HOP_FCT_NAME, 0 ) )
+
+// Split a profiling trace with a new provided name. Name must be static.
+#define HOP_PROF_SPLIT( x ) HOP_PROF_ID_SPLIT( hop__, ( __FILE__, __LINE__, (x), 0 ) )
 
 // Create a new profiling trace for dynamic strings. Please use sparingly as they will incur more slowdown
 #define HOP_PROF_DYN_NAME( x ) HOP_PROF_DYN_STRING_GUARD_VAR( __LINE__, ( __FILE__, __LINE__, (x), 0 ) )
@@ -407,25 +411,43 @@ class ClientManager
 class ProfGuard
 {
   public:
-   ProfGuard( const char* fileName, TLineNb_t lineNb, const char* fctName, TGroup_t groupId ) HOP_NOEXCEPT
-       : _start( getTimeStamp() ),
-         _fileName( fileName ),
-         _fctName( fctName ),
-         _lineNb( lineNb ),
-         _group( groupId )
-   {
-      ClientManager::StartProfile();
-   }
-   ~ProfGuard()
-   {
-      ClientManager::EndProfile( _fileName, _fctName, _start, getTimeStamp(), _lineNb, _group );
-   }
+    ProfGuard( const char* fileName, TLineNb_t lineNb, const char* fctName, TGroup_t groupId ) HOP_NOEXCEPT
+    {
+      open( fileName, lineNb, fctName, groupId );
+    }
+    ~ProfGuard()
+    {
+      close();
+    }
+    inline void reset( const char* fileName, TLineNb_t lineNb, const char* fctName, TGroup_t groupId )
+    {
+      // Please uncomment the following line if close() is made public!
+      // if ( _fctName )
+      close();
+      open( fileName, lineNb, fctName, groupId );
+    }
 
   private:
-   TimeStamp _start;
-   const char *_fileName, *_fctName;
-   TLineNb_t _lineNb;
-   TGroup_t _group;
+    inline void open( const char* fileName, TLineNb_t lineNb, const char* fctName, TGroup_t groupId )
+    {
+      _start = getTimeStamp();
+      _fileName = fileName;
+      _fctName = fctName;
+      _lineNb = lineNb;
+      _group = groupId;
+      ClientManager::StartProfile();
+    }
+    inline void close()
+    {
+      ClientManager::EndProfile( _fileName, _fctName, _start, getTimeStamp(), _lineNb, _group );
+      // Please uncomment the following line if close() is made public!
+      // _fctName = nullptr;
+    }
+
+    TimeStamp _start;
+    const char *_fileName, *_fctName;
+    TLineNb_t _lineNb;
+    TGroup_t _group;
 };
 
 class ProfGuardGLFinish
@@ -497,6 +519,10 @@ class ProfGuardDynamicString
 #define HOP_COMBINE( X, Y ) X##Y
 #define HOP_PROF_GUARD_VAR( LINE, ARGS ) \
    hop::ProfGuard HOP_COMBINE( hopProfGuard, LINE ) ARGS
+#define HOP_PROF_ID_GUARD( ID, ARGS ) \
+   hop::ProfGuard ID ARGS
+#define HOP_PROF_ID_SPLIT( ID, ARGS ) \
+   ID.reset ARGS
 #define HOP_PROF_GL_FINISH_GUARD_VAR( LINE, ARGS ) \
    hop::ProfGuardGLFinish HOP_COMBINE( hopProfGuard, LINE ) ARGS
 #define HOP_PROF_DYN_STRING_GUARD_VAR( LINE, ARGS ) \
