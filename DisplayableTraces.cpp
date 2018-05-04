@@ -17,7 +17,7 @@ void DisplayableTraces::append( const DisplayableTraces& newTraces )
        fileNameIds.end(), newTraces.fileNameIds.begin(), newTraces.fileNameIds.end() );
    fctNameIds.insert( fctNameIds.end(), newTraces.fctNameIds.begin(), newTraces.fctNameIds.end() );
    lineNbs.insert( lineNbs.end(), newTraces.lineNbs.begin(), newTraces.lineNbs.end() );
-   groups.insert( groups.end(), newTraces.groups.begin(), newTraces.groups.end() );
+   zones.insert( zones.end(), newTraces.zones.begin(), newTraces.zones.end() );
    depths.insert( depths.end(), newTraces.depths.begin(), newTraces.depths.end() );
    maxDepth = std::max(maxDepth, newTraces.maxDepth);
 
@@ -32,7 +32,7 @@ void DisplayableTraces::clear()
    fileNameIds.clear();
    fctNameIds.clear();
    lineNbs.clear();
-   groups.clear();
+   zones.clear();
    depths.clear();
    maxDepth = 0;
 }
@@ -46,7 +46,7 @@ DisplayableTraces DisplayableTraces::copy() const
    copy.fileNameIds = this->fileNameIds;
    copy.fctNameIds = this->fctNameIds;
    copy.lineNbs = this->lineNbs;
-   copy.groups = this->groups;
+   copy.zones = this->zones;
    copy.depths = this->depths;
    copy.lods = this->lods;
    copy.maxDepth = this->maxDepth;

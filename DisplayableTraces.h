@@ -33,7 +33,7 @@ struct DisplayableTraces
    std::deque< TStrPtr_t > fctNameIds;
 
    std::deque< TLineNb_t > lineNbs;
-   std::deque< TGroup_t > groups;
+   std::deque< TZoneId_t > zones;
    std::deque< TDepth_t > depths;
    std::deque< uint32_t > flags;
 

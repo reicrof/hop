@@ -166,13 +166,15 @@ void Timeline::draw(
 
       HOP_PROF_DYN_NAME( threadName );
 
-      uint32_t traceColor = getColorForThread( g_options, i );
-      if(threadHidden)
-         traceColor = DISABLED_COLOR;
+      const auto& zoneColors = g_options.zoneColors;
 
-      ImGui::PushStyleColor( ImGuiCol_Button, traceColor );
-      ImGui::PushStyleColor( ImGuiCol_ButtonHovered, addColorWithClamping( traceColor, HOVERED_COLOR_DELTA ) );
-      ImGui::PushStyleColor( ImGuiCol_ButtonActive, addColorWithClamping( traceColor, ACTIVE_COLOR_DELTA ) );
+      uint32_t threadLabelCol = zoneColors[ (i+1) % HOP_MAX_ZONES ];
+      if(threadHidden)
+         threadLabelCol = DISABLED_COLOR;
+
+      ImGui::PushStyleColor( ImGuiCol_Button, threadLabelCol );
+      ImGui::PushStyleColor( ImGuiCol_ButtonHovered, addColorWithClamping( threadLabelCol, HOVERED_COLOR_DELTA ) );
+      ImGui::PushStyleColor( ImGuiCol_ButtonActive, addColorWithClamping( threadLabelCol, ACTIVE_COLOR_DELTA ) );
       if ( ImGui::Button( threadName ) )
       {
          tracesPerThread[i]._hidden = !threadHidden;
@@ -209,8 +211,7 @@ void Timeline::draw(
          {
             // Draw the lock waits (before traces so that they are not hiding them)
             drawLockWaits(tracesPerThread, i, startDrawPos.x, absTracesVerticalStartPos);
-            drawTraces( tracesPerThread[i], i, curDrawPos.x, curDrawPos.y, strDb, traceColor );
-            printf("Drawing thread %zu\n", i );
+            drawTraces( tracesPerThread[i], i, curDrawPos.x, curDrawPos.y, strDb);
          }
 
 
@@ -685,13 +686,23 @@ void Timeline::zoomOn( int64_t nanoToZoomOn, float zoomFactor )
    }
 }
 
+static uint32_t setBitIndex( TZoneId_t zone )
+{
+   uint32_t count = 0;
+   while ( zone )
+   {
+      zone = zone >> 1;
+      ++count;
+   }
+   return count-1;
+}
+
 void Timeline::drawTraces(
     const ThreadInfo& data,
     uint32_t threadIndex,
     const float posX,
     const float posY,
-    const StringDb& strDb,
-    uint32_t color )
+    const StringDb& strDb )
 {
    if ( data._traces.ends.empty() ) return;
 
@@ -706,9 +717,15 @@ void Timeline::drawTraces(
       float lengthPxl;
    };
 
-   static std::vector<DrawingInfo> tracesToDraw, lodTracesToDraw, highlightTraceToDraw;
-   tracesToDraw.clear();
-   lodTracesToDraw.clear();
+   static std::array< std::vector< DrawingInfo >, HOP_MAX_ZONES > tracesToDraw;
+   static std::array< std::vector< DrawingInfo >, HOP_MAX_ZONES > lodTracesToDraw;
+   for( size_t i = 0; i < lodTracesToDraw.size(); ++i )
+   {
+      tracesToDraw[ i ].clear();
+      lodTracesToDraw[ i ].clear();
+   }
+
+   static std::vector<DrawingInfo> highlightTraceToDraw;
    highlightTraceToDraw.clear();
 
    // Find the best lodLevel for our current zoom
@@ -737,14 +754,15 @@ void Timeline::drawTraces(
       const auto tracePos = ImVec2(
           posX + traceEndPxl - traceLengthPxl,
           posY + t.depth * PADDED_TRACE_SIZE);
+      const uint32_t zoneIndex = setBitIndex(data._traces.zones[t.traceIndex]);
       if ( t.isLoded )
       {
-         lodTracesToDraw.push_back(
+         lodTracesToDraw[ zoneIndex ].push_back(
              DrawingInfo{tracePos, t.delta, t.traceIndex, traceLengthPxl} );
       }
       else
       {
-         tracesToDraw.push_back(
+         tracesToDraw[ zoneIndex ].push_back(
              DrawingInfo{tracePos, t.delta, t.traceIndex, traceLengthPxl} );
          for( const auto& tid : _highlightedTraces )
          {
@@ -759,89 +777,103 @@ void Timeline::drawTraces(
    const bool rightMouseClicked = ImGui::IsMouseReleased( 1 );
    const bool leftMouseDblClicked = ImGui::IsMouseDoubleClicked( 0 );
 
-   ImGui::PushStyleColor( ImGuiCol_Button, color );
-   ImGui::PushStyleColor( ImGuiCol_ButtonHovered, addColorWithClamping( color, HOVERED_COLOR_DELTA ) );
-   ImGui::PushStyleColor( ImGuiCol_ButtonActive, addColorWithClamping( color, ACTIVE_COLOR_DELTA ) );
+   const auto& zoneColors = g_options.zoneColors;
+   const auto& enabledZone = g_options.zoneEnabled;
+   const float disabledZoneOpacity = g_options.disabledZoneOpacity;
 
    // Draw the loded traces
    char curName[512] = "<Multiple Elements> ~";
    const size_t hoveredNamePrefixSize = strlen( curName );
-   for ( const auto& t : lodTracesToDraw )
+   for ( size_t zoneId = 0; zoneId < lodTracesToDraw.size(); ++zoneId )
    {
-      ImGui::SetCursorScreenPos( t.posPxl );
-
-      ImGui::Button( "", ImVec2( t.lengthPxl, TRACE_HEIGHT ) );
-
-      if ( ImGui::IsItemHovered() )
+      ImGui::PushStyleColor(ImGuiCol_Button, zoneColors[zoneId] );
+      ImGui::PushStyleColor(ImGuiCol_ButtonHovered, addColorWithClamping( zoneColors[zoneId], HOVERED_COLOR_DELTA ) );
+      ImGui::PushStyleColor(ImGuiCol_ButtonActive, addColorWithClamping( zoneColors[zoneId], ACTIVE_COLOR_DELTA ) );
+      ImGui::PushStyleVar(ImGuiStyleVar_Alpha, enabledZone[zoneId] ? 1.0f : disabledZoneOpacity );
+      const auto& traces = lodTracesToDraw[ zoneId ];
+      for( const auto& t : traces )
       {
-         if ( t.lengthPxl > 3 )
-         {
-            ImGui::BeginTooltip();
-            formatNanosDurationToDisplay( t.duration, curName + hoveredNamePrefixSize, sizeof( curName ) - hoveredNamePrefixSize );
-            ImGui::TextUnformatted( curName );
-            ImGui::EndTooltip();
-         }
+         ImGui::SetCursorScreenPos( t.posPxl );
 
-         if ( leftMouseDblClicked )
+         ImGui::Button( "", ImVec2( t.lengthPxl, TRACE_HEIGHT ) );
+
+         if ( ImGui::IsItemHovered() )
          {
-            pushNavigationState();
-            const TimeStamp traceEndTime =
-                pxlToNanos( windowWidthPxl, _timelineRange, t.posPxl.x - posX + t.lengthPxl );
-            frameToTime( _timelineStart + ( traceEndTime - t.duration ), t.duration );
-         }
-         else if ( rightMouseClicked && _rightClickStartPosInCanvas[0] == 0.0f)
-         {
-            _traceDetails = createTraceDetails( data._traces, threadIndex, t.traceIndex );
+            if ( t.lengthPxl > 3 )
+            {
+               ImGui::BeginTooltip();
+               formatNanosDurationToDisplay( t.duration, curName + hoveredNamePrefixSize, sizeof( curName ) - hoveredNamePrefixSize );
+               ImGui::TextUnformatted( curName );
+               ImGui::EndTooltip();
+            }
+
+            if ( leftMouseDblClicked )
+            {
+               pushNavigationState();
+               const TimeStamp traceEndTime =
+                   pxlToNanos( windowWidthPxl, _timelineRange, t.posPxl.x - posX + t.lengthPxl );
+               frameToTime( _timelineStart + ( traceEndTime - t.duration ), t.duration );
+            }
+            else if ( rightMouseClicked && _rightClickStartPosInCanvas[0] == 0.0f)
+            {
+               _traceDetails = createTraceDetails( data._traces, threadIndex, t.traceIndex );
+            }
          }
       }
+      ImGui::PopStyleColor( 3 );
+      ImGui::PopStyleVar();
    }
 
-   ImGui::PopStyleColor( 3 );
-
-   ImGui::PushStyleColor(ImGuiCol_Button, color );
-   ImGui::PushStyleColor(ImGuiCol_ButtonHovered, addColorWithClamping( color, HOVERED_COLOR_DELTA ) );
-   ImGui::PushStyleColor(ImGuiCol_ButtonActive, addColorWithClamping( color, ACTIVE_COLOR_DELTA ) );
    char formattedTime[64] = {};
    // Draw the non-loded traces
-   for ( const auto& t : tracesToDraw )
+   for ( size_t zoneId = 0; zoneId < tracesToDraw.size(); ++zoneId )
    {
-      const size_t traceIndex = t.traceIndex;
-      snprintf( curName, sizeof(curName), "%s", strDb.getString( data._traces.fctNameIds[traceIndex] ) );
-
-      ImGui::SetCursorScreenPos( t.posPxl );
-      ImGui::Button( curName, ImVec2( t.lengthPxl, TRACE_HEIGHT ) );
-      if ( ImGui::IsItemHovered() )
+      ImGui::PushStyleColor(ImGuiCol_Button, zoneColors[zoneId] );
+      ImGui::PushStyleColor(ImGuiCol_ButtonHovered, addColorWithClamping( zoneColors[zoneId], HOVERED_COLOR_DELTA ) );
+      ImGui::PushStyleColor(ImGuiCol_ButtonActive, addColorWithClamping( zoneColors[zoneId], ACTIVE_COLOR_DELTA ) );
+      ImGui::PushStyleVar(ImGuiStyleVar_Alpha, enabledZone[zoneId] ? 1.0f : disabledZoneOpacity );
+      const auto& traces = tracesToDraw[ zoneId ];
+      for( const auto& t : traces )
       {
-         if ( t.lengthPxl > 3 )
-         {
-            size_t lastChar = strlen( curName );
-            curName[lastChar] = ' ';
-            ImGui::BeginTooltip();
-            formatNanosDurationToDisplay( t.duration, formattedTime, sizeof( formattedTime ) );
-            snprintf(
-                curName + lastChar,
-                sizeof( curName ) - lastChar,
-                " (%s)\n   %s:%d ",
-                formattedTime,
-                strDb.getString( data._traces.fileNameIds[traceIndex] ),
-                data._traces.lineNbs[traceIndex] );
-            ImGui::TextUnformatted( curName );
-            ImGui::EndTooltip();
-         }
+         const size_t traceIndex = t.traceIndex;
+         snprintf( curName, sizeof(curName), "%s", strDb.getString( data._traces.fctNameIds[traceIndex] ) );
 
-         if ( leftMouseDblClicked )
+         ImGui::SetCursorScreenPos( t.posPxl );
+         ImGui::Button( curName, ImVec2( t.lengthPxl, TRACE_HEIGHT ) );
+         if ( ImGui::IsItemHovered() )
          {
-            setZoom( t.duration );
-            setStartTime(
-                ( data._traces.ends[traceIndex] - data._traces.deltas[traceIndex] - absoluteStart ) );
-         }
-         else if ( rightMouseClicked && _rightClickStartPosInCanvas[0] == 0.0f)
-         {
-            _traceDetails = createTraceDetails( data._traces, threadIndex, t.traceIndex );
+            if ( t.lengthPxl > 3 )
+            {
+               size_t lastChar = strlen( curName );
+               curName[lastChar] = ' ';
+               ImGui::BeginTooltip();
+               formatNanosDurationToDisplay( t.duration, formattedTime, sizeof( formattedTime ) );
+               snprintf(
+                   curName + lastChar,
+                   sizeof( curName ) - lastChar,
+                   " (%s)\n   %s:%d ",
+                   formattedTime,
+                   strDb.getString( data._traces.fileNameIds[traceIndex] ),
+                   data._traces.lineNbs[traceIndex] );
+               ImGui::TextUnformatted( curName );
+               ImGui::EndTooltip();
+            }
+
+            if ( leftMouseDblClicked )
+            {
+               setZoom( t.duration );
+               setStartTime(
+                   ( data._traces.ends[traceIndex] - data._traces.deltas[traceIndex] - absoluteStart ) );
+            }
+            else if ( rightMouseClicked && _rightClickStartPosInCanvas[0] == 0.0f)
+            {
+               _traceDetails = createTraceDetails( data._traces, threadIndex, t.traceIndex );
+            }
          }
       }
+      ImGui::PopStyleColor( 3 );
+      ImGui::PopStyleVar();
    }
-   ImGui::PopStyleColor( 3 );
 
    ImGui::PushStyleColor( ImGuiCol_Button, ImColor( 1.0f, 1.0f, 1.0f, 0.5f * _animationState.highlightPercent ).Value );
    ImGui::PushStyleColor( ImGuiCol_ButtonHovered, ImColor( 1.0f, 1.0f, 1.0f, 0.4f * _animationState.highlightPercent ).Value );
@@ -1028,9 +1060,13 @@ void Timeline::drawLockWaits(
       }
    }
 
-   ImGui::PushStyleColor( ImGuiCol_Button, ImVec4( 0.8f, 0.0f, 0.0f, 1.0f ) );
-   ImGui::PushStyleColor( ImGuiCol_ButtonHovered, ImVec4( 1.0f, 0.3f, 0.3f, 1.0f ) );
-   ImGui::PushStyleColor( ImGuiCol_ButtonActive, ImVec4( 1.0f, 0.0f, 0.0f, 1.0f ) );
+   const auto& zoneColors = g_options.zoneColors;
+   const auto& enabledZone = g_options.zoneEnabled;
+   const float disabledZoneOpacity = g_options.disabledZoneOpacity;
+   ImGui::PushStyleColor(ImGuiCol_Button, zoneColors[0] );
+   ImGui::PushStyleColor(ImGuiCol_ButtonHovered, addColorWithClamping( zoneColors[0], HOVERED_COLOR_DELTA ) );
+   ImGui::PushStyleColor(ImGuiCol_ButtonActive, addColorWithClamping( zoneColors[0], ACTIVE_COLOR_DELTA ) );
+   ImGui::PushStyleVar(ImGuiStyleVar_Alpha, enabledZone[0] ? 1.0f : disabledZoneOpacity );
 
    for ( const auto& t : lodTracesToDraw )
    {
@@ -1118,6 +1154,7 @@ void Timeline::drawLockWaits(
    }
 
    ImGui::PopStyleColor( 3 );
+   ImGui::PopStyleVar();
 }
 
 void Timeline::addTraceToHighlight( const std::pair< size_t, uint32_t >& trace )

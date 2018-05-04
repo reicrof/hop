@@ -46,20 +46,21 @@ struct MaClasse
 
 void func3()
 {
-   HOP_PROF_FUNC_WITH_GROUP(42);
+   HOP_PROF_FUNC();
    std::this_thread::sleep_for(std::chrono::microseconds(500));
 }
 void func2()
 {
-   HOP_PROF_FUNC_WITH_GROUP(42);
+   HOP_PROF_FUNC();
    func3();
    buggyFunction();
    func3();
 }
 void func1()
 {
+   HOP_ZONE( HOP_ZONE_10 );
    //static size_t i = 0;
-   HOP_PROF_FUNC_WITH_GROUP(42);
+   HOP_PROF_FUNC();
    //std::lock_guard<std::mutex> g(m1);
    func2();
    char dynName[ 100 ];
@@ -85,17 +86,17 @@ void doEvenMoreStuff()
 
 void doMoreStuf()
 {
-   HOP_PROF_FUNC_WITH_GROUP(42);
+   HOP_PROF_FUNC();
    for( int i = 0; i < 200; ++i )
       doEvenMoreStuff();
 }
 
 void takeMutexAndDoStuff()
 {
-   HOP_PROF_FUNC_WITH_GROUP(42);
+   HOP_PROF_FUNC();
    //std::lock_guard<std::mutex> g(m);
    {
-      HOP_PROF_FUNC_WITH_GROUP(42);
+      HOP_PROF_FUNC();
       doMoreStuf();
       std::this_thread::sleep_for(std::chrono::milliseconds(1));
       doMoreStuf();
@@ -133,13 +134,13 @@ void LODTest()
 
 void l3()
 {
-	HOP_PROF_FUNC_WITH_GROUP(42);
+	HOP_PROF_FUNC();
 	//std::this_thread::sleep_for(100us);
 }
 
 void l2()
 {
-	HOP_PROF_FUNC_WITH_GROUP(42);
+	HOP_PROF_FUNC();
 	//std::this_thread::sleep_for(500us);
 	for (int i = 0; i < 2; ++i)
 	{
@@ -149,14 +150,14 @@ void l2()
 
 void l1()
 {
-	HOP_PROF_FUNC_WITH_GROUP(42);
+	HOP_PROF_FUNC();
 	l2();
 	l2();
 }
 
 void rec( int& i )
 {
-   HOP_PROF_FUNC_WITH_GROUP(42);
+   HOP_PROF_FUNC();
    while( i > 0 )
    {
       std::this_thread::sleep_for(std::chrono::microseconds(1));
@@ -168,7 +169,7 @@ void rec( int& i )
 
 void startRec()
 {
-   HOP_PROF_FUNC_WITH_GROUP(42);
+   HOP_PROF_FUNC();
    int recCount = 50;
    rec( recCount );
 }
@@ -176,7 +177,7 @@ void startRec()
 void testMutex()
 {
 
-   HOP_PROF_FUNC_WITH_GROUP(42);
+   HOP_PROF_FUNC();
 
    const auto start = hop::getTimeStamp();
    std::lock_guard<std::mutex> g(m1);
@@ -215,20 +216,24 @@ int main()
 
     while(g_run)
     {
-      HOP_PROF_FUNC_WITH_GROUP(42);
+      HOP_PROF_FUNC();
       //std::lock_guard<std::mutex> g(m);
       std::this_thread::sleep_for(std::chrono::milliseconds(3));
       func1();
       {
+      HOP_ZONE( HOP_ZONE_4 );
       HOP_PROF_GL_FINISH( "GL finish" );
       HOP_PROF( "Creating maclass1" );
       {
+         HOP_ZONE( HOP_ZONE_3 );
          std::this_thread::sleep_for(std::chrono::microseconds(250));
          HOP_PROF( "Creating maclass2" );
          {
+            HOP_ZONE( HOP_ZONE_2 );
             std::this_thread::sleep_for(std::chrono::microseconds(250));
             HOP_PROF( "Creating MaClasselass3" );
             {
+               HOP_ZONE( HOP_ZONE_1 );
                std::this_thread::sleep_for(std::chrono::microseconds(250));
                HOP_PROF( "Creating maclass4" );
                {

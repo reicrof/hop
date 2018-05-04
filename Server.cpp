@@ -127,8 +127,8 @@ size_t Server::handleNewMessage( uint8_t* data, size_t maxSize )
              dispTraces.fctNameIds.push_back( _stringDb.getStringIndex( t.fctNameId ) );
              dispTraces.lineNbs.push_back( t.lineNumber );
              dispTraces.depths.push_back( t.depth );
+             dispTraces.zones.push_back( t.zone );
              maxDepth = std::max( maxDepth, t.depth );
-             dispTraces.groups.push_back( t.group );
           }
           dispTraces.maxDepth = maxDepth;
 
