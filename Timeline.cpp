@@ -1063,10 +1063,10 @@ void Timeline::drawLockWaits(
    const auto& zoneColors = g_options.zoneColors;
    const auto& enabledZone = g_options.zoneEnabled;
    const float disabledZoneOpacity = g_options.disabledZoneOpacity;
-   ImGui::PushStyleColor(ImGuiCol_Button, zoneColors[0] );
-   ImGui::PushStyleColor(ImGuiCol_ButtonHovered, addColorWithClamping( zoneColors[0], HOVERED_COLOR_DELTA ) );
-   ImGui::PushStyleColor(ImGuiCol_ButtonActive, addColorWithClamping( zoneColors[0], ACTIVE_COLOR_DELTA ) );
-   ImGui::PushStyleVar(ImGuiStyleVar_Alpha, enabledZone[0] ? 1.0f : disabledZoneOpacity );
+   ImGui::PushStyleColor(ImGuiCol_Button, zoneColors[HOP_MAX_ZONES] );
+   ImGui::PushStyleColor(ImGuiCol_ButtonHovered, addColorWithClamping( zoneColors[HOP_MAX_ZONES], HOVERED_COLOR_DELTA ) );
+   ImGui::PushStyleColor(ImGuiCol_ButtonActive, addColorWithClamping( zoneColors[HOP_MAX_ZONES], ACTIVE_COLOR_DELTA ) );
+   ImGui::PushStyleVar(ImGuiStyleVar_Alpha, enabledZone[HOP_MAX_ZONES] ? 1.0f : disabledZoneOpacity );
 
    for ( const auto& t : lodTracesToDraw )
    {
