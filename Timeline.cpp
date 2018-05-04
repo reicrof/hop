@@ -26,6 +26,7 @@ static constexpr float MIN_TRACE_HEIGHT = 15.0f;
 static constexpr uint32_t DISABLED_COLOR = 0xFF505050;
 static constexpr uint32_t HOVERED_COLOR_DELTA = 0x00191919;
 static constexpr uint32_t ACTIVE_COLOR_DELTA = 0x00333333;
+static constexpr float PADDING_BETWEEN_THREADS = 70.0f;
 
 static void drawHoveringTimelineLine(float posInScreenX, float timelineStartPosY, const char* text )
 {
@@ -156,8 +157,6 @@ void Timeline::draw(
    // Set the scroll and get it back from ImGui to have the clamped value
    ImGui::SetScrollY(_verticalPosPxl);
 
-   const float windowHeight = ImGui::GetWindowHeight();
-
    char threadName[128] = "Thread ";
    for ( size_t i = 0; i < tracesPerThread.size(); ++i )
    {
@@ -198,17 +197,24 @@ void Timeline::draw(
       {
          ImVec2 curDrawPos = ImGui::GetCursorScreenPos();
 
-         // Draw the lock waits (before traces so that they are not hiding them)
-         drawLockWaits(tracesPerThread, i, startDrawPos.x, absTracesVerticalStartPos);
-   
-         const bool tracesVisible = 
-            ImGui::GetCursorStartPos().y < _verticalPosPxl + windowHeight &&
-            curDrawPos.y + tracesPerThread[i]._traces.maxDepth * PADDED_TRACE_SIZE > 0;
+         const float threadStartRelDrawPos = curDrawPos.y - ImGui::GetWindowPos().y;
+         const float threadEndRelDrawPos =
+             threadStartRelDrawPos + ( tracesPerThread[i]._traces.maxDepth * PADDED_TRACE_SIZE ) +
+             PADDING_BETWEEN_THREADS;
+
+         const bool tracesVisible =
+             !( threadStartRelDrawPos > ImGui::GetWindowHeight() || threadEndRelDrawPos < 0 );
 
          if( tracesVisible )
+         {
+            // Draw the lock waits (before traces so that they are not hiding them)
+            drawLockWaits(tracesPerThread, i, startDrawPos.x, absTracesVerticalStartPos);
             drawTraces( tracesPerThread[i], i, curDrawPos.x, curDrawPos.y, strDb, traceColor );
+            printf("Drawing thread %zu\n", i );
+         }
 
-         curDrawPos.y += tracesPerThread[i]._traces.maxDepth * PADDED_TRACE_SIZE + 70;
+
+         curDrawPos.y += tracesPerThread[i]._traces.maxDepth * PADDED_TRACE_SIZE + PADDING_BETWEEN_THREADS;
          ImGui::SetCursorScreenPos(curDrawPos);
       }
    }
