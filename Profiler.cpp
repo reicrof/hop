@@ -1000,6 +1000,7 @@ bool hop::Profiler::openFile( const char* path )
 
 void hop::Profiler::clear()
 {
+   _server.clear();
    _strDb.clear();
    _tracesPerThread.clear();
    _timeline.setAbsoluteStartTime( 0 );

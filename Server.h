@@ -18,6 +18,7 @@ class Server
    bool start( const char* name, bool useGlFinishByDefault );
    bool setRecording( bool recording );
    void stop();
+   void clear();
 
    bool useGlFinish() const noexcept;
    void setUseGlFinish( bool );

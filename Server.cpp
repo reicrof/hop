@@ -210,6 +210,13 @@ void Server::clearPendingMessages()
    }
 }
 
+void Server::clear()
+{
+   setRecording( false );
+   _sharedMem.incrementStrDbResetCount();
+   clearPendingMessages();
+}
+
 void Server::stop()
 {
    if( _running )
