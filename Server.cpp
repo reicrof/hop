@@ -39,18 +39,29 @@ bool Server::start( const char* name, bool useGlFinishByDefault )
          _sharedMem.waitSemaphore();
 
          // We are done running.
-         if ( !_running ) break;
+         if ( !_running.load() ) break;
+
+         // A clear was requested so we need to clear our string database
+         if( _clearingRequested.load() )
+         {
+            _stringDb.clear();
+            clearPendingMessages();
+            _clearingRequested.store( false );
+            _sharedMem.setResetTimestamp( getTimeStamp() );
+            continue;
+         }
 
          HOP_PROF( "Handle messages" );
          size_t offset = 0;
          const size_t bytesToRead = ringbuf_consume( _sharedMem.ringbuffer(), &offset );
          if ( bytesToRead > 0 )
          {
+            const TimeStamp minTimestamp = _sharedMem.lastResetTimestamp();
             size_t bytesRead = 0;
             while ( bytesRead < bytesToRead )
             {
                bytesRead += handleNewMessage(
-                   &_sharedMem.data()[offset + bytesRead], bytesToRead - bytesRead );
+                   &_sharedMem.data()[offset + bytesRead], bytesToRead - bytesRead, minTimestamp);
             }
             ringbuf_release( _sharedMem.ringbuffer(), bytesToRead );
          }
@@ -79,7 +90,7 @@ void Server::getPendingData(PendingData & data)
     _pendingData.clear();
 }
 
-size_t Server::handleNewMessage( uint8_t* data, size_t maxSize )
+size_t Server::handleNewMessage( uint8_t* data, size_t maxSize, TimeStamp minTimestamp )
 {
    uint8_t* bufPtr = data;
    const MsgInfo* msgInfo = (const MsgInfo*)bufPtr;
@@ -88,6 +99,10 @@ size_t Server::handleNewMessage( uint8_t* data, size_t maxSize )
 
     bufPtr += sizeof( MsgInfo );
     assert( (size_t)(bufPtr - data) <= maxSize );
+
+    // If the message was sent prior to the last reset timestamp, ignore it
+    if( msgInfo->timeStamp < minTimestamp )
+       return (size_t)(bufPtr - data);
 
     switch ( msgType )
     {
@@ -100,11 +115,9 @@ size_t Server::handleNewMessage( uint8_t* data, size_t maxSize )
              memcpy( stringData.data(), bufPtr, stringData.size() );
              _stringDb.addStringData( stringData );
              bufPtr += stringData.size();
-          }
-          assert( ( size_t )( bufPtr - data ) <= maxSize );
 
-          if ( stringData.size() > 0 )
-          {
+             assert( ( size_t )( bufPtr - data ) <= maxSize );
+
              // TODO: Could lock later when we received all the messages
              std::lock_guard<std::mutex> guard( _pendingData.mutex );
              _pendingData.stringData.emplace_back( std::move( stringData ) );
@@ -213,8 +226,7 @@ void Server::clearPendingMessages()
 void Server::clear()
 {
    setRecording( false );
-   _sharedMem.incrementStrDbResetCount();
-   clearPendingMessages();
+   _clearingRequested.store( true );
 }
 
 void Server::stop()

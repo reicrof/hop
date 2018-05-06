@@ -5,7 +5,7 @@
 namespace hop
 {
 
-Stats g_stats = { 0.0, 0.0, 0.0, 0.0, 0, 0, 0, 0, 0 };
+Stats g_stats = { 0.0, 0.0, 0.0, 0.0, 0, 0, 0, 0 };
 
 void drawStatsWindow( const Stats& stats )
 {
@@ -21,7 +21,6 @@ void drawStatsWindow( const Stats& stats )
    //ImGui::Text("Total traces size : %zu", stats.traceSize);
    ImGui::Text("Traces count : %zu", stats.traceCount);
    ImGui::Text( "Current LOD : %d", stats.currentLOD );
-   ImGui::Text( "Selected trace : %lld", stats.selectedTrace );
 }
 
 }

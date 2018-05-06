@@ -44,15 +44,16 @@ class Server
 
   private:
    // Returns the number of bytes processed
-   size_t handleNewMessage( uint8_t* data, size_t maxSize );
+   size_t handleNewMessage( uint8_t* data, size_t maxSize, TimeStamp minTimestamp );
 
    void clearPendingMessages();
 
    std::thread _thread;
    std::atomic< bool > _running{false};
    SharedMemory _sharedMem;
-   StringDb _stringDb;
 
+   std::atomic< bool > _clearingRequested{false};
+   StringDb _stringDb;
    PendingData _pendingData;
 };
 

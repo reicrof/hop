@@ -1007,5 +1007,6 @@ void hop::Profiler::clear()
    _timeline.clearTraceDetails();
    _timeline.clearBookmarks();
    _recording = false;
+   g_stats.traceCount = 0;
 }
 
