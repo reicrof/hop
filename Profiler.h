@@ -4,6 +4,7 @@
 #include "Hop.h"
 #include "Timeline.h"
 #include "ThreadInfo.h"
+#include "TraceSearch.h"
 #include "StringDb.h"
 #include "Server.h"
 
@@ -43,6 +44,7 @@ private:
    Timeline _timeline;
    std::vector< ThreadInfo > _tracesPerThread;
    StringDb _strDb;
+   SearchResult _searchRes;
    bool _recording{ false };
    bool _searchWindowOpen{ false };
    bool _focusSearchWindow{ false };

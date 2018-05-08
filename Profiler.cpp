@@ -4,7 +4,6 @@
 #include "Stats.h"
 #include "Utils.h"
 #include "TraceDetail.h"
-#include "TraceSearch.h"
 #include "DisplayableTraces.h"
 #include "ModalWindow.h"
 #include "miniz.h"
@@ -541,7 +540,6 @@ void hop::Profiler::drawSearchWindow()
       ImGui::SetNextWindowSize( ImVec2( 600, 300 ), ImGuiSetCond_FirstUseEver );
       if ( ImGui::Begin( "Search Window", &_searchWindowOpen ) )
       {
-         static hop::SearchResult lastSearch;
          static char input[512];
 
          if ( inputFocus ) ImGui::SetKeyboardFocusHere();
@@ -555,14 +553,14 @@ void hop::Profiler::drawSearchWindow()
          {
             const auto startSearch = std::chrono::system_clock::now();
 
-            findTraces( input, _strDb, _tracesPerThread, lastSearch );
+            findTraces( input, _strDb, _tracesPerThread, _searchRes );
 
             const auto endSearch = std::chrono::system_clock::now();
             hop::g_stats.searchTimeMs =
                 std::chrono::duration<double, std::milli>( ( endSearch - startSearch ) ).count();
          }
 
-         auto selection = drawSearchResult( lastSearch, _timeline, _strDb, _tracesPerThread );
+         auto selection = drawSearchResult( _searchRes, _timeline, _strDb, _tracesPerThread );
 
          if ( selection.selectedTraceIdx != (size_t)-1 && selection.selectedThreadIdx != (uint32_t)-1 )
          {
@@ -1006,6 +1004,7 @@ void hop::Profiler::clear()
    _timeline.setAbsoluteStartTime( 0 );
    _timeline.clearTraceDetails();
    _timeline.clearBookmarks();
+   clearSearchResult( _searchRes );
    _recording = false;
    g_stats.traceCount = 0;
 }

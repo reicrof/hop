@@ -232,4 +232,11 @@ SearchSelection drawSearchResult( SearchResult& searchRes, const Timeline& timel
    return SearchSelection{ selectedTraceId, hoveredTraceId, selectedThreadId, hoveredThreadId };
 }
 
+void clearSearchResult( SearchResult& res )
+{
+   res.stringSearched.clear();
+   res.tracesIdxThreadIdx.clear();
+   res.matchCount = 0;
+}
+
 } // namespace hop
