@@ -30,6 +30,7 @@ void StringDb::clear()
 {
    _strData.clear();
    _stringIndices.clear();
+   g_stats.stringDbSize = 0;
 }
 
 void StringDb::addStringData( const char* inData, size_t count )

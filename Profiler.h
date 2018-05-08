@@ -22,11 +22,11 @@ struct Profiler
    Profiler( const char* name );
    ~Profiler();
    void update( float deltaTimeMs ) noexcept;
-   void draw();
+   void draw( uint32_t windowWidth, uint32_t windowHeight );
    void fetchClientData();
    void addStringData( const std::vector< char >& stringData );
    void addTraces( const DisplayableTraces& traces, uint32_t threadIndex );
-   void addLockWaits( const std::vector< LockWait >& lockWaits, uint32_t threadIndex);
+   void addLockWaits( const DisplayableLockWaits& lockWaits, uint32_t threadIndex);
    void addUnlockEvents(const std::vector<UnlockEvent>& unlockEvents, uint32_t threadIndex);
    void handleHotkey();
    bool setRecording( bool recording );
@@ -58,7 +58,7 @@ void addNewProfiler( Profiler* profiler );
 // Updates the imgui data. Should be called each frame
 void onNewFrame( int width, int height, int mouseX, int mouseY, bool lmbPressed, bool rmbPressed, float mouseWheel );
 // Draw the ui
-void draw();
+void draw( uint32_t windowWidth, uint32_t windowHeight );
 
 } // namespace hop
 

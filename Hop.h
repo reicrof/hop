@@ -34,6 +34,7 @@ For more information, please refer to <http://unlicense.org/>
 // when HOP_ENABLED is false
 #define HOP_PROF( x )
 #define HOP_PROF_FUNC()
+#define HOP_PROF_SPLIT( x )
 #define HOP_PROF_DYN_NAME( x )
 #define HOP_PROF_GL_FINISH( x )
 #define HOP_PROF_FUNC_GL_FINISH()
@@ -68,7 +69,10 @@ For more information, please refer to <http://unlicense.org/>
 #define HOP_PROF( x ) HOP_PROF_GUARD_VAR( __LINE__, ( __FILE__, __LINE__, (x), 0 ) )
 
 // Create a new profiling trace with the compiler provided name
-#define HOP_PROF_FUNC() HOP_PROF_GUARD_VAR( __LINE__, ( __FILE__, __LINE__, HOP_FCT_NAME, 0 ) )
+#define HOP_PROF_FUNC() HOP_PROF_ID_GUARD( hop__, ( __FILE__, __LINE__, HOP_FCT_NAME, 0 ) )
+
+// Split a profiling trace with a new provided name. Name must be static.
+#define HOP_PROF_SPLIT( x ) HOP_PROF_ID_SPLIT( hop__, ( __FILE__, __LINE__, (x), 0 ) )
 
 // Create a new profiling trace for dynamic strings. Please use sparingly as they will incur more slowdown
 #define HOP_PROF_DYN_NAME( x ) HOP_PROF_DYN_STRING_GUARD_VAR( __LINE__, ( __FILE__, __LINE__, (x), 0 ) )
@@ -265,6 +269,7 @@ struct MsgInfo
    // Thread id from which the msg was sent
    uint32_t threadIndex;
    uint64_t threadId;
+   TimeStamp timeStamp;
    // Specific message data
    union {
       TracesMsgInfo traces;
@@ -272,7 +277,6 @@ struct MsgInfo
       LockWaitsMsgInfo lockwaits;
       UnlockEventsMsgInfo unlockEvents;
    };
-   unsigned char padding[8];
 };
 HOP_STATIC_ASSERT( sizeof(MsgInfo) == EXPECTED_MSG_INFO_SIZE, "MsgInfo layout has changed unexpectedly" );
 
@@ -333,7 +337,7 @@ class SharedMemory
       const float clientVersion{0.0f};
       const uint32_t maxThreadNb{0};
       const size_t requestedSize{0};
-      std::atomic< uint32_t > strDbResetCount{0};
+      std::atomic< TimeStamp > lastResetTimeStamp{0};
    };
 
    bool hasConnectedProducer() const HOP_NOEXCEPT;
@@ -344,8 +348,8 @@ class SharedMemory
    void setListeningConsumer( bool ) HOP_NOEXCEPT;
    bool isUsingGlFinish() const HOP_NOEXCEPT;
    void setUseGlFinish( bool ) HOP_NOEXCEPT;
-   uint32_t strDbResetCount() const HOP_NOEXCEPT;
-   void incrementStrDbResetCount() HOP_NOEXCEPT;
+   TimeStamp lastResetTimestamp() const HOP_NOEXCEPT;
+   void setResetTimestamp( TimeStamp t ) HOP_NOEXCEPT;
    ringbuf_t* ringbuffer() const HOP_NOEXCEPT;
    uint8_t* data() const HOP_NOEXCEPT;
    bool valid() const HOP_NOEXCEPT;
@@ -407,25 +411,43 @@ class ClientManager
 class ProfGuard
 {
   public:
-   ProfGuard( const char* fileName, TLineNb_t lineNb, const char* fctName, TGroup_t groupId ) HOP_NOEXCEPT
-       : _start( getTimeStamp() ),
-         _fileName( fileName ),
-         _fctName( fctName ),
-         _lineNb( lineNb ),
-         _group( groupId )
-   {
-      ClientManager::StartProfile();
-   }
-   ~ProfGuard()
-   {
-      ClientManager::EndProfile( _fileName, _fctName, _start, getTimeStamp(), _lineNb, _group );
-   }
+    ProfGuard( const char* fileName, TLineNb_t lineNb, const char* fctName, TGroup_t groupId ) HOP_NOEXCEPT
+    {
+      open( fileName, lineNb, fctName, groupId );
+    }
+    ~ProfGuard()
+    {
+      close();
+    }
+    inline void reset( const char* fileName, TLineNb_t lineNb, const char* fctName, TGroup_t groupId )
+    {
+      // Please uncomment the following line if close() is made public!
+      // if ( _fctName )
+      close();
+      open( fileName, lineNb, fctName, groupId );
+    }
 
   private:
-   TimeStamp _start;
-   const char *_fileName, *_fctName;
-   TLineNb_t _lineNb;
-   TGroup_t _group;
+    inline void open( const char* fileName, TLineNb_t lineNb, const char* fctName, TGroup_t groupId )
+    {
+      _start = getTimeStamp();
+      _fileName = fileName;
+      _fctName = fctName;
+      _lineNb = lineNb;
+      _group = groupId;
+      ClientManager::StartProfile();
+    }
+    inline void close()
+    {
+      ClientManager::EndProfile( _fileName, _fctName, _start, getTimeStamp(), _lineNb, _group );
+      // Please uncomment the following line if close() is made public!
+      // _fctName = nullptr;
+    }
+
+    TimeStamp _start;
+    const char *_fileName, *_fctName;
+    TLineNb_t _lineNb;
+    TGroup_t _group;
 };
 
 class ProfGuardGLFinish
@@ -497,6 +519,10 @@ class ProfGuardDynamicString
 #define HOP_COMBINE( X, Y ) X##Y
 #define HOP_PROF_GUARD_VAR( LINE, ARGS ) \
    hop::ProfGuard HOP_COMBINE( hopProfGuard, LINE ) ARGS
+#define HOP_PROF_ID_GUARD( ID, ARGS ) \
+   hop::ProfGuard ID ARGS
+#define HOP_PROF_ID_SPLIT( ID, ARGS ) \
+   ID.reset ARGS
 #define HOP_PROF_GL_FINISH_GUARD_VAR( LINE, ARGS ) \
    hop::ProfGuardGLFinish HOP_COMBINE( hopProfGuard, LINE ) ARGS
 #define HOP_PROF_DYN_STRING_GUARD_VAR( LINE, ARGS ) \
@@ -868,7 +894,7 @@ bool SharedMemory::create( const char* exeName, size_t requestedSize, bool isCon
 
       if ( isConsumer )
       {
-         incrementStrDbResetCount();
+         setResetTimestamp( getTimeStamp());
          // We can only have one consumer
          if( hasConnectedConsumer() )
          {
@@ -944,14 +970,14 @@ void SharedMemory::setUseGlFinish( bool useGlFinish ) HOP_NOEXCEPT
       _sharedMetaData->flags &= ~SharedMetaInfo::USE_GL_FINISH;
 }
 
-uint32_t SharedMemory::strDbResetCount() const HOP_NOEXCEPT
+TimeStamp SharedMemory::lastResetTimestamp() const HOP_NOEXCEPT
 {
-   return _sharedMetaData->strDbResetCount.load();
+   return _sharedMetaData->lastResetTimeStamp.load();
 }
 
-void SharedMemory::incrementStrDbResetCount() HOP_NOEXCEPT
+void SharedMemory::setResetTimestamp(TimeStamp t) HOP_NOEXCEPT
 {
-   _sharedMetaData->strDbResetCount.fetch_add( 1 );
+   _sharedMetaData->lastResetTimeStamp.store( t );
 }
 
 uint8_t* SharedMemory::data() const HOP_NOEXCEPT
@@ -1074,6 +1100,9 @@ class Client
       _unlockEvents.reserve( 64 );
       _stringPtr.reserve( 256 );
       _stringData.reserve( 256 * 32 );
+      _stringPtr.insert(0);
+      for (size_t i = 0; i < sizeof(TStrPtr_t); ++i)
+         _stringData.push_back('\0');
 
       resetStringData();
    }
@@ -1164,7 +1193,18 @@ class Client
       _traces.clear();
       _lockWaits.clear();
       _unlockEvents.clear();
-      resetStringData();
+   }
+
+   TimeStamp getMsgTimeStamp() const
+   {
+      if( _traces.empty() )
+      {
+         return getTimeStamp();
+      }
+      else
+      {
+         return _traces.back().start;
+      }
    }
 
    bool sendStringData()
@@ -1217,6 +1257,7 @@ class Client
          msgInfo->type = MsgType::PROFILER_STRING_DATA;
          msgInfo->threadId = tl_threadId;
          msgInfo->threadIndex = tl_threadIndex;
+         msgInfo->timeStamp = getMsgTimeStamp();
          msgInfo->stringData.size = stringToSendSize;
 
          // Copy string data into its array
@@ -1269,6 +1310,7 @@ class Client
          tracesInfo->type = MsgType::PROFILER_TRACE;
          tracesInfo->threadId = tl_threadId;
          tracesInfo->threadIndex = tl_threadIndex;
+         tracesInfo->timeStamp = getMsgTimeStamp();
          tracesInfo->traces.count = (uint32_t)_traces.size();
 
          // Copy trace information into buffer to send
@@ -1308,6 +1350,7 @@ class Client
          lwInfo->type = MsgType::PROFILER_WAIT_LOCK;
          lwInfo->threadId = tl_threadId;
          lwInfo->threadIndex = tl_threadIndex;
+         lwInfo->timeStamp = _lockWaits.back().start;
          lwInfo->lockwaits.count = (uint32_t)_lockWaits.size();
          bufferPtr += sizeof( MsgInfo );
          memcpy( bufferPtr, _lockWaits.data(), _lockWaits.size() * sizeof( LockWait ) );
@@ -1345,6 +1388,7 @@ class Client
          uInfo->type = MsgType::PROFILER_UNLOCK_EVENT;
          uInfo->threadId = tl_threadId;
          uInfo->threadIndex = tl_threadIndex;
+         uInfo->timeStamp = _unlockEvents.back().time;
          uInfo->unlockEvents.count = (uint32_t)_unlockEvents.size();
          bufferPtr += sizeof( MsgInfo );
          memcpy( bufferPtr, _unlockEvents.data(), _unlockEvents.size() * sizeof( UnlockEvent ) );
@@ -1367,16 +1411,17 @@ class Client
          return;
       }
 
-      // If the shared memory reset count is bigger than our local reset count
+      // If the shared memory reset timestamp more recent than our local one
       // it means we need to clear our string table. Otherwise it means we
       // already took care of it. Since some traces might depend on strings
-      // that were added dynamiccally (ie before clearing the db), we cannot
-      // consider them.
-      uint32_t curStrDbResetCount = ClientManager::sharedMemory.strDbResetCount();
-      if( _localStrDbResetCount < curStrDbResetCount )
+      // that were added dynamically (ie before clearing the db), we cannot
+      // consider them and need to return here.
+      TimeStamp resetTimeStamp = ClientManager::sharedMemory.lastResetTimestamp();
+      if( _clientResetTimeStamp < resetTimeStamp)
       {
-         _localStrDbResetCount = curStrDbResetCount;
+         resetStringData();
          resetPendingTraces();
+         _clientResetTimeStamp = resetTimeStamp;
          return;
       }
 
@@ -1391,7 +1436,7 @@ class Client
    std::vector< UnlockEvent > _unlockEvents;
    std::unordered_set< TStrPtr_t > _stringPtr;
    std::vector< char > _stringData;
-   uint32_t _localStrDbResetCount{0};
+   TimeStamp _clientResetTimeStamp{0};
    ringbuf_worker_t* _worker{NULL};
    uint32_t _sentStringDataSize{0}; // The size of the string array on the server side
 };

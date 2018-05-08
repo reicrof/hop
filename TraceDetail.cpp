@@ -35,6 +35,8 @@ static void sortTraceDetailOnName(
     const hop::StringDb& strDb,
     const CMP& cmp )
 {
+   HOP_PROF_FUNC();
+
    std::stable_sort(
        td.begin(),
        td.end(),
@@ -54,6 +56,8 @@ static void sortTraceDetailOnMember(
     const hop::ThreadInfo& threadInfo,
     bool descending )
 {
+   HOP_PROF_FUNC();
+
    if ( descending )
    {
       auto cmp = std::greater<MEMBER_T>();
@@ -81,6 +85,8 @@ static void sortTraceDetailOnCount(
     const hop::ThreadInfo& threadInfo,
     bool descending )
 {
+   HOP_PROF_FUNC();
+
    if ( descending )
    {
       auto cmp = std::greater<size_t>();
@@ -118,6 +124,8 @@ namespace std
 
 static std::vector<hop::TraceDetail> mergeTraceDetails( const hop::DisplayableTraces& traces, const std::vector<hop::TraceDetail>& allDetails )
 {
+   HOP_PROF_FUNC();
+
    using namespace hop;
    std::vector<TraceDetail> mergedDetails;
    mergedDetails.reserve( allDetails.size() / 2 );
@@ -221,6 +229,8 @@ static std::vector<hop::TraceDetail> mergeTraceDetails( const hop::DisplayableTr
 static std::vector<hop::TraceDetail>
 gatherTraceDetails( const hop::DisplayableTraces& traces, size_t traceId )
 {
+   HOP_PROF_FUNC();
+
    using namespace hop;
    std::vector<TraceDetail> traceDetails;
 
@@ -278,6 +288,8 @@ static void finalizeTraceDetails(
     std::vector<hop::TraceDetail>& details,
     hop::TimeDuration totalTime )
 {
+   HOP_PROF_FUNC();
+
    using namespace hop;
    // Adjust the percentage
    float totalPct = 0.0f;
@@ -301,6 +313,8 @@ namespace hop
 TraceDetails
 createTraceDetails( const DisplayableTraces& traces, uint32_t threadIndex, size_t traceId )
 {
+   HOP_PROF_FUNC();
+
    const TimeStamp totalDelta = traces.deltas[traceId];
 
    std::vector<TraceDetail> traceDetails = mergeTraceDetails( traces, gatherTraceDetails( traces, traceId ) );
@@ -315,6 +329,8 @@ createTraceDetails( const DisplayableTraces& traces, uint32_t threadIndex, size_
 
 TraceDetails createGlobalTraceDetails( const DisplayableTraces& traces, uint32_t threadIndex )
 {
+   HOP_PROF_FUNC();
+
    TraceDetails details;
 
    std::vector<hop::TraceDetail> traceDetails;
@@ -344,6 +360,8 @@ TraceDetailDrawResult drawTraceDetails(
     const std::vector<ThreadInfo>& tracesPerThread,
     const StringDb& strDb )
 {
+   HOP_PROF_FUNC();
+
    TraceDetailDrawResult result;
    result.isWindowOpen = details.details.size() > 0;
    if ( details.details.size() > 0 )

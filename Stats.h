@@ -12,7 +12,6 @@ namespace hop
       double fetchTimeMs;
       double searchTimeMs;
       int currentLOD;
-      long long selectedTrace;
       size_t stringDbSize;
       size_t traceCount;
       size_t traceSize;

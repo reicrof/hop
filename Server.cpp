@@ -11,13 +11,13 @@
 
 namespace hop
 {
-bool Server::start( const char* name )
+bool Server::start( const char* name, bool useGlFinishByDefault )
 {
    assert( name != nullptr );
 
    _running = true;
 
-   _thread = std::thread( [this, name]() {
+   _thread = std::thread( [this, name, useGlFinishByDefault]() {
       while ( true )
       {
          // Try to get the shared memory
@@ -30,23 +30,38 @@ bool Server::start( const char* name )
                std::this_thread::sleep_for( std::chrono::milliseconds( 500 ) );
                continue;
             }
+            // Clear any remaining messages from previous execution now
+            clearPendingMessages();
+            setUseGlFinish( useGlFinishByDefault );
             printf( "Connection to shared data successful.\n" );
          }
 
          _sharedMem.waitSemaphore();
 
          // We are done running.
-         if ( !_running ) break;
+         if ( !_running.load() ) break;
 
+         // A clear was requested so we need to clear our string database
+         if( _clearingRequested.load() )
+         {
+            _stringDb.clear();
+            clearPendingMessages();
+            _clearingRequested.store( false );
+            _sharedMem.setResetTimestamp( getTimeStamp() );
+            continue;
+         }
+
+         HOP_PROF( "Handle messages" );
          size_t offset = 0;
          const size_t bytesToRead = ringbuf_consume( _sharedMem.ringbuffer(), &offset );
          if ( bytesToRead > 0 )
          {
+            const TimeStamp minTimestamp = _sharedMem.lastResetTimestamp();
             size_t bytesRead = 0;
             while ( bytesRead < bytesToRead )
             {
                bytesRead += handleNewMessage(
-                   &_sharedMem.data()[offset + bytesRead], bytesToRead - bytesRead );
+                   &_sharedMem.data()[offset + bytesRead], bytesToRead - bytesRead, minTimestamp);
             }
             ringbuf_release( _sharedMem.ringbuffer(), bytesToRead );
          }
@@ -69,12 +84,13 @@ bool Server::setRecording( bool recording )
 
 void Server::getPendingData(PendingData & data)
 {
+    HOP_PROF_FUNC();
     std::lock_guard<std::mutex> guard(_pendingData.mutex);
     _pendingData.swap(data);
     _pendingData.clear();
 }
 
-size_t Server::handleNewMessage( uint8_t* data, size_t maxSize )
+size_t Server::handleNewMessage( uint8_t* data, size_t maxSize, TimeStamp minTimestamp )
 {
    uint8_t* bufPtr = data;
    const MsgInfo* msgInfo = (const MsgInfo*)bufPtr;
@@ -83,6 +99,10 @@ size_t Server::handleNewMessage( uint8_t* data, size_t maxSize )
 
     bufPtr += sizeof( MsgInfo );
     assert( (size_t)(bufPtr - data) <= maxSize );
+
+    // If the message was sent prior to the last reset timestamp, ignore it
+    if( msgInfo->timeStamp < minTimestamp )
+       return (size_t)(bufPtr - data);
 
     switch ( msgType )
     {
@@ -95,19 +115,9 @@ size_t Server::handleNewMessage( uint8_t* data, size_t maxSize )
              memcpy( stringData.data(), bufPtr, stringData.size() );
              _stringDb.addStringData( stringData );
              bufPtr += stringData.size();
-          }
-          // If our string table is emtpy and we did not received any strings,
-          // it means these messages are pending messages from previous execution.
-          // Ignore them until we receive string data. This can happen after an
-          // unclean exit.
-          else if ( _stringDb.empty() )
-          {
-             return maxSize;
-          }
-          assert( ( size_t )( bufPtr - data ) <= maxSize );
 
-          if ( stringData.size() > 0 )
-          {
+             assert( ( size_t )( bufPtr - data ) <= maxSize );
+
              // TODO: Could lock later when we received all the messages
              std::lock_guard<std::mutex> guard( _pendingData.mutex );
              _pendingData.stringData.emplace_back( std::move( stringData ) );
@@ -120,7 +130,6 @@ size_t Server::handleNewMessage( uint8_t* data, size_t maxSize )
           const size_t traceCount = msgInfo->traces.count;
 
           DisplayableTraces dispTraces;
-          dispTraces.reserve( traceCount );
           TDepth_t maxDepth = 0;
           for ( size_t i = 0; i < traceCount; ++i )
           {
@@ -156,21 +165,27 @@ size_t Server::handleNewMessage( uint8_t* data, size_t maxSize )
       }
       case MsgType::PROFILER_WAIT_LOCK:
       {
-         std::vector< LockWait > lockwaits( msgInfo->lockwaits.count );
-         memcpy( lockwaits.data(), bufPtr, lockwaits.size() * sizeof(LockWait) );
+         const LockWait* lws = (const LockWait*)bufPtr;
+         const uint32_t lwCount = msgInfo->lockwaits.count;
 
-         bufPtr += lockwaits.size() * sizeof(LockWait);
-         assert( (size_t)(bufPtr - data) <= maxSize );
+         DisplayableLockWaits dispLw;
+         for( uint32_t i = 0; i < lwCount; ++i )
+         {
+            dispLw.ends.push_back( lws[i].end );
+            dispLw.deltas.push_back( lws[i].end - lws[i].start );
+            dispLw.depths.push_back( lws[i].depth );
+            dispLw.mutexAddrs.push_back( lws[i].mutexAddress );
+         }
 
-         std::sort(
-             lockwaits.begin(), lockwaits.end(), []( const LockWait& lhs, const LockWait& rhs ) {
-                return lhs.end < rhs.end;
-             } );
+         bufPtr += ( lwCount * sizeof( LockWait ) );
+
+         // The ends time should already be sorted
+         assert_is_sorted( dispLw.ends.begin(), dispLw.ends.end() );
 
          // TODO: Could lock later when we received all the messages
          std::lock_guard<std::mutex> guard( _pendingData.mutex );
-         _pendingData.lockWaits.emplace_back( std::move( lockwaits ) );
-         _pendingData.lockWaitThreadIndex.push_back(threadIndex);
+         _pendingData.lockWaits.emplace_back( std::move( dispLw ) );
+         _pendingData.lockWaitThreadIndex.push_back( threadIndex );
 
          return (size_t)(bufPtr - data);
       }
@@ -197,6 +212,21 @@ size_t Server::handleNewMessage( uint8_t* data, size_t maxSize )
          assert( false );
          return (size_t)(bufPtr - data);
    }
+}
+
+void Server::clearPendingMessages()
+{
+   size_t offset = 0;
+   while ( size_t bytesToRead = ringbuf_consume( _sharedMem.ringbuffer(), &offset ) )
+   {
+      ringbuf_release( _sharedMem.ringbuffer(), bytesToRead );
+   }
+}
+
+void Server::clear()
+{
+   setRecording( false );
+   _clearingRequested.store( true );
 }
 
 void Server::stop()
@@ -244,6 +274,7 @@ void Server::PendingData::clear()
 
 void Server::PendingData::swap(PendingData & rhs)
 {
+    HOP_PROF_FUNC();
     using std::swap;
     swap(traces, rhs.traces);
     swap(stringData, rhs.stringData);

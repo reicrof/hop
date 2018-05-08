@@ -280,19 +280,20 @@
 	"buffers":
 	[
 		{
-			"file": "Timeline.cpp",
+			"file": "Profiler.cpp",
 			"settings":
 			{
-				"buffer_size": 35908,
+				"buffer_size": 29678,
 				"encoding": "UTF-8",
 				"line_ending": "Unix"
 			}
 		},
 		{
-			"file": "Hop.h",
+			"file": "hop_main.cpp",
 			"settings":
 			{
-				"buffer_size": 48952,
+				"buffer_size": 11030,
+				"encoding": "UTF-8",
 				"line_ending": "Unix"
 			}
 		}
@@ -341,25 +342,33 @@
 	],
 	"file_history":
 	[
+		"/DLlocal/landrych/workspaces/experiments/hop/test_client/main_client.cpp",
+		"/DLlocal/landrych/workspaces/experiments/hop/ThreadInfo.h",
+		"/DLlocal/landrych/workspaces/experiments/hop/ThreadInfo.cpp",
+		"/DLlocal/landrych/workspaces/experiments/hop/Hop.h",
+		"/DLlocal/landrych/workspaces/experiments/hop/Server.h",
+		"/DLlocal/landrych/workspaces/experiments/hop/Server.cpp",
+		"/DLlocal/landrych/workspaces/experiments/hop/DisplayableTraces.cpp",
+		"/DLlocal/landrych/workspaces/experiments/hop/Profiler.h",
+		"/DLlocal/landrych/workspaces/experiments/hop/Timeline.cpp",
+		"/DLlocal/landrych/workspaces/experiments/hop/Lod.h",
+		"/DLlocal/landrych/workspaces/experiments/hop/Lod.cpp",
+		"/DLlocal/landrych/workspaces/experiments/hop/Profiler.cpp",
+		"/DLlocal/landrych/workspaces/experiments/hop/DisplayableTraces.h",
 		"/DLlocal/landrych/workspaces/experiments/hop/imgui/imgui.h",
+		"/DLlocal/landrych/workspaces/experiments/hop/hop_main.cpp",
+		"/DLlocal/landrych/workspaces/experiments/hop/ModalWindow.cpp",
+		"/DLlocal/landrych/workspaces/experiments/hop/wrap_library/hop_wrap_linux.cpp",
+		"/DLlocal/landrych/workspaces/experiments/hop/SDL2/SDL_scancode.h",
+		"/DLlocal/landrych/workspaces/experiments/hop/TraceDetail.cpp",
+		"/DLlocal/landrych/workspaces/experiments/hop/TraceSearch.cpp",
+		"/DLlocal/landrych/workspaces/secondaryMain/develop/src/librenderinterface/VK/shaders/linuxBuildShader.sh",
+		"/DLlocal/landrych/workspaces/experiments/hop/.git/COMMIT_EDITMSG",
 		"/DLlocal/landrych/workspaces/experiments/hop/Timeline.h",
 		"/DLlocal/landrych/workspaces/experiments/hop/StringDb.h",
-		"/DLlocal/landrych/workspaces/experiments/hop/Timeline.cpp",
-		"/DLlocal/landrych/workspaces/experiments/hop/Server.cpp",
-		"/DLlocal/landrych/workspaces/experiments/hop/Hop.h",
-		"/DLlocal/landrych/workspaces/experiments/hop/Profiler.cpp",
-		"/DLlocal/landrych/workspaces/experiments/hop/ThreadInfo.h",
-		"/DLlocal/landrych/workspaces/experiments/hop/wrap_library/hop_wrap_linux.cpp",
-		"/DLlocal/landrych/workspaces/experiments/hop/ThreadInfo.cpp",
-		"/DLlocal/landrych/workspaces/experiments/hop/DisplayableTraces.h",
 		"/DLlocal/landrych/workspaces/experiments/hop/main_server.cpp",
-		"/DLlocal/landrych/workspaces/experiments/hop/.git/COMMIT_EDITMSG",
 		"/DLlocal/landrych/workspaces/experiments/hop/StringDb.cpp",
-		"/DLlocal/landrych/workspaces/experiments/hop/Server.h",
 		"/DLlocal/landrych/workspaces/experiments/hop/SDL2/SDL_keycode.h",
-		"/DLlocal/landrych/workspaces/experiments/hop/Profiler.h",
-		"/DLlocal/landrych/workspaces/experiments/hop/SDL2/SDL_scancode.h",
-		"/DLlocal/landrych/workspaces/experiments/hop/test_client/main_client.cpp",
 		"/DLlocal/landrych/workspaces/experiments/hop/imgui/imconfig.h",
 		"/DLlocal/landrych/workspaces/experiments/mvk-bug/mvk-bug/mainFinal.cpp",
 		"/DLlocal/landrych/workspaces/experiments/mvk-bug/mvk-bug/main.mm",
@@ -368,7 +377,6 @@
 		"/DLlocal/landrych/workspaces/experiments/hop/wrap_library/hop_wrap_unix.cpp",
 		"/DLlocal/landrych/workspaces/experiments/hop/CMakeLists.txt",
 		"/DLlocal/landrych/workspaces/experiments/hop/Makefile",
-		"/DLlocal/landrych/workspaces/experiments/hop/DisplayableTraces.cpp",
 		"/DLlocal/landrych/workspaces/experiments/hop/imgui/imgui_demo.cpp",
 		"/DLlocal/landrych/workspaces/experiments/hop/imgui/imgui.cpp",
 		"/DLlocal/landrych/workspaces/experiments/hop/imdbg.cpp",
@@ -461,18 +469,11 @@
 		"/Users/landrych/Library/Application Support/Sublime Text 3/Packages/User/clang_format.sublime-settings",
 		"/Users/landrych/workspaces/experiment/vk_cf_render/src/VK/RI/RIVKCommandList.h",
 		"/Users/landrych/workspaces/experiment/vk_cf_render/src/Mtl/RI/RIMtlCommandLIst.h",
-		"/Users/landrych/workspaces/experiment/vk_cf_render/src/VK/RI/RIVKCommandList.cpp",
-		"/Users/landrych/workspaces/experiment/vk_cf_render/src/RenderInterface/RICommandLIst.h",
-		"/Users/landrych/workspaces/experiment/vk_cf_render/src/VK/impl/Device.cpp",
-		"/Users/landrych/workspaces/experiment/vk_cf_render/src/VK/impl/Base.h",
-		"/Users/landrych/workspaces/experiment/vk_cf_render/src/VK/impl/CommandBufferManager.cpp",
-		"/Users/landrych/workspaces/experiment/vk_cf_render/src/VK/impl/CommandBufferManager.h",
-		"/Users/landrych/workspaces/experiment/vk_cf_render/src/VK/impl/CommandBufferPool.cpp",
-		"/Users/landrych/workspaces/experiment/vk_cf_render/src/VK/impl/CommandBufferPool.h"
+		"/Users/landrych/workspaces/experiment/vk_cf_render/src/VK/RI/RIVKCommandList.cpp"
 	],
 	"find":
 	{
-		"height": 39.0
+		"height": 40.0
 	},
 	"find_in_files":
 	{
@@ -487,6 +488,34 @@
 		"case_sensitive": false,
 		"find_history":
 		[
+			"g_run",
+			"handle",
+			"esc",
+			"_serverPendingData",
+			"DisplayableLockWaits",
+			"lockwait",
+			"addlockwai",
+			"lockwai",
+			"lockwait",
+			"_lockWaits",
+			"_lockwiat",
+			"_lockWaits",
+			"START_TRACE",
+			"END_TRACE",
+			"SDLK_ESCAPE",
+			"esc",
+			"keypress",
+			"KeyMap",
+			"SDL_SCANCODE_RETURN",
+			"IsKeyPressed",
+			"enter",
+			"ENTER",
+			"SDL_SCANCODE_RIGHT",
+			"IsKeyPressed",
+			"hop_p",
+			"HOP_PROF_FUNC",
+			"LodsArray",
+			"addlockwa",
 			"highli",
 			"drawlockwai",
 			"stringStartIdx",
@@ -586,35 +615,7 @@
 			"curname",
 			"addProfilingTrace",
 			"endprofile",
-			"linen",
-			"tooltip",
-			"fctnameindex",
-			"details",
-			"details::",
-			"displayabletrace",
-			"classNameIndex",
-			"drawtraces",
-			"addProfilingTrace",
-			"ProfGuard",
-			"VDBG_PROF_GUARD_VAR",
-			"VDBG_COMBINE",
-			"ProfGuard",
-			"classna",
-			"VDBG_PROF_GUARD_VAR",
-			"ProfGuard",
-			"endprofil",
-			"shallowtr",
-			"_stringData",
-			"fctNameIdx",
-			"_sharedMetaData->fl",
-			"nameid",
-			"stringid",
-			"namearra",
-			"_namearrayid",
-			"drawtraces",
-			"stringdata",
-			"_stringDataPerThread",
-			"saveasjson"
+			"linen"
 		],
 		"highlight": true,
 		"in_selection": false,
@@ -643,231 +644,39 @@
 			[
 				{
 					"buffer": 0,
-					"file": "Timeline.cpp",
+					"file": "Profiler.cpp",
 					"semi_transient": false,
 					"settings":
 					{
-						"buffer_size": 35908,
+						"buffer_size": 29678,
 						"regions":
 						{
 						},
 						"selection":
 						[
 							[
-								32708,
-								32708
+								21935,
+								21940
 							]
 						],
 						"settings":
 						{
+							"SL.1879.region_keys":
+							[
+								"SL.clang.Gutter.region.redish markup.deleted.sublime_linter markup.error.sublime_linter.dot",
+								"SL.clang.Highlights.|region.redish markup.deleted.sublime_linter markup.error.sublime_linter|32",
+								"sublime_linter.protected_regions"
+							],
 							"bracket_highlighter.busy": false,
-							"bracket_highlighter.clone": 493,
+							"bracket_highlighter.clone": -1,
 							"bracket_highlighter.clone_locations":
 							{
 								"close":
 								{
 									"1":
 									[
-										32773,
-										32774
-									]
-								},
-								"icon":
-								{
-									"1":
-									[
-										"Packages/BracketHighlighter/icons/curly_bracket.png",
-										"region.purplish"
-									]
-								},
-								"open":
-								{
-									"1":
-									[
-										32691,
-										32692
-									]
-								},
-								"unmatched":
-								{
-								}
-							},
-							"bracket_highlighter.clone_regions":
-							[
-								"bh_round",
-								"bh_round_center",
-								"bh_round_open",
-								"bh_round_close",
-								"bh_round_content",
-								"bh_single_quote",
-								"bh_single_quote_center",
-								"bh_single_quote_open",
-								"bh_single_quote_close",
-								"bh_single_quote_content",
-								"bh_curly",
-								"bh_curly_center",
-								"bh_curly_open",
-								"bh_curly_close",
-								"bh_curly_content",
-								"bh_square",
-								"bh_square_center",
-								"bh_square_open",
-								"bh_square_close",
-								"bh_square_content",
-								"bh_angle",
-								"bh_angle_center",
-								"bh_angle_open",
-								"bh_angle_close",
-								"bh_angle_content",
-								"bh_c_define",
-								"bh_c_define_center",
-								"bh_c_define_open",
-								"bh_c_define_close",
-								"bh_c_define_content",
-								"bh_unmatched",
-								"bh_unmatched_center",
-								"bh_unmatched_open",
-								"bh_unmatched_close",
-								"bh_unmatched_content",
-								"bh_double_quote",
-								"bh_double_quote_center",
-								"bh_double_quote_open",
-								"bh_double_quote_close",
-								"bh_double_quote_content",
-								"bh_regex",
-								"bh_regex_center",
-								"bh_regex_open",
-								"bh_regex_close",
-								"bh_regex_content",
-								"bh_tag",
-								"bh_tag_center",
-								"bh_tag_open",
-								"bh_tag_close",
-								"bh_tag_content",
-								"bh_default",
-								"bh_default_center",
-								"bh_default_open",
-								"bh_default_close",
-								"bh_default_content"
-							],
-							"bracket_highlighter.locations":
-							{
-								"close":
-								{
-								},
-								"icon":
-								{
-								},
-								"open":
-								{
-								},
-								"unmatched":
-								{
-								}
-							},
-							"bracket_highlighter.regions":
-							[
-								"bh_round",
-								"bh_round_center",
-								"bh_round_open",
-								"bh_round_close",
-								"bh_round_content",
-								"bh_single_quote",
-								"bh_single_quote_center",
-								"bh_single_quote_open",
-								"bh_single_quote_close",
-								"bh_single_quote_content",
-								"bh_curly",
-								"bh_curly_center",
-								"bh_curly_open",
-								"bh_curly_close",
-								"bh_curly_content",
-								"bh_square",
-								"bh_square_center",
-								"bh_square_open",
-								"bh_square_close",
-								"bh_square_content",
-								"bh_angle",
-								"bh_angle_center",
-								"bh_angle_open",
-								"bh_angle_close",
-								"bh_angle_content",
-								"bh_c_define",
-								"bh_c_define_center",
-								"bh_c_define_open",
-								"bh_c_define_close",
-								"bh_c_define_content",
-								"bh_unmatched",
-								"bh_unmatched_center",
-								"bh_unmatched_open",
-								"bh_unmatched_close",
-								"bh_unmatched_content",
-								"bh_double_quote",
-								"bh_double_quote_center",
-								"bh_double_quote_open",
-								"bh_double_quote_close",
-								"bh_double_quote_content",
-								"bh_regex",
-								"bh_regex_center",
-								"bh_regex_open",
-								"bh_regex_close",
-								"bh_regex_content",
-								"bh_tag",
-								"bh_tag_center",
-								"bh_tag_open",
-								"bh_tag_close",
-								"bh_tag_content",
-								"bh_default",
-								"bh_default_center",
-								"bh_default_open",
-								"bh_default_close",
-								"bh_default_content"
-							],
-							"function_name_status_row": 0,
-							"origPos":
-							[
-								0.0,
-								16085.0
-							],
-							"syncScroll": false,
-							"syntax": "Packages/C++/C++.sublime-syntax"
-						},
-						"translation.x": 0.0,
-						"translation.y": 16085.0,
-						"zoom_level": 1.0
-					},
-					"stack_index": 1,
-					"type": "text"
-				},
-				{
-					"buffer": 1,
-					"file": "Hop.h",
-					"semi_transient": false,
-					"settings":
-					{
-						"buffer_size": 48952,
-						"regions":
-						{
-						},
-						"selection":
-						[
-							[
-								8281,
-								8281
-							]
-						],
-						"settings":
-						{
-							"bracket_highlighter.busy": false,
-							"bracket_highlighter.clone": -1,
-							"bracket_highlighter.locations":
-							{
-								"close":
-								{
-									"1":
-									[
-										8287,
-										8288
+										21596,
+										21597
 									]
 								},
 								"icon":
@@ -882,8 +691,96 @@
 								{
 									"1":
 									[
-										8280,
-										8281
+										21559,
+										21560
+									]
+								},
+								"unmatched":
+								{
+								}
+							},
+							"bracket_highlighter.clone_regions":
+							[
+								"bh_c_define",
+								"bh_c_define_center",
+								"bh_c_define_open",
+								"bh_c_define_close",
+								"bh_c_define_content",
+								"bh_square",
+								"bh_square_center",
+								"bh_square_open",
+								"bh_square_close",
+								"bh_square_content",
+								"bh_unmatched",
+								"bh_unmatched_center",
+								"bh_unmatched_open",
+								"bh_unmatched_close",
+								"bh_unmatched_content",
+								"bh_round",
+								"bh_round_center",
+								"bh_round_open",
+								"bh_round_close",
+								"bh_round_content",
+								"bh_default",
+								"bh_default_center",
+								"bh_default_open",
+								"bh_default_close",
+								"bh_default_content",
+								"bh_tag",
+								"bh_tag_center",
+								"bh_tag_open",
+								"bh_tag_close",
+								"bh_tag_content",
+								"bh_single_quote",
+								"bh_single_quote_center",
+								"bh_single_quote_open",
+								"bh_single_quote_close",
+								"bh_single_quote_content",
+								"bh_angle",
+								"bh_angle_center",
+								"bh_angle_open",
+								"bh_angle_close",
+								"bh_angle_content",
+								"bh_curly",
+								"bh_curly_center",
+								"bh_curly_open",
+								"bh_curly_close",
+								"bh_curly_content",
+								"bh_regex",
+								"bh_regex_center",
+								"bh_regex_open",
+								"bh_regex_close",
+								"bh_regex_content",
+								"bh_double_quote",
+								"bh_double_quote_center",
+								"bh_double_quote_open",
+								"bh_double_quote_close",
+								"bh_double_quote_content"
+							],
+							"bracket_highlighter.locations":
+							{
+								"close":
+								{
+									"1":
+									[
+										21959,
+										21960
+									]
+								},
+								"icon":
+								{
+									"1":
+									[
+										"Packages/BracketHighlighter/icons/curly_bracket.png",
+										"region.purplish"
+									]
+								},
+								"open":
+								{
+									"1":
+									[
+										21921,
+										21922
 									]
 								},
 								"unmatched":
@@ -892,73 +789,189 @@
 							},
 							"bracket_highlighter.regions":
 							[
-								"bh_round",
-								"bh_round_center",
-								"bh_round_open",
-								"bh_round_close",
-								"bh_round_content",
-								"bh_single_quote",
-								"bh_single_quote_center",
-								"bh_single_quote_open",
-								"bh_single_quote_close",
-								"bh_single_quote_content",
-								"bh_curly",
-								"bh_curly_center",
-								"bh_curly_open",
-								"bh_curly_close",
-								"bh_curly_content",
-								"bh_square",
-								"bh_square_center",
-								"bh_square_open",
-								"bh_square_close",
-								"bh_square_content",
-								"bh_angle",
-								"bh_angle_center",
-								"bh_angle_open",
-								"bh_angle_close",
-								"bh_angle_content",
 								"bh_c_define",
 								"bh_c_define_center",
 								"bh_c_define_open",
 								"bh_c_define_close",
 								"bh_c_define_content",
+								"bh_square",
+								"bh_square_center",
+								"bh_square_open",
+								"bh_square_close",
+								"bh_square_content",
 								"bh_unmatched",
 								"bh_unmatched_center",
 								"bh_unmatched_open",
 								"bh_unmatched_close",
 								"bh_unmatched_content",
-								"bh_double_quote",
-								"bh_double_quote_center",
-								"bh_double_quote_open",
-								"bh_double_quote_close",
-								"bh_double_quote_content",
-								"bh_regex",
-								"bh_regex_center",
-								"bh_regex_open",
-								"bh_regex_close",
-								"bh_regex_content",
+								"bh_round",
+								"bh_round_center",
+								"bh_round_open",
+								"bh_round_close",
+								"bh_round_content",
+								"bh_default",
+								"bh_default_center",
+								"bh_default_open",
+								"bh_default_close",
+								"bh_default_content",
 								"bh_tag",
 								"bh_tag_center",
 								"bh_tag_open",
 								"bh_tag_close",
 								"bh_tag_content",
-								"bh_default",
-								"bh_default_center",
-								"bh_default_open",
-								"bh_default_close",
-								"bh_default_content"
+								"bh_single_quote",
+								"bh_single_quote_center",
+								"bh_single_quote_open",
+								"bh_single_quote_close",
+								"bh_single_quote_content",
+								"bh_angle",
+								"bh_angle_center",
+								"bh_angle_open",
+								"bh_angle_close",
+								"bh_angle_content",
+								"bh_curly",
+								"bh_curly_center",
+								"bh_curly_open",
+								"bh_curly_close",
+								"bh_curly_content",
+								"bh_regex",
+								"bh_regex_center",
+								"bh_regex_open",
+								"bh_regex_close",
+								"bh_regex_content",
+								"bh_double_quote",
+								"bh_double_quote_center",
+								"bh_double_quote_open",
+								"bh_double_quote_close",
+								"bh_double_quote_content"
 							],
-							"function_name_status_row": 278,
+							"function_name_status_row": 664,
 							"origPos":
 							[
 								0.0,
-								12369.0
+								11998.0
 							],
 							"syncScroll": false,
 							"syntax": "Packages/C++/C++.sublime-syntax"
 						},
 						"translation.x": 0.0,
-						"translation.y": 12369.0,
+						"translation.y": 0.0,
+						"zoom_level": 1.0
+					},
+					"stack_index": 1,
+					"type": "text"
+				},
+				{
+					"buffer": 1,
+					"file": "hop_main.cpp",
+					"semi_transient": false,
+					"settings":
+					{
+						"buffer_size": 11030,
+						"regions":
+						{
+						},
+						"selection":
+						[
+							[
+								350,
+								350
+							]
+						],
+						"settings":
+						{
+							"SL.1881.region_keys":
+							[
+								"SL.clang.Gutter.region.redish markup.deleted.sublime_linter markup.error.sublime_linter.dot",
+								"SL.clang.Highlights.|region.redish markup.deleted.sublime_linter markup.error.sublime_linter|32",
+								"sublime_linter.protected_regions"
+							],
+							"bracket_highlighter.busy": false,
+							"bracket_highlighter.clone": -1,
+							"bracket_highlighter.locations":
+							{
+								"close":
+								{
+								},
+								"icon":
+								{
+								},
+								"open":
+								{
+								},
+								"unmatched":
+								{
+								}
+							},
+							"bracket_highlighter.regions":
+							[
+								"bh_c_define",
+								"bh_c_define_center",
+								"bh_c_define_open",
+								"bh_c_define_close",
+								"bh_c_define_content",
+								"bh_square",
+								"bh_square_center",
+								"bh_square_open",
+								"bh_square_close",
+								"bh_square_content",
+								"bh_unmatched",
+								"bh_unmatched_center",
+								"bh_unmatched_open",
+								"bh_unmatched_close",
+								"bh_unmatched_content",
+								"bh_round",
+								"bh_round_center",
+								"bh_round_open",
+								"bh_round_close",
+								"bh_round_content",
+								"bh_default",
+								"bh_default_center",
+								"bh_default_open",
+								"bh_default_close",
+								"bh_default_content",
+								"bh_tag",
+								"bh_tag_center",
+								"bh_tag_open",
+								"bh_tag_close",
+								"bh_tag_content",
+								"bh_single_quote",
+								"bh_single_quote_center",
+								"bh_single_quote_open",
+								"bh_single_quote_close",
+								"bh_single_quote_content",
+								"bh_angle",
+								"bh_angle_center",
+								"bh_angle_open",
+								"bh_angle_close",
+								"bh_angle_content",
+								"bh_curly",
+								"bh_curly_center",
+								"bh_curly_open",
+								"bh_curly_close",
+								"bh_curly_content",
+								"bh_regex",
+								"bh_regex_center",
+								"bh_regex_open",
+								"bh_regex_close",
+								"bh_regex_content",
+								"bh_double_quote",
+								"bh_double_quote_center",
+								"bh_double_quote_open",
+								"bh_double_quote_close",
+								"bh_double_quote_content"
+							],
+							"function_name_status_row": 23,
+							"origPos":
+							[
+								0.0,
+								0.0
+							],
+							"syncScroll": false,
+							"syntax": "Packages/C++/C++.sublime-syntax"
+						},
+						"translation.x": 0.0,
+						"translation.y": 0.0,
 						"zoom_level": 1.0
 					},
 					"stack_index": 0,
@@ -974,7 +987,7 @@
 	],
 	"incremental_find":
 	{
-		"height": 26.0
+		"height": 27.0
 	},
 	"input":
 	{
@@ -1000,7 +1013,7 @@
 		"cols":
 		[
 			0.0,
-			0.456235378352,
+			0.5,
 			1.0
 		],
 		"rows":
@@ -1018,11 +1031,15 @@
 	{
 		"height": 0.0
 	},
+	"output.unsaved_changes":
+	{
+		"height": 100.0
+	},
 	"pinned_build_system": "",
 	"project": "imdbg.sublime-project",
 	"replace":
 	{
-		"height": 68.0
+		"height": 50.0
 	},
 	"save_all_on_build": true,
 	"select_file":
@@ -1032,16 +1049,144 @@
 		"selected_items":
 		[
 			[
-				"hop.h",
-				"Hop.h"
+				"main",
+				"hop_main.cpp"
+			],
+			[
+				"profi",
+				"Profiler.cpp"
+			],
+			[
+				"profiler",
+				"Profiler.h"
+			],
+			[
+				"server.cp",
+				"Server.cpp"
+			],
+			[
+				"profil",
+				"Profiler.cpp"
+			],
+			[
+				"lod.pc",
+				"Lod.cpp"
+			],
+			[
+				"display",
+				"DisplayableTraces.cpp"
+			],
+			[
+				"lod.h",
+				"Lod.h"
+			],
+			[
+				"dspla",
+				"DisplayableTraces.cpp"
 			],
 			[
 				"timeline",
 				"Timeline.cpp"
 			],
 			[
+				"displ",
+				"DisplayableTraces.cpp"
+			],
+			[
+				"profile",
+				"Profiler.cpp"
+			],
+			[
+				"hop.h",
+				"Hop.h"
+			],
+			[
+				"main_c",
+				"test_client/main_client.cpp"
+			],
+			[
 				"server",
 				"Server.cpp"
+			],
+			[
+				"threadinf",
+				"ThreadInfo.cpp"
+			],
+			[
+				"disp",
+				"DisplayableTraces.h"
+			],
+			[
+				"lod",
+				"Lod.cpp"
+			],
+			[
+				"dispa",
+				"DisplayableTraces.h"
+			],
+			[
+				"timeline.cpp",
+				"Timeline.cpp"
+			],
+			[
+				"server.cpp",
+				"Server.cpp"
+			],
+			[
+				"lod.cp",
+				"Lod.cpp"
+			],
+			[
+				"wrap",
+				"wrap_library/hop_wrap_linux.cpp"
+			],
+			[
+				"hop_main",
+				"hop_main.cpp"
+			],
+			[
+				"hop_m",
+				"hop_main.cpp"
+			],
+			[
+				"modal",
+				"ModalWindow.cpp"
+			],
+			[
+				"imgui",
+				"imgui/imgui.h"
+			],
+			[
+				"serv",
+				"Server.cpp"
+			],
+			[
+				"tracesera",
+				"TraceSearch.cpp"
+			],
+			[
+				"tracede",
+				"TraceDetail.cpp"
+			],
+			[
+				"time",
+				"Timeline.cpp"
+			],
+			[
+				"serach",
+				"TraceSearch.cpp"
+			],
+			[
+				"prof",
+				"Profiler.cpp"
+			],
+			[
+				"timelin",
+				"Timeline.cpp"
+			],
+			[
+				"timel",
+				"Timeline.cpp"
 			],
 			[
 				"stringdb",
@@ -1056,28 +1201,12 @@
 				"StringDb.cpp"
 			],
 			[
-				"serv",
-				"Server.cpp"
-			],
-			[
 				"pro",
 				"Profiler.cpp"
 			],
 			[
-				"imgui",
-				"imgui/imgui.h"
-			],
-			[
-				"timel",
-				"Timeline.cpp"
-			],
-			[
 				"imguicon",
 				"imgui/imconfig.h"
-			],
-			[
-				"main",
-				"test_client/main_client.cpp"
 			],
 			[
 				"hopw",
@@ -1100,14 +1229,6 @@
 				"Hop.h"
 			],
 			[
-				"threadinf",
-				"ThreadInfo.h"
-			],
-			[
-				"timelin",
-				"Timeline.cpp"
-			],
-			[
 				"unix.cp",
 				"wrap_library/hop_wrap_unix.cpp"
 			],
@@ -1118,10 +1239,6 @@
 			[
 				"cma",
 				"CMakeLists.txt"
-			],
-			[
-				"main_c",
-				"test_client/main_client.cpp"
 			],
 			[
 				"cmakelis",
@@ -1148,20 +1265,12 @@
 				"Profiler.cpp"
 			],
 			[
-				"profil",
-				"Profiler.cpp"
-			],
-			[
 				"thread",
 				"ThreadInfo.h"
 			],
 			[
 				"threadinfo",
 				"ThreadInfo.h"
-			],
-			[
-				"prof",
-				"Profiler.cpp"
 			],
 			[
 				"thra",
@@ -1312,10 +1421,6 @@
 				"Makefile"
 			],
 			[
-				"server.cp",
-				"server.cpp"
-			],
-			[
 				"makefi",
 				"src/Makefile"
 			],
@@ -1454,94 +1559,6 @@
 			[
 				"test.c",
 				"src/Test.cpp"
-			],
-			[
-				"test.",
-				"src/Test.cpp"
-			],
-			[
-				"riinteropgl",
-				"src/Mtl/RI/RIMtlInteropGL.cpp"
-			],
-			[
-				"ripipe",
-				"src/RenderInterface/RIPipelineLayout.h"
-			],
-			[
-				"pipelinelayo",
-				"src/VK/impl/PipelineLayouts.cpp"
-			],
-			[
-				"interopg",
-				"src/Mtl/RI/RIMtlInteropGL.cpp"
-			],
-			[
-				"ricmo",
-				"src/RenderInterface/RICommonTypes.h"
-			],
-			[
-				"main.cp",
-				"src/main.cpp"
-			],
-			[
-				"common/",
-				"src/common/PxlFormat.cpp"
-			],
-			[
-				"cppty",
-				"src/Mtl/CppMtlTypes.h"
-			],
-			[
-				"rimtlde",
-				"src/Mtl/RI/RIMtlDevice.h"
-			],
-			[
-				"rimtlint",
-				"src/Mtl/RI/RIMtlInteropGL.cpp"
-			],
-			[
-				"maint",
-				"thirdParties/boost/geometry/algorithms/detail/max_interval_gap.hpp"
-			],
-			[
-				"rimtlintep",
-				"src/Mtl/RI/RIMtlInteropGL.cpp"
-			],
-			[
-				"riresour",
-				"src/RenderInterface/RIResource.h"
-			],
-			[
-				"rimtlresource.h",
-				"src/Mtl/RI/RIMtlResource.h"
-			],
-			[
-				"rivkresour",
-				"src/VK/RI/RIVKResource.h"
-			],
-			[
-				"riresou",
-				"src/RenderInterface/RIResource.h"
-			],
-			[
-				"transfercmdlis",
-				"src/Mtl/RI/RIMtlTransferCmdList.cpp"
-			],
-			[
-				"mtltransf",
-				"src/Mtl/RI/RIMtlTransferCmdList.cpp"
-			],
-			[
-				"test.cp",
-				"src/Test.cpp"
-			],
-			[
-				"commandutil",
-				"src/Mtl/impl/CommandUtils.h"
-			],
-			[
-				"rimtltran",
-				"src/Mtl/RI/RIMtlTransferCmdList.cpp"
 			]
 		],
 		"width": 0.0
@@ -1549,16 +1566,36 @@
 	"select_project":
 	{
 		"height": 500.0,
-		"last_filter": "prim",
+		"last_filter": "second",
 		"selected_items":
 		[
+			[
+				"second",
+				"/DLlocal/landrych/workspaces/secondaryMain/secondaryMain.sublime-project"
+			],
+			[
+				"vk_",
+				"/DLlocal/landrych/workspaces/experiments/vk_cf_render/vk_cf_render.sublime-project"
+			],
+			[
+				"",
+				"/DLlocal/landrych/workspaces/experiments/vk_cf_render/vk_cf_render.sublime-project"
+			],
+			[
+				"secon",
+				"/DLlocal/landrych/workspaces/secondaryMain/secondaryMain.sublime-project"
+			],
 			[
 				"prim",
 				"/DLlocal/landrych/workspaces/primaryMain/primaryMain.sublime-project"
 			],
 			[
-				"secon",
-				"/DLlocal/landrych/workspaces/secondaryMain/secondaryMain.sublime-project"
+				"vkc",
+				"/DLlocal/landrych/workspaces/experiments/vk_cf_render/vk_cf_render.sublime-project"
+			],
+			[
+				"vk",
+				"/DLlocal/landrych/workspaces/experiments/vk_cf_render/vk_cf_render.sublime-project"
 			],
 			[
 				"prima",
@@ -1567,10 +1604,6 @@
 			[
 				"primar",
 				"/DLlocal/landrych/workspaces/primaryMain/primaryMain.sublime-project"
-			],
-			[
-				"vk",
-				"/DLlocal/landrych/workspaces/experiments/vk_cf_render/vk_cf_render.sublime-project"
 			],
 			[
 				"se",
@@ -1611,14 +1644,6 @@
 			[
 				"pim",
 				"~/workspaces/primary/primary.sublime-project"
-			],
-			[
-				"second",
-				"~/workspaces/secondary/secondary.sublime-project"
-			],
-			[
-				"",
-				"~/workspaces/secondary/secondary.sublime-project"
 			],
 			[
 				"sec",

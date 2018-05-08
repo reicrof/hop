@@ -13,6 +13,8 @@ static void sortSearchResOnTime(
     const std::vector<hop::ThreadInfo>& threadInfos,
     const CMP& cmp )
 {
+   HOP_PROF_FUNC();
+
    std::stable_sort(
        sr.tracesIdxThreadIdx.begin(),
        sr.tracesIdxThreadIdx.end(),
@@ -31,6 +33,8 @@ static void sortSearchResOnName(
     const hop::StringDb& strDb,
     const CMP& cmp )
 {
+   HOP_PROF_FUNC();
+
    // TODO Fix this as it is not in alphabetic order
    std::stable_sort(
        sr.tracesIdxThreadIdx.begin(),
@@ -51,6 +55,8 @@ static void sortSearchResOnDuration(
     const std::vector<hop::ThreadInfo>& threadInfos,
     const CMP& cmp )
 {
+   HOP_PROF_FUNC();
+
    std::stable_sort(
        sr.tracesIdxThreadIdx.begin(),
        sr.tracesIdxThreadIdx.end(),
@@ -67,6 +73,8 @@ namespace hop
 
 void findTraces( const char* string, const hop::StringDb& strDb, const std::vector< hop::ThreadInfo >& threadInfos, SearchResult& result )
 {
+   HOP_PROF_FUNC();
+
    result.stringSearched = string;
    result.matchCount = 0;
    result.tracesIdxThreadIdx.clear();
@@ -96,6 +104,8 @@ void findTraces( const char* string, const hop::StringDb& strDb, const std::vect
 
 SearchSelection drawSearchResult( SearchResult& searchRes, const Timeline& timeline, const StringDb& strDb, const std::vector< ThreadInfo >& threadInfos )
 {
+   HOP_PROF_FUNC();
+
    ImGui::Text("Found %zu matches", searchRes.matchCount );
 
    const float entryHeight = ImGui::GetTextLineHeightWithSpacing();

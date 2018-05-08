@@ -23,9 +23,9 @@ class Timeline
       ANIMATION_TYPE_FAST
    };
 
-   static constexpr float TRACE_HEIGHT = 20.0f;
-   static constexpr float TRACE_VERTICAL_PADDING = 2.0f;
-   static constexpr float PADDED_TRACE_SIZE = TRACE_HEIGHT + TRACE_VERTICAL_PADDING;
+   static float TRACE_HEIGHT;
+   static float TRACE_VERTICAL_PADDING;
+   static float PADDED_TRACE_SIZE;
 
    void update( float deltaTimeMs ) noexcept;
    void draw(
@@ -42,6 +42,7 @@ class Timeline
    TimeDuration timelineRange() const noexcept;
    float verticalPosPxl() const noexcept;
    float maxVerticalPosPxl() const noexcept;
+   int currentLodLevel() const noexcept;
 
    TraceDetails& getTraceDetails() noexcept;
    void clearTraceDetails();
@@ -101,14 +102,14 @@ class Timeline
    };
 
    void drawTimeline( const float posX, const float posY );
-   void drawTraces( const ThreadInfo& traces, uint32_t threadIndex, const float posX, const float posY, const StringDb& strDb, const ImColor& color );
+   void drawTraces( const ThreadInfo& traces, uint32_t threadIndex, const float posX, const float posY, const StringDb& strDb, uint32_t color );
    void drawLockWaits(const std::vector<ThreadInfo>& infos, uint32_t threadIndex, const float posX, const float posY );
    void handleMouseDrag( float mousePosX, float mousePosY );
    void handleMouseWheel( float mousePosX, float mousePosY );
    void zoomOn( int64_t microToZoomOn, float zoomFactor );
    void setStartTime( int64_t timeInMicro, AnimationType animType = ANIMATION_TYPE_NORMAL ) noexcept;
    void setZoom( TimeDuration microsToDisplay, AnimationType animType = ANIMATION_TYPE_NORMAL );
-   std::vector< LockOwnerInfo > highlightLockOwner(const std::vector<ThreadInfo>& infos, uint32_t threadIndex, const hop::LockWait& highlightedLockWait, const float posX, const float posY );
+   std::vector< LockOwnerInfo > highlightLockOwner(const std::vector<ThreadInfo>& infos, uint32_t threadIndex, uint32_t hoveredLwIndex, const float posX, const float posY );
 
    int64_t _timelineStart{0};
    TimeDuration _timelineRange{5000000000};
@@ -119,6 +120,7 @@ class Timeline
    float _rightClickStartPosInCanvas[2] = {};
    float _ctrlRightClickStartPosInCanvas[2] = {};
    float _timelineHoverPos{-1.0f};
+   int _lodLevel;
    bool _realtime{true};
 
    std::vector< std::pair< size_t, uint32_t > > _highlightedTraces;

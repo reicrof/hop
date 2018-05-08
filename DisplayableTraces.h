@@ -4,6 +4,7 @@
 #include "Hop.h"
 #include "Lod.h"
 #include <vector>
+#include <deque>
 #include <utility>
 #include <limits>
 
@@ -18,39 +19,53 @@ struct DisplayableTraces
    DisplayableTraces(const DisplayableTraces& ) = delete;
    DisplayableTraces& operator=(const DisplayableTraces& ) = delete;
 
-   enum Flags
-   {
-      END_TRACE = 0,
-      START_TRACE = 1,
-   };
-
    // Explicit copy to avoid accidental one
    DisplayableTraces copy() const;
 
    void append( const DisplayableTraces& newTraces );
-   void reserve( size_t size );
    void clear();
 
-   std::vector< TimeStamp > ends; // in ns
-   std::vector< TimeDuration > deltas; // in ns
+   std::deque< TimeStamp > ends; // in ns
+   std::deque< TimeDuration > deltas; // in ns
 
    //Indexes of the name in the string database
-   std::vector< TStrPtr_t > fileNameIds;
-   std::vector< TStrPtr_t > fctNameIds;
+   std::deque< TStrPtr_t > fileNameIds;
+   std::deque< TStrPtr_t > fctNameIds;
 
-   std::vector< TLineNb_t > lineNbs;
-   std::vector< TGroup_t > groups;
-   std::vector< TDepth_t > depths;
-   std::vector< uint32_t > flags;
+   std::deque< TLineNb_t > lineNbs;
+   std::deque< TGroup_t > groups;
+   std::deque< TDepth_t > depths;
+   std::deque< uint32_t > flags;
 
    LodsArray lods;
    TDepth_t maxDepth{ 0 };
 };
 
-std::pair<size_t, size_t> visibleTracesIndexSpan(
-    const DisplayableTraces& traces,
-    TimeStamp absoluteStart,
-    TimeStamp absoluteEnd );
+struct DisplayableLockWaits
+{
+   DisplayableLockWaits() = default;
+   DisplayableLockWaits(DisplayableLockWaits&& ) = default;
+   DisplayableLockWaits(const DisplayableLockWaits& ) = delete;
+   DisplayableLockWaits& operator=(const DisplayableLockWaits& ) = delete;
+
+   void append( const DisplayableLockWaits& newLockWaits );
+   void clear();
+
+   std::deque< TimeStamp > ends; // in ns
+   std::deque< TimeDuration > deltas; // in ns
+   std::deque< TDepth_t > depths;
+   std::deque< void* > mutexAddrs;
+
+   LodsArray lods;
+};
+
+template <typename Ts>
+std::pair<size_t, size_t>
+visibleIndexSpan( const Ts& traces, TimeStamp absoluteStart, TimeStamp absoluteEnd );
+
+std::pair<size_t, size_t>
+visibleIndexSpan( const LodsArray& lodsArr, TimeStamp absoluteStart, TimeStamp absoluteEnd, int lodLvl );
+
 }
 
 #endif // DISPLAYABLE_TRACE_H_

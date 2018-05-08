@@ -1,6 +1,7 @@
 #ifndef UTILS_H_
 #define UTILS_H_
 
+#include <cstdio>
 #include <cassert>
 #include <algorithm>
 
@@ -81,6 +82,26 @@ inline void formatNanosTimepointToDisplay(int64_t timepoint, uint64_t totalNanos
    }
 }
 
+inline uint32_t addColorWithClamping( uint32_t c1, uint32_t c2 )
+{
+   unsigned char r = clamp( ((c1 >> 0) & 0xFF) + ((c2 >> 0) & 0xFF), 0u, 255u );
+   unsigned char g = clamp( ((c1 >> 8) & 0xFF) + ((c2 >> 8) & 0xFF), 0u, 255u );
+   unsigned char b = clamp( ((c1 >> 16) & 0xFF) + ((c2 >> 16) & 0xFF), 0u, 255u );
+   unsigned char a = clamp( ((c1 >> 24) & 0xFF) + ((c2 >> 24) & 0xFF), 0u, 255u );
+
+   return ( r | (g<<8) | (b<<16) | (a<<24) );
+}
+
+inline uint32_t subColorWithClamping( uint32_t c1, uint32_t c2 )
+{
+   unsigned char r = clamp( ((c1 >> 0) & 0xFF) - ((c2 >> 0) & 0xFF), 0u, 255u );
+   unsigned char g = clamp( ((c1 >> 8) & 0xFF) - ((c2 >> 8) & 0xFF), 0u, 255u );
+   unsigned char b = clamp( ((c1 >> 16) & 0xFF) - ((c2 >> 16) & 0xFF), 0u, 255u );
+   unsigned char a = clamp( ((c1 >> 24) & 0xFF) - ((c2 >> 24) & 0xFF), 0u, 255u );
+
+   return ( r | (g<<8) | (b<<16) | (a<<24) );
+}
+
 inline void formatSizeInBytesToDisplay( size_t sizeInBytes, char* str, size_t strSize )
 {
    if (sizeInBytes < 1000)
@@ -101,6 +122,6 @@ inline void formatSizeInBytesToDisplay( size_t sizeInBytes, char* str, size_t st
    }
 }
 
-}
+} // namespace hop
 
 #endif  // UTILS_H_

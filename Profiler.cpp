@@ -8,6 +8,7 @@
 #include "DisplayableTraces.h"
 #include "ModalWindow.h"
 #include "miniz.h"
+#include "Options.h"
 #include <SDL_keycode.h>
 
 // Todo : I dont like this dependency
@@ -27,6 +28,8 @@
 #include <numeric>
 #include <stdio.h>
 #include <fstream>
+
+extern bool g_run;
 
 namespace
 {
@@ -227,7 +230,7 @@ void onNewFrame( int width, int height, int mouseX, int mouseY, bool lmbPressed,
    ImGui::NewFrame();
 }
 
-void draw()
+void draw( uint32_t windowWidth, uint32_t windowHeight )
 {
    for( auto p : _profilers )
    {
@@ -236,7 +239,7 @@ void draw()
 
    for ( auto p : _profilers )
    {
-      p->draw();
+      p->draw( windowWidth, windowHeight );
    }
 
    hop::drawStatsWindow( g_stats );
@@ -263,7 +266,7 @@ void addNewProfiler( Profiler* profiler )
 
 Profiler::Profiler( const char* name ) : _name( name )
 {
-   _server.start( name );
+   _server.start( name, g_options.glFinishByDefault );
 }
 
 void Profiler::addTraces( const DisplayableTraces& traces, uint32_t threadIndex )
@@ -306,6 +309,8 @@ void Profiler::addTraces( const DisplayableTraces& traces, uint32_t threadIndex 
 
 void Profiler::fetchClientData()
 {
+   HOP_PROF_FUNC();
+
    _server.getPendingData(_serverPendingData);
 
    if( _recording )
@@ -331,6 +336,7 @@ void Profiler::fetchClientData()
 
 void Profiler::addStringData( const std::vector<char>& strData )
 {
+   HOP_PROF_FUNC();
    // We should read the string data even when not recording since the string data
    // is sent only once (the first time a function is used)
    if ( !strData.empty() )
@@ -339,8 +345,9 @@ void Profiler::addStringData( const std::vector<char>& strData )
    }
 }
 
-void Profiler::addLockWaits( const std::vector<LockWait>& lockWaits, uint32_t threadIndex )
+void Profiler::addLockWaits( const DisplayableLockWaits& lockWaits, uint32_t threadIndex )
 {
+   HOP_PROF_FUNC();
    // Check if new thread
    if ( threadIndex >= _tracesPerThread.size() )
    {
@@ -352,6 +359,7 @@ void Profiler::addLockWaits( const std::vector<LockWait>& lockWaits, uint32_t th
 
 void Profiler::addUnlockEvents( const std::vector<UnlockEvent>& unlockEvents, uint32_t threadIndex )
 {
+   HOP_PROF_FUNC();
    // Check if new thread
    if ( threadIndex >= _tracesPerThread.size() )
    {
@@ -416,6 +424,7 @@ Profiler::~Profiler()
 void hop::Profiler::update( float deltaTimeMs ) noexcept
 {
    _timeline.update( deltaTimeMs );
+   setThreadCount( g_options, _tracesPerThread.size() );
 }
 
 static bool ptInRect( const ImVec2& pt, const ImVec2& a, const ImVec2& b )
@@ -426,34 +435,98 @@ static bool ptInRect( const ImVec2& pt, const ImVec2& a, const ImVec2& b )
    return true;
 }
 
-static bool drawPlayStopButton( bool& isRecording )
+static constexpr float TOOLBAR_BUTTON_HEIGHT = 15.0f;
+static constexpr float TOOLBAR_BUTTON_WIDTH = 15.0f;
+static constexpr float TOOLBAR_BUTTON_PADDING = 5.0f;
+
+static bool drawPlayStopButton( const ImVec2& drawPos, bool isRecording )
 {
-   constexpr float height = 15.0f, width = 15.0f, padding = 5.0f;
-   const auto startDrawPos = ImGui::GetCursorScreenPos();
+   HOP_PROF_FUNC();
    ImDrawList* DrawList = ImGui::GetWindowDrawList();
 
    const auto& mousePos = ImGui::GetMousePos();
-   const bool hovering = ImGui::IsMouseHoveringWindow() && ptInRect( mousePos, startDrawPos, ImVec2( startDrawPos.x + width, startDrawPos.y + height ) );
+   const bool hovering =
+       ImGui::IsMouseHoveringWindow() &&
+       ptInRect(
+           mousePos,
+           drawPos,
+           ImVec2( drawPos.x + TOOLBAR_BUTTON_WIDTH, drawPos.y + TOOLBAR_BUTTON_HEIGHT ) );
 
-   if( isRecording )
+   if ( isRecording )
    {
-      DrawList->AddRectFilled( startDrawPos, ImVec2( startDrawPos.x + width, startDrawPos.y + height ), hovering ? ImColor(0.9f,0.0f,0.0f) : ImColor(0.7f,0.0f,.0f) );
+      DrawList->AddRectFilled(
+          drawPos,
+          ImVec2( drawPos.x + TOOLBAR_BUTTON_WIDTH, drawPos.y + TOOLBAR_BUTTON_HEIGHT ),
+          hovering ? ImColor( 0.9f, 0.0f, 0.0f ) : ImColor( 0.7f, 0.0f, .0f ) );\
+      if( hovering )
+      {
+         ImGui::BeginTooltip();
+         ImGui::Text("Stop recording traces ('r')");
+         ImGui::EndTooltip();
+      }
    }
    else
    {
-      ImVec2 pts[] = {startDrawPos,
-                      ImVec2( startDrawPos.x + width, startDrawPos.y + ( height * 0.5 ) ),
-                      ImVec2( startDrawPos.x, startDrawPos.y + width )};
-      DrawList->AddConvexPolyFilled( pts, 3, hovering ? ImColor( 0.0f, 0.9f, 0.0f ) : ImColor( 0.0f, 0.7f, 0.0f ), true );
+      ImVec2 pts[] = {
+          drawPos,
+          ImVec2( drawPos.x + TOOLBAR_BUTTON_WIDTH, drawPos.y + ( TOOLBAR_BUTTON_HEIGHT * 0.5 ) ),
+          ImVec2( drawPos.x, drawPos.y + TOOLBAR_BUTTON_WIDTH )};
+      DrawList->AddConvexPolyFilled(
+          pts, 3, hovering ? ImColor( 0.0f, 0.9f, 0.0f ) : ImColor( 0.0f, 0.7f, 0.0f ) );
+
+      if( hovering )
+      {
+         ImGui::BeginTooltip();
+         ImGui::Text("Start recording traces ('r')");
+         ImGui::EndTooltip();
+      }
    }
 
-   ImGui::SetCursorScreenPos( ImVec2(startDrawPos.x, startDrawPos.y + height + padding) );
+   ImGui::SetCursorScreenPos(
+       ImVec2( drawPos.x, drawPos.y + TOOLBAR_BUTTON_HEIGHT + TOOLBAR_BUTTON_PADDING ) );
 
-   return hovering && ImGui::IsMouseClicked(0);
+   return hovering && ImGui::IsMouseClicked( 0 );
+}
+
+static bool drawDeleteTracesButton( const ImVec2& drawPos, bool active )
+{
+   ImDrawList* DrawList = ImGui::GetWindowDrawList();
+
+   const auto& mousePos = ImGui::GetMousePos();
+   const bool hovering =
+       ImGui::IsMouseHoveringWindow() &&
+       ptInRect(
+           mousePos,
+           drawPos,
+           ImVec2( drawPos.x + TOOLBAR_BUTTON_WIDTH, drawPos.y + TOOLBAR_BUTTON_HEIGHT ) );
+
+   ImColor col = active ? ( hovering ? ImColor( 0.9f, 0.0f, 0.0f ) : ImColor( 0.7f, 0.0f, 0.0f ) )
+                        : ImColor( 0.5f, 0.5f, 0.5f );
+
+   DrawList->AddLine(
+       drawPos,
+       ImVec2( drawPos.x + TOOLBAR_BUTTON_WIDTH, drawPos.y + TOOLBAR_BUTTON_HEIGHT ),
+       col,
+       3.0f );
+   DrawList->AddLine(
+       ImVec2( drawPos.x + TOOLBAR_BUTTON_WIDTH, drawPos.y ),
+       ImVec2( drawPos.x, drawPos.y + TOOLBAR_BUTTON_HEIGHT ),
+       col,
+       3.0f );
+
+   if( active && hovering )
+   {
+      ImGui::BeginTooltip();
+      ImGui::Text("Delete all recorded traces ('Del')");
+      ImGui::EndTooltip();
+   }
+
+   return hovering && active && ImGui::IsMouseClicked( 0 );
 }
 
 void hop::Profiler::drawSearchWindow()
 {
+   HOP_PROF_FUNC();
    bool inputFocus = false;
    if ( _focusSearchWindow && _searchWindowOpen )
    {
@@ -520,13 +593,14 @@ void hop::Profiler::drawSearchWindow()
 
 void hop::Profiler::drawTraceDetailsWindow()
 {
+   HOP_PROF_FUNC();
    const auto traceDetailRes = drawTraceDetails( _timeline.getTraceDetails(), _tracesPerThread, _strDb );
    if ( traceDetailRes.isWindowOpen )
    {
        _timeline.setTraceDetailsDisplayed();
 
        // Add the trace that will need to be highlighted
-       std::pair<size_t, size_t> span = visibleTracesIndexSpan(
+       std::pair<size_t, size_t> span = visibleIndexSpan(
            _tracesPerThread[traceDetailRes.hoveredThreadIdx]._traces,
            _timeline.absoluteTimelineStart(),
            _timeline.absoluteTimelineEnd() );
@@ -546,10 +620,11 @@ void hop::Profiler::drawTraceDetailsWindow()
    }
 }
 
-void hop::Profiler::draw()
+void hop::Profiler::draw( uint32_t windowWidth, uint32_t windowHeight )
 {
-   ImGui::SetNextWindowSize(ImVec2(1000,500), ImGuiSetCond_FirstUseEver);
-   ImGui::PushStyleVar( ImGuiStyleVar_WindowMinSize, ImVec2( 300, 300 ) );
+   HOP_PROF_FUNC();
+   ImGui::SetNextWindowSize(ImVec2( windowWidth * 0.9, windowHeight * 0.9 ), ImGuiSetCond_FirstUseEver);
+   ImGui::PushStyleVar( ImGuiStyleVar_WindowMinSize, ImVec2( 600, 300 ) );
    if ( !ImGui::Begin( _name.c_str(), nullptr, ImGuiWindowFlags_NoScrollWithMouse | ImGuiWindowFlags_MenuBar | ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoCollapse ) )
    {
       // Early out
@@ -566,26 +641,36 @@ void hop::Profiler::draw()
 
    handleHotkey();
 
+   drawOptionsWindow( g_options );
 
-   if( drawPlayStopButton( _recording ) )
+   auto toolbarDrawPos = ImGui::GetCursorScreenPos();
+   if( drawPlayStopButton( toolbarDrawPos, _recording ) )
    {
       setRecording( !_recording );
+   }
+   toolbarDrawPos.x += (2.0f*TOOLBAR_BUTTON_PADDING) + TOOLBAR_BUTTON_WIDTH;
+   if( drawDeleteTracesButton( toolbarDrawPos, !_tracesPerThread.empty() ) )
+   {
+      hop::displayModalWindow( "Delete all traces?", hop::MODAL_TYPE_YES_NO, [&](){ clear(); } );
    }
 
    if( _tracesPerThread.empty() && !_recording )
    {
-      const char* record = "-------------- Hop --------------\n\n"
+      const char* helpTxt = "-------------- Hop --------------\n\n"
                            "Press 'R' to start/stop recording\n"
                            "Right mouse click to get traces details\n"
                            "Double click on a trace to focus it\n"
                            "Right mouse drag to zoom on a region\n"
-                           "Use CTRL+F to search traces\n";
+                           "Right click on the timeline to create a bookmark\n"
+                           "Use arrow keys <-/-> to navigate bookmarks\n"
+                           "Use CTRL+F to search traces\n"
+                           "Use Del to delete traces\n";
       const auto pos = ImGui::GetWindowPos();
       const float windowWidthPxl = ImGui::GetWindowWidth();
       const float windowHeightPxl = ImGui::GetWindowHeight();
       ImDrawList* DrawList = ImGui::GetWindowDrawList();
-      auto size = ImGui::CalcTextSize( record );
-      DrawList->AddText( ImGui::GetIO().Fonts->Fonts[0], 30.0f, ImVec2(pos.x + windowWidthPxl/2 - (size.x), pos.y + windowHeightPxl/2 - size.y),ImGui::GetColorU32( ImGuiCol_TextDisabled ), record );
+      auto size = ImGui::CalcTextSize( helpTxt );
+      DrawList->AddText( ImGui::GetIO().Fonts->Fonts[0], 30.0f, ImVec2(pos.x + windowWidthPxl/2 - (size.x), pos.y + windowHeightPxl/2 - size.y),ImGui::GetColorU32( ImGuiCol_TextDisabled ), helpTxt );
    }
    else
    {
@@ -613,6 +698,7 @@ void hop::Profiler::draw()
 
 void hop::Profiler::drawMenuBar()
 {
+   HOP_PROF_FUNC();
    const char* const menuSaveAsHop = "Save as...";
    const char* const menuOpenHopFile = "Open";
    const char* const menuHelp = "Help";
@@ -635,6 +721,10 @@ void hop::Profiler::drawMenuBar()
          {
             menuAction = menuHelp;
          }
+         if( ImGui::MenuItem( "Options", NULL ) )
+         {
+            g_options.optionWindowOpened = true;
+         }
          ImGui::Separator();
          if( ImGui::Checkbox("Use glFinish()", &useGlFinish) )
          {
@@ -643,7 +733,7 @@ void hop::Profiler::drawMenuBar()
          ImGui::Separator();
          if ( ImGui::MenuItem( "Exit", NULL ) )
          {
-            exit(0);
+            g_run = false;
          }
          ImGui::EndMenu();
       }
@@ -764,13 +854,10 @@ void hop::Profiler::handleHotkey()
    {
       _timeline.nextBookmark();
    }
-   else if( ImGui::IsKeyPressed( SDL_SCANCODE_UP ) )
+   else if( ImGui::IsKeyDown( SDLK_DELETE ) && !_tracesPerThread.empty() )
    {
-      printf("Up arrow\n");
-   }
-   else if( ImGui::IsKeyPressed( SDL_SCANCODE_DOWN ) )
-   {
-      printf("Down arrow\n");
+      if( ImGui::IsWindowFocused( ImGuiFocusedFlags_RootAndChildWindows ) && !hop::modalWindowShowing() )
+         hop::displayModalWindow( "Delete all traces?", hop::MODAL_TYPE_YES_NO, [&](){ clear(); } );
    }
 }
 
@@ -789,7 +876,7 @@ bool hop::Profiler::setRecording(bool recording)
 
 bool hop::Profiler::saveToFile( const char* path )
 {
-   displayModalWindow( "Saving...", false );
+   displayModalWindow( "Saving...", MODAL_TYPE_NO_CLOSE );
    std::thread t( [this, path]() {
       // Compute the size of the serialized data
       const size_t dbSerializedSize = serializedSize( _strDb );
@@ -801,7 +888,7 @@ bool hop::Profiler::saveToFile( const char* path )
       }
 
       const size_t totalSerializedSize =
-          std::accumulate( threadInfosSerializedSize.begin(), threadInfosSerializedSize.end(), 0 ) +
+          std::accumulate( threadInfosSerializedSize.begin(), threadInfosSerializedSize.end(), size_t{0} ) +
           timelineSerializedSize +
           dbSerializedSize;
 
@@ -824,7 +911,7 @@ bool hop::Profiler::saveToFile( const char* path )
       if ( compressionStatus != Z_OK )
       {
          closeModalWindow();
-         displayModalWindow( "Compression failed. File not saved!", true );
+         displayModalWindow( "Compression failed. File not saved!", MODAL_TYPE_CLOSE );
          return false;
       }
 
@@ -853,7 +940,7 @@ bool hop::Profiler::openFile( const char* path )
    {
       clear();
 
-      displayModalWindow( "Loading...", false );
+      displayModalWindow( "Loading...", MODAL_TYPE_NO_CLOSE );
       std::thread t( [this, path]() {
          std::ifstream input( path, std::ifstream::binary );
          std::vector<char> data(
@@ -864,7 +951,7 @@ bool hop::Profiler::openFile( const char* path )
          if( header->magicNumber != MAGIC_NUMBER )
          {
             closeModalWindow();
-            displayModalWindow( "Not a valid hop file.", true );
+            displayModalWindow( "Not a valid hop file.", MODAL_TYPE_CLOSE );
             return false;
          }
 
@@ -880,7 +967,7 @@ bool hop::Profiler::openFile( const char* path )
          if ( uncompressStatus != Z_OK )
          {
             closeModalWindow();
-            displayModalWindow( "Error uncompressing file. Nothing will be loaded", true );
+            displayModalWindow( "Error uncompressing file. Nothing will be loaded", MODAL_TYPE_CLOSE );
             return false;
          }
 
@@ -907,17 +994,19 @@ bool hop::Profiler::openFile( const char* path )
 
       return true;
    }
-   displayModalWindow( "File not found", true );
+   displayModalWindow( "File not found", MODAL_TYPE_CLOSE );
    return false;
 }
 
 void hop::Profiler::clear()
 {
+   _server.clear();
    _strDb.clear();
    _tracesPerThread.clear();
    _timeline.setAbsoluteStartTime( 0 );
    _timeline.clearTraceDetails();
    _timeline.clearBookmarks();
    _recording = false;
+   g_stats.traceCount = 0;
 }
 

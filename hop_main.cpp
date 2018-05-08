@@ -4,6 +4,8 @@
 #include "Stats.h"
 #include "imgui/imgui.h"
 #include "argtable3.h"
+#include "Options.h"
+#include "ModalWindow.h"
 #include <SDL.h>
 #undef main
 
@@ -19,7 +21,7 @@
 #include <sys/wait.h>
 #endif
 
-static bool g_run = true;
+bool g_run = true;
 static float g_mouseWheel = 0.0f;
 
 void terminateCallback( int sig )
@@ -43,6 +45,8 @@ static void setClipboardText(void*, const char* text)
 
 static void sdlImGuiInit()
 {
+   ImGui::CreateContext();
+
    ImGuiIO& io = ImGui::GetIO();
    io.KeyMap[ImGuiKey_Tab] = SDLK_TAB; // Keyboard mapping. ImGui will use those indices to peek into the io.KeyDown[] array.
    io.KeyMap[ImGuiKey_LeftArrow] = SDL_SCANCODE_LEFT;
@@ -115,7 +119,8 @@ static void handleInput()
          {
             if ( event.key.keysym.sym == SDLK_ESCAPE )
             {
-               g_run = false;
+               if( !hop::modalWindowShowing() )
+                  hop::displayModalWindow( "Exit ?", hop::MODAL_TYPE_YES_NO, [&](){ ::g_run = false; } );
                break;
             }
             int key = event.key.keysym.sym & ~SDLK_SCANCODE_MASK;
@@ -285,8 +290,13 @@ int main( int argc, char* argv[] )
       return -1;
    }
 
+   hop::loadOptions();
+
+   uint32_t createWindowFlags = SDL_WINDOW_OPENGL | SDL_WINDOW_RESIZABLE;
+   if( hop::g_options.startFullScreen ) createWindowFlags |= SDL_WINDOW_MAXIMIZED;
+
    SDL_Window* window = SDL_CreateWindow(
-       "Hop", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, 1600, 1024, SDL_WINDOW_OPENGL | SDL_WINDOW_RESIZABLE );
+       "Hop", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, 1600, 1024, createWindowFlags );
 
    if ( window == NULL )
    {
@@ -302,6 +312,11 @@ int main( int argc, char* argv[] )
    SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 2);
    SDL_GL_SetAttribute(SDL_GL_DOUBLEBUFFER, 1);
    SDL_GL_SetSwapInterval(1);
+
+   // Setup the LOD granularity based on screen resolution
+   SDL_DisplayMode DM;
+   SDL_GetCurrentDisplayMode(0, &DM);
+   hop::setupLODResolution( DM.w );
 
    hop::init();
 
@@ -353,7 +368,7 @@ int main( int argc, char* argv[] )
       glClearColor( 1.0f, 1.0f, 1.0f, 1.0f );
       glClear( GL_COLOR_BUFFER_BIT );
 
-      hop::draw();
+      hop::draw( w, h );
 
       const auto drawEnd = std::chrono::system_clock::now();
       hop::g_stats.drawingTimeMs = std::chrono::duration< double, std::milli>( ( drawEnd - drawStart ) ).count();
@@ -369,11 +384,15 @@ int main( int argc, char* argv[] )
       hop::g_stats.frameTimeMs = std::chrono::duration< double, std::milli>( ( frameEnd - frameStart ) ).count();
    }
 
+   hop::saveOptions();
+
    // We have launched a child process. Let's close it
    if( executablePath )
    {
       terminateProcess( childProcess );
    }
+
+   ImGui::DestroyContext();
 
    SDL_GL_DeleteContext( mainContext );
    SDL_DestroyWindow( window );

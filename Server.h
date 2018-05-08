@@ -15,9 +15,10 @@ namespace hop
 class Server
 {
   public:
-   bool start( const char* name );
+   bool start( const char* name, bool useGlFinishByDefault );
    bool setRecording( bool recording );
    void stop();
+   void clear();
 
    bool useGlFinish() const noexcept;
    void setUseGlFinish( bool );
@@ -29,7 +30,7 @@ class Server
        std::vector<std::vector<char> > stringData;
        std::vector<uint32_t> tracesThreadIndex;
 
-       std::vector<std::vector<LockWait> > lockWaits;
+       std::vector< DisplayableLockWaits > lockWaits;
        std::vector<uint32_t> lockWaitThreadIndex;
 
        std::vector<std::vector<UnlockEvent> > unlockEvents;
@@ -43,13 +44,16 @@ class Server
 
   private:
    // Returns the number of bytes processed
-   size_t handleNewMessage( uint8_t* data, size_t maxSize );
+   size_t handleNewMessage( uint8_t* data, size_t maxSize, TimeStamp minTimestamp );
+
+   void clearPendingMessages();
 
    std::thread _thread;
    std::atomic< bool > _running{false};
    SharedMemory _sharedMem;
-   StringDb _stringDb;
 
+   std::atomic< bool > _clearingRequested{false};
+   StringDb _stringDb;
    PendingData _pendingData;
 };
 
