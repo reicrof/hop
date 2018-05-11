@@ -101,6 +101,13 @@ class Timeline
       uint32_t threadIndex{0};
    };
 
+   struct ContextMenu
+   {
+      size_t traceId{0};
+      uint32_t threadIndex{0};
+      bool open{false};
+   } _contextMenuInfo;
+
    void drawTimeline( const float posX, const float posY );
    void drawTraces( const ThreadInfo& traces, uint32_t threadIndex, const float posX, const float posY, const StringDb& strDb, uint32_t color );
    void drawLockWaits(const std::vector<ThreadInfo>& infos, uint32_t threadIndex, const float posX, const float posY );

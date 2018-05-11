@@ -239,6 +239,26 @@ void Timeline::draw(
       ImGui::PopStyleColor(3);
    }
 
+   if ( _contextMenuInfo.open )
+   {
+      ImGui::PushStyleVar( ImGuiStyleVar_WindowMinSize, ImVec2( 0, 0 ) );
+      ImGui::SetNextWindowBgAlpha(0.8f); // Transparent background
+      if( ImGui::BeginPopupContextItem( "Context Menu" ) )
+      {
+         if ( ImGui::Selectable( "Profile Stack" ) )
+         {
+            _traceDetails = createTraceDetails(
+                tracesPerThread[_contextMenuInfo.threadIndex]._traces,
+                _contextMenuInfo.threadIndex,
+                _contextMenuInfo.traceId );
+            _contextMenuInfo.open = false;
+            ImGui::CloseCurrentPopup();
+         }
+         ImGui::EndPopup();
+      }
+      ImGui::PopStyleVar();
+   }
+
    ImGui::EndChild(); // TimelineCanvas
 
    if ( ImGui::IsItemHoveredRect() )
@@ -785,7 +805,10 @@ void Timeline::drawTraces(
          }
          else if ( rightMouseClicked && _rightClickStartPosInCanvas[0] == 0.0f)
          {
-            _traceDetails = createTraceDetails( data._traces, threadIndex, t.traceIndex );
+            ImGui::OpenPopup( "Context Menu" );
+            _contextMenuInfo.open = true;
+            _contextMenuInfo.threadIndex = threadIndex;
+            _contextMenuInfo.traceId = t.traceIndex;
          }
       }
    }
@@ -831,7 +854,10 @@ void Timeline::drawTraces(
          }
          else if ( rightMouseClicked && _rightClickStartPosInCanvas[0] == 0.0f)
          {
-            _traceDetails = createTraceDetails( data._traces, threadIndex, t.traceIndex );
+            ImGui::OpenPopup( "Context Menu" );
+            _contextMenuInfo.open = true;
+            _contextMenuInfo.threadIndex = threadIndex;
+            _contextMenuInfo.traceId = t.traceIndex;
          }
       }
    }
