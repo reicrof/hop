@@ -362,7 +362,7 @@ TraceStats createTraceStats(const DisplayableTraces& traces, uint32_t threadInde
       median = medianValues[ medianValues.size() / 2 ];
    }
 
-   return TraceStats{ fctName, count, min, max, median, std::move(displayableDurations), true };
+   return TraceStats{ fctName, count, min, max, median, std::move(displayableDurations), true, true };
 }
 
 TraceDetails createGlobalTraceDetails( const DisplayableTraces& traces, uint32_t threadIndex )
@@ -565,7 +565,11 @@ void drawTraceStats(TraceStats& stats, const std::vector<ThreadInfo>& tracesPerT
 {
    if ( stats.open > 0 )
    {
-      //if (details.shouldFocusWindow) ImGui::SetNextWindowFocus();
+      if (stats.focus)
+      {
+         ImGui::SetNextWindowFocus();
+         stats.focus = false;
+      }
 
       ImGui::PushStyleColor(ImGuiCol_WindowBg, ImVec4(0.20f, 0.20f, 0.20f, 0.75f));
       ImGui::SetNextWindowSize( ImVec2(0, 0) );

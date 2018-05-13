@@ -49,6 +49,7 @@ struct TraceStats
    TimeDuration min, max, median;
    std::vector< float > displayableDurations;
    bool open;
+   bool focus;
 };
 
 TraceDetails
