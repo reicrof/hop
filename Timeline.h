@@ -133,6 +133,7 @@ class Timeline
    std::vector< std::pair< size_t, uint32_t > > _highlightedTraces;
 
    TraceDetails _traceDetails{};
+   TraceStats _traceStats{};
 
    std::vector< AnimationState > _undoPositionStates, _redoPositionStates;
 

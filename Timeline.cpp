@@ -254,12 +254,24 @@ void Timeline::draw(
             _contextMenuInfo.open = false;
             ImGui::CloseCurrentPopup();
          }
+         else if ( ImGui::Selectable("Trace Stats") )
+         {
+            _traceStats = createTraceStats(
+               tracesPerThread[_contextMenuInfo.threadIndex]._traces,
+               _contextMenuInfo.threadIndex,
+               _contextMenuInfo.traceId);
+         }
          ImGui::EndPopup();
       }
       ImGui::PopStyleVar();
    }
 
    ImGui::EndChild(); // TimelineCanvas
+
+   if (_traceStats.open)
+   {
+      drawTraceStats(_traceStats, tracesPerThread, strDb);
+   }
 
    if ( ImGui::IsItemHoveredRect() )
    {
