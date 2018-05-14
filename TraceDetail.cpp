@@ -5,6 +5,7 @@
 #include "imgui/imgui.h"
 
 #include <algorithm>
+#include <limits>
 #include <unordered_set>
 
 #include <cassert>
@@ -327,6 +328,43 @@ createTraceDetails( const DisplayableTraces& traces, uint32_t threadIndex, size_
    return details;
 }
 
+TraceStats createTraceStats(const DisplayableTraces& traces, uint32_t threadIndex, size_t traceId)
+{
+   const TStrPtr_t fileName = traces.fileNameIds[ traceId ];
+   const TStrPtr_t fctName = traces.fctNameIds[ traceId ];
+   const TLineNb_t lineNb = traces.lineNbs[ traceId ];
+
+   std::vector<float> displayableDurations;
+   std::vector<float> medianValues;
+   displayableDurations.reserve( 256 );
+   medianValues.reserve( 256 );
+   TimeDuration min = std::numeric_limits< TimeDuration >::max();
+   TimeDuration max = 0;
+   TimeDuration median = 0;
+   size_t count = 0;
+
+   for (size_t i = 0; i < traces.fileNameIds.size(); ++i)
+   {
+      if (traces.fileNameIds[i] == fileName && traces.fctNameIds[i] == fctName && traces.lineNbs[i] == lineNb)
+      {
+         const TimeDuration delta = traces.deltas[i];
+         displayableDurations.push_back( (float) delta );
+         medianValues.push_back( delta );
+         min = std::min( min, delta );
+         max = std::max( max, delta );
+         ++count;
+      }
+   }
+
+   if( !medianValues.empty() )
+   {
+      std::nth_element(medianValues.begin(), medianValues.begin() + medianValues.size() / 2, medianValues.end());
+      median = medianValues[ medianValues.size() / 2 ];
+   }
+
+   return TraceStats{ fctName, count, min, max, median, std::move(displayableDurations), true, true };
+}
+
 TraceDetails createGlobalTraceDetails( const DisplayableTraces& traces, uint32_t threadIndex )
 {
    HOP_PROF_FUNC();
@@ -522,4 +560,33 @@ TraceDetailDrawResult drawTraceDetails(
 
    return result;
 }
+
+void drawTraceStats(TraceStats& stats, const std::vector<ThreadInfo>& tracesPerThread, const StringDb& strDb)
+{
+   if ( stats.open > 0 )
+   {
+      if (stats.focus)
+      {
+         ImGui::SetNextWindowFocus();
+         stats.focus = false;
+      }
+
+      ImGui::PushStyleColor(ImGuiCol_WindowBg, ImVec4(0.20f, 0.20f, 0.20f, 0.75f));
+      ImGui::SetNextWindowSize( ImVec2(0, 0) );
+      if ( ImGui::Begin("Trace Stats", &stats.open) )
+      {
+         char minStr[32] = {};
+         char maxStr[32] = {};
+         char medianStr[32] = {};
+         formatNanosDurationToDisplay( stats.min, minStr, sizeof( minStr ) );
+         formatNanosDurationToDisplay( stats.max, maxStr, sizeof( maxStr ) );
+         formatNanosDurationToDisplay( stats.median, medianStr, sizeof( medianStr ) );
+         ImGui::Text("Function : %s\nCount    : %zu\nMin      : %s\nMax      : %s\nMedian   : %s", strDb.getString(stats.fctNameId), stats.count, minStr, maxStr, medianStr );
+         ImGui::PlotLines( "", stats.displayableDurations.data(), stats.displayableDurations.size() );
+      }
+      ImGui::End();
+      ImGui::PopStyleColor();
+   }
+}
+
 }

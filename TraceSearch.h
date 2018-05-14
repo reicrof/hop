@@ -27,6 +27,7 @@ namespace hop
 
    void findTraces( const char* string, const StringDb& strDb, const std::vector< ThreadInfo >& threadInfos, SearchResult& result );
    SearchSelection drawSearchResult( SearchResult& searchRes, const Timeline& timeline, const StringDb& strDb, const std::vector< ThreadInfo >& threadInfos );
+   void clearSearchResult( SearchResult& res );
 }
 
 #endif //TRACE_SEARCH_H_

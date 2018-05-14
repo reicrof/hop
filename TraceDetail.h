@@ -42,6 +42,16 @@ struct TraceDetailDrawResult
    bool isWindowOpen;
 };
 
+struct TraceStats
+{
+   TStrPtr_t fctNameId;
+   size_t count;
+   TimeDuration min, max, median;
+   std::vector< float > displayableDurations;
+   bool open;
+   bool focus;
+};
+
 TraceDetails
 createTraceDetails( const DisplayableTraces& traces, uint32_t threadIndex, size_t traceId );
 TraceDetails createGlobalTraceDetails( const DisplayableTraces& traces, uint32_t threadIndex );
@@ -49,6 +59,10 @@ TraceDetailDrawResult drawTraceDetails(
     TraceDetails& details,
     const std::vector<ThreadInfo>& tracesPerThread,
     const StringDb& strDb );
+
+
+TraceStats createTraceStats( const DisplayableTraces& traces, uint32_t threadIndex, size_t traceId );
+void drawTraceStats( TraceStats& stats, const std::vector<ThreadInfo>& tracesPerThread, const StringDb& strDb);
 }
 
 #endif  // TRACE_DETAIL_H_
