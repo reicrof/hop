@@ -360,6 +360,7 @@ class SharedMemory
       const float clientVersion{0.0f};
       const uint32_t maxThreadNb{0};
       const size_t requestedSize{0};
+      std::atomic< uint32_t > threadCount{0};
       std::atomic< TimeStamp > lastResetTimeStamp{0};
    };
 
@@ -379,6 +380,7 @@ class SharedMemory
    sem_handle semaphore() const HOP_NOEXCEPT;
    void waitSemaphore() const HOP_NOEXCEPT;
    void signalSemaphore() const HOP_NOEXCEPT;
+   uint32_t nextThreadId() HOP_NOEXCEPT;
    const SharedMetaInfo* sharedMetaInfo() const HOP_NOEXCEPT;
    ~SharedMemory();
 
@@ -1057,6 +1059,11 @@ void SharedMemory::signalSemaphore() const HOP_NOEXCEPT
 #endif
 }
 
+uint32_t SharedMemory::nextThreadId() HOP_NOEXCEPT
+{
+   return _sharedMetaData->threadCount.fetch_add(1);
+}
+
 const SharedMemory::SharedMetaInfo* SharedMemory::sharedMetaInfo() const HOP_NOEXCEPT
 {
    return _sharedMetaData;
@@ -1498,9 +1505,8 @@ Client* ClientManager::Get()
       }
    }
 
-   // Static variable that counts the total number of thread
-   static std::atomic< int > threadCount{ 0 };
-   tl_threadIndex = threadCount.fetch_add(1);
+   // Atomically get the next thread id to use from the shared memory
+   tl_threadIndex = ClientManager::sharedMemory.nextThreadId();
    tl_threadId = HOP_GET_THREAD_ID();
 
    threadClient.reset( new Client() );
