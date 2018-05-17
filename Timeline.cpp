@@ -628,6 +628,11 @@ void Timeline::clearTraceDetails()
    _traceDetails = TraceDetails{};
 }
 
+void Timeline::clearTraceStats()
+{
+   _traceStats = TraceStats{ 0, 0, 0, 0, 0, std::vector< float >(), false, false };
+}
+
 void Timeline::setTraceDetailsDisplayed()
 {
     _traceDetails.shouldFocusWindow = false;
@@ -839,19 +844,20 @@ void Timeline::drawTraces(
                ImGui::EndTooltip();
             }
 
-         if ( leftMouseDblClicked )
-         {
-            pushNavigationState();
-            const TimeStamp traceEndTime =
-                pxlToNanos( windowWidthPxl, _timelineRange, t.posPxl.x - posX + t.lengthPxl );
-            frameToTime( _timelineStart + ( traceEndTime - t.duration ), t.duration );
-         }
-         else if ( rightMouseClicked && _rightClickStartPosInCanvas[0] == 0.0f)
-         {
-            ImGui::OpenPopup( "Context Menu" );
-            _contextMenuInfo.open = true;
-            _contextMenuInfo.threadIndex = threadIndex;
-            _contextMenuInfo.traceId = t.traceIndex;
+            if ( leftMouseDblClicked )
+            {
+               pushNavigationState();
+               const TimeStamp traceEndTime =
+                   pxlToNanos( windowWidthPxl, _timelineRange, t.posPxl.x - posX + t.lengthPxl );
+               frameToTime( _timelineStart + ( traceEndTime - t.duration ), t.duration );
+            }
+            else if ( rightMouseClicked && _rightClickStartPosInCanvas[0] == 0.0f)
+            {
+               ImGui::OpenPopup( "Context Menu" );
+               _contextMenuInfo.open = true;
+               _contextMenuInfo.threadIndex = threadIndex;
+               _contextMenuInfo.traceId = t.traceIndex;
+            }
          }
       }
       ImGui::PopStyleColor( 3 );
@@ -899,7 +905,7 @@ void Timeline::drawTraces(
                setStartTime(
                    ( data._traces.ends[traceIndex] - data._traces.deltas[traceIndex] - absoluteStart ) );
             }
-            else if ( rightMouseClicked && _rightClickStartPosInCanvas[0] == 0.0f)
+            else if ( rightMouseClicked && _rightClickStartPosInCanvas[0] == 0.0f )
             {
                ImGui::OpenPopup( "Context Menu" );
                _contextMenuInfo.open = true;

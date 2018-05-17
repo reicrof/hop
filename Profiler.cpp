@@ -1006,6 +1006,7 @@ void hop::Profiler::clear()
    _timeline.setAbsoluteStartTime( 0 );
    _timeline.clearTraceDetails();
    _timeline.clearBookmarks();
+   _timeline.clearTraceStats();
    clearSearchResult( _searchRes );
    _recording = false;
    g_stats.traceCount = 0;

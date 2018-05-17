@@ -328,7 +328,7 @@ createTraceDetails( const DisplayableTraces& traces, uint32_t threadIndex, size_
    return details;
 }
 
-TraceStats createTraceStats(const DisplayableTraces& traces, uint32_t threadIndex, size_t traceId)
+TraceStats createTraceStats(const DisplayableTraces& traces, uint32_t, size_t traceId)
 {
    const TStrPtr_t fileName = traces.fileNameIds[ traceId ];
    const TStrPtr_t fctName = traces.fctNameIds[ traceId ];
@@ -561,7 +561,7 @@ TraceDetailDrawResult drawTraceDetails(
    return result;
 }
 
-void drawTraceStats(TraceStats& stats, const std::vector<ThreadInfo>& tracesPerThread, const StringDb& strDb)
+void drawTraceStats(TraceStats& stats, const std::vector<ThreadInfo>& , const StringDb& strDb)
 {
    if ( stats.open > 0 )
    {
