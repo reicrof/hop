@@ -38,9 +38,9 @@ For more information, please refer to <http://unlicense.org/>
 #define HOP_PROF_DYN_NAME( x )
 #define HOP_PROF_GL_FINISH( x )
 #define HOP_PROF_FUNC_GL_FINISH()
-#define HOP_PROF_FUNC_WITH_GROUP( x )
 #define HOP_PROF_MUTEX_LOCK( x )
 #define HOP_PROF_MUTEX_UNLOCK( x )
+#define HOP_ZONE( x )
 
 #else  // We do want to profile
 
@@ -55,6 +55,30 @@ For more information, please refer to <http://unlicense.org/>
 // include the meta-data size
 #define HOP_SHARED_MEM_SIZE 32000000
 
+// These are the zone that can be used. You can change the name
+// but you must not change the values.
+enum { HOP_MAX_ZONES = 16 };
+enum HopZone
+{
+   HOP_ZONE_ALL = 0xFFFF,
+   HOP_ZONE_1   = 1 << 0,
+   HOP_ZONE_2   = 1 << 1,
+   HOP_ZONE_3   = 1 << 2,
+   HOP_ZONE_4   = 1 << 3,
+   HOP_ZONE_5   = 1 << 4,
+   HOP_ZONE_6   = 1 << 5,
+   HOP_ZONE_7   = 1 << 6,
+   HOP_ZONE_8   = 1 << 7,
+   HOP_ZONE_9   = 1 << 8,
+   HOP_ZONE_10   = 1 << 9,
+   HOP_ZONE_11   = 1 << 10,
+   HOP_ZONE_12   = 1 << 11,
+   HOP_ZONE_13   = 1 << 12,
+   HOP_ZONE_14   = 1 << 13,
+   HOP_ZONE_15   = 1 << 14,
+   HOP_ZONE_16   = 1 << 15,
+};
+
 ///////////////////////////////////////////////////////////////
 /////       THESE ARE THE MACROS YOU SHOULD USE     ///////////
 ///////////////////////////////////////////////////////////////
@@ -66,25 +90,22 @@ For more information, please refer to <http://unlicense.org/>
 #endif
 
 // Create a new profiling trace with specified name. Name must be static
-#define HOP_PROF( x ) HOP_PROF_GUARD_VAR( __LINE__, ( __FILE__, __LINE__, (x), 0 ) )
+#define HOP_PROF( x ) HOP_PROF_GUARD_VAR( __LINE__, ( __FILE__, __LINE__, (x) ) )
 
 // Create a new profiling trace with the compiler provided name
-#define HOP_PROF_FUNC() HOP_PROF_ID_GUARD( hop__, ( __FILE__, __LINE__, HOP_FCT_NAME, 0 ) )
+#define HOP_PROF_FUNC() HOP_PROF_ID_GUARD( hop__, ( __FILE__, __LINE__, HOP_FCT_NAME ) )
 
 // Split a profiling trace with a new provided name. Name must be static.
-#define HOP_PROF_SPLIT( x ) HOP_PROF_ID_SPLIT( hop__, ( __FILE__, __LINE__, (x), 0 ) )
+#define HOP_PROF_SPLIT( x ) HOP_PROF_ID_SPLIT( hop__, ( __FILE__, __LINE__, (x) ) )
 
 // Create a new profiling trace for dynamic strings. Please use sparingly as they will incur more slowdown
-#define HOP_PROF_DYN_NAME( x ) HOP_PROF_DYN_STRING_GUARD_VAR( __LINE__, ( __FILE__, __LINE__, (x), 0 ) )
+#define HOP_PROF_DYN_NAME( x ) HOP_PROF_DYN_STRING_GUARD_VAR( __LINE__, ( __FILE__, __LINE__, (x) ) )
 
 // Create a new profiling trace that will call glFinish() before being destroyed
-#define HOP_PROF_GL_FINISH( x ) HOP_PROF_GL_FINISH_GUARD_VAR( __LINE__, ( __FILE__, __LINE__, (x), 0 ) )
+#define HOP_PROF_GL_FINISH( x ) HOP_PROF_GL_FINISH_GUARD_VAR( __LINE__, ( __FILE__, __LINE__, (x) ) )
 
 // Create a new profiling trace for a free function
-#define HOP_PROF_FUNC_GL_FINISH() HOP_PROF_GL_FINISH_GUARD_VAR( __LINE__, ( __FILE__, __LINE__, HOP_FCT_NAME, 0 ) )
-
-// Create a new profiling trace for a free function that falls under category x
-#define HOP_PROF_FUNC_WITH_GROUP( x ) HOP_PROF_GUARD_VAR(__LINE__,( __FILE__, __LINE__, HOP_FCT_NAME, (x) ) )
+#define HOP_PROF_FUNC_GL_FINISH() HOP_PROF_GL_FINISH_GUARD_VAR( __LINE__, ( __FILE__, __LINE__, HOP_FCT_NAME ) )
 
 // Create a trace that represent the time waiting for a mutex. You need to provide
 // a pointer to the mutex that is being locked
@@ -94,6 +115,8 @@ For more information, please refer to <http://unlicense.org/>
 // used to provide stall region. You should provide a pointer to the mutex that
 // is being unlocked.
 #define HOP_PROF_MUTEX_UNLOCK( x ) HOP_MUTEX_UNLOCK_EVENT( x )
+
+#define HOP_ZONE( x ) HOP_ZONE_GUARD( __LINE__, ( x ) )
 
 ///////////////////////////////////////////////////////////////
 /////     EVERYTHING AFTER THIS IS IMPL DETAILS        ////////
@@ -138,7 +161,7 @@ For more information, please refer to <http://unlicense.org/>
 
 // ------ platform.h ------------
 // This is most things that are potentially non-portable.
-#define HOP_VERSION 0.2f
+#define HOP_VERSION 0.3f
 #define HOP_CONSTEXPR constexpr
 #define HOP_NOEXCEPT noexcept
 #define HOP_STATIC_ASSERT static_assert
@@ -283,16 +306,16 @@ HOP_STATIC_ASSERT( sizeof(MsgInfo) == EXPECTED_MSG_INFO_SIZE, "MsgInfo layout ha
 
 using TStrPtr_t = uint64_t;
 using TLineNb_t = uint32_t;
-using TGroup_t = uint16_t;
+using TZoneId_t = uint16_t;
 using TDepth_t = uint16_t;
 HOP_CONSTEXPR uint32_t EXPECTED_TRACE_SIZE = 40;
 struct Trace
 {
    TimeStamp start, end;   // Timestamp for start/end of this trace
-   TStrPtr_t fileNameId;  // Index into string array for the file name
-   TStrPtr_t fctNameId;   // Index into string array for the function name
+   TStrPtr_t fileNameId;   // Index into string array for the file name
+   TStrPtr_t fctNameId;    // Index into string array for the function name
    TLineNb_t lineNumber;   // Line at which the trace was inserted
-   TGroup_t group;         // Group to which this trace belongs
+   TZoneId_t zone;         // Zone to which this trace belongs
    TDepth_t depth;         // The depth in the callstack of this trace
 };
 HOP_STATIC_ASSERT( sizeof(Trace) == EXPECTED_TRACE_SIZE, "Trace layout has changed unexpectedly" );
@@ -337,6 +360,7 @@ class SharedMemory
       const float clientVersion{0.0f};
       const uint32_t maxThreadNb{0};
       const size_t requestedSize{0};
+      std::atomic< uint32_t > threadCount{0};
       std::atomic< TimeStamp > lastResetTimeStamp{0};
    };
 
@@ -356,6 +380,7 @@ class SharedMemory
    sem_handle semaphore() const HOP_NOEXCEPT;
    void waitSemaphore() const HOP_NOEXCEPT;
    void signalSemaphore() const HOP_NOEXCEPT;
+   uint32_t nextThreadId() HOP_NOEXCEPT;
    const SharedMetaInfo* sharedMetaInfo() const HOP_NOEXCEPT;
    ~SharedMemory();
 
@@ -381,27 +406,28 @@ class ClientManager
   public:
    static Client* Get();
    static void CallGlFinish();
-   static void StartProfile();
-   static void StartProfileGlFinish();
-   static TStrPtr_t StartProfileDynString( const char* );
+   static TZoneId_t StartProfile();
+   static TZoneId_t StartProfileGlFinish();
+   static TStrPtr_t StartProfileDynString( const char*, TZoneId_t* );
    static void EndProfile(
        const char* fileName,
        const char* fctName,
        TimeStamp start,
        TimeStamp end,
        TLineNb_t lineNb,
-       TGroup_t group );
+       TZoneId_t zone );
    static void EndProfileGlFinish(
        const char* fileName,
        const char* fctName,
        TimeStamp start,
        TLineNb_t lineNb,
-       TGroup_t group );
+       TZoneId_t zone );
    static void EndLockWait(
       void* mutexAddr,
       TimeStamp start,
       TimeStamp end );
    static void UnlockEvent( void* mutexAddr, TimeStamp time );
+   static TZoneId_t PushNewZone( TZoneId_t newZone );
    static bool HasConnectedConsumer() HOP_NOEXCEPT;
    static bool HasListeningConsumer() HOP_NOEXCEPT;
 
@@ -411,35 +437,34 @@ class ClientManager
 class ProfGuard
 {
   public:
-    ProfGuard( const char* fileName, TLineNb_t lineNb, const char* fctName, TGroup_t groupId ) HOP_NOEXCEPT
+    ProfGuard( const char* fileName, TLineNb_t lineNb, const char* fctName ) HOP_NOEXCEPT
     {
-      open( fileName, lineNb, fctName, groupId );
+      open( fileName, lineNb, fctName );
     }
     ~ProfGuard()
     {
       close();
     }
-    inline void reset( const char* fileName, TLineNb_t lineNb, const char* fctName, TGroup_t groupId )
+    inline void reset( const char* fileName, TLineNb_t lineNb, const char* fctName )
     {
       // Please uncomment the following line if close() is made public!
       // if ( _fctName )
       close();
-      open( fileName, lineNb, fctName, groupId );
+      open( fileName, lineNb, fctName );
     }
 
   private:
-    inline void open( const char* fileName, TLineNb_t lineNb, const char* fctName, TGroup_t groupId )
+    inline void open( const char* fileName, TLineNb_t lineNb, const char* fctName )
     {
       _start = getTimeStamp();
       _fileName = fileName;
       _fctName = fctName;
       _lineNb = lineNb;
-      _group = groupId;
-      ClientManager::StartProfile();
+      _zone = ClientManager::StartProfile();
     }
     inline void close()
     {
-      ClientManager::EndProfile( _fileName, _fctName, _start, getTimeStamp(), _lineNb, _group );
+      ClientManager::EndProfile( _fileName, _fctName, _start, getTimeStamp(), _lineNb, _zone );
       // Please uncomment the following line if close() is made public!
       // _fctName = nullptr;
     }
@@ -447,31 +472,30 @@ class ProfGuard
     TimeStamp _start;
     const char *_fileName, *_fctName;
     TLineNb_t _lineNb;
-    TGroup_t _group;
+    TZoneId_t _zone;
 };
 
 class ProfGuardGLFinish
 {
   public:
-   ProfGuardGLFinish( const char* fileName, TLineNb_t lineNb, const char* fctName, TGroup_t groupId ) HOP_NOEXCEPT
+   ProfGuardGLFinish( const char* fileName, TLineNb_t lineNb, const char* fctName ) HOP_NOEXCEPT
        : _start( getTimeStamp() ),
          _fileName( fileName ),
          _fctName( fctName ),
-         _lineNb( lineNb ),
-         _group( groupId )
+         _lineNb( lineNb )
    {
-      ClientManager::StartProfileGlFinish();
+      _zone = ClientManager::StartProfileGlFinish();
    }
    ~ProfGuardGLFinish()
    {
-      ClientManager::EndProfileGlFinish( _fileName, _fctName, _start, _lineNb, _group );
+      ClientManager::EndProfileGlFinish( _fileName, _fctName, _start, _lineNb, _zone );
    }
 
   private:
    TimeStamp _start;
    const char *_fileName, *_fctName;
    TLineNb_t _lineNb;
-   TGroup_t _group;
+   TZoneId_t _zone;
 };
 
 class LockWaitGuard
@@ -494,17 +518,16 @@ class LockWaitGuard
 class ProfGuardDynamicString
 {
   public:
-   ProfGuardDynamicString( const char* fileName, TLineNb_t lineNb, const char* fctName, TGroup_t groupId ) HOP_NOEXCEPT
+   ProfGuardDynamicString( const char* fileName, TLineNb_t lineNb, const char* fctName ) HOP_NOEXCEPT
        : _start( getTimeStamp() | 1 ), // Set the first bit to 1 to flag the use of dynamic strings
          _fileName( fileName ),
-         _lineNb( lineNb ),
-         _group( groupId )
+         _lineNb( lineNb )
    {
-      _fctName = ClientManager::StartProfileDynString( fctName );
+      _fctName = ClientManager::StartProfileDynString( fctName, &_zone );
    }
    ~ProfGuardDynamicString()
    {
-      ClientManager::EndProfile( _fileName, (const char*) _fctName, _start, getTimeStamp(), _lineNb, _group );
+      ClientManager::EndProfile( _fileName, (const char*) _fctName, _start, getTimeStamp(), _lineNb, _zone );
    }
 
   private:
@@ -512,7 +535,23 @@ class ProfGuardDynamicString
    const char *_fileName;
    TStrPtr_t _fctName;
    TLineNb_t _lineNb;
-   TGroup_t _group;
+   TZoneId_t _zone;
+};
+
+class ZoneGuard
+{
+ public:
+   ZoneGuard( TZoneId_t newZone ) HOP_NOEXCEPT
+   {
+      _prevZoneId = ClientManager::PushNewZone( newZone );
+   }
+   ~ZoneGuard()
+   {
+      ClientManager::PushNewZone( _prevZoneId );
+   }
+
+  private:
+   TZoneId_t _prevZoneId;
 };
 
 
@@ -531,6 +570,8 @@ class ProfGuardDynamicString
    hop::LockWaitGuard HOP_COMBINE( hopMutexLock, LINE ) ARGS
 #define HOP_MUTEX_UNLOCK_EVENT( x ) \
    hop::ClientManager::UnlockEvent( x, hop::getTimeStamp() );
+#define HOP_ZONE_GUARD( LINE, ARGS ) \
+   hop::ZoneGuard HOP_COMBINE( hopZoneGuard, LINE ) ARGS
 
 }  // namespace hop
 
@@ -832,6 +873,7 @@ bool SharedMemory::create( const char* exeName, size_t requestedSize, bool isCon
          ringbuf_get_sizes( HOP_MAX_THREAD_NB, &ringBufSize, NULL );
          totalSize = ringBufSize + requestedSize + sizeof( SharedMetaInfo );
          sharedMem = (uint8_t*)createSharedMemory( _sharedMemPath, totalSize, &_sharedMemHandle );
+         new(sharedMem) SharedMetaInfo; // Placement new for initializing values
       }
 
       if ( !sharedMem )
@@ -1018,6 +1060,11 @@ void SharedMemory::signalSemaphore() const HOP_NOEXCEPT
 #endif
 }
 
+uint32_t SharedMemory::nextThreadId() HOP_NOEXCEPT
+{
+   return _sharedMetaData->threadCount.fetch_add(1);
+}
+
 const SharedMemory::SharedMetaInfo* SharedMemory::sharedMetaInfo() const HOP_NOEXCEPT
 {
    return _sharedMetaData;
@@ -1044,6 +1091,7 @@ void SharedMemory::destroy()
          printf("HOP - Cleaning up shared memory...\n");
          closeSemaphore( _semaphore, _sharedSemPath);
          closeSharedMemory( _sharedMemPath, _sharedMemHandle, _sharedMetaData );
+         _sharedMetaData->~SharedMetaInfo();
       }
 
       _data = NULL;
@@ -1088,6 +1136,7 @@ SharedMemory ClientManager::sharedMemory;
 // The call stack depth of the current measured trace. One variable per thread
 thread_local int tl_traceLevel = 0;
 thread_local uint32_t tl_threadIndex = 0;
+thread_local TZoneId_t tl_zoneId = HOP_ZONE_ALL;
 thread_local uint64_t tl_threadId = 0;
 
 class Client
@@ -1113,9 +1162,9 @@ class Client
        TimeStamp start,
        TimeStamp end,
        TLineNb_t lineNb,
-       TGroup_t group )
+       TZoneId_t zone )
    {
-      _traces.push_back( Trace{ start, end, (TStrPtr_t)fileName, (TStrPtr_t)fctName, lineNb, group, (TDepth_t)tl_traceLevel } );
+      _traces.push_back( Trace{ start, end, (TStrPtr_t)fileName, (TStrPtr_t)fctName, lineNb, zone, (TDepth_t)tl_traceLevel } );
    }
 
    void addWaitLockTrace( void* mutexAddr, TimeStamp start, TimeStamp end, TDepth_t depth )
@@ -1458,9 +1507,8 @@ Client* ClientManager::Get()
       }
    }
 
-   // Static variable that counts the total number of thread
-   static std::atomic< int > threadCount{ 0 };
-   tl_threadIndex = threadCount.fetch_add(1);
+   // Atomically get the next thread id to use from the shared memory
+   tl_threadIndex = ClientManager::sharedMemory.nextThreadId();
    tl_threadId = HOP_GET_THREAD_ID();
 
    threadClient.reset( new Client() );
@@ -1508,24 +1556,27 @@ void ClientManager::CallGlFinish()
    }
 }
 
-void ClientManager::StartProfile()
+TZoneId_t ClientManager::StartProfile()
 {
    ++tl_traceLevel;
+   return tl_zoneId;
 }
 
-void ClientManager::StartProfileGlFinish()
+TZoneId_t ClientManager::StartProfileGlFinish()
 {
    ++tl_traceLevel;
    ClientManager::CallGlFinish();
+   return tl_zoneId;
 }
 
-TStrPtr_t ClientManager::StartProfileDynString( const char* str )
+TStrPtr_t ClientManager::StartProfileDynString( const char* str, TZoneId_t* zone )
 {
    ++tl_traceLevel;
    Client* client = ClientManager::Get();
 
    if( unlikely( !client ) ) return 0;
 
+   *zone = tl_zoneId;
    return client->addDynamicStringToDb( str );
 }
 
@@ -1535,7 +1586,7 @@ void ClientManager::EndProfile(
     TimeStamp start,
     TimeStamp end,
     TLineNb_t lineNb,
-    TGroup_t group )
+    TZoneId_t zone )
 {
    const int remainingPushedTraces = --tl_traceLevel;
    Client* client = ClientManager::Get();
@@ -1544,7 +1595,7 @@ void ClientManager::EndProfile(
 
    if( end - start > 50 ) // Minimum trace time is 50 ns
    {
-      client->addProfilingTrace( fileName, fctName, start, end, lineNb, group );
+      client->addProfilingTrace( fileName, fctName, start, end, lineNb, zone );
    }
    if ( remainingPushedTraces <= 0 )
    {
@@ -1557,7 +1608,7 @@ void ClientManager::EndProfileGlFinish(
     const char* fctName,
     TimeStamp start,
     TLineNb_t lineNb,
-    TGroup_t group )
+    TZoneId_t zone )
 {
    ClientManager::CallGlFinish();
    
@@ -1570,7 +1621,7 @@ void ClientManager::EndProfileGlFinish(
    
    if( end - start > 50 ) // Minimum trace time is 50 ns
    {
-      client->addProfilingTrace( fileName, fctName, start, end, lineNb, group );
+      client->addProfilingTrace( fileName, fctName, start, end, lineNb, zone );
    }
    if ( remainingPushedTraces <= 0 )
    {
@@ -1600,6 +1651,13 @@ void ClientManager::UnlockEvent( void* mutexAddr, TimeStamp time )
 
       client->addUnlockEvent( mutexAddr, time );
    }
+}
+
+TZoneId_t ClientManager::PushNewZone( TZoneId_t newZone )
+{
+   TZoneId_t prevZone = tl_zoneId;
+   tl_zoneId = newZone;
+   return prevZone;
 }
 
 bool ClientManager::HasConnectedConsumer() HOP_NOEXCEPT

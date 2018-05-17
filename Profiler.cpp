@@ -270,6 +270,9 @@ Profiler::Profiler( const char* name ) : _name( name )
 
 void Profiler::addTraces( const DisplayableTraces& traces, uint32_t threadIndex )
 {
+   // Ignore empty traces
+   if( traces.ends.empty() ) return;
+
    // Add new thread as they come
    if ( threadIndex >= _tracesPerThread.size() )
    {
@@ -423,7 +426,6 @@ Profiler::~Profiler()
 void hop::Profiler::update( float deltaTimeMs ) noexcept
 {
    _timeline.update( deltaTimeMs );
-   setThreadCount( g_options, _tracesPerThread.size() );
 }
 
 static bool ptInRect( const ImVec2& pt, const ImVec2& a, const ImVec2& b )
@@ -1004,6 +1006,7 @@ void hop::Profiler::clear()
    _timeline.setAbsoluteStartTime( 0 );
    _timeline.clearTraceDetails();
    _timeline.clearBookmarks();
+   _timeline.clearTraceStats();
    clearSearchResult( _searchRes );
    _recording = false;
    g_stats.traceCount = 0;

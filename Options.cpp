@@ -8,13 +8,13 @@
 
 static const char* startFullScreenStr = "start_full_screen";
 static const char* traceHeights = "trace_height";
-static const char* threadColors = "thread_colors";
+static const char* zoneColors = "zone_colors";
 static const char* glFinishByDefault = "gl_finish_by_default";
 
 static const uint32_t DEFAULT_COLORS[] = {
-    0xffe6194b, 0xff3cb44b, 0xffffe119, 0xff0082c8, 0xfff58231, 0xff911eb4, 0xff46f0f0, 0xfff032e6,
-    0xffd2f53c, 0xfffabebe, 0xff008080, 0xffe6beff, 0xffaa6e28, 0xfffffac8, 0xff800000, 0xffaaffc3,
-    0xff808000, 0xffffd8b1, 0xff000080, 0xff808080, 0xffFFFFFF, 0xff000000};
+    0xffef4bff, 0xff3cb44b, 0xffffe119, 0xff0082c8, 0xfff58231, 0xff911eb4, 0xff46f0f0, 0xfff032e6,
+    0xffd2f53c, 0xfffabebe, 0xff008080, 0xffe6beff, 0xffaa6e28, 0xfffffac8, 0xff800000, 0xffe6194b,
+    0xff0000ff };
 
 static constexpr uint32_t DEFAULT_COLORS_SIZE = sizeof(DEFAULT_COLORS) / sizeof( DEFAULT_COLORS[0] );
 
@@ -37,9 +37,9 @@ bool saveOptions()
       // Trace height option
       outOptions << traceHeights << " " << g_options.traceHeight << '\n';
 
-      // Thread colors options
-      outOptions << threadColors << " " << g_options.threadColors.size() << " " ;
-      for( auto c : g_options.threadColors )
+      // Zone colors options
+      outOptions << zoneColors << " " << g_options.zoneColors.size() << " " ;
+      for( auto c : g_options.zoneColors )
       {
          outOptions << c << " ";
       }
@@ -51,8 +51,12 @@ bool saveOptions()
 
 bool loadOptions()
 {
-   // Even without a config file we load the default thread colors first
-   g_options.threadColors.assign( DEFAULT_COLORS, DEFAULT_COLORS+DEFAULT_COLORS_SIZE );
+   // Even without a config file we load the default zone colors first
+   for( size_t i = 0; i < g_options.zoneColors.size(); ++i )
+   {
+      g_options.zoneColors[i] = DEFAULT_COLORS[i];
+      g_options.zoneEnabled[i] = true;
+   }
 
    std::ifstream inOptions( "hop.conf" );
    std::string token;
@@ -72,14 +76,15 @@ bool loadOptions()
          {
             inOptions >> g_options.traceHeight;
          }
-         else if( strcmp( token.c_str(), threadColors ) == 0 )
+         else if( strcmp( token.c_str(), zoneColors ) == 0 )
          {
             size_t colorCount = 0;
             inOptions >> colorCount;
-            g_options.threadColors.resize( colorCount, 0 );
-            for( size_t i = 0; i < colorCount; ++i )
+            const size_t minColCount = std::min( colorCount, g_options.zoneColors.size() );
+            for( size_t i = 0; i < minColCount; ++i )
             {
-               inOptions >> g_options.threadColors[i];
+               inOptions >> g_options.zoneColors[i];
+               g_options.zoneColors[i];
             }
          }
       }
@@ -102,41 +107,48 @@ void drawOptionsWindow( Options& opt )
 
       ImGui::Spacing();
 
-      if ( ImGui::CollapsingHeader( "Thread Colors" ) )
+      if ( ImGui::CollapsingHeader( "Zone Colors" ) )
       {
-         ImColor color;
-         for( size_t i = 0; i < opt.threadColors.size(); ++i )
+         ImGui::SliderFloat( "Disabled Zones Opacity", &opt.disabledZoneOpacity, 0.0f, 1.0f, "%.2f" );
+
+         size_t i = HOP_MAX_ZONES - 1;
+         ImColor color = opt.zoneColors[i];
+         ImGui::PushID( i );
+         ImGui::Checkbox( "", &opt.zoneEnabled[i] );
+         ImGui::SameLine();
+         ImGui::Text( "General Zone" );
+         ImGui::SameLine();
+         ImGui::ColorEdit3( "", (float*)&color.Value );
+         ImGui::PopID();
+         opt.zoneColors[i] = color;
+
+         for( i = 0; i < opt.zoneColors.size() - 2; ++i )
          {
-            color = opt.threadColors[i];
+            color = opt.zoneColors[i];
             ImGui::PushID( i );
-            ImGui::Text( "Thread #%d", (int)i );
+            ImGui::Checkbox( "", &opt.zoneEnabled[i] );
             ImGui::SameLine();
-            ImGui::ColorEdit3( "Color test", (float*)&color.Value );
+            ImGui::Text( "Zone #%d", (int)i+1 );
+            ImGui::SameLine();
+            ImGui::ColorEdit3( "", (float*)&color.Value );
             ImGui::PopID();
-            opt.threadColors[i] = color;
+            opt.zoneColors[i] = color;
          }
+
+         i = HOP_MAX_ZONES; // Locks uses index 16 for color infos
+         color = opt.zoneColors[i];
+         ImGui::PushID( i );
+         ImGui::Checkbox( "", &opt.zoneEnabled[i] );
+         ImGui::SameLine();
+         ImGui::Text( "Locks" );
+         ImGui::SameLine();
+         ImGui::ColorEdit3( "", (float*)&color.Value );
+         ImGui::PopID();
+         opt.zoneColors[i] = color;
       }
    }
    ImGui::End();
    ImGui::PopStyleColor();
-}
-
-uint32_t getColorForThread( const Options& opt, uint32_t threadIdx )
-{
-   return opt.threadColors[ threadIdx % opt.threadColors.size() ];
-}
-
-void setThreadCount( Options& opt, uint32_t threadCount )
-{
-   const uint32_t curThreadCount = opt.threadColors.size();
-   if( threadCount > curThreadCount )
-   {
-      opt.threadColors.resize( threadCount );
-      for( uint32_t i = curThreadCount; i < threadCount; ++i )
-      {
-         opt.threadColors[ i ] = opt.threadColors[ i % DEFAULT_COLORS_SIZE ];
-      }
-   }
 }
 
 } // namespace hop

@@ -48,6 +48,8 @@ class Timeline
    void clearTraceDetails();
    void setTraceDetailsDisplayed();
 
+   void clearTraceStats();
+
    // Move to first trace
    void moveToStart( AnimationType animType = ANIMATION_TYPE_NORMAL ) noexcept;
    // Move to latest time
@@ -109,7 +111,7 @@ class Timeline
    } _contextMenuInfo;
 
    void drawTimeline( const float posX, const float posY );
-   void drawTraces( const ThreadInfo& traces, uint32_t threadIndex, const float posX, const float posY, const StringDb& strDb, uint32_t color );
+   void drawTraces( const ThreadInfo& traces, uint32_t threadIndex, const float posX, const float posY, const StringDb& strDb );
    void drawLockWaits(const std::vector<ThreadInfo>& infos, uint32_t threadIndex, const float posX, const float posY );
    void handleMouseDrag( float mousePosX, float mousePosY );
    void handleMouseWheel( float mousePosX, float mousePosY );
@@ -133,7 +135,7 @@ class Timeline
    std::vector< std::pair< size_t, uint32_t > > _highlightedTraces;
 
    TraceDetails _traceDetails{};
-   TraceStats _traceStats{};
+   TraceStats _traceStats{ 0, 0, 0, 0, 0, std::vector< float >(), false, false };
 
    std::vector< AnimationState > _undoPositionStates, _redoPositionStates;
 
