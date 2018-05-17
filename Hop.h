@@ -873,6 +873,7 @@ bool SharedMemory::create( const char* exeName, size_t requestedSize, bool isCon
          ringbuf_get_sizes( HOP_MAX_THREAD_NB, &ringBufSize, NULL );
          totalSize = ringBufSize + requestedSize + sizeof( SharedMetaInfo );
          sharedMem = (uint8_t*)createSharedMemory( _sharedMemPath, totalSize, &_sharedMemHandle );
+         new(sharedMem) SharedMetaInfo; // Placement new for initializing values
       }
 
       if ( !sharedMem )
@@ -1090,6 +1091,7 @@ void SharedMemory::destroy()
          printf("HOP - Cleaning up shared memory...\n");
          closeSemaphore( _semaphore, _sharedSemPath);
          closeSharedMemory( _sharedMemPath, _sharedMemHandle, _sharedMetaData );
+         _sharedMetaData->~SharedMetaInfo();
       }
 
       _data = NULL;
