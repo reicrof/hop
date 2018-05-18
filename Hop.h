@@ -360,7 +360,6 @@ class SharedMemory
       const float clientVersion{0.0f};
       const uint32_t maxThreadNb{0};
       const size_t requestedSize{0};
-      std::atomic< uint32_t > threadCount{0};
       std::atomic< TimeStamp > lastResetTimeStamp{0};
    };
 
@@ -431,7 +430,7 @@ class ClientManager
    static bool HasConnectedConsumer() HOP_NOEXCEPT;
    static bool HasListeningConsumer() HOP_NOEXCEPT;
 
-   static SharedMemory sharedMemory;
+   static SharedMemory& sharedMemory() HOP_NOEXCEPT;
 };
 
 class ProfGuard
@@ -918,9 +917,8 @@ bool SharedMemory::create( const char* exeName, size_t requestedSize, bool isCon
                 "HOP - Client's version (%f) does not match HOP viewer version (%f)\n",
                 metaInfo->clientVersion,
                 HOP_VERSION );
-            closeSemaphore( _semaphore, _sharedSemPath);
-            closeSharedMemory( _sharedMemPath, _sharedMemHandle, sharedMem );
-            return false;
+            destroy();
+            exit(0);
          }
       }
 
@@ -1060,11 +1058,6 @@ void SharedMemory::signalSemaphore() const HOP_NOEXCEPT
 #endif
 }
 
-uint32_t SharedMemory::nextThreadId() HOP_NOEXCEPT
-{
-   return _sharedMetaData->threadCount.fetch_add(1);
-}
-
 const SharedMemory::SharedMetaInfo* SharedMemory::sharedMetaInfo() const HOP_NOEXCEPT
 {
    return _sharedMetaData;
@@ -1128,10 +1121,6 @@ namespace
 }
 
 // ------ cdbg_client.cpp------------
-
-// The shared memory that will be created by the client process to communicate
-// with the server
-SharedMemory ClientManager::sharedMemory;
 
 // The call stack depth of the current measured trace. One variable per thread
 thread_local int tl_traceLevel = 0;
@@ -1277,7 +1266,7 @@ class Client
       const size_t msgSize = sizeof( MsgInfo ) + stringToSendSize;
 
       // Allocate big enough buffer from the shared memory
-      ringbuf_t* ringbuf = ClientManager::sharedMemory.ringbuffer();
+      ringbuf_t* ringbuf = ClientManager::sharedMemory().ringbuffer();
       const bool msgWayToBig = msgSize > HOP_SHARED_MEM_SIZE;
       ssize_t offset = -1;
       if( !msgWayToBig )
@@ -1292,7 +1281,7 @@ class Client
          return false;
       }
 
-      uint8_t* bufferPtr = &ClientManager::sharedMemory.data()[offset];
+      uint8_t* bufferPtr = &ClientManager::sharedMemory().data()[offset];
 
       // Fill the buffer with the string data
       {
@@ -1315,7 +1304,7 @@ class Client
       }
 
       ringbuf_produce( ringbuf, _worker );
-      ClientManager::sharedMemory.signalSemaphore();
+      ClientManager::sharedMemory().signalSemaphore();
 
       // Update sent array size
       _sentStringDataSize = stringDataSize;
@@ -1329,7 +1318,7 @@ class Client
       const size_t profilerMsgSize = sizeof( MsgInfo ) + sizeof( Trace ) * _traces.size();
 
       // Allocate big enough buffer from the shared memory
-      ringbuf_t* ringbuf = ClientManager::sharedMemory.ringbuffer();
+      ringbuf_t* ringbuf = ClientManager::sharedMemory().ringbuffer();
       const bool msgWayToBig = profilerMsgSize > HOP_SHARED_MEM_SIZE;
       ssize_t offset = -1;
       if( !msgWayToBig )
@@ -1345,7 +1334,7 @@ class Client
           return false;
        }
 
-      uint8_t* bufferPtr = &ClientManager::sharedMemory.data()[offset];
+      uint8_t* bufferPtr = &ClientManager::sharedMemory().data()[offset];
 
       // Fill the buffer with the profiling trace message
       {
@@ -1367,7 +1356,7 @@ class Client
       }
 
       ringbuf_produce( ringbuf, _worker );
-      ClientManager::sharedMemory.signalSemaphore();
+      ClientManager::sharedMemory().signalSemaphore();
 
       // Free the buffers
       _traces.clear();
@@ -1382,7 +1371,7 @@ class Client
       const size_t lockMsgSize = sizeof( MsgInfo ) + _lockWaits.size() * sizeof( LockWait );
 
       // Allocate big enough buffer from the shared memory
-      ringbuf_t* ringbuf = ClientManager::sharedMemory.ringbuffer();
+      ringbuf_t* ringbuf = ClientManager::sharedMemory().ringbuffer();
       const auto offset = ringbuf_acquire( ringbuf, _worker, lockMsgSize );
       if ( offset == -1 )
       {
@@ -1391,7 +1380,7 @@ class Client
          return false;
       }
 
-      uint8_t* bufferPtr = &ClientManager::sharedMemory.data()[offset];
+      uint8_t* bufferPtr = &ClientManager::sharedMemory().data()[offset];
 
       // Fill the buffer with the lock message
       {
@@ -1406,7 +1395,7 @@ class Client
       }
 
       ringbuf_produce( ringbuf, _worker );
-      ClientManager::sharedMemory.signalSemaphore();
+      ClientManager::sharedMemory().signalSemaphore();
 
       _lockWaits.clear();
 
@@ -1420,7 +1409,7 @@ class Client
       const size_t unlocksMsgSize = sizeof( MsgInfo ) + _unlockEvents.size() * sizeof( UnlockEvent );
 
       // Allocate big enough buffer from the shared memory
-      ringbuf_t* ringbuf = ClientManager::sharedMemory.ringbuffer();
+      ringbuf_t* ringbuf = ClientManager::sharedMemory().ringbuffer();
       const auto offset = ringbuf_acquire( ringbuf, _worker, unlocksMsgSize );
       if ( offset == -1 )
       {
@@ -1429,7 +1418,7 @@ class Client
          return false;
       }
 
-      uint8_t* bufferPtr = &ClientManager::sharedMemory.data()[offset];
+      uint8_t* bufferPtr = &ClientManager::sharedMemory().data()[offset];
 
       // Fill the buffer with the lock message
       {
@@ -1444,7 +1433,7 @@ class Client
       }
 
       ringbuf_produce( ringbuf, _worker );
-      ClientManager::sharedMemory.signalSemaphore();
+      ClientManager::sharedMemory().signalSemaphore();
 
       _unlockEvents.clear();
 
@@ -1465,7 +1454,7 @@ class Client
       // already took care of it. Since some traces might depend on strings
       // that were added dynamically (ie before clearing the db), we cannot
       // consider them and need to return here.
-      TimeStamp resetTimeStamp = ClientManager::sharedMemory.lastResetTimestamp();
+      TimeStamp resetTimeStamp = ClientManager::sharedMemory().lastResetTimestamp();
       if( _clientResetTimeStamp < resetTimeStamp)
       {
          resetStringData();
@@ -1497,9 +1486,9 @@ Client* ClientManager::Get()
    if( likely( threadClient.get() ) ) return threadClient.get();
 
    // If we have not yet created our shared memory segment, do it here
-   if( !ClientManager::sharedMemory.valid() )
+   if( !ClientManager::sharedMemory().valid() )
    {
-      bool success = ClientManager::sharedMemory.create( HOP_GET_PROG_NAME(), HOP_SHARED_MEM_SIZE, false );
+      bool success = ClientManager::sharedMemory().create( HOP_GET_PROG_NAME(), HOP_SHARED_MEM_SIZE, false );
       if (!success)
       {
          printf("HOP - Could not create shared memory. HOP will not be able to run\n");
@@ -1507,15 +1496,16 @@ Client* ClientManager::Get()
       }
    }
 
-   // Atomically get the next thread id to use from the shared memory
-   tl_threadIndex = ClientManager::sharedMemory.nextThreadId();
+   // Atomically get the next thread id from the static atomic count
+   static std::atomic< uint32_t > threadCount{0};
+   tl_threadIndex = threadCount.fetch_add(1);
    tl_threadId = HOP_GET_THREAD_ID();
 
    threadClient.reset( new Client() );
 
    // Register producer in the ringbuffer
    assert(tl_threadIndex <= HOP_MAX_THREAD_NB);
-   auto ringBuffer = ClientManager::sharedMemory.ringbuffer();
+   auto ringBuffer = ClientManager::sharedMemory().ringbuffer();
    threadClient->_worker = ringbuf_register( ringBuffer, tl_threadIndex);
    if ( threadClient->_worker  == NULL )
    {
@@ -1536,7 +1526,7 @@ void ClientManager::CallGlFinish()
    static void (*glFinishPtr)() = NULL;
 
    // If we request glFinish, load the symbol and call it
-   if( ClientManager::sharedMemory.isUsingGlFinish() )
+   if( ClientManager::sharedMemory().isUsingGlFinish() )
    {
       // Load the symobl
       if( !glFinishPtr )
@@ -1662,14 +1652,20 @@ TZoneId_t ClientManager::PushNewZone( TZoneId_t newZone )
 
 bool ClientManager::HasConnectedConsumer() HOP_NOEXCEPT
 {
-   return ClientManager::sharedMemory.valid() &&
-          ClientManager::sharedMemory.hasConnectedConsumer();
+   return ClientManager::sharedMemory().valid() &&
+          ClientManager::sharedMemory().hasConnectedConsumer();
 }
 
 bool ClientManager::HasListeningConsumer() HOP_NOEXCEPT
 {
-   return ClientManager::sharedMemory.valid() &&
-          ClientManager::sharedMemory.hasListeningConsumer();
+   return ClientManager::sharedMemory().valid() &&
+          ClientManager::sharedMemory().hasListeningConsumer();
+}
+
+SharedMemory& ClientManager::sharedMemory() HOP_NOEXCEPT
+{
+   static SharedMemory _sharedMemory;
+   return _sharedMemory;
 }
 
 #endif  // end !HOP_SERVER_IMPLEMENTATION
