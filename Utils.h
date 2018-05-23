@@ -8,7 +8,7 @@
 #define __STDC_FORMAT_MACROS
 #include <inttypes.h>
 
-//#define HOP_ASSERT_IS_SORTED
+// #define HOP_ASSERT_IS_SORTED
 
 namespace hop
 {

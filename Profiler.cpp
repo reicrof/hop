@@ -192,6 +192,31 @@ namespace
       uint32_t strDbSize;
       uint32_t threadCount;
    };
+
+   void displayBackgroundHelpMsg()
+   {
+      const char* helpTxt =
+          "-------------- Hop --------------\n\n"
+          "Press 'R' to start/stop recording\n"
+          "Right mouse click to get traces details\n"
+          "Double click on a trace to focus it\n"
+          "Right mouse drag to zoom on a region\n"
+          "Right click on the timeline to create a bookmark\n"
+          "Use arrow keys <-/-> to navigate bookmarks\n"
+          "Use CTRL+F to search traces\n"
+          "Use Del to delete traces\n";
+      const auto pos = ImGui::GetWindowPos();
+      const float windowWidthPxl = ImGui::GetWindowWidth();
+      const float windowHeightPxl = ImGui::GetWindowHeight();
+      ImDrawList* DrawList = ImGui::GetWindowDrawList();
+      auto size = ImGui::CalcTextSize( helpTxt );
+      DrawList->AddText(
+          ImGui::GetIO().Fonts->Fonts[0],
+          30.0f,
+          ImVec2( pos.x + windowWidthPxl / 2 - ( size.x ), pos.y + windowHeightPxl / 2 - size.y ),
+          ImGui::GetColorU32( ImGuiCol_TextDisabled ),
+          helpTxt );
+   }
 }
 
 } // end of anonymous namespace
@@ -241,7 +266,8 @@ void draw( uint32_t windowWidth, uint32_t windowHeight )
       p->draw( windowWidth, windowHeight );
    }
 
-   hop::drawStatsWindow( g_stats );
+   if( g_options.debugWindow )
+      hop::drawStatsWindow( g_stats );
 
    ImGui::Render();
 }
@@ -620,28 +646,20 @@ void hop::Profiler::drawTraceDetailsWindow()
    }
 }
 
-void hop::Profiler::draw( uint32_t windowWidth, uint32_t windowHeight )
+void hop::Profiler::draw( uint32_t /*windowWidth*/, uint32_t /*windowHeight*/ )
 {
    HOP_PROF_FUNC();
-   ImGui::SetNextWindowSize(ImVec2( windowWidth * 0.9, windowHeight * 0.9 ), ImGuiSetCond_FirstUseEver);
-   ImGui::PushStyleVar( ImGuiStyleVar_WindowMinSize, ImVec2( 600, 300 ) );
-   if ( !ImGui::Begin( _name.c_str(), nullptr, ImGuiWindowFlags_NoScrollWithMouse | ImGuiWindowFlags_MenuBar | ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoCollapse ) )
-   {
-      // Early out
-      ImGui::End();
-      ImGui::PopStyleVar();
-      return;
-   }
+   ImGui::SetNextWindowPos( ImVec2( 0.0f, 0.0f ), ImGuiCond_Always );
+   ImGui::SetNextWindowSize( ImGui::GetIO().DisplaySize, ImGuiCond_Always );
+   ImGui::PushStyleVar( ImGuiStyleVar_WindowRounding, 0.0f );
 
-   // Reset the style var so the popups can rescale properly
-   ImGui::PushStyleVar(ImGuiStyleVar_WindowMinSize, ImVec2(0, 0));
-   drawMenuBar();
-   renderModalWindow();
-   ImGui::PopStyleVar();
-
-   handleHotkey();
-
-   drawOptionsWindow( g_options );
+   ImGui::Begin(
+       _name.c_str(),
+       nullptr,
+       ImGuiWindowFlags_NoScrollWithMouse | ImGuiWindowFlags_MenuBar |
+           ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoCollapse |
+           ImGuiWindowFlags_NoBringToFrontOnFocus | ImGuiWindowFlags_NoTitleBar |
+           ImGuiWindowFlags_NoResize );
 
    auto toolbarDrawPos = ImGui::GetCursorScreenPos();
    if( drawPlayStopButton( toolbarDrawPos, _recording ) )
@@ -656,39 +674,40 @@ void hop::Profiler::draw( uint32_t windowWidth, uint32_t windowHeight )
 
    if( _tracesPerThread.empty() && !_recording )
    {
-      const char* helpTxt = "-------------- Hop --------------\n\n"
-                           "Press 'R' to start/stop recording\n"
-                           "Right mouse click to get traces details\n"
-                           "Double click on a trace to focus it\n"
-                           "Right mouse drag to zoom on a region\n"
-                           "Right click on the timeline to create a bookmark\n"
-                           "Use arrow keys <-/-> to navigate bookmarks\n"
-                           "Use CTRL+F to search traces\n"
-                           "Use Del to delete traces\n";
-      const auto pos = ImGui::GetWindowPos();
-      const float windowWidthPxl = ImGui::GetWindowWidth();
-      const float windowHeightPxl = ImGui::GetWindowHeight();
-      ImDrawList* DrawList = ImGui::GetWindowDrawList();
-      auto size = ImGui::CalcTextSize( helpTxt );
-      DrawList->AddText( ImGui::GetIO().Fonts->Fonts[0], 30.0f, ImVec2(pos.x + windowWidthPxl/2 - (size.x), pos.y + windowHeightPxl/2 - size.y),ImGui::GetColorU32( ImGuiCol_TextDisabled ), helpTxt );
+      displayBackgroundHelpMsg();
    }
    else
    {
-      //  Move timeline to the most recent trace if Live mode is on
-      if( _recording && _timeline.realtime() )
-      {
-         _timeline.moveToPresentTime( Timeline::ANIMATION_TYPE_NONE );
-      }
+      // Reset the style var so the floating windows can be drawn properly
+      ImGui::PushStyleVar( ImGuiStyleVar_WindowMinSize, ImVec2( 0, 0 ) );
+      ImGui::PushStyleVar( ImGuiStyleVar_WindowRounding, 5.0f );
 
-      // Draw the search window. This must be done before drawing the traces as we need to highlight traces
-      // that might be hovered from this window
+      drawMenuBar();
+
+      // Render modal window, if any
+      renderModalWindow();
+
+      // Draw the search window. This must be done before drawing the traces as we need to highlight
+      // traces that might be hovered from this window
       drawSearchWindow();
 
       // Draw the trace details window before the traces for the same reason
       drawTraceDetailsWindow();
 
+      drawOptionsWindow( g_options );
+
+      //  Move timeline to the most recent trace if Live mode is on
+      if ( _recording && _timeline.realtime() )
+      {
+         _timeline.moveToPresentTime( Timeline::ANIMATION_TYPE_NONE );
+      }
+
       _timeline.draw( _tracesPerThread, _strDb );
+
+      ImGui::PopStyleVar( 2 );
    }
+
+   handleHotkey();
 
    _timeline.clearHighlightedTraces();
 

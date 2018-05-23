@@ -400,6 +400,9 @@ TraceDetailDrawResult drawTraceDetails(
 {
    HOP_PROF_FUNC();
 
+   static constexpr float pctColumnWidth = 65.0f;
+   static constexpr float timeColumnWidth = 90.0f;
+
    TraceDetailDrawResult result;
    result.isWindowOpen = details.details.size() > 0;
    if ( details.details.size() > 0 )
@@ -416,6 +419,12 @@ TraceDetailDrawResult drawTraceDetails(
       if ( ImGui::Begin( "Trace Details", &result.isWindowOpen ) )
       {
          ImGui::Columns( 6, "TraceDetailsTable" );
+         ImGui::SetColumnWidth( 0, ImGui::GetWindowWidth() - 400 );
+         ImGui::SetColumnWidth( 1, pctColumnWidth );
+         ImGui::SetColumnWidth( 2, timeColumnWidth );
+         ImGui::SetColumnWidth( 3, pctColumnWidth );
+         ImGui::SetColumnWidth( 4, timeColumnWidth );
+         ImGui::SetColumnWidth( 5, pctColumnWidth );
          ImGui::Separator();
          if ( ImGui::Button( "Trace" ) )
          {
@@ -436,6 +445,7 @@ TraceDetailDrawResult drawTraceDetails(
                    details.details, tracesPerThread[details.threadIndex], strDb, std::less<int>() );
             }
          }
+
          ImGui::NextColumn();
          if ( ImGui::Button( "Incl. %" ) )
          {
@@ -448,6 +458,7 @@ TraceDetailDrawResult drawTraceDetails(
                 tracesPerThread[details.threadIndex],
                 descending );
          }
+
          ImGui::NextColumn();
          if ( ImGui::Button( "Incl Time" ) )
          {
@@ -460,6 +471,7 @@ TraceDetailDrawResult drawTraceDetails(
                 tracesPerThread[details.threadIndex],
                 descending );
          }
+
          ImGui::NextColumn();
          if ( ImGui::Button( "Excl. %" ) )
          {
@@ -472,6 +484,7 @@ TraceDetailDrawResult drawTraceDetails(
                 tracesPerThread[details.threadIndex],
                 descending );
          }
+
          ImGui::NextColumn();
          if ( ImGui::Button( "Excl Time" ) )
          {
@@ -484,6 +497,7 @@ TraceDetailDrawResult drawTraceDetails(
                 tracesPerThread[details.threadIndex],
                 descending );
          }
+
          ImGui::NextColumn();
          if ( ImGui::Button( "Count" ) )
          {
@@ -492,6 +506,7 @@ TraceDetailDrawResult drawTraceDetails(
             sortTraceDetailOnCount(
                 details.details, tracesPerThread[details.threadIndex], descending );
          }
+
          ImGui::NextColumn();
          ImGui::Separator();
 
