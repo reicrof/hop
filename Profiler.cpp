@@ -661,6 +661,20 @@ void hop::Profiler::draw( uint32_t /*windowWidth*/, uint32_t /*windowHeight*/ )
            ImGuiWindowFlags_NoBringToFrontOnFocus | ImGuiWindowFlags_NoTitleBar |
            ImGuiWindowFlags_NoResize );
 
+   // Reset the style var so the floating windows can be drawn properly
+   ImGui::PushStyleVar( ImGuiStyleVar_WindowMinSize, ImVec2( 0, 0 ) );
+   ImGui::PushStyleVar( ImGuiStyleVar_WindowRounding, 5.0f );
+
+   drawMenuBar();
+   // Render modal window, if any
+   renderModalWindow();
+   drawOptionsWindow( g_options );
+
+   // These must be done before drawing the traces as we need to highlight
+   // traces that might be hovered from this window
+   drawSearchWindow();
+   drawTraceDetailsWindow();
+
    auto toolbarDrawPos = ImGui::GetCursorScreenPos();
    if( drawPlayStopButton( toolbarDrawPos, _recording ) )
    {
@@ -678,24 +692,6 @@ void hop::Profiler::draw( uint32_t /*windowWidth*/, uint32_t /*windowHeight*/ )
    }
    else
    {
-      // Reset the style var so the floating windows can be drawn properly
-      ImGui::PushStyleVar( ImGuiStyleVar_WindowMinSize, ImVec2( 0, 0 ) );
-      ImGui::PushStyleVar( ImGuiStyleVar_WindowRounding, 5.0f );
-
-      drawMenuBar();
-
-      // Render modal window, if any
-      renderModalWindow();
-
-      // Draw the search window. This must be done before drawing the traces as we need to highlight
-      // traces that might be hovered from this window
-      drawSearchWindow();
-
-      // Draw the trace details window before the traces for the same reason
-      drawTraceDetailsWindow();
-
-      drawOptionsWindow( g_options );
-
       //  Move timeline to the most recent trace if Live mode is on
       if ( _recording && _timeline.realtime() )
       {
@@ -703,8 +699,6 @@ void hop::Profiler::draw( uint32_t /*windowWidth*/, uint32_t /*windowHeight*/ )
       }
 
       _timeline.draw( _tracesPerThread, _strDb );
-
-      ImGui::PopStyleVar( 2 );
    }
 
    handleHotkey();
@@ -712,7 +706,7 @@ void hop::Profiler::draw( uint32_t /*windowWidth*/, uint32_t /*windowHeight*/ )
    _timeline.clearHighlightedTraces();
 
    ImGui::End();
-   ImGui::PopStyleVar();
+   ImGui::PopStyleVar(3);
 }
 
 void hop::Profiler::drawMenuBar()

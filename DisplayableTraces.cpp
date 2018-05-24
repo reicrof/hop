@@ -121,9 +121,10 @@ std::pair<size_t, size_t> visibleIndexSpan(
 
 std::pair<size_t, size_t> visibleIndexSpan(
     const LodsArray& lodsArr,
+    int lodLvl,
     TimeStamp absoluteStart,
     TimeStamp absoluteEnd,
-    int lodLvl )
+    int baseDepth )
 {
    auto span = std::make_pair( hop::INVALID_IDX, hop::INVALID_IDX );
 
@@ -136,13 +137,10 @@ std::pair<size_t, size_t> visibleIndexSpan(
    // The last trace of the current thread does not reach the current time
    if ( it1 == lods.end() ) return span;
 
-   // Find the the first trace on the left and right that have a depth of 0. This prevents
-   // traces that have a smaller depth than the one foune previously to vanish.
-   while ( it1 != lods.begin() && it1->depth != 0 )
-   {
-      --it1;
-   }
-   while ( it2 != lods.end() && it2->depth != 0 )
+   // Find the the first trace on right that have a depth of "baseDepth". This can be either 0
+   // for traces or 1 for lockwaits. This prevents traces that have a smaller depth than the
+   // one foune previously to vanish.
+   while ( it2 != lods.end() && it2->depth != baseDepth )
    {
       ++it2;
    }

@@ -64,7 +64,7 @@ std::pair<size_t, size_t>
 visibleIndexSpan( const Ts& traces, TimeStamp absoluteStart, TimeStamp absoluteEnd );
 
 std::pair<size_t, size_t>
-visibleIndexSpan( const LodsArray& lodsArr, TimeStamp absoluteStart, TimeStamp absoluteEnd, int lodLvl );
+visibleIndexSpan( const LodsArray& lodsArr, int lodLvl, TimeStamp absoluteStart, TimeStamp absoluteEnd, int baseDepth );
 
 }
 

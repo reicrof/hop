@@ -743,6 +743,8 @@ void Timeline::drawTraces(
 {
    if ( data._traces.ends.empty() ) return;
 
+   HOP_PROF_FUNC();
+
    const auto absoluteStart = _absoluteStartTime;
    const float windowWidthPxl = ImGui::GetWindowWidth();
 
@@ -775,7 +777,7 @@ void Timeline::drawTraces(
    const TimeStamp lastTraceAbsoluteTime = absoluteTimelineEnd();
 
    const auto span = visibleIndexSpan(
-       data._traces.lods, firstTraceAbsoluteTime, lastTraceAbsoluteTime, lodLevel );
+       data._traces.lods, lodLevel, firstTraceAbsoluteTime, lastTraceAbsoluteTime, 0 );
 
    if( span.first == hop::INVALID_IDX ) return;
 
@@ -952,6 +954,7 @@ std::vector< Timeline::LockOwnerInfo > Timeline::highlightLockOwner(
     const float posX,
     const float /*posY*/ )
 {
+    HOP_PROF_FUNC();
     std::vector< LockOwnerInfo > lockInfos;
     lockInfos.reserve( 16 );
 
@@ -1055,6 +1058,8 @@ void Timeline::drawLockWaits(
    const DisplayableLockWaits& lockWaits = data._lockWaits;
    if ( lockWaits.ends.empty() ) return;
 
+   HOP_PROF_FUNC();
+
    const auto absoluteStart = _absoluteStartTime;
    const float windowWidthPxl = ImGui::GetWindowWidth();
 
@@ -1074,13 +1079,15 @@ void Timeline::drawLockWaits(
    };
 
    const auto span =
-       visibleIndexSpan( lockWaits.lods, firstTraceAbsoluteTime, lastTraceAbsoluteTime, lodLevel );
+       visibleIndexSpan( lockWaits.lods, lodLevel, firstTraceAbsoluteTime, lastTraceAbsoluteTime, 1 );
 
    if ( span.first == hop::INVALID_IDX ) return;
 
    static std::vector<DrawingInfo> tracesToDraw, lodTracesToDraw;
    tracesToDraw.clear();
    lodTracesToDraw.clear();
+
+   HOP_PROF_SPLIT( "Gathering drawing info" );
 
    for ( size_t i = span.first; i < span.second; ++i )
    {
@@ -1111,6 +1118,7 @@ void Timeline::drawLockWaits(
    ImGui::PushStyleColor(ImGuiCol_ButtonActive, addColorWithClamping( zoneColors[HOP_MAX_ZONES], ACTIVE_COLOR_DELTA ) );
    ImGui::PushStyleVar(ImGuiStyleVar_Alpha, enabledZone[HOP_MAX_ZONES] ? 1.0f : disabledZoneOpacity );
 
+   HOP_PROF_SPLIT( "drawing lod" );
    for ( const auto& t : lodTracesToDraw )
    {
       ImGui::SetCursorScreenPos( t.posPxl );
@@ -1141,6 +1149,7 @@ void Timeline::drawLockWaits(
       }
    }
 
+   HOP_PROF_SPLIT( "drawing non-lod" );
    for ( const auto& t : tracesToDraw )
    {
       ImGui::SetCursorScreenPos( t.posPxl );
