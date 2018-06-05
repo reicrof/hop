@@ -705,8 +705,9 @@ void hop::Profiler::draw( uint32_t /*windowWidth*/, uint32_t /*windowHeight*/ )
 
    _timeline.clearHighlightedTraces();
 
+   ImGui::PopStyleVar(2);
    ImGui::End();
-   ImGui::PopStyleVar(3);
+   ImGui::PopStyleVar();
 }
 
 void hop::Profiler::drawMenuBar()

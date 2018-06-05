@@ -40,8 +40,8 @@ size_t serializedSize( const ThreadInfo& ti )
        sizeof( hop::TimeDuration ) * tracesCount +   // deltas
        sizeof( hop::TStrPtr_t ) * tracesCount * 2 +  // fileNameId and fctNameIds
        sizeof( hop::TLineNb_t ) * tracesCount +      // lineNbs
-       // sizeof( hop::TGroup_t ) * tracesCount +       // groups
-       sizeof( hop::TDepth_t ) * tracesCount;  // depths
+       sizeof( hop::TZoneId_t ) * tracesCount +      // zones
+       sizeof( hop::TDepth_t ) * tracesCount;        // depths
 
    return serializedSize;
 }
@@ -81,9 +81,9 @@ size_t serialize( const ThreadInfo& ti, char* data )
     std::copy( ti._traces.lineNbs.begin(), ti._traces.lineNbs.end(), (hop::TLineNb_t*) &data[i] );
     i += sizeof( hop::TLineNb_t ) * tracesCount;
 
-    // // groups
-    // memcpy( &data[i], ti.traces.groups.data(), sizeof( hop::TGroup_t ) * tracesCount );
-    // i += sizeof( hop::TGroup_t ) * tracesCount;
+    // zones
+    std::copy( ti._traces.zones.begin(), ti._traces.zones.end(), (hop::TZoneId_t*) &data[i] );
+    i += sizeof( hop::TZoneId_t ) * tracesCount;
 
     // depths
     std::copy( ti._traces.depths.begin(), ti._traces.depths.end(), (hop::TDepth_t*)&data[i] );
@@ -121,6 +121,10 @@ size_t deserialize( const char* data, ThreadInfo& ti )
     // lineNbs
     std::copy((hop::TLineNb_t*)&data[i], ((hop::TLineNb_t*)&data[i]) + tracesCount, std::back_inserter(ti._traces.lineNbs));
     i += sizeof( hop::TLineNb_t ) * tracesCount;
+
+    // zones
+    std::copy((hop::TZoneId_t*)&data[i], ((hop::TZoneId_t*)&data[i]) + tracesCount, std::back_inserter(ti._traces.zones));
+    i += sizeof( hop::TZoneId_t ) * tracesCount;
 
     // depths
     std::copy((hop::TDepth_t*)&data[i], ((hop::TDepth_t*) &data[i]) + tracesCount, std::back_inserter(ti._traces.depths));
