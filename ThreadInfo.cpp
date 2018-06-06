@@ -33,7 +33,9 @@ TDepth_t ThreadInfo::maxDepth() const noexcept
 size_t serializedSize( const ThreadInfo& ti )
 {
    const size_t tracesCount = ti._traces.ends.size();
+   const size_t lockwaitsCount = ti._lockWaits.ends.size();
    const size_t serializedSize =
+       // Traces
        sizeof( size_t ) +                            // Traces count
        sizeof( hop::TDepth_t ) +                     // Max depth
        sizeof( hop::TimeStamp ) * tracesCount +      // ends
@@ -41,7 +43,14 @@ size_t serializedSize( const ThreadInfo& ti )
        sizeof( hop::TStrPtr_t ) * tracesCount * 2 +  // fileNameId and fctNameIds
        sizeof( hop::TLineNb_t ) * tracesCount +      // lineNbs
        sizeof( hop::TZoneId_t ) * tracesCount +      // zones
-       sizeof( hop::TDepth_t ) * tracesCount;        // depths
+       sizeof( hop::TDepth_t ) * tracesCount +       // depths
+
+       // Lock Waits
+       sizeof( size_t ) +                            // LockWaits count
+       sizeof( hop::TimeStamp ) * lockwaitsCount +   // ends
+       sizeof( hop::TimeDuration ) * lockwaitsCount +// deltas
+       sizeof( hop::TDepth_t ) * lockwaitsCount +    // depths
+       sizeof( void* ) * lockwaitsCount;             // mutexAddrs
 
    return serializedSize;
 }
@@ -50,10 +59,12 @@ size_t serialize( const ThreadInfo& ti, char* data )
 {
     const size_t serialSize = serializedSize( ti );
     (void)serialSize; // Removed unused warning
-    const size_t tracesCount = ti._traces.ends.size();
-
     size_t i = 0;
+
+    // Serialize Traces
+    {
     // Traces count
+    const size_t tracesCount = ti._traces.ends.size();
     memcpy( &data[i], &tracesCount, sizeof( size_t ) );
     i += sizeof( size_t );
 
@@ -88,6 +99,31 @@ size_t serialize( const ThreadInfo& ti, char* data )
     // depths
     std::copy( ti._traces.depths.begin(), ti._traces.depths.end(), (hop::TDepth_t*)&data[i] );
     i += sizeof( hop::TDepth_t ) * tracesCount;
+    }
+
+    // Serialize LockWaits
+    {
+    // LockWaits count
+    const size_t lockwaitsCount = ti._lockWaits.ends.size();
+    memcpy( &data[i], &lockwaitsCount, sizeof( size_t ) );
+    i += sizeof( size_t );
+
+    // ends
+    std::copy(ti._lockWaits.ends.begin(), ti._lockWaits.ends.end(), (hop::TimeStamp*)&data[i] );
+    i += sizeof( hop::TimeStamp ) * lockwaitsCount;
+
+    // deltas
+    std::copy( ti._lockWaits.deltas.begin(), ti._lockWaits.deltas.end(), (hop::TimeDuration*)&data[i] );
+    i += sizeof( hop::TimeDuration ) * lockwaitsCount;
+
+    // depths
+    std::copy( ti._lockWaits.depths.begin(), ti._lockWaits.depths.end(), (hop::TDepth_t*)&data[i] );
+    i += sizeof( hop::TDepth_t ) * lockwaitsCount;
+
+    // mutexAddrs
+    std::copy( ti._lockWaits.mutexAddrs.begin(), ti._lockWaits.mutexAddrs.end(), (void**)&data[i] );
+    i += sizeof( void* ) * lockwaitsCount;
+    }
 
     assert( i == serialSize );
 
@@ -97,6 +133,9 @@ size_t serialize( const ThreadInfo& ti, char* data )
 size_t deserialize( const char* data, ThreadInfo& ti )
 {
     size_t i = 0;
+
+    // Deserializing Traces
+    {
     const size_t tracesCount = *(size_t*)&data[i];
     i += sizeof( size_t );
     ti._traces.maxDepth = *(hop::TDepth_t*)&data[i];
@@ -129,6 +168,28 @@ size_t deserialize( const char* data, ThreadInfo& ti )
     // depths
     std::copy((hop::TDepth_t*)&data[i], ((hop::TDepth_t*) &data[i]) + tracesCount, std::back_inserter(ti._traces.depths));
     i += sizeof( hop::TDepth_t ) * tracesCount;
+    }
+
+    // Deserializing LockWaits
+    {
+    const size_t lockWaitsCount = *(size_t*)&data[i];
+    i += sizeof( size_t );
+    // ends
+    std::copy((hop::TimeStamp*)&data[i], ((hop::TimeStamp*) &data[i]) + lockWaitsCount, std::back_inserter(ti._lockWaits.ends));
+    i += sizeof( hop::TimeStamp ) * lockWaitsCount;
+
+    // deltas
+    std::copy((hop::TimeDuration*)&data[i], ((hop::TimeDuration*)&data[i]) + lockWaitsCount, std::back_inserter(ti._lockWaits.deltas));
+    i += sizeof( hop::TimeDuration ) * lockWaitsCount;
+
+    // depths
+    std::copy((hop::TDepth_t*)&data[i], ((hop::TDepth_t*) &data[i]) + lockWaitsCount, std::back_inserter(ti._lockWaits.depths));
+    i += sizeof( hop::TDepth_t ) * lockWaitsCount;
+
+    // mutexAddrs
+    std::copy((void**)&data[i], ((void**) &data[i]) + lockWaitsCount, std::back_inserter(ti._lockWaits.mutexAddrs));
+    i += sizeof( void* ) * lockWaitsCount;
+    }
 
     return i;
 }

@@ -382,7 +382,10 @@ void Profiler::addLockWaits( const DisplayableLockWaits& lockWaits, uint32_t thr
       _tracesPerThread.resize( threadIndex + 1 );
    }
 
-   _tracesPerThread[threadIndex].addLockWaits( lockWaits );
+   if( !lockWaits.ends.empty() )
+   {
+      _tracesPerThread[threadIndex].addLockWaits( lockWaits );
+   }
 }
 
 void Profiler::addUnlockEvents( const std::vector<UnlockEvent>& unlockEvents, uint32_t threadIndex )
@@ -394,7 +397,10 @@ void Profiler::addUnlockEvents( const std::vector<UnlockEvent>& unlockEvents, ui
       _tracesPerThread.resize( threadIndex + 1 );
    }
 
-   _tracesPerThread[threadIndex].addUnlockEvents( unlockEvents );
+   if( !unlockEvents.empty() )
+   {
+      _tracesPerThread[threadIndex].addUnlockEvents( unlockEvents );
+   }
 }
 
 Profiler::~Profiler()
@@ -998,6 +1004,7 @@ bool hop::Profiler::openFile( const char* path )
          {
             size_t threadInfoSize = deserialize( &uncompressedData[i], threadInfos[j] );
             addTraces( threadInfos[j]._traces, j );
+            addLockWaits( threadInfos[j]._lockWaits, j );
             i += threadInfoSize;
          }
          closeModalWindow();
