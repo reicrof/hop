@@ -386,7 +386,7 @@ class SharedMemory
    uint8_t* data() const HOP_NOEXCEPT;
    bool valid() const HOP_NOEXCEPT;
    sem_handle semaphore() const HOP_NOEXCEPT;
-   bool waitSemaphore( uint32_t timeoutMs ) const HOP_NOEXCEPT;
+   bool tryWaitSemaphore() const HOP_NOEXCEPT;
    void signalSemaphore() const HOP_NOEXCEPT;
    uint32_t nextThreadId() HOP_NOEXCEPT;
    const SharedMetaInfo* sharedMetaInfo() const HOP_NOEXCEPT;
@@ -1063,13 +1063,12 @@ sem_handle SharedMemory::semaphore() const HOP_NOEXCEPT
    return _semaphore;
 }
 
-bool SharedMemory::waitSemaphore( uint32_t timeoutMs ) const HOP_NOEXCEPT
+bool SharedMemory::tryWaitSemaphore() const HOP_NOEXCEPT
 {
 #if defined(_MSC_VER)
-    WaitForSingleObject( _semaphore, timeoutMs ) == WAIT_OBJECT_0;
+    return WaitForSingleObject( _semaphore, 0 ) == WAIT_OBJECT_0;
 #else
-    struct timespec ts = { timeoutMs / 1000, (timeoutMs % 1000) * 1000000 };
-    return sem_timedwait( _semaphore, &ts ) == 0;
+    return sem_trywait( _semaphore ) == 0;
 #endif
 }
 

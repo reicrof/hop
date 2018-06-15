@@ -19,6 +19,7 @@ bool Server::start( const char* name, bool useGlFinishByDefault )
    _connectionState = SharedMemory::NOT_CONNECTED;
 
    _thread = std::thread( [this, name, useGlFinishByDefault]() {
+      TimeStamp lastSignalTime = getTimeStamp();
       while ( true )
       {
          // Try to get the shared memory
@@ -39,9 +40,15 @@ bool Server::start( const char* name, bool useGlFinishByDefault )
             printf( "Connection to shared data successful.\n" );
          }
 
-         // Wait for a signal with a timeout of 1s (1000ms)
-         const bool wasSignaled = _sharedMem.waitSemaphore( 3000 );
-         _connectionState = wasSignaled ? SharedMemory::CONNECTED_NO_CLIENT : SharedMemory::CONNECTED;
+         const bool wasSignaled = _sharedMem.tryWaitSemaphore();
+         TimeStamp curTime = getTimeStamp();
+         if( curTime - lastSignalTime > 5000000 )
+         {
+            lastSignalTime = curTime;
+            const bool hasProducer = _sharedMem.hasConnectedProducer();
+            _connectionState.store(
+                hasProducer ? SharedMemory::CONNECTED : SharedMemory::CONNECTED_NO_CLIENT );
+         }
 
          // We are done running.
          if ( !_running.load() ) break;
@@ -55,6 +62,7 @@ bool Server::start( const char* name, bool useGlFinishByDefault )
             {
                _sharedMem.setConnectedConsumer( true );
                _sharedMem.setListeningConsumer( true );
+               std::this_thread::sleep_for( std::chrono::milliseconds( 1000 ) );
             }
 
             // Otherwise, it simply means the app is either not very productive or is being debuged
