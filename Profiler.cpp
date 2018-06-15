@@ -557,6 +557,31 @@ static bool drawDeleteTracesButton( const ImVec2& drawPos, bool active )
    return hovering && active && ImGui::IsMouseClicked( 0 );
 }
 
+static void drawStatusIcon( const ImVec2& drawPos, hop::SharedMemory::ConnectionState state )
+{
+   ImColor col( 0.5f, 0.5f, 0.5f );
+   switch ( state )
+   {
+      case hop::SharedMemory::NOT_CONNECTED:
+         col = ImColor( 0.8f, 0.0f, 0.0f );
+         break;
+      case hop::SharedMemory::CONNECTED:
+         col = ImColor( 0.0f, 0.8f, 0.0f );
+         break;
+      case hop::SharedMemory::CONNECTED_NO_CLIENT:
+         col = ImColor( 0.8f, 0.8f, 0.0f );
+         break;
+      case hop::SharedMemory::PERMISSION_DENIED:
+         col = ImColor( 0.6f, 0.2f, 0.0f );
+         break;
+      case hop::SharedMemory::UNKNOWN_CONNECTION_ERROR:
+         col = ImColor( 0.4f, 0.0f, 0.0f );
+         break;
+   }
+   ImDrawList* DrawList = ImGui::GetWindowDrawList();
+   DrawList->AddCircleFilled( drawPos, 10.0f, col );
+}
+
 void hop::Profiler::drawSearchWindow()
 {
    HOP_PROF_FUNC();
@@ -681,16 +706,23 @@ void hop::Profiler::draw( uint32_t /*windowWidth*/, uint32_t /*windowHeight*/ )
    drawSearchWindow();
    drawTraceDetailsWindow();
 
-   auto toolbarDrawPos = ImGui::GetCursorScreenPos();
+   const auto toolbarDrawPos = ImGui::GetCursorScreenPos();
    if( drawPlayStopButton( toolbarDrawPos, _recording ) )
    {
       setRecording( !_recording );
    }
-   toolbarDrawPos.x += (2.0f*TOOLBAR_BUTTON_PADDING) + TOOLBAR_BUTTON_WIDTH;
-   if( drawDeleteTracesButton( toolbarDrawPos, !_tracesPerThread.empty() ) )
+
+   auto deleteTracePos = toolbarDrawPos;
+   deleteTracePos.x += (2.0f*TOOLBAR_BUTTON_PADDING) + TOOLBAR_BUTTON_WIDTH;
+   if( drawDeleteTracesButton( deleteTracePos, !_tracesPerThread.empty() ) )
    {
       hop::displayModalWindow( "Delete all traces?", hop::MODAL_TYPE_YES_NO, [&](){ clear(); } );
    }
+
+   auto statusPos = toolbarDrawPos;
+   statusPos.x += ImGui::GetWindowWidth() - 25.0f;
+   statusPos.y += 5.0f;
+   drawStatusIcon( statusPos, _server.connectionState() );
 
    if( _tracesPerThread.empty() && !_recording )
    {

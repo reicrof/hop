@@ -16,6 +16,7 @@ bool Server::start( const char* name, bool useGlFinishByDefault )
    assert( name != nullptr );
 
    _running = true;
+   _connectionState = SharedMemory::NOT_CONNECTED;
 
    _thread = std::thread( [this, name, useGlFinishByDefault]() {
       while ( true )
@@ -23,9 +24,10 @@ bool Server::start( const char* name, bool useGlFinishByDefault )
          // Try to get the shared memory
          if ( !_sharedMem.data() )
          {
-            bool success = _sharedMem.create( name, 0 /*will be define in shared metadata*/, true );
-            if ( !success )
+            SharedMemory::ConnectionState state = _sharedMem.create( name, 0 /*will be define in shared metadata*/, true );
+            if ( state != SharedMemory::CONNECTED )
             {
+               _connectionState = state;
                if (!_running) return; // We are done without even opening the shared mem :(
                std::this_thread::sleep_for( std::chrono::milliseconds( 500 ) );
                continue;
@@ -33,13 +35,31 @@ bool Server::start( const char* name, bool useGlFinishByDefault )
             // Clear any remaining messages from previous execution now
             clearPendingMessages();
             setUseGlFinish( useGlFinishByDefault );
+            _connectionState = state;
             printf( "Connection to shared data successful.\n" );
          }
 
-         _sharedMem.waitSemaphore();
+         // Wait for a signal with a timeout of 1s (1000ms)
+         const bool wasSignaled = _sharedMem.waitSemaphore( 3000 );
+         _connectionState = wasSignaled ? SharedMemory::CONNECTED_NO_CLIENT : SharedMemory::CONNECTED;
 
          // We are done running.
          if ( !_running.load() ) break;
+
+         if( !wasSignaled )
+         {
+            // We timed out.
+            // If the profiled app has stopped, we need to signal the shared memory we are still
+            // listening in case it connects back
+            if( !_sharedMem.hasConnectedProducer() )
+            {
+               _sharedMem.setConnectedConsumer( true );
+               _sharedMem.setListeningConsumer( true );
+            }
+
+            // Otherwise, it simply means the app is either not very productive or is being debuged
+            continue;
+         }
 
          // A clear was requested so we need to clear our string database
          if( _clearingRequested.load() )
@@ -69,6 +89,11 @@ bool Server::start( const char* name, bool useGlFinishByDefault )
    } );
 
    return true;
+}
+
+SharedMemory::ConnectionState Server::connectionState() const
+{
+   return _connectionState.load();
 }
 
 bool Server::setRecording( bool recording )

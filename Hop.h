@@ -344,7 +344,16 @@ HOP_STATIC_ASSERT( sizeof(UnlockEvent) == EXPECTED_UNLOCK_EVENT_SIZE, "Unlock Ev
 class SharedMemory
 {
   public:
-   bool create( const char* path, size_t size, bool isConsumer );
+   enum ConnectionState
+   {
+      NOT_CONNECTED,
+      CONNECTED,
+      CONNECTED_NO_CLIENT,
+      PERMISSION_DENIED,
+      UNKNOWN_CONNECTION_ERROR
+   };
+
+   ConnectionState create( const char* path, size_t size, bool isConsumer );
    void destroy();
 
    struct SharedMetaInfo
@@ -377,7 +386,7 @@ class SharedMemory
    uint8_t* data() const HOP_NOEXCEPT;
    bool valid() const HOP_NOEXCEPT;
    sem_handle semaphore() const HOP_NOEXCEPT;
-   void waitSemaphore() const HOP_NOEXCEPT;
+   bool waitSemaphore( uint32_t timeoutMs ) const HOP_NOEXCEPT;
    void signalSemaphore() const HOP_NOEXCEPT;
    uint32_t nextThreadId() HOP_NOEXCEPT;
    const SharedMetaInfo* sharedMetaInfo() const HOP_NOEXCEPT;
@@ -628,17 +637,29 @@ void ringbuf_release( ringbuf_t*, size_t );
 #if !defined( _MSC_VER )
 
 // Unix shared memory includes
-#include <fcntl.h> //O_CREAT
+#include <fcntl.h> // O_CREAT
 #include <cstring> // memcpy
 #include <sys/mman.h> // shm_open
 #include <sys/stat.h> // stat
 #include <unistd.h> // ftruncate
-#include <dlfcn.h> //dlsym
+#include <dlfcn.h> // dlsym
+#include <time.h> // timespec
 
 #endif
 
 namespace
 {
+    hop::SharedMemory::ConnectionState errorToConnectionState( uint32_t err )
+    {
+#if defined( _MSC_VER )
+       return UNKNOWN_CONNECTION_ERROR;
+#else
+       if( err == ENOENT ) return hop::SharedMemory::NOT_CONNECTED;
+       if( err == EACCES ) return hop::SharedMemory::PERMISSION_DENIED;
+       return hop::SharedMemory::UNKNOWN_CONNECTION_ERROR;
+#endif
+    }
+
     static void printErrorMsg(const char* msg)
     {
 #if defined( _MSC_VER )
@@ -652,40 +673,41 @@ namespace
 #endif
     }
 
-   sem_handle openSemaphore( const char* name )
-   {
-      sem_handle sem = NULL;
+    sem_handle openSemaphore( const char* name, hop::SharedMemory::ConnectionState* state )
+    {
+       sem_handle sem = NULL;
 #if defined( _MSC_VER )
-         sem = CreateSemaphore(NULL, 0, LONG_MAX, name);
+       sem = CreateSemaphore( NULL, 0, LONG_MAX, name );
+       if ( !sem )
+       {
+          printErrorMsg( "Could not open semaphore" );
+       }
 #else
-         sem = sem_open( name, O_CREAT, S_IRUSR | S_IWUSR, 1 );
+       sem = sem_open( name, O_CREAT, S_IRUSR | S_IWUSR, 1 );
+       if( !sem && state ) {
+          *state = errorToConnectionState( errno );
+       }
 #endif
+       return sem;
+    }
 
-         if (!sem)
-         {
-             printErrorMsg("Could not open semaphore");
-         }
-
-      return sem;
+    void closeSemaphore( sem_handle sem, const char* semName )
+    {
+#if defined( _MSC_VER )
+       BOOL success = CloseHandle( sem );
+#else
+       if ( sem_close( sem ) != 0 )
+       {
+          perror( "HOP - Could not close semaphore" );
+       }
+       if ( sem_unlink( semName ) < 0 )
+       {
+          perror( "HOP - Could not unlink semaphore" );
+       }
+#endif
    }
 
-   void closeSemaphore( sem_handle sem, const char* semName )
-   {
- #if defined ( _MSC_VER )
-         BOOL success = CloseHandle(sem);
- #else
-         if ( sem_close( sem ) != 0 )
-         {
-            perror( "HOP - Could not close semaphore" );
-         }
-         if ( sem_unlink( semName ) < 0 )
-         {
-            perror( "HOP - Could not unlink semaphore" );
-         }
- #endif
-   }
-
-   void* createSharedMemory(const char* path, size_t size, shm_handle* handle)
+   void* createSharedMemory(const char* path, size_t size, shm_handle* handle, hop::SharedMemory::ConnectionState* state )
    {
        uint8_t* sharedMem = NULL;
 #if defined ( _MSC_VER )
@@ -699,6 +721,7 @@ namespace
 
        if (*handle == NULL)
        {
+           *state = UNKNOWN_CONNECTION_ERROR;
            printErrorMsg("Could not create file mapping");
            return NULL;
        }
@@ -712,7 +735,7 @@ namespace
        if (sharedMem == NULL)
        {
            printErrorMsg("Could not map view of file");
-
+           *state = UNKNOWN_CONNECTION_ERROR;
            CloseHandle(*handle);
            return NULL;
        }
@@ -720,6 +743,7 @@ namespace
        *handle = shm_open(path, O_CREAT | O_RDWR, 0666);
        if (*handle < 0)
        {
+           *state = errorToConnectionState( errno );
            return NULL;
        }
 
@@ -728,13 +752,14 @@ namespace
        sharedMem = (uint8_t*)mmap(NULL, size, PROT_READ | PROT_WRITE, MAP_SHARED, *handle, 0);
        if (sharedMem == NULL)
        {
+           *state = errorToConnectionState( errno );
            printErrorMsg("Could not map shared memory");
        }
 #endif
        return sharedMem;
    }
 
-   void* openSharedMemory(const char* path, shm_handle* handle, size_t* totalSize)
+   void* openSharedMemory( const char* path, shm_handle* handle, size_t* totalSize, hop::SharedMemory::ConnectionState* state )
    {
        uint8_t* sharedMem = NULL;
 #if defined ( _MSC_VER )
@@ -745,7 +770,7 @@ namespace
 
        if (*handle == NULL)
        {
-           printErrorMsg("Could not open shared mem handle");
+           *state = UNKNOWN_CONNECTION_ERROR;
            return NULL;
        }
 
@@ -758,6 +783,7 @@ namespace
 
        if (sharedMem == NULL)
        {
+           *state = UNKNOWN_CONNECTION_ERROR;
            CloseHandle(*handle);
            return NULL;
        }
@@ -765,7 +791,7 @@ namespace
        MEMORY_BASIC_INFORMATION memInfo;
        if (!VirtualQuery(sharedMem, &memInfo, sizeof(memInfo)))
        {
-          printErrorMsg("Could not read shared memory size");
+          *state = UNKNOWN_CONNECTION_ERROR;
           UnmapViewOfFile(sharedMem);
           CloseHandle(*handle);
           return NULL;
@@ -775,14 +801,14 @@ namespace
       *handle = shm_open( path, O_RDWR, 0666 );
       if ( *handle < 0 )
       {
-         printErrorMsg( "Could not open shared mem handle" );
+         *state = errorToConnectionState( errno );
          return NULL;
       }
 
       struct stat fileStat;
       if(fstat(*handle,&fileStat) < 0)
       {
-         printErrorMsg( "Could not retrieve shared mem size" );
+         *state = errorToConnectionState( errno );
          return NULL;
       }
 
@@ -790,10 +816,6 @@ namespace
       ftruncate( *handle, fileStat.st_size );
 
       sharedMem = (uint8_t*) mmap( NULL, fileStat.st_size, PROT_READ | PROT_WRITE, MAP_SHARED, *handle, 0 );
-      if ( sharedMem == NULL )
-      {
-         printErrorMsg( "Could not map shared memory" );
-      }
 #endif
       return sharedMem;
    }
@@ -836,8 +858,9 @@ namespace hop
 {
 
 // ------ SharedMemory.cpp------------
-bool SharedMemory::create( const char* exeName, size_t requestedSize, bool isConsumer )
+SharedMemory::ConnectionState SharedMemory::create( const char* exeName, size_t requestedSize, bool isConsumer )
 {
+   ConnectionState state = CONNECTED;
    std::lock_guard<std::mutex> g( _creationMutex );
 
    // Create the shared data if it was not already created
@@ -856,30 +879,29 @@ bool SharedMemory::create( const char* exeName, size_t requestedSize, bool isCon
       strncat( _sharedSemPath, "_sem", sizeof( _sharedSemPath ) - strlen( _sharedMemPath ) -1 );
 
       // Open semaphore
-      _semaphore = openSemaphore(_sharedSemPath);
-      if ( _semaphore == NULL ) return false;
+      _semaphore = openSemaphore( _sharedSemPath, &state );
+      if ( _semaphore == NULL ) return state;
 
       // Create or open the shared memory
       uint8_t* sharedMem = NULL;
       size_t totalSize = 0;
       if ( isConsumer )
       {
-         sharedMem = (uint8_t*)openSharedMemory( _sharedMemPath, &_sharedMemHandle, &totalSize );
+         sharedMem = (uint8_t*)openSharedMemory( _sharedMemPath, &_sharedMemHandle, &totalSize, &state );
       }
       else
       {
          size_t ringBufSize;
          ringbuf_get_sizes( HOP_MAX_THREAD_NB, &ringBufSize, NULL );
          totalSize = ringBufSize + requestedSize + sizeof( SharedMetaInfo );
-         sharedMem = (uint8_t*)createSharedMemory( _sharedMemPath, totalSize, &_sharedMemHandle );
+         sharedMem = (uint8_t*)createSharedMemory( _sharedMemPath, totalSize, &_sharedMemHandle, &state );
          new(sharedMem) SharedMetaInfo; // Placement new for initializing values
       }
 
       if ( !sharedMem )
       {
-         if ( !isConsumer ) printErrorMsg( "HOP - Could not shm_open shared memory" );
-         closeSemaphore( _semaphore, _sharedSemPath);
-         return false;
+         closeSemaphore( _semaphore, _sharedSemPath );
+         return state;
       }
 
       SharedMetaInfo* metaInfo = (SharedMetaInfo*)sharedMem;
@@ -906,7 +928,7 @@ bool SharedMemory::create( const char* exeName, size_t requestedSize, bool isCon
             assert( false && "Ring buffer creation failed" );
             closeSharedMemory( _sharedMemPath, _sharedMemHandle, sharedMem );
             closeSemaphore( _semaphore, _sharedSemPath);
-            return false;
+            return UNKNOWN_CONNECTION_ERROR;
          }
       }
       else // Check if client has compatible version
@@ -954,7 +976,8 @@ bool SharedMemory::create( const char* exeName, size_t requestedSize, bool isCon
 
       isConsumer ? setConnectedConsumer( true ) : setConnectedProducer( true );
    }
-   return true;
+
+   return state;
 }
 
 bool SharedMemory::hasConnectedProducer() const HOP_NOEXCEPT
@@ -1040,12 +1063,13 @@ sem_handle SharedMemory::semaphore() const HOP_NOEXCEPT
    return _semaphore;
 }
 
-void SharedMemory::waitSemaphore() const HOP_NOEXCEPT
+bool SharedMemory::waitSemaphore( uint32_t timeoutMs ) const HOP_NOEXCEPT
 {
 #if defined(_MSC_VER)
-    WaitForSingleObject(_semaphore, INFINITE);
+    WaitForSingleObject( _semaphore, timeoutMs ) == WAIT_OBJECT_0;
 #else
-    sem_wait( _semaphore );
+    struct timespec ts = { timeoutMs / 1000, (timeoutMs % 1000) * 1000000 };
+    return sem_timedwait( _semaphore, &ts ) == 0;
 #endif
 }
 
@@ -1488,8 +1512,9 @@ Client* ClientManager::Get()
    // If we have not yet created our shared memory segment, do it here
    if( !ClientManager::sharedMemory().valid() )
    {
-      bool success = ClientManager::sharedMemory().create( HOP_GET_PROG_NAME(), HOP_SHARED_MEM_SIZE, false );
-      if (!success)
+      SharedMemory::ConnectionState state =
+          ClientManager::sharedMemory().create( HOP_GET_PROG_NAME(), HOP_SHARED_MEM_SIZE, false );
+      if ( state != SharedMemory::CONNECTED )
       {
          printf("HOP - Could not create shared memory. HOP will not be able to run\n");
          return NULL;
