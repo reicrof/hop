@@ -9,6 +9,8 @@
 #include <SDL.h>
 #undef main
 
+#include "hop_icon_data.inline"
+
 #include <signal.h>
 
 #ifdef __APPLE__
@@ -313,6 +315,20 @@ int main( int argc, char* argv[] )
    SDL_GL_SetAttribute(SDL_GL_DOUBLEBUFFER, 1);
    SDL_GL_SetSwapInterval(1);
 
+   // Load fabulous icon
+   SDL_Surface* iconSurface = SDL_CreateRGBSurfaceFrom(
+       (void*)hop_icon.pixel_data,
+       hop_icon.width,
+       hop_icon.height,
+       hop_icon.bytes_per_pixel * 8,
+       hop_icon.width * hop_icon.bytes_per_pixel,
+       0x000000ff,
+       0x0000ff00,
+       0x00ff0000,
+       0xff000000 );
+
+   if( iconSurface != nullptr ) SDL_SetWindowIcon( window, iconSurface );
+
    // Setup the LOD granularity based on screen resolution
    SDL_DisplayMode DM;
    SDL_GetCurrentDisplayMode(0, &DM);
@@ -391,6 +407,8 @@ int main( int argc, char* argv[] )
    {
       terminateProcess( childProcess );
    }
+
+   if( iconSurface ) SDL_FreeSurface( iconSurface );
 
    ImGui::DestroyContext();
 
