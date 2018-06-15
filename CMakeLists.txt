@@ -28,6 +28,15 @@ find_package(OpenGL REQUIRED)
 set(CMAKE_CXX_FLAGS "-ffast-math -fno-exceptions -fno-rtti ${CMAKE_CXX_FLAGS}")
 
 #####################
+### Asan
+#####################
+SET(ASAN OFF CACHE BOOL "Enable Address Sanitizer")
+if(ASAN)
+   set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fno-omit-frame-pointer -fsanitize=address")
+   set (CMAKE_LINKER_FLAGS "${CMAKE_STATIC_LINKER_FLAGS} -fno-omit-frame-pointer -fsanitize=address")
+endif()
+
+#####################
 ### Main executable
 #####################
 add_definitions( -DHOP_ENABLED )
