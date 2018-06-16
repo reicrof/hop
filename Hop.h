@@ -262,6 +262,7 @@ enum class MsgType : uint32_t
    PROFILER_STRING_DATA,
    PROFILER_WAIT_LOCK,
    PROFILER_UNLOCK_EVENT,
+   PROFILER_HEARTBEAT,
    INVALID_MESSAGE,
 };
 
@@ -1101,7 +1102,7 @@ void SharedMemory::destroy()
       }
 
       // If we are the last one accessing the shared memory, clean it.
-      if ( ( _sharedMetaData->flags &
+      if ( ( _sharedMetaData->flags.load() &
              ( SharedMetaInfo::CONNECTED_PRODUCER | SharedMetaInfo::CONNECTED_CONSUMER ) ) == 0 )
       {
          printf("HOP - Cleaning up shared memory...\n");
@@ -1463,8 +1464,41 @@ class Client
       return true;
    }
 
+   bool sendHeartbeat()
+   {
+      const size_t heartbeatSize = sizeof( MsgInfo );
+
+      // Allocate big enough buffer from the shared memory
+      ringbuf_t* ringbuf = ClientManager::sharedMemory().ringbuffer();
+      const auto offset = ringbuf_acquire( ringbuf, _worker, heartbeatSize );
+      if ( offset == -1 )
+      {
+         printf("HOP - Failed to acquire enough shared memory. Consider increasing shared memory size\n");
+         return false;
+      }
+
+      uint8_t* bufferPtr = &ClientManager::sharedMemory().data()[offset];
+
+      // Fill the buffer with the lock message
+      {
+         MsgInfo* hbInfo = (MsgInfo*)bufferPtr;
+         hbInfo->type = MsgType::PROFILER_HEARTBEAT;
+         hbInfo->threadId = tl_threadId;
+         hbInfo->threadIndex = tl_threadIndex;
+         hbInfo->timeStamp = _unlockEvents.back().time;
+         bufferPtr += sizeof( MsgInfo );
+      }
+
+      ringbuf_produce( ringbuf, _worker );
+      ClientManager::sharedMemory().signalSemaphore();
+
+      return true;
+   }
+
    void flushToConsumer()
    {
+      sendHeartbeat();
+
       // If no one is there to listen, no need to send anything
       if( !ClientManager::HasListeningConsumer() )
       {

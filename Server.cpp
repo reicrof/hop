@@ -19,6 +19,7 @@ bool Server::start( const char* name, bool useGlFinishByDefault )
    _connectionState = SharedMemory::NOT_CONNECTED;
 
    _thread = std::thread( [this, name, useGlFinishByDefault]() {
+      TimeStamp lastUpdate = getTimeStamp();
       TimeStamp lastSignalTime = getTimeStamp();
       SharedMemory::ConnectionState localState = SharedMemory::NOT_CONNECTED;
       while ( true )
@@ -49,9 +50,8 @@ bool Server::start( const char* name, bool useGlFinishByDefault )
 
          // Check if its been a while since we have been signaleds
          const TimeStamp curTime = getTimeStamp();
-         const auto newState = ( curTime - lastSignalTime > 5000000 )
-                                   ? SharedMemory::CONNECTED_NO_CLIENT
-                                   : SharedMemory::CONNECTED;
+         const bool producerLost = !_sharedMem.hasConnectedProducer() || curTime - lastSignalTime > 5000000 ;
+         const auto newState = producerLost ? SharedMemory::CONNECTED_NO_CLIENT : SharedMemory::CONNECTED;
 
          // Update state if it has changed
          if( localState != newState )
@@ -247,6 +247,10 @@ size_t Server::handleNewMessage( uint8_t* data, size_t maxSize, TimeStamp minTim
          std::lock_guard<std::mutex> guard(_pendingData.mutex);
          _pendingData.unlockEvents.emplace_back( std::move( unlockEvents ) );
          _pendingData.unlockEventsThreadIndex.push_back(threadIndex);
+         return (size_t)(bufPtr - data);
+      }
+      case MsgType::PROFILER_HEARTBEAT:
+      {
          return (size_t)(bufPtr - data);
       }
       default:
