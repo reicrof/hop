@@ -107,7 +107,7 @@ void drawOptionsWindow( Options& opt )
    if ( !opt.optionWindowOpened ) return;
 
    ImGui::PushStyleColor( ImGuiCol_WindowBg, ImVec4( 0.20f, 0.20f, 0.20f, 0.75f ) );
-   if ( ImGui::Begin( "Options", &opt.optionWindowOpened ) )
+   if ( ImGui::Begin( "Options", &opt.optionWindowOpened, ImGuiWindowFlags_AlwaysAutoResize ) )
    {
       ImGui::Checkbox( "Start in Fullscreen", &opt.startFullScreen );
       ImGui::Checkbox("Show Debug Window", &opt.debugWindow );
