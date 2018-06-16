@@ -6,18 +6,13 @@
 #include "argtable3.h"
 #include "Options.h"
 #include "ModalWindow.h"
+#include "RendererGL.h"
 #include <SDL.h>
 #undef main
 
 #include "hop_icon_data.inline"
 
 #include <signal.h>
-
-#ifdef __APPLE__
-#include <OpenGL/gl.h>
-#else
-#include <GL/gl.h>
-#endif
 
 #ifndef _MSC_VER
 #include <sys/wait.h>
@@ -380,9 +375,8 @@ int main( int argc, char* argv[] )
           g_mouseWheel );
       g_mouseWheel = 0;
 
-      glViewport( 0, 0, w, h );
-      glClearColor( 1.0f, 1.0f, 1.0f, 1.0f );
-      glClear( GL_COLOR_BUFFER_BIT );
+      renderer::setViewport( 0, 0, w, h );
+      renderer::clearColorBuffer();
 
       hop::draw( w, h );
 
