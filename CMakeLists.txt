@@ -18,6 +18,7 @@ else()
    set( HOP_WINDOWS_LIB "Shlwapi.lib" ) # Used for StrStrI
 endif()
 
+set( default_build_type "Release" )
 set( CMAKE_CXX_STANDARD 14 )
 
 # includes cmake/FindSDL2.cmake
