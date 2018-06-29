@@ -20,6 +20,7 @@ bool Server::start( const char* name, bool useGlFinishByDefault )
 
    _thread = std::thread( [this, name, useGlFinishByDefault]() {
       TimeStamp lastSignalTime = getTimeStamp();
+      SharedMemory::ConnectionState localState = SharedMemory::NOT_CONNECTED;
       while ( true )
       {
          // Try to get the shared memory
@@ -29,6 +30,7 @@ bool Server::start( const char* name, bool useGlFinishByDefault )
             if ( state != SharedMemory::CONNECTED )
             {
                _connectionState = state;
+               localState = state;
                if (!_running) return; // We are done without even opening the shared mem :(
                std::this_thread::sleep_for( std::chrono::milliseconds( 500 ) );
                continue;
@@ -41,32 +43,21 @@ bool Server::start( const char* name, bool useGlFinishByDefault )
          }
 
          const bool wasSignaled = _sharedMem.tryWaitSemaphore();
-         TimeStamp curTime = getTimeStamp();
-         if( curTime - lastSignalTime > 5000000 )
-         {
-            lastSignalTime = curTime;
-            const bool hasProducer = _sharedMem.hasConnectedProducer();
-            _connectionState.store(
-                hasProducer ? SharedMemory::CONNECTED : SharedMemory::CONNECTED_NO_CLIENT );
-         }
 
-         // We are done running.
+         // Check if we are done running.
          if ( !_running.load() ) break;
 
-         if( !wasSignaled )
-         {
-            // We timed out.
-            // If the profiled app has stopped, we need to signal the shared memory we are still
-            // listening in case it connects back
-            if( !_sharedMem.hasConnectedProducer() )
-            {
-               _sharedMem.setConnectedConsumer( true );
-               _sharedMem.setListeningConsumer( true );
-               std::this_thread::sleep_for( std::chrono::milliseconds( 1000 ) );
-            }
+         // Check if its been a while since we have been signaleds
+         const TimeStamp curTime = getTimeStamp();
+         const auto newState = ( curTime - lastSignalTime > 5000000 )
+                                   ? SharedMemory::CONNECTED_NO_CLIENT
+                                   : SharedMemory::CONNECTED;
 
-            // Otherwise, it simply means the app is either not very productive or is being debuged
-            continue;
+         // Update state if it has changed
+         if( localState != newState )
+         {
+            localState = newState;
+            _connectionState.store( newState );
          }
 
          // A clear was requested so we need to clear our string database
@@ -78,6 +69,23 @@ bool Server::start( const char* name, bool useGlFinishByDefault )
             _sharedMem.setResetTimestamp( getTimeStamp() );
             continue;
          }
+
+         if( !wasSignaled )
+         {
+            // We timed out.
+            // If the profiled app has stopped, we need to signal the shared memory we are still
+            // listening in case it connects back
+            if( !_sharedMem.hasConnectedProducer() )
+            {
+               std::this_thread::sleep_for( std::chrono::milliseconds( 1000 ) );
+            }
+
+            // Otherwise, it simply means the app is either not very productive or is being debuged
+            continue;
+         }
+
+         // We were signaled
+         lastSignalTime = curTime;
 
          HOP_PROF( "Handle messages" );
          size_t offset = 0;

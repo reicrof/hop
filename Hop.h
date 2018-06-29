@@ -721,7 +721,7 @@ namespace
 
        if (*handle == NULL)
        {
-           *state = UNKNOWN_CONNECTION_ERROR;
+           *state = hop::SharedMemory::UNKNOWN_CONNECTION_ERROR;
            printErrorMsg("Could not create file mapping");
            return NULL;
        }
@@ -735,7 +735,7 @@ namespace
        if (sharedMem == NULL)
        {
            printErrorMsg("Could not map view of file");
-           *state = UNKNOWN_CONNECTION_ERROR;
+           *state = hop::SharedMemory::UNKNOWN_CONNECTION_ERROR;
            CloseHandle(*handle);
            return NULL;
        }
@@ -750,11 +750,7 @@ namespace
        ftruncate(*handle, size);
 
        sharedMem = (uint8_t*)mmap(NULL, size, PROT_READ | PROT_WRITE, MAP_SHARED, *handle, 0);
-       if (sharedMem == NULL)
-       {
-           *state = errorToConnectionState( errno );
-           printErrorMsg("Could not map shared memory");
-       }
+       *state = sharedMem ? hop::SharedMemory::CONNECTED : hop::SharedMemory::UNKNOWN_CONNECTION_ERROR;
 #endif
        return sharedMem;
    }
@@ -770,7 +766,7 @@ namespace
 
        if (*handle == NULL)
        {
-           *state = UNKNOWN_CONNECTION_ERROR;
+           *state = hop::SharedMemory::UNKNOWN_CONNECTION_ERROR;
            return NULL;
        }
 
@@ -783,7 +779,7 @@ namespace
 
        if (sharedMem == NULL)
        {
-           *state = UNKNOWN_CONNECTION_ERROR;
+           *state = hop::SharedMemory::UNKNOWN_CONNECTION_ERROR;
            CloseHandle(*handle);
            return NULL;
        }
@@ -791,7 +787,7 @@ namespace
        MEMORY_BASIC_INFORMATION memInfo;
        if (!VirtualQuery(sharedMem, &memInfo, sizeof(memInfo)))
        {
-          *state = UNKNOWN_CONNECTION_ERROR;
+          *state = hop::SharedMemory::UNKNOWN_CONNECTION_ERROR;
           UnmapViewOfFile(sharedMem);
           CloseHandle(*handle);
           return NULL;
@@ -816,6 +812,7 @@ namespace
       ftruncate( *handle, fileStat.st_size );
 
       sharedMem = (uint8_t*) mmap( NULL, fileStat.st_size, PROT_READ | PROT_WRITE, MAP_SHARED, *handle, 0 );
+      *state = sharedMem ? hop::SharedMemory::CONNECTED : hop::SharedMemory::UNKNOWN_CONNECTION_ERROR;
 #endif
       return sharedMem;
    }
@@ -880,16 +877,19 @@ SharedMemory::ConnectionState SharedMemory::create( const char* exeName, size_t 
 
       // Open semaphore
       _semaphore = openSemaphore( _sharedSemPath, &state );
-      if ( _semaphore == NULL ) return state;
-
-      // Create or open the shared memory
-      uint8_t* sharedMem = NULL;
-      size_t totalSize = 0;
-      if ( isConsumer )
+      if ( _semaphore == NULL )
       {
-         sharedMem = (uint8_t*)openSharedMemory( _sharedMemPath, &_sharedMemHandle, &totalSize, &state );
+         printf( "Could not create semaphore\n" );
+         return state;
       }
-      else
+
+      // Try to open shared memory
+      size_t totalSize = 0;
+      uint8_t* sharedMem =
+          (uint8_t*)openSharedMemory( _sharedMemPath, &_sharedMemHandle, &totalSize, &state );
+
+      // If we are the producer and we were not able to open the shared memory, we create it
+      if ( !isConsumer && !sharedMem )
       {
          size_t ringBufSize;
          ringbuf_get_sizes( HOP_MAX_THREAD_NB, &ringBufSize, NULL );
@@ -906,7 +906,7 @@ SharedMemory::ConnectionState SharedMemory::create( const char* exeName, size_t 
 
       SharedMetaInfo* metaInfo = (SharedMetaInfo*)sharedMem;
 
-      // Only the first consumer setups the shared memory
+      // Only the first producer setups the shared memory
       if( !isConsumer )
       {
          // Set client's info in the shared memory for the viewer to access
@@ -1515,7 +1515,7 @@ Client* ClientManager::Get()
           ClientManager::sharedMemory().create( HOP_GET_PROG_NAME(), HOP_SHARED_MEM_SIZE, false );
       if ( state != SharedMemory::CONNECTED )
       {
-         printf("HOP - Could not create shared memory. HOP will not be able to run\n");
+         printf("HOP - Could not create shared memory. HOP will not be able to run %d\n", state);
          return NULL;
       }
    }
