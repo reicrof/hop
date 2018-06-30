@@ -19,7 +19,6 @@ bool Server::start( const char* name, bool useGlFinishByDefault )
    _connectionState = SharedMemory::NOT_CONNECTED;
 
    _thread = std::thread( [this, name, useGlFinishByDefault]() {
-      TimeStamp lastUpdate = getTimeStamp();
       TimeStamp lastSignalTime = getTimeStamp();
       SharedMemory::ConnectionState localState = SharedMemory::NOT_CONNECTED;
       while ( true )
