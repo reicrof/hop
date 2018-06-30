@@ -748,7 +748,12 @@ namespace
            return NULL;
        }
 
-       ftruncate(*handle, size);
+       int truncRes = ftruncate(*handle, size);
+       if( truncRes != 0 )
+       {
+          *state = errorToConnectionState( errno );
+           return NULL;
+       }
 
        sharedMem = (uint8_t*)mmap(NULL, size, PROT_READ | PROT_WRITE, MAP_SHARED, *handle, 0);
        *state = sharedMem ? hop::SharedMemory::CONNECTED : hop::SharedMemory::UNKNOWN_CONNECTION_ERROR;
@@ -810,7 +815,12 @@ namespace
       }
 
       *totalSize = fileStat.st_size;
-      ftruncate( *handle, fileStat.st_size );
+      int truncRes = ftruncate( *handle, fileStat.st_size );
+      if( truncRes != 0 )
+      {
+         *state = errorToConnectionState( errno );
+         return NULL;
+      }
 
       sharedMem = (uint8_t*) mmap( NULL, fileStat.st_size, PROT_READ | PROT_WRITE, MAP_SHARED, *handle, 0 );
       *state = sharedMem ? hop::SharedMemory::CONNECTED : hop::SharedMemory::UNKNOWN_CONNECTION_ERROR;
@@ -933,7 +943,7 @@ SharedMemory::ConnectionState SharedMemory::create( const char* exeName, size_t 
       }
       else // Check if client has compatible version
       {
-         if ( metaInfo->clientVersion != HOP_VERSION )
+         if ( std::abs( metaInfo->clientVersion - HOP_VERSION ) > 0.001f )
          {
             printf(
                 "HOP - Client's version (%f) does not match HOP viewer version (%f)\n",

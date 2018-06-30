@@ -139,6 +139,7 @@ size_t Server::handleNewMessage( uint8_t* data, size_t maxSize, TimeStamp minTim
 
     bufPtr += sizeof( MsgInfo );
     assert( (size_t)(bufPtr - data) <= maxSize );
+    (void)maxSize; // Removed unused warning
 
     // If the message was sent prior to the last reset timestamp, ignore it
     if( msgInfo->timeStamp < minTimestamp )

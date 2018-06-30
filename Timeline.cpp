@@ -158,11 +158,12 @@ void Timeline::draw(
    ImGui::SetScrollY(_verticalPosPxl);
 
    char threadName[128] = "Thread ";
+   const size_t threadNamePrefix = sizeof( "Thread " );
    for ( size_t i = 0; i < tracesPerThread.size(); ++i )
    {
       const bool threadHidden = tracesPerThread[i]._hidden;
       snprintf(
-          threadName + sizeof( "Thread" ), sizeof( threadName ), "%lu", i );
+          threadName + threadNamePrefix, sizeof( threadName ) - threadNamePrefix, "%lu", i );
 
       HOP_PROF_DYN_NAME( threadName );
 
