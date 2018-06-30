@@ -5,7 +5,6 @@
 
 struct ImDrawData;
 
-
 namespace renderer
 {
 

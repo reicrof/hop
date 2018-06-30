@@ -61,7 +61,7 @@ set (CMAKE_SHARED_LINKER_FLAGS "-ldl")
 
 # With clang on MacOs, we need to ignore the missing symbols as they are going to be resolved
 # at runtime when linking against the executable that uses hop.
-if("${CMAKE_CXX_COMPILER_ID}" STREQUAL "Clang")
+if(${CMAKE_CXX_COMPILER_ID} STREQUAL "Clang")
   set(CMAKE_SHARED_LINKER_FLAGS "${CMAKE_SHARED_LINKER_FLAGS} -undefined dynamic_lookup")
 endif()
 

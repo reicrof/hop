@@ -653,7 +653,9 @@ namespace
     hop::SharedMemory::ConnectionState errorToConnectionState( uint32_t err )
     {
 #if defined( _MSC_VER )
-       return UNKNOWN_CONNECTION_ERROR;
+       if( err == ERROR_FILE_NOT_FOUND ) return hop::SharedMemory::NOT_CONNECTED;
+       if( err == ERROR_ACCESS_DENIED ) return hop::SharedMemory::PERMISSION_DENIED;
+       return hop::SharedMemory::UNKNOWN_CONNECTION_ERROR;
 #else
        if( err == ENOENT ) return hop::SharedMemory::NOT_CONNECTED;
        if( err == EACCES ) return hop::SharedMemory::PERMISSION_DENIED;
@@ -722,7 +724,7 @@ namespace
 
        if (*handle == NULL)
        {
-           *state = hop::SharedMemory::UNKNOWN_CONNECTION_ERROR;
+           *state = errorToConnectionState( GetLastError() );
            printErrorMsg("Could not create file mapping");
            return NULL;
        }
@@ -736,7 +738,7 @@ namespace
        if (sharedMem == NULL)
        {
            printErrorMsg("Could not map view of file");
-           *state = hop::SharedMemory::UNKNOWN_CONNECTION_ERROR;
+           *state = errorToConnectionState( GetLastError() );
            CloseHandle(*handle);
            return NULL;
        }
@@ -756,8 +758,8 @@ namespace
        }
 
        sharedMem = (uint8_t*)mmap(NULL, size, PROT_READ | PROT_WRITE, MAP_SHARED, *handle, 0);
-       *state = sharedMem ? hop::SharedMemory::CONNECTED : hop::SharedMemory::UNKNOWN_CONNECTION_ERROR;
 #endif
+       if( sharedMem ) *state = hop::SharedMemory::CONNECTED;
        return sharedMem;
    }
 
@@ -772,7 +774,7 @@ namespace
 
        if (*handle == NULL)
        {
-           *state = hop::SharedMemory::UNKNOWN_CONNECTION_ERROR;
+           *state = errorToConnectionState( GetLastError() );
            return NULL;
        }
 
@@ -785,7 +787,7 @@ namespace
 
        if (sharedMem == NULL)
        {
-           *state = hop::SharedMemory::UNKNOWN_CONNECTION_ERROR;
+           *state = errorToConnectionState( GetLastError() );
            CloseHandle(*handle);
            return NULL;
        }
@@ -793,7 +795,7 @@ namespace
        MEMORY_BASIC_INFORMATION memInfo;
        if (!VirtualQuery(sharedMem, &memInfo, sizeof(memInfo)))
        {
-          *state = hop::SharedMemory::UNKNOWN_CONNECTION_ERROR;
+          *state = errorToConnectionState( GetLastError() );
           UnmapViewOfFile(sharedMem);
           CloseHandle(*handle);
           return NULL;
@@ -1494,7 +1496,7 @@ class Client
          hbInfo->type = MsgType::PROFILER_HEARTBEAT;
          hbInfo->threadId = tl_threadId;
          hbInfo->threadIndex = tl_threadIndex;
-         hbInfo->timeStamp = _unlockEvents.back().time;
+         hbInfo->timeStamp = getTimeStamp();
          bufferPtr += sizeof( MsgInfo );
       }
 
@@ -1558,7 +1560,7 @@ Client* ClientManager::Get()
           ClientManager::sharedMemory().create( HOP_GET_PROG_NAME(), HOP_SHARED_MEM_SIZE, false );
       if ( state != SharedMemory::CONNECTED )
       {
-         printf("HOP - Could not create shared memory. HOP will not be able to run %d\n", state);
+         printf("HOP - Could not create shared memory. HOP will not be able to run\n");
          return NULL;
       }
    }

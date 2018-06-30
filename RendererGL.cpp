@@ -2,6 +2,10 @@
 
 #include "imgui/imgui.h"
 
+#ifdef _MSC_VER
+#include <windows.h>
+#endif
+
 #ifdef __APPLE__
 #include <OpenGL/gl.h>
 #else
