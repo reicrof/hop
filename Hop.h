@@ -880,7 +880,6 @@ SharedMemory::ConnectionState SharedMemory::create( const char* exeName, size_t 
       _semaphore = openSemaphore( _sharedSemPath, &state );
       if ( _semaphore == NULL )
       {
-         printf( "Could not create semaphore\n" );
          return state;
       }
 

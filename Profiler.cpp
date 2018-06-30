@@ -323,6 +323,13 @@ static bool ptInRect( const ImVec2& pt, const ImVec2& a, const ImVec2& b )
    return true;
 }
 
+static bool ptInCircle( const ImVec2& pt, const ImVec2& center, float radius )
+{
+   const float dx = pt.x - center.x;
+   const float dy = pt.y - center.y;
+   return dx * dx + dy * dy <= radius * radius;
+}
+
 static constexpr float TOOLBAR_BUTTON_HEIGHT = 15.0f;
 static constexpr float TOOLBAR_BUTTON_WIDTH = 15.0f;
 static constexpr float TOOLBAR_BUTTON_PADDING = 5.0f;
@@ -415,26 +422,42 @@ static bool drawDeleteTracesButton( const ImVec2& drawPos, bool active )
 static void drawStatusIcon( const ImVec2& drawPos, hop::SharedMemory::ConnectionState state )
 {
    ImColor col( 0.5f, 0.5f, 0.5f );
+   const char* msg = nullptr;
    switch ( state )
    {
       case hop::SharedMemory::NOT_CONNECTED:
          col = ImColor( 0.8f, 0.0f, 0.0f );
+         msg = "No shared memory found";
          break;
       case hop::SharedMemory::CONNECTED:
          col = ImColor( 0.0f, 0.8f, 0.0f );
+         msg = "Connected";
          break;
       case hop::SharedMemory::CONNECTED_NO_CLIENT:
          col = ImColor( 0.8f, 0.8f, 0.0f );
+         msg = "Connected to shared memory, but no client";
          break;
       case hop::SharedMemory::PERMISSION_DENIED:
          col = ImColor( 0.6f, 0.2f, 0.0f );
+         msg = "Permission to shared memory or semaphore denied";
          break;
       case hop::SharedMemory::UNKNOWN_CONNECTION_ERROR:
          col = ImColor( 0.4f, 0.0f, 0.0f );
+         msg = "Unknown connection error";
          break;
    }
+
    ImDrawList* DrawList = ImGui::GetWindowDrawList();
    DrawList->AddCircleFilled( drawPos, 10.0f, col );
+
+   const auto& mousePos = ImGui::GetMousePos();
+   const bool hovering = ImGui::IsMouseHoveringWindow() && ptInCircle( mousePos, drawPos, 10.0f );
+   if( hovering && msg )
+   {
+      ImGui::BeginTooltip();
+      ImGui::Text( "%s", msg );
+      ImGui::EndTooltip();
+   }
 }
 
 void hop::Profiler::drawSearchWindow()
