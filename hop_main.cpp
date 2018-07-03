@@ -152,7 +152,6 @@ static processId_t startChildProcess( const char* path, const char* basename )
    (void)basename;
    if ( !CreateProcess( NULL, (LPSTR)path, NULL, NULL, FALSE, 0, NULL, NULL, &si, &pi ) )
    {
-      printErrorMsg("Error starting executable");
       return false;
    }
    newProcess = pi.hProcess;
@@ -165,7 +164,6 @@ static processId_t startChildProcess( const char* path, const char* basename )
       int res = execvp( path, subprocessArg );
       if ( res < 0 )
       {
-         printErrorMsg( "Error starting executable" );
          exit( 0 );
       }
    }

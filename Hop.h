@@ -663,19 +663,6 @@ namespace
 #endif
     }
 
-    static void printErrorMsg(const char* msg)
-    {
-#if defined( _MSC_VER )
-        char err[512];
-        FormatMessage(FORMAT_MESSAGE_FROM_SYSTEM, NULL, GetLastError(),
-            MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT), err, 255, NULL);
-        printf("HOP - %s %s\n", msg, err);
-        puts(err);
-#else
-        perror(msg);
-#endif
-    }
-
     sem_handle openSemaphore( const char* name, hop::SharedMemory::ConnectionState* state )
     {
        sem_handle sem = NULL;
@@ -683,7 +670,7 @@ namespace
        sem = CreateSemaphore( NULL, 0, LONG_MAX, name );
        if ( !sem )
        {
-          printErrorMsg( "Could not open semaphore" );
+          *state = errorToConnectionState( GetLastError() );
        }
 #else
        sem = sem_open( name, O_CREAT, S_IRUSR | S_IWUSR, 1 );
@@ -725,7 +712,6 @@ namespace
        if (*handle == NULL)
        {
            *state = errorToConnectionState( GetLastError() );
-           printErrorMsg("Could not create file mapping");
            return NULL;
        }
        sharedMem = (uint8_t*)MapViewOfFile(
@@ -737,7 +723,6 @@ namespace
 
        if (sharedMem == NULL)
        {
-           printErrorMsg("Could not map view of file");
            *state = errorToConnectionState( GetLastError() );
            CloseHandle(*handle);
            return NULL;
