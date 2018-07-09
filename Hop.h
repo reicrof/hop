@@ -1506,7 +1506,8 @@ class Client
 
    void flushToConsumer()
    {
-      sendHeartbeat();
+      if( ClientManager::HasConnectedConsumer() )
+         sendHeartbeat();
 
       // If no one is there to listen, no need to send anything
       if( !ClientManager::HasListeningConsumer() )

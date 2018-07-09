@@ -113,7 +113,7 @@ class Timeline
    void drawTimeline( const float posX, const float posY );
    void drawTraces( const ThreadInfo& traces, uint32_t threadIndex, const float posX, const float posY, const StringDb& strDb );
    void drawLockWaits(const std::vector<ThreadInfo>& infos, uint32_t threadIndex, const float posX, const float posY );
-   void handleMouseDrag( float mousePosX, float mousePosY );
+   void handleMouseDrag( float mousePosX, float mousePosY, std::vector<ThreadInfo>& tracesPerThread );
    void handleMouseWheel( float mousePosX, float mousePosY );
    void zoomOn( int64_t microToZoomOn, float zoomFactor );
    void setStartTime( int64_t timeInMicro, AnimationType animType = ANIMATION_TYPE_NORMAL ) noexcept;

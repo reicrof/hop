@@ -26,7 +26,6 @@ struct ThreadInfo
    float _localTracesVerticalStartPos;
    float _absoluteTracesVerticalStartPos;
    float _trackHeight{9999.0f};
-   bool _hidden{false};
 
    friend size_t serializedSize( const ThreadInfo& ti );
    friend size_t serialize( const ThreadInfo& ti, char* );

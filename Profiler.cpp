@@ -498,7 +498,7 @@ void hop::Profiler::drawSearchWindow()
             const TDepth_t depth = threadInfo._traces.depths[selection.selectedTraceIdx];
 
             // If the thread was hidden, display it so we can see the selected trace
-            _tracesPerThread[selection.selectedThreadIdx]._hidden = false;
+            _tracesPerThread[selection.selectedThreadIdx]._trackHeight = 9999.0f;
 
             const TimeStamp startTime = absEndTime - delta - _timeline.absoluteStartTime();
             const float verticalPosPxl = threadInfo._localTracesVerticalStartPos + (depth * Timeline::PADDED_TRACE_SIZE) - (3* Timeline::PADDED_TRACE_SIZE);
