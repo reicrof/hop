@@ -802,12 +802,6 @@ namespace
       }
 
       *totalSize = fileStat.st_size;
-      int truncRes = ftruncate( *handle, fileStat.st_size );
-      if( truncRes != 0 )
-      {
-         *state = errorToConnectionState( errno );
-         return NULL;
-      }
 
       sharedMem = (uint8_t*) mmap( NULL, fileStat.st_size, PROT_READ | PROT_WRITE, MAP_SHARED, *handle, 0 );
       *state = sharedMem ? hop::SharedMemory::CONNECTED : hop::SharedMemory::UNKNOWN_CONNECTION_ERROR;
