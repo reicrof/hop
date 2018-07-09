@@ -209,9 +209,9 @@ int main()
        std::string nb = std::to_string( i );
        std::string tname = "thread #" + nb;
        std::thread t1 ( [tname](){ while(g_run) { HOP_PROF_DYN_NAME( tname.c_str() ); func1(); } } );
-       //std::thread t2 ( [tname](){ while(g_run) { HOP_PROF_DYN_NAME( tname.c_str() ); func1(); } } );
-       //std::thread t3 ( [tname](){ while(g_run) { HOP_PROF_DYN_NAME( tname.c_str() ); func1(); } } );
-       t1.detach();// t2.detach(); t3.detach();
+       std::thread t2 ( [tname](){ while(g_run) { HOP_PROF_DYN_NAME( tname.c_str() ); func1(); } } );
+       std::thread t3 ( [tname](){ while(g_run) { HOP_PROF_DYN_NAME( tname.c_str() ); func1(); } } );
+       t1.detach(); t2.detach(); t3.detach();
     }
 
     while(g_run)

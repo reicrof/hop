@@ -16,7 +16,6 @@
 
 namespace hop
 {
-
 class Server;
 struct Profiler
 {

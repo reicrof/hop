@@ -131,6 +131,7 @@ class Timeline
    float _timelineHoverPos{-1.0f};
    int _lodLevel;
    bool _realtime{true};
+   int _draggedTrack{-1};
 
    std::vector< std::pair< size_t, uint32_t > > _highlightedTraces;
 
