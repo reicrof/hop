@@ -1493,9 +1493,13 @@ class Client
 
    void flushToConsumer()
    {
-      sendHeartbeat();
+      // If we have a consumer, send life signal
+      if( ClientManager::HasConnectedConsumer() )
+      {
+         sendHeartbeat();
+      }
 
-      // If no one is there to listen, no need to send anything
+      // If no one is there to listen, no need to send any data
       if( !ClientManager::HasListeningConsumer() )
       {
          resetPendingTraces();
