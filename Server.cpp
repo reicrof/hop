@@ -49,7 +49,7 @@ bool Server::start( const char* name, bool useGlFinishByDefault )
 
          // Check if its been a while since we have been signaleds
          const TimeStamp curTime = getTimeStamp();
-         const bool producerLost = !_sharedMem.hasConnectedProducer() || curTime - lastSignalTime > 5000000 ;
+         const bool producerLost = !_sharedMem.hasConnectedProducer() || curTime - lastSignalTime > 3000000000 ;
          const auto newState = producerLost ? SharedMemory::CONNECTED_NO_CLIENT : SharedMemory::CONNECTED;
 
          // Update state if it has changed

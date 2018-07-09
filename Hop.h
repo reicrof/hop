@@ -161,7 +161,7 @@ enum HopZone
 
 // ------ platform.h ------------
 // This is most things that are potentially non-portable.
-#define HOP_VERSION 0.3f
+#define HOP_VERSION 0.4f
 #define HOP_CONSTEXPR constexpr
 #define HOP_NOEXCEPT noexcept
 #define HOP_STATIC_ASSERT static_assert
@@ -892,7 +892,7 @@ SharedMemory::ConnectionState SharedMemory::create( const char* exeName, size_t 
          ringbuf_get_sizes( HOP_MAX_THREAD_NB, &ringBufSize, NULL );
          totalSize = ringBufSize + requestedSize + sizeof( SharedMetaInfo );
          sharedMem = (uint8_t*)createSharedMemory( _sharedMemPath, totalSize, &_sharedMemHandle, &state );
-         new(sharedMem) SharedMetaInfo; // Placement new for initializing values
+         if( sharedMem ) new(sharedMem) SharedMetaInfo; // Placement new for initializing values
       }
 
       if ( !sharedMem )
