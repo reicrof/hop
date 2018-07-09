@@ -21,6 +21,7 @@
 
 static constexpr hop::TimeDuration MIN_NANOS_TO_DISPLAY = 500;
 static constexpr hop::TimeDuration MAX_NANOS_TO_DISPLAY = 900000000000;
+static constexpr float TIMELINE_TOTAL_HEIGHT = 50.0f;
 static constexpr float MIN_TRACE_LENGTH_PXL = 1.0f;
 static constexpr float MAX_TRACE_HEIGHT = 50.0f;
 static constexpr float MIN_TRACE_HEIGHT = 15.0f;
@@ -79,6 +80,25 @@ static bool drawSeparator( uint32_t threadIndex )
    ImGui::SetCursorPosY( ImGui::GetCursorPosY() );
 
    return hovered;
+}
+
+static void resizeAllTracksToFit( std::vector<hop::ThreadInfo>& tracesPerThread )
+{
+   float visibleTrackCount = 0;
+   for( auto& t : tracesPerThread )
+      if( !t.empty() ) ++visibleTrackCount;
+
+   float timelineCanvasHeight = ImGui::GetIO().DisplaySize.y - TIMELINE_TOTAL_HEIGHT;
+
+   const float totalTraceHeight = timelineCanvasHeight - visibleTrackCount * THREAD_LABEL_HEIGHT;
+   const float heightPerTrack = totalTraceHeight / visibleTrackCount;
+
+   // Autofit all track except the last one
+   const size_t lastThread = tracesPerThread.size() - 1;
+   for( size_t i = 0; i < lastThread; ++i )
+      tracesPerThread[i].setTrackHeight( heightPerTrack / hop::Timeline::PADDED_TRACE_SIZE );
+
+   tracesPerThread[lastThread].setTrackHeight( 9999.0f );
 }
 
 namespace hop
@@ -210,6 +230,7 @@ void Timeline::draw(
       {
          tracesPerThread[i]._trackHeight = threadHidden ? 9999.0f : -1.0f;
       }
+
       ImGui::PopStyleColor( 3 );
       ImGui::PopID();
 
@@ -301,14 +322,14 @@ void Timeline::draw(
             _contextMenuInfo.open = false;
             ImGui::CloseCurrentPopup();
          }
-         else if ( ImGui::Selectable("Trace Stats") )
+         else if ( ImGui::Selectable( "Trace Stats" ) )
          {
             _traceStats = createTraceStats(
                tracesPerThread[_contextMenuInfo.threadIndex]._traces,
                _contextMenuInfo.threadIndex,
                _contextMenuInfo.traceId);
          }
-         else if( ImGui::Selectable("Profiler Thread") )
+         else if( ImGui::Selectable( "Profile Thread" ) )
          {
             displayModalWindow( "Computing total trace size...", MODAL_TYPE_NO_CLOSE );
             const uint32_t tIdx = _contextMenuInfo.threadIndex;
@@ -317,6 +338,10 @@ void Timeline::draw(
                closeModalWindow();
             } );
             t.detach();
+         }
+         else if( ImGui::Selectable( "Resize Tracks to Fit" ) )
+         {
+            resizeAllTracksToFit( tracesPerThread );
          }
          ImGui::EndPopup();
       }
@@ -349,7 +374,6 @@ void Timeline::drawTimeline( const float posX, const float posY )
 {
    HOP_PROF_FUNC();
 
-   constexpr float TIMELINE_TOTAL_HEIGHT = 50.0f;
    constexpr uint64_t minStepSize = 10;
    constexpr uint64_t minStepCount = 20;
    constexpr uint64_t maxStepCount = 140;
