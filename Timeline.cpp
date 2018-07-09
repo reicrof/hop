@@ -313,7 +313,14 @@ void Timeline::draw(
       ImGui::SetNextWindowBgAlpha(0.8f); // Transparent background
       if( ImGui::BeginPopupContextItem( "Context Menu" ) )
       {
-         if ( ImGui::Selectable( "Profile Stack" ) )
+         if ( ImGui::Selectable( "Trace Stats" ) )
+         {
+            _traceStats = createTraceStats(
+               tracesPerThread[_contextMenuInfo.threadIndex]._traces,
+               _contextMenuInfo.threadIndex,
+               _contextMenuInfo.traceId);
+         }
+         else if ( ImGui::Selectable( "Profile Stack" ) )
          {
             _traceDetails = createTraceDetails(
                 tracesPerThread[_contextMenuInfo.threadIndex]._traces,
@@ -322,14 +329,7 @@ void Timeline::draw(
             _contextMenuInfo.open = false;
             ImGui::CloseCurrentPopup();
          }
-         else if ( ImGui::Selectable( "Trace Stats" ) )
-         {
-            _traceStats = createTraceStats(
-               tracesPerThread[_contextMenuInfo.threadIndex]._traces,
-               _contextMenuInfo.threadIndex,
-               _contextMenuInfo.traceId);
-         }
-         else if( ImGui::Selectable( "Profile Thread" ) )
+         else if( ImGui::Selectable( "Profile Track" ) )
          {
             displayModalWindow( "Computing total trace size...", MODAL_TYPE_NO_CLOSE );
             const uint32_t tIdx = _contextMenuInfo.threadIndex;
