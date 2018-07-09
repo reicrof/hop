@@ -24,11 +24,10 @@ static constexpr hop::TimeDuration MAX_NANOS_TO_DISPLAY = 900000000000;
 static constexpr float MIN_TRACE_LENGTH_PXL = 1.0f;
 static constexpr float MAX_TRACE_HEIGHT = 50.0f;
 static constexpr float MIN_TRACE_HEIGHT = 15.0f;
+static constexpr float THREAD_LABEL_HEIGHT = 20.0f;
 static constexpr uint32_t DISABLED_COLOR = 0xFF505050;
 static constexpr uint32_t HOVERED_COLOR_DELTA = 0x00191919;
 static constexpr uint32_t ACTIVE_COLOR_DELTA = 0x00333333;
-static constexpr float PADDING_BETWEEN_THREADS = 0.0f;
-static constexpr float PADDING_BETWEEN_SEPARATOR = 0.0f;
 
 static void drawHoveringTimelineLine(float posInScreenX, float timelineStartPosY, const char* text )
 {
@@ -69,7 +68,7 @@ static bool drawSeparator( uint32_t threadIndex )
    p2.x += ImGui::GetWindowSize().x;
    p2.y += + 1;
 
-   const bool hovered = std::abs( ImGui::GetMousePos().y - p1.y ) < 5.0f && threadIndex > 0;
+   const bool hovered = std::abs( ImGui::GetMousePos().y - p1.y ) < 7.0f && threadIndex > 0;
 
    if( hovered )
       hop::setCursor( hop::CURSOR_SIZE_NS );
@@ -77,7 +76,7 @@ static bool drawSeparator( uint32_t threadIndex )
    ImDrawList* drawList = ImGui::GetWindowDrawList();
    drawList->AddLine( p1, p2, hovered ? 0xFFFFFFFF : ImGui::GetColorU32(ImGuiCol_Separator), 2.0f );
 
-   ImGui::SetCursorPosY( ImGui::GetCursorPosY() + PADDING_BETWEEN_SEPARATOR );
+   ImGui::SetCursorPosY( ImGui::GetCursorPosY() );
 
    return hovered;
 }
@@ -187,9 +186,9 @@ void Timeline::draw(
    for ( size_t i = 0; i < tracesPerThread.size(); ++i )
    {
       // Skip empty threads
-      if( tracesPerThread[i]._traces.ends.size() == 0 ) continue;
+      if( tracesPerThread[i].empty() ) continue;
 
-      const bool threadHidden = tracesPerThread[i].maxDisplayedDepth() <= 0;
+      const bool threadHidden = tracesPerThread[i].maxDisplayedDepth() <= 0.0f;
       const float trackHeight = tracesPerThread[i].maxDisplayedDepth() * PADDED_TRACE_SIZE;
       snprintf(
           threadName + threadNamePrefix, sizeof( threadName ) - threadNamePrefix, "%lu", i );
@@ -198,7 +197,6 @@ void Timeline::draw(
       // First draw the separator of the track
       const bool separatorHovered = drawSeparator( i );
 
-      // Draw thread label afterwards
       const auto& zoneColors = g_options.zoneColors;
       uint32_t threadLabelCol = zoneColors[ (i+1) % HOP_MAX_ZONES ];
       if( threadHidden )
@@ -208,12 +206,17 @@ void Timeline::draw(
       ImGui::PushStyleColor( ImGuiCol_Button, threadLabelCol );
       ImGui::PushStyleColor( ImGuiCol_ButtonHovered, addColorWithClamping( threadLabelCol, HOVERED_COLOR_DELTA ) );
       ImGui::PushStyleColor( ImGuiCol_ButtonActive, addColorWithClamping( threadLabelCol, ACTIVE_COLOR_DELTA ) );
-      if ( ImGui::Button( threadName ) )
+      if ( ImGui::Button( threadName, ImVec2( 0, THREAD_LABEL_HEIGHT ) ) )
       {
-         tracesPerThread[i]._trackHeight = threadHidden ? 9999.0f : 0.0f;
+         tracesPerThread[i]._trackHeight = threadHidden ? 9999.0f : -1.0f;
       }
       ImGui::PopStyleColor( 3 );
       ImGui::PopID();
+
+      // Then draw the interesting stuff
+      tracesPerThread[i]._localTracesVerticalStartPos = ImGui::GetCursorPosY();
+      const float absTracesVerticalStartPos = ImGui::GetCursorScreenPos().y;
+      tracesPerThread[i]._absoluteTracesVerticalStartPos = absTracesVerticalStartPos;
 
       // Handle track resize
       if ( separatorHovered || _draggedTrack > 0 )
@@ -221,19 +224,12 @@ void Timeline::draw(
          if ( _draggedTrack == -1 && ImGui::IsMouseClicked( 0 ) )
          {
             _draggedTrack = (int)i;
-            printf( "Dragging track %d\n", i );
          }
          if( ImGui::IsMouseReleased( 0 ) )
          {
             _draggedTrack = -1;
-            printf( "Stopped dragging\n" );
          }
       }
-
-      // Then draw the interesting stuff
-      tracesPerThread[i]._localTracesVerticalStartPos = ImGui::GetCursorPosY();
-      const float absTracesVerticalStartPos = ImGui::GetCursorScreenPos().y;
-      tracesPerThread[i]._absoluteTracesVerticalStartPos = absTracesVerticalStartPos;
 
       ImVec2 curDrawPos = ImGui::GetCursorScreenPos();
       if (!threadHidden)
@@ -248,7 +244,7 @@ void Timeline::draw(
          {
             ImGui::PushClipRect(
                 ImVec2( 0.0f, curDrawPos.y ),
-                ImVec2( 9999.0f, curDrawPos.y + trackHeight + PADDING_BETWEEN_THREADS ),
+                ImVec2( 9999.0f, curDrawPos.y + trackHeight ),
                 true );
 
             // Draw the lock waits (before traces so that they are not hiding them)
@@ -260,7 +256,7 @@ void Timeline::draw(
       } // !threadHidden
 
       // Set cursor for next drawing iterations
-      curDrawPos.y += trackHeight + PADDING_BETWEEN_THREADS;
+      curDrawPos.y += trackHeight;
       ImGui::SetCursorScreenPos( curDrawPos );
    }
 
@@ -539,13 +535,16 @@ void Timeline::handleMouseDrag( float mouseInCanvasX, float mouseInCanvasY, std:
       // Handle track resize
       if( _draggedTrack > 0 )
       {
-         ThreadInfo& draggedTrack = tracesPerThread[_draggedTrack-1];
-         printf("Dragging track %d\n", _draggedTrack );
+         // Find the previous track that is visible
+         int i = _draggedTrack-1;
+         while( i > 0 && tracesPerThread[i].empty() ){
+            --i;
+         }
+
          const float trackHeight =
-             ( ImGui::GetMousePos().y -
-               ( draggedTrack._absoluteTracesVerticalStartPos + PADDING_BETWEEN_THREADS ) ) /
+             ( ImGui::GetMousePos().y - tracesPerThread[i]._absoluteTracesVerticalStartPos - THREAD_LABEL_HEIGHT ) /
              PADDED_TRACE_SIZE;
-         draggedTrack.setTrackHeight( trackHeight );
+         tracesPerThread[i].setTrackHeight( trackHeight );
       }
       else // handle timeline panning
       {
@@ -1099,7 +1098,7 @@ std::vector< Timeline::LockOwnerInfo > Timeline::highlightLockOwner(
                const int64_t unlockTimeAsPxl = nanosToPxl<float>(
                   windowWidthPxl, _timelineRange, (lastUnlock->time - absoluteStart));
 
-               const float tracesHeight = (infos[i].maxDisplayedDepth() + 1) * Timeline::PADDED_TRACE_SIZE;
+               const float tracesHeight = infos[i].maxDisplayedDepth() * Timeline::PADDED_TRACE_SIZE;
 
                DrawList->AddRectFilled(
                   ImVec2(posX - startNanosAsPxl + lockTimeAsPxl, infos[i]._absoluteTracesVerticalStartPos),

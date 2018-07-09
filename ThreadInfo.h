@@ -17,6 +17,7 @@ struct ThreadInfo
    TDepth_t maxDepth() const noexcept;
    float maxDisplayedDepth() const noexcept;
    void setTrackHeight( float height );
+   bool empty() const;
    DisplayableTraces _traces;
    DisplayableLockWaits _lockWaits;
    std::vector<UnlockEvent> _unlockEvents;
