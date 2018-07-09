@@ -7,6 +7,7 @@
 #include "Options.h"
 #include "ModalWindow.h"
 #include "RendererGL.h"
+#include "Cursor.h"
 #include <SDL.h>
 #undef main
 
@@ -322,6 +323,8 @@ int main( int argc, char* argv[] )
 
    if( iconSurface != nullptr ) SDL_SetWindowIcon( window, iconSurface );
 
+   hop::initCursors();
+
    // Setup the LOD granularity based on screen resolution
    SDL_DisplayMode DM;
    SDL_GetCurrentDisplayMode(0, &DM);
@@ -361,6 +364,9 @@ int main( int argc, char* argv[] )
       SDL_GetWindowSize( window, &w, &h );
       uint32_t buttonState = SDL_GetMouseState( &x, &y );
 
+      // Reset cursor at start of the frame
+      hop::setCursor( hop::CURSOR_ARROW );
+
       const auto drawStart = std::chrono::system_clock::now();
 
       hop::onNewFrame(
@@ -377,6 +383,8 @@ int main( int argc, char* argv[] )
       renderer::clearColorBuffer();
 
       hop::draw( w, h );
+
+      hop::drawCursor();
 
       const auto drawEnd = std::chrono::system_clock::now();
       hop::g_stats.drawingTimeMs = std::chrono::duration< double, std::milli>( ( drawEnd - drawStart ) ).count();
@@ -401,6 +409,8 @@ int main( int argc, char* argv[] )
    }
 
    if( iconSurface ) SDL_FreeSurface( iconSurface );
+
+   hop::uninitCursors();
 
    ImGui::DestroyContext();
 
