@@ -17,8 +17,6 @@ static const uint32_t DEFAULT_COLORS[] = {
     0xffd2f53c, 0xfffabebe, 0xff008080, 0xffe6beff, 0xffaa6e28, 0xfffffac8, 0xff800000, 0xffe6194b,
     0xff0000ff };
 
-static constexpr uint32_t DEFAULT_COLORS_SIZE = sizeof(DEFAULT_COLORS) / sizeof( DEFAULT_COLORS[0] );
-
 namespace hop
 {
 
