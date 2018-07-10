@@ -17,8 +17,6 @@ static const uint32_t DEFAULT_COLORS[] = {
     0xffd2f53c, 0xfffabebe, 0xff008080, 0xffe6beff, 0xffaa6e28, 0xfffffac8, 0xff800000, 0xffe6194b,
     0xff0000ff };
 
-static constexpr uint32_t DEFAULT_COLORS_SIZE = sizeof(DEFAULT_COLORS) / sizeof( DEFAULT_COLORS[0] );
-
 namespace hop
 {
 
@@ -107,7 +105,7 @@ void drawOptionsWindow( Options& opt )
    if ( !opt.optionWindowOpened ) return;
 
    ImGui::PushStyleColor( ImGuiCol_WindowBg, ImVec4( 0.20f, 0.20f, 0.20f, 0.75f ) );
-   if ( ImGui::Begin( "Options", &opt.optionWindowOpened ) )
+   if ( ImGui::Begin( "Options", &opt.optionWindowOpened, ImGuiWindowFlags_AlwaysAutoResize ) )
    {
       ImGui::Checkbox( "Start in Fullscreen", &opt.startFullScreen );
       ImGui::Checkbox("Show Debug Window", &opt.debugWindow );

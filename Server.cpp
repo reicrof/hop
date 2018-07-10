@@ -16,16 +16,21 @@ bool Server::start( const char* name, bool useGlFinishByDefault )
    assert( name != nullptr );
 
    _running = true;
+   _connectionState = SharedMemory::NOT_CONNECTED;
 
    _thread = std::thread( [this, name, useGlFinishByDefault]() {
+      TimeStamp lastSignalTime = getTimeStamp();
+      SharedMemory::ConnectionState localState = SharedMemory::NOT_CONNECTED;
       while ( true )
       {
          // Try to get the shared memory
          if ( !_sharedMem.data() )
          {
-            bool success = _sharedMem.create( name, 0 /*will be define in shared metadata*/, true );
-            if ( !success )
+            SharedMemory::ConnectionState state = _sharedMem.create( name, 0 /*will be define in shared metadata*/, true );
+            if ( state != SharedMemory::CONNECTED )
             {
+               _connectionState = state;
+               localState = state;
                if (!_running) return; // We are done without even opening the shared mem :(
                std::this_thread::sleep_for( std::chrono::milliseconds( 500 ) );
                continue;
@@ -33,13 +38,26 @@ bool Server::start( const char* name, bool useGlFinishByDefault )
             // Clear any remaining messages from previous execution now
             clearPendingMessages();
             setUseGlFinish( useGlFinishByDefault );
+            _connectionState = state;
             printf( "Connection to shared data successful.\n" );
          }
 
-         _sharedMem.waitSemaphore();
+         const bool wasSignaled = _sharedMem.tryWaitSemaphore();
 
-         // We are done running.
+         // Check if we are done running.
          if ( !_running.load() ) break;
+
+         // Check if its been a while since we have been signaleds
+         const TimeStamp curTime = getTimeStamp();
+         const bool producerLost = !_sharedMem.hasConnectedProducer() || curTime - lastSignalTime > 3000000000 ;
+         const auto newState = producerLost ? SharedMemory::CONNECTED_NO_CLIENT : SharedMemory::CONNECTED;
+
+         // Update state if it has changed
+         if( localState != newState )
+         {
+            localState = newState;
+            _connectionState.store( newState );
+         }
 
          // A clear was requested so we need to clear our string database
          if( _clearingRequested.load() )
@@ -50,6 +68,23 @@ bool Server::start( const char* name, bool useGlFinishByDefault )
             _sharedMem.setResetTimestamp( getTimeStamp() );
             continue;
          }
+
+         if( !wasSignaled )
+         {
+            // We timed out.
+            // If the profiled app has stopped, we need to signal the shared memory we are still
+            // listening in case it connects back
+            if( !_sharedMem.hasConnectedProducer() )
+            {
+               std::this_thread::sleep_for( std::chrono::milliseconds( 1000 ) );
+            }
+
+            // Otherwise, it simply means the app is either not very productive or is being debuged
+            continue;
+         }
+
+         // We were signaled
+         lastSignalTime = curTime;
 
          HOP_PROF( "Handle messages" );
          size_t offset = 0;
@@ -69,6 +104,11 @@ bool Server::start( const char* name, bool useGlFinishByDefault )
    } );
 
    return true;
+}
+
+SharedMemory::ConnectionState Server::connectionState() const
+{
+   return _connectionState.load();
 }
 
 bool Server::setRecording( bool recording )
@@ -99,6 +139,7 @@ size_t Server::handleNewMessage( uint8_t* data, size_t maxSize, TimeStamp minTim
 
     bufPtr += sizeof( MsgInfo );
     assert( (size_t)(bufPtr - data) <= maxSize );
+    (void)maxSize; // Removed unused warning
 
     // If the message was sent prior to the last reset timestamp, ignore it
     if( msgInfo->timeStamp < minTimestamp )
@@ -206,6 +247,10 @@ size_t Server::handleNewMessage( uint8_t* data, size_t maxSize, TimeStamp minTim
          std::lock_guard<std::mutex> guard(_pendingData.mutex);
          _pendingData.unlockEvents.emplace_back( std::move( unlockEvents ) );
          _pendingData.unlockEventsThreadIndex.push_back(threadIndex);
+         return (size_t)(bufPtr - data);
+      }
+      case MsgType::PROFILER_HEARTBEAT:
+      {
          return (size_t)(bufPtr - data);
       }
       default:

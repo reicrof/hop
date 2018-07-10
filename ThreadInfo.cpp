@@ -30,6 +30,21 @@ TDepth_t ThreadInfo::maxDepth() const noexcept
    return _traces.maxDepth;
 }
 
+float ThreadInfo::maxDisplayedDepth() const noexcept
+{
+   return std::min( (float)_traces.maxDepth, _trackHeight ) + 1.0f;
+}
+
+void ThreadInfo::setTrackHeight( float height )
+{
+   _trackHeight = hop::clamp( height, -1.0f, (float)maxDepth() );
+}
+
+bool ThreadInfo::empty() const
+{
+   return _traces.ends.empty();
+}
+
 size_t serializedSize( const ThreadInfo& ti )
 {
    const size_t tracesCount = ti._traces.ends.size();

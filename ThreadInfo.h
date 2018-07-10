@@ -15,6 +15,9 @@ struct ThreadInfo
    void addLockWaits( const DisplayableLockWaits& lockWaits );
    void addUnlockEvents(const std::vector<UnlockEvent>& unlockEvents);
    TDepth_t maxDepth() const noexcept;
+   float maxDisplayedDepth() const noexcept;
+   void setTrackHeight( float height );
+   bool empty() const;
    DisplayableTraces _traces;
    DisplayableLockWaits _lockWaits;
    std::vector<UnlockEvent> _unlockEvents;
@@ -23,13 +26,11 @@ struct ThreadInfo
    // are being draw
    float _localTracesVerticalStartPos;
    float _absoluteTracesVerticalStartPos;
-   bool _hidden{false};
+   float _trackHeight{9999.0f};
 
-   // Right now the locks will not be serialized
    friend size_t serializedSize( const ThreadInfo& ti );
    friend size_t serialize( const ThreadInfo& ti, char* );
    friend size_t deserialize( const char* data, ThreadInfo& ti );
-
 };
 }
 

@@ -54,7 +54,6 @@ template <typename MEMBER_T>
 static void sortTraceDetailOnMember(
     std::vector<hop::TraceDetail>& td,
     MEMBER_T hop::TraceDetail::*memPtr,
-    const hop::ThreadInfo& threadInfo,
     bool descending )
 {
    HOP_PROF_FUNC();
@@ -65,7 +64,7 @@ static void sortTraceDetailOnMember(
       std::stable_sort(
           td.begin(),
           td.end(),
-          [&threadInfo, memPtr, cmp]( const hop::TraceDetail& lhs, const hop::TraceDetail& rhs ) {
+          [memPtr, cmp]( const hop::TraceDetail& lhs, const hop::TraceDetail& rhs ) {
              return cmp( lhs.*memPtr, rhs.*memPtr );
           } );
    }
@@ -75,7 +74,7 @@ static void sortTraceDetailOnMember(
       std::stable_sort(
           td.begin(),
           td.end(),
-          [&threadInfo, memPtr, cmp]( const hop::TraceDetail& lhs, const hop::TraceDetail& rhs ) {
+          [memPtr, cmp]( const hop::TraceDetail& lhs, const hop::TraceDetail& rhs ) {
              return cmp( lhs.*memPtr, rhs.*memPtr );
           } );
    }
@@ -83,7 +82,6 @@ static void sortTraceDetailOnMember(
 
 static void sortTraceDetailOnCount(
     std::vector<hop::TraceDetail>& td,
-    const hop::ThreadInfo& threadInfo,
     bool descending )
 {
    HOP_PROF_FUNC();
@@ -94,7 +92,7 @@ static void sortTraceDetailOnCount(
       std::stable_sort(
           td.begin(),
           td.end(),
-          [&threadInfo, cmp]( const hop::TraceDetail& lhs, const hop::TraceDetail& rhs ) {
+          [cmp]( const hop::TraceDetail& lhs, const hop::TraceDetail& rhs ) {
              return cmp( lhs.traceIds.size(), rhs.traceIds.size() );
           } );
    }
@@ -104,7 +102,7 @@ static void sortTraceDetailOnCount(
       std::stable_sort(
           td.begin(),
           td.end(),
-          [&threadInfo, cmp]( const hop::TraceDetail& lhs, const hop::TraceDetail& rhs ) {
+          [cmp]( const hop::TraceDetail& lhs, const hop::TraceDetail& rhs ) {
              return cmp( lhs.traceIds.size(), rhs.traceIds.size() );
           } );
    }
@@ -455,7 +453,6 @@ TraceDetailDrawResult drawTraceDetails(
             sortTraceDetailOnMember(
                 details.details,
                 &TraceDetail::inclusivePct,
-                tracesPerThread[details.threadIndex],
                 descending );
          }
 
@@ -468,7 +465,6 @@ TraceDetailDrawResult drawTraceDetails(
             sortTraceDetailOnMember(
                 details.details,
                 &TraceDetail::inclusiveTimeInNanos,
-                tracesPerThread[details.threadIndex],
                 descending );
          }
 
@@ -481,7 +477,6 @@ TraceDetailDrawResult drawTraceDetails(
             sortTraceDetailOnMember(
                 details.details,
                 &TraceDetail::exclusivePct,
-                tracesPerThread[details.threadIndex],
                 descending );
          }
 
@@ -494,7 +489,6 @@ TraceDetailDrawResult drawTraceDetails(
             sortTraceDetailOnMember(
                 details.details,
                 &TraceDetail::exclusiveTimeInNanos,
-                tracesPerThread[details.threadIndex],
                 descending );
          }
 
@@ -503,8 +497,7 @@ TraceDetailDrawResult drawTraceDetails(
          {
             static bool descending = false;
             descending = !descending;
-            sortTraceDetailOnCount(
-                details.details, tracesPerThread[details.threadIndex], descending );
+            sortTraceDetailOnCount( details.details, descending );
          }
 
          ImGui::NextColumn();

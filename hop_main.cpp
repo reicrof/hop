@@ -6,18 +6,14 @@
 #include "argtable3.h"
 #include "Options.h"
 #include "ModalWindow.h"
+#include "RendererGL.h"
+#include "Cursor.h"
 #include <SDL.h>
 #undef main
 
 #include "hop_icon_data.inline"
 
 #include <signal.h>
-
-#ifdef __APPLE__
-#include <OpenGL/gl.h>
-#else
-#include <GL/gl.h>
-#endif
 
 #ifndef _MSC_VER
 #include <sys/wait.h>
@@ -157,7 +153,6 @@ static processId_t startChildProcess( const char* path, const char* basename )
    (void)basename;
    if ( !CreateProcess( NULL, (LPSTR)path, NULL, NULL, FALSE, 0, NULL, NULL, &si, &pi ) )
    {
-      printErrorMsg("Error starting executable");
       return false;
    }
    newProcess = pi.hProcess;
@@ -170,7 +165,6 @@ static processId_t startChildProcess( const char* path, const char* basename )
       int res = execvp( path, subprocessArg );
       if ( res < 0 )
       {
-         printErrorMsg( "Error starting executable" );
          exit( 0 );
       }
    }
@@ -329,6 +323,8 @@ int main( int argc, char* argv[] )
 
    if( iconSurface != nullptr ) SDL_SetWindowIcon( window, iconSurface );
 
+   hop::initCursors();
+
    // Setup the LOD granularity based on screen resolution
    SDL_DisplayMode DM;
    SDL_GetCurrentDisplayMode(0, &DM);
@@ -368,6 +364,9 @@ int main( int argc, char* argv[] )
       SDL_GetWindowSize( window, &w, &h );
       uint32_t buttonState = SDL_GetMouseState( &x, &y );
 
+      // Reset cursor at start of the frame
+      hop::setCursor( hop::CURSOR_ARROW );
+
       const auto drawStart = std::chrono::system_clock::now();
 
       hop::onNewFrame(
@@ -380,11 +379,12 @@ int main( int argc, char* argv[] )
           g_mouseWheel );
       g_mouseWheel = 0;
 
-      glViewport( 0, 0, w, h );
-      glClearColor( 1.0f, 1.0f, 1.0f, 1.0f );
-      glClear( GL_COLOR_BUFFER_BIT );
+      renderer::setViewport( 0, 0, w, h );
+      renderer::clearColorBuffer();
 
       hop::draw( w, h );
+
+      hop::drawCursor();
 
       const auto drawEnd = std::chrono::system_clock::now();
       hop::g_stats.drawingTimeMs = std::chrono::duration< double, std::milli>( ( drawEnd - drawStart ) ).count();
@@ -409,6 +409,8 @@ int main( int argc, char* argv[] )
    }
 
    if( iconSurface ) SDL_FreeSurface( iconSurface );
+
+   hop::uninitCursors();
 
    ImGui::DestroyContext();
 
