@@ -59,7 +59,7 @@ static void drawBookmarks( float posXPxl, float posYPxl )
    ImGui::Button("", ImVec2( BOOKMARK_WIDTH, BOOKMARK_HEIGHT ) );
 }
 
-static bool drawSeparator( uint32_t threadIndex )
+static bool drawSeparator( uint32_t threadIndex, bool highlightSeparator )
 {
    const float drawPosY = ImGui::GetCursorScreenPos().y - ImGui::GetWindowPos().y;
    ImVec2 p1 = ImGui::GetWindowPos();
@@ -71,11 +71,15 @@ static bool drawSeparator( uint32_t threadIndex )
 
    const bool hovered = std::abs( ImGui::GetMousePos().y - p1.y ) < 7.0f && threadIndex > 0;
 
-   if( hovered )
+   uint32_t color = ImGui::GetColorU32(ImGuiCol_Separator);
+   if( hovered && highlightSeparator )
+   {
       hop::setCursor( hop::CURSOR_SIZE_NS );
+      color = 0xFFFFFFFF;
+   }
 
    ImDrawList* drawList = ImGui::GetWindowDrawList();
-   drawList->AddLine( p1, p2, hovered ? 0xFFFFFFFF : ImGui::GetColorU32(ImGuiCol_Separator), 2.0f );
+   drawList->AddLine( p1, p2, color, 2.0f );
 
    ImGui::SetCursorPosY( ImGui::GetCursorPosY() );
 
@@ -215,7 +219,8 @@ void Timeline::draw(
       HOP_PROF_DYN_NAME( threadName );
 
       // First draw the separator of the track
-      const bool separatorHovered = drawSeparator( i );
+      const bool highlightSeparator = ImGui::IsRootWindowOrAnyChildFocused();
+      const bool separatorHovered = drawSeparator( i, highlightSeparator );
 
       const auto& zoneColors = g_options.zoneColors;
       uint32_t threadLabelCol = zoneColors[ (i+1) % HOP_MAX_ZONES ];
@@ -561,7 +566,7 @@ void Timeline::handleMouseDrag( float mouseInCanvasX, float mouseInCanvasY, std:
       {
          // Find the previous track that is visible
          int i = _draggedTrack-1;
-         while( i > 0 && tracesPerThread[i].empty() ){
+         while( i > 0 && tracesPerThread[i].empty() ) {
             --i;
          }
 
