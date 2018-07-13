@@ -29,7 +29,7 @@ struct Profiler
    void addLockWaits( const DisplayableLockWaits& lockWaits, uint32_t threadIndex);
    void addUnlockEvents(const std::vector<UnlockEvent>& unlockEvents, uint32_t threadIndex);
    void handleHotkey();
-   bool setRecording( bool recording );
+   void setRecording( bool recording );
    void clear();
 
 private:

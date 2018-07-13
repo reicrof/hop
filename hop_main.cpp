@@ -338,15 +338,12 @@ int main( int argc, char* argv[] )
    // If we want to launch an executable to profile, now is the time to do it
    if( executablePath )
    {
+      profiler->setRecording( true );
       childProcess = startChildProcess(exec->filename[0], executableName);
       if( childProcess == 0 )
       {
          exit(-1);
       }
-
-      // Try to start recording until the shared memory is created
-      while( processAlive( childProcess ) && !profiler->setRecording( true ) )
-      {;}
    }
 
    while ( g_run )

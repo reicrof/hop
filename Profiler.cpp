@@ -782,17 +782,14 @@ void hop::Profiler::handleHotkey()
    }
 }
 
-bool hop::Profiler::setRecording(bool recording)
+void hop::Profiler::setRecording(bool recording)
 {
-   bool success = _server.setRecording(recording);
-   if (success)
+   _recording = recording;
+   _server.setRecording(recording);
+   if (recording)
    {
-      _recording = recording;
-      if (recording)
-         _timeline.setRealtime(true);
+      _timeline.setRealtime(true);
    }
-
-   return success;
 }
 
 bool hop::Profiler::saveToFile( const char* path )

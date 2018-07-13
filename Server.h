@@ -16,7 +16,7 @@ class Server
 {
   public:
    bool start( const char* name, bool useGlFinishByDefault );
-   bool setRecording( bool recording );
+   void setRecording( bool recording );
    void stop();
    void clear();
    SharedMemory::ConnectionState connectionState() const;
@@ -51,6 +51,7 @@ class Server
 
    std::thread _thread;
    std::atomic< bool > _running{false};
+   std::atomic< bool > _recording{false};
    SharedMemory _sharedMem;
    std::atomic< SharedMemory::ConnectionState > _connectionState;
 

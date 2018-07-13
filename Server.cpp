@@ -38,6 +38,7 @@ bool Server::start( const char* name, bool useGlFinishByDefault )
             // Clear any remaining messages from previous execution now
             clearPendingMessages();
             setUseGlFinish( useGlFinishByDefault );
+            _sharedMem.setListeningConsumer( _recording );
             _connectionState = state;
             printf( "Connection to shared data successful.\n" );
          }
@@ -111,15 +112,13 @@ SharedMemory::ConnectionState Server::connectionState() const
    return _connectionState.load();
 }
 
-bool Server::setRecording( bool recording )
+void Server::setRecording( bool recording )
 {
-    bool stateChanged = false;
-    if (_sharedMem.data())
-    {
-        _sharedMem.setListeningConsumer(recording);
-        stateChanged = true;
-    }
-    return stateChanged;
+   _recording = recording;
+   if ( _sharedMem.data() )
+   {
+      _sharedMem.setListeningConsumer( recording );
+   }
 }
 
 void Server::getPendingData(PendingData & data)
