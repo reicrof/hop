@@ -11,6 +11,23 @@
 #define HOP_IMPLEMENTATION
 #include <Hop.h>
 
+class MyMutex
+{
+public:
+   void lock()
+   {
+      HOP_PROF_MUTEX_LOCK( &m );
+      m.lock();
+   }
+
+   void unlock()
+   {
+      HOP_PROF_MUTEX_UNLOCK( &m );
+      m.unlock();
+   }
+
+   std::mutex m;
+};
 
 #include <signal.h>
 bool g_run = true;
@@ -18,7 +35,7 @@ bool g_run = true;
 int bug = -1;
 std::atomic< size_t > count{0};
 //std::mutex m;
-std::mutex m1;
+MyMutex m1;
 
 void stall()
 {
@@ -176,14 +193,13 @@ void startRec()
 
 void testMutex()
 {
-
    HOP_PROF_FUNC();
 
-   const auto start = hop::getTimeStamp();
-   std::lock_guard<std::mutex> g(m1);
-   hop::ClientManager::EndLockWait( &m1, start, hop::getTimeStamp() );
-   std::this_thread::sleep_for(std::chrono::microseconds(1000));
-   HOP_PROF_MUTEX_UNLOCK( &m1 );
+   {
+   std::lock_guard<MyMutex> g(m1);
+   HOP_PROF( "lockgaurd" );
+   std::this_thread::sleep_for(std::chrono::microseconds(10000));
+   }
 }
 
 void terminateCallback(int sig)
@@ -204,73 +220,73 @@ int main()
    signal(SIGTERM, terminateCallback);
 
 
-    for( int i = 0; i < 1; ++i )
-    {
-       std::string nb = std::to_string( i );
-       std::string tname = "thread #" + nb;
-       std::thread t1 ( [tname](){ while(g_run) { HOP_PROF_DYN_NAME( tname.c_str() ); func1(); } } );
-       std::thread t2 ( [tname](){ while(g_run) { HOP_PROF_DYN_NAME( tname.c_str() ); func1(); } } );
-       std::thread t3 ( [tname](){ while(g_run) { HOP_PROF_DYN_NAME( tname.c_str() ); func1(); } } );
-       t1.detach(); t2.detach(); t3.detach();
-    }
+    // for( int i = 0; i < 1; ++i )
+    // {
+    //    std::string nb = std::to_string( i );
+    //    std::string tname = "thread #" + nb;
+    //    std::thread t1 ( [tname](){ while(g_run) { HOP_PROF_DYN_NAME( tname.c_str() ); func1(); } } );
+    //    std::thread t2 ( [tname](){ while(g_run) { HOP_PROF_DYN_NAME( tname.c_str() ); func1(); } } );
+    //    std::thread t3 ( [tname](){ while(g_run) { HOP_PROF_DYN_NAME( tname.c_str() ); func1(); } } );
+    //    t1.detach(); t2.detach(); t3.detach();
+    // }
 
-    while(g_run)
-    {
-      HOP_PROF_FUNC();
-      //std::lock_guard<std::mutex> g(m);
-      std::this_thread::sleep_for(std::chrono::milliseconds(3));
-      func1();
-      {
-      HOP_ZONE( HOP_ZONE_4 );
-      HOP_PROF_GL_FINISH( "GL finish" );
-      HOP_PROF( "Creating maclass1" );
-      {
-         HOP_ZONE( HOP_ZONE_3 );
-         std::this_thread::sleep_for(std::chrono::microseconds(250));
-         HOP_PROF( "Creating maclass2" );
-         {
-            HOP_ZONE( HOP_ZONE_2 );
-            std::this_thread::sleep_for(std::chrono::microseconds(250));
-            HOP_PROF( "Creating MaClasselass3" );
-            {
-               HOP_ZONE( HOP_ZONE_1 );
-               std::this_thread::sleep_for(std::chrono::microseconds(250));
-               HOP_PROF( "Creating maclass4" );
-               {
-                  std::this_thread::sleep_for(std::chrono::microseconds(250));
-                  HOP_PROF( "Creating maclass5" );
-                  {
-                     //std::lock_guard<std::mutex> g(m1);
-                     std::this_thread::sleep_for(std::chrono::microseconds(250));
-                     startRec();
-                     startRec();
-                     startRec();
-                     HOP_PROF( "Creating maclass6" );
+    // while(g_run)
+    // {
+    //   HOP_PROF_FUNC();
+    //   //std::lock_guard<std::mutex> g(m);
+    //   std::this_thread::sleep_for(std::chrono::milliseconds(3));
+    //   func1();
+    //   {
+    //   HOP_ZONE( HOP_ZONE_4 );
+    //   HOP_PROF_GL_FINISH( "GL finish" );
+    //   HOP_PROF( "Creating maclass1" );
+    //   {
+    //      HOP_ZONE( HOP_ZONE_3 );
+    //      std::this_thread::sleep_for(std::chrono::microseconds(250));
+    //      HOP_PROF( "Creating maclass2" );
+    //      {
+    //         HOP_ZONE( HOP_ZONE_2 );
+    //         std::this_thread::sleep_for(std::chrono::microseconds(250));
+    //         HOP_PROF( "Creating MaClasselass3" );
+    //         {
+    //            HOP_ZONE( HOP_ZONE_1 );
+    //            std::this_thread::sleep_for(std::chrono::microseconds(250));
+    //            HOP_PROF( "Creating maclass4" );
+    //            {
+    //               std::this_thread::sleep_for(std::chrono::microseconds(250));
+    //               HOP_PROF( "Creating maclass5" );
+    //               {
+    //                  //std::lock_guard<std::mutex> g(m1);
+    //                  std::this_thread::sleep_for(std::chrono::microseconds(250));
+    //                  startRec();
+    //                  startRec();
+    //                  startRec();
+    //                  HOP_PROF( "Creating maclass6" );
 
-                  }
-               }
-            }
-         }
-      }
-      MaClasse a;
-      a.callBuggyFunction();
-      }
-      ++count;
-	   l1();
-	   l1();
-    }
+    //               }
+    //            }
+    //         }
+    //      }
+    //   }
+    //   MaClasse a;
+    //   a.callBuggyFunction();
+    //   }
+    //   ++count;
+	   // l1();
+	   // l1();
+    // }
    // t1.join();
    // t2.join();
    // t3.join();
 
-    // std::thread t ( [](){ while(g_run) { testMutex(); } } );
-    // //std::thread t1 ( [](){ while(g_run) { testMutex(); } } );
-    // //std::thread t2([]() { while (g_run) { testMutex(); } });
-    // std::this_thread::sleep_for(std::chrono::microseconds(25000));
-    // while(g_run)
-    // {
-    //   testMutex();
-    // }
+    std::thread t ( [](){ while(g_run) { testMutex(); } } );
+    //std::thread t1 ( [](){ while(g_run) { testMutex(); } } );
+    //std::thread t2([]() { while (g_run) { testMutex(); } });
+    std::this_thread::sleep_for(std::chrono::microseconds(25000));
+    while(g_run)
+    {
+      testMutex();
+    }
 
 
 
