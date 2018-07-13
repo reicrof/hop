@@ -142,7 +142,7 @@ size_t Server::handleNewMessage( uint8_t* data, size_t maxSize, TimeStamp minTim
     (void)maxSize; // Removed unused warning
 
     // If the message was sent prior to the last reset timestamp, ignore it
-    if( msgInfo->timeStamp < minTimestamp )
+    if( msgInfo->timeStamp < minTimestamp || msgInfo->trackIndex > 0 )
        return (size_t)(bufPtr - data);
 
     switch ( msgType )
@@ -150,7 +150,7 @@ size_t Server::handleNewMessage( uint8_t* data, size_t maxSize, TimeStamp minTim
        case MsgType::PROFILER_STRING_DATA:
        {
           // Copy string and add it to database
-          std::vector<char> stringData( msgInfo->stringData.size );
+          std::vector<char> stringData( msgInfo->count );
           if ( stringData.size() > 0 )
           {
              memcpy( stringData.data(), bufPtr, stringData.size() );
@@ -168,7 +168,7 @@ size_t Server::handleNewMessage( uint8_t* data, size_t maxSize, TimeStamp minTim
        case MsgType::PROFILER_TRACE:
        {
           const Trace* traces = (const Trace*)bufPtr;
-          const size_t traceCount = msgInfo->traces.count;
+          const size_t traceCount = msgInfo->count;
 
           DisplayableTraces dispTraces;
           TDepth_t maxDepth = 0;
@@ -207,7 +207,7 @@ size_t Server::handleNewMessage( uint8_t* data, size_t maxSize, TimeStamp minTim
       case MsgType::PROFILER_WAIT_LOCK:
       {
          const LockWait* lws = (const LockWait*)bufPtr;
-         const uint32_t lwCount = msgInfo->lockwaits.count;
+         const uint32_t lwCount = msgInfo->count;
 
          DisplayableLockWaits dispLw;
          for( uint32_t i = 0; i < lwCount; ++i )
@@ -232,7 +232,7 @@ size_t Server::handleNewMessage( uint8_t* data, size_t maxSize, TimeStamp minTim
       }
       case MsgType::PROFILER_UNLOCK_EVENT:
       {
-         std::vector< UnlockEvent > unlockEvents( msgInfo->unlockEvents.count );
+         std::vector< UnlockEvent > unlockEvents( msgInfo->count );
          memcpy( unlockEvents.data(), bufPtr, unlockEvents.size() * sizeof(UnlockEvent) );
 
          bufPtr += unlockEvents.size() * sizeof(UnlockEvent);

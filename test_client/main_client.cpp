@@ -157,7 +157,7 @@ void l1()
 
 void rec( int& i )
 {
-   HOP_PROF_FUNC();
+   HOP_PROF_FUNC_TRACK(1);
    while( i > 0 )
    {
       std::this_thread::sleep_for(std::chrono::microseconds(1));

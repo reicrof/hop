@@ -51,6 +51,9 @@ For more information, please refer to <http://unlicense.org/>
 // Total maximum of thread being traced
 #define HOP_MAX_THREAD_NB 64
 
+// Maximum of track per thread
+#define HOP_MAX_TRACK_PER_THREAD 2
+
 // Total size of the shared memory ring buffer. This does not
 // include the meta-data size
 #define HOP_SHARED_MEM_SIZE 32000000
@@ -94,6 +97,8 @@ enum HopZone
 
 // Create a new profiling trace with the compiler provided name
 #define HOP_PROF_FUNC() HOP_PROF_ID_GUARD( hop__, ( __FILE__, __LINE__, HOP_FCT_NAME ) )
+
+#define HOP_PROF_FUNC_TRACK( x ) HOP_PROF_ID_GUARD( hop__, ( __FILE__, __LINE__, HOP_FCT_NAME, x ) )
 
 // Split a profiling trace with a new provided name. Name must be static.
 #define HOP_PROF_SPLIT( x ) HOP_PROF_ID_SPLIT( hop__, ( __FILE__, __LINE__, (x) ) )
@@ -266,41 +271,16 @@ enum class MsgType : uint32_t
    INVALID_MESSAGE,
 };
 
-struct TracesMsgInfo
-{
-   uint32_t count;
-};
-
-struct StringDataMsgInfo
-{
-   uint32_t size;
-};
-
-struct LockWaitsMsgInfo
-{
-   uint32_t count;
-};
-
-struct UnlockEventsMsgInfo
-{
-   uint32_t count;
-};
-
 HOP_CONSTEXPR uint32_t EXPECTED_MSG_INFO_SIZE = 32;
 struct MsgInfo
 {
    MsgType type;
+   uint32_t count;
    // Thread id from which the msg was sent
    uint32_t threadIndex;
+   uint32_t trackIndex;
    uint64_t threadId;
    TimeStamp timeStamp;
-   // Specific message data
-   union {
-      TracesMsgInfo traces;
-      StringDataMsgInfo stringData;
-      LockWaitsMsgInfo lockwaits;
-      UnlockEventsMsgInfo unlockEvents;
-   };
 };
 HOP_STATIC_ASSERT( sizeof(MsgInfo) == EXPECTED_MSG_INFO_SIZE, "MsgInfo layout has changed unexpectedly" );
 
@@ -424,7 +404,8 @@ class ClientManager
        TimeStamp start,
        TimeStamp end,
        TLineNb_t lineNb,
-       TZoneId_t zone );
+       TZoneId_t zone,
+       int trackIndex );
    static void EndProfileGlFinish(
        const char* fileName,
        const char* fctName,
@@ -446,9 +427,9 @@ class ClientManager
 class ProfGuard
 {
   public:
-    ProfGuard( const char* fileName, TLineNb_t lineNb, const char* fctName ) HOP_NOEXCEPT
+    ProfGuard( const char* fileName, TLineNb_t lineNb, const char* fctName, int trackIndex = 0 ) HOP_NOEXCEPT
     {
-      open( fileName, lineNb, fctName );
+      open( fileName, lineNb, fctName, trackIndex );
     }
     ~ProfGuard()
     {
@@ -459,27 +440,29 @@ class ProfGuard
       // Please uncomment the following line if close() is made public!
       // if ( _fctName )
       close();
-      open( fileName, lineNb, fctName );
+      open( fileName, lineNb, fctName, 0 );
     }
 
   private:
-    inline void open( const char* fileName, TLineNb_t lineNb, const char* fctName )
+    inline void open( const char* fileName, TLineNb_t lineNb, const char* fctName, int trackIndex )
     {
       _start = getTimeStamp();
       _fileName = fileName;
       _fctName = fctName;
       _lineNb = lineNb;
+      _trackIndex = trackIndex;
       _zone = ClientManager::StartProfile();
     }
     inline void close()
     {
-      ClientManager::EndProfile( _fileName, _fctName, _start, getTimeStamp(), _lineNb, _zone );
+      ClientManager::EndProfile( _fileName, _fctName, _start, getTimeStamp(), _lineNb, _zone, _trackIndex );
       // Please uncomment the following line if close() is made public!
       // _fctName = nullptr;
     }
 
     TimeStamp _start;
     const char *_fileName, *_fctName;
+    int _trackIndex;
     TLineNb_t _lineNb;
     TZoneId_t _zone;
 };
@@ -536,7 +519,7 @@ class ProfGuardDynamicString
    }
    ~ProfGuardDynamicString()
    {
-      ClientManager::EndProfile( _fileName, (const char*) _fctName, _start, getTimeStamp(), _lineNb, _zone );
+      ClientManager::EndProfile( _fileName, (const char*) _fctName, _start, getTimeStamp(), _lineNb, _zone, 0 );
    }
 
   private:
@@ -1147,11 +1130,14 @@ class Client
   public:
    Client()
    {
-      _traces.reserve( 256 );
-      _lockWaits.reserve( 64 );
-      _unlockEvents.reserve( 64 );
-      _stringPtr.reserve( 256 );
-      _stringData.reserve( 256 * 32 );
+      for( int i = 0; i < HOP_MAX_TRACK_PER_THREAD; ++i )
+      {
+         _traces[i].reserve( 1024 );
+         _lockWaits[i].reserve( 128 );
+         _unlockEvents[i].reserve( 128 );
+      }
+      _stringPtr.reserve( 1024 );
+      _stringData.reserve( 1024 * 32 );
       _stringPtr.insert(0);
       for (size_t i = 0; i < sizeof(TStrPtr_t); ++i)
          _stringData.push_back('\0');
@@ -1165,19 +1151,20 @@ class Client
        TimeStamp start,
        TimeStamp end,
        TLineNb_t lineNb,
-       TZoneId_t zone )
+       TZoneId_t zone,
+       int trackIdx = 0 )
    {
-      _traces.push_back( Trace{ start, end, (TStrPtr_t)fileName, (TStrPtr_t)fctName, lineNb, zone, (TDepth_t)tl_traceLevel } );
+      _traces[trackIdx].push_back( Trace{ start, end, (TStrPtr_t)fileName, (TStrPtr_t)fctName, lineNb, zone, (TDepth_t)tl_traceLevel } );
    }
 
-   void addWaitLockTrace( void* mutexAddr, TimeStamp start, TimeStamp end, TDepth_t depth )
+   void addWaitLockTrace( void* mutexAddr, TimeStamp start, TimeStamp end, TDepth_t depth, int trackIdx = 0 )
    {
-      _lockWaits.push_back( LockWait{ mutexAddr, start, end, depth, 0 /*padding*/ } );
+      _lockWaits[trackIdx].push_back( LockWait{ mutexAddr, start, end, depth, 0 /*padding*/ } );
    }
 
-   void addUnlockEvent( void* mutexAddr, TimeStamp time )
+   void addUnlockEvent( void* mutexAddr, TimeStamp time, int trackIdx = 0 )
    {
-      _unlockEvents.push_back( UnlockEvent{ mutexAddr, time } );
+      _unlockEvents[trackIdx].push_back( UnlockEvent{ mutexAddr, time } );
    }
 
    TStrPtr_t addDynamicStringToDb( const char* dynStr )
@@ -1242,36 +1229,42 @@ class Client
 
    void resetPendingTraces()
    {
-      _traces.clear();
-      _lockWaits.clear();
-      _unlockEvents.clear();
+      for( int i = 0; i < HOP_MAX_TRACK_PER_THREAD; ++i )
+      {
+         _traces[i].clear();
+         _lockWaits[i].clear();
+         _unlockEvents[i].clear();
+      }
    }
 
-   TimeStamp getMsgTimeStamp() const
+   TimeStamp getMsgTimeStamp( int trackIndex ) const
    {
-      if( _traces.empty() )
+      if( _traces[trackIndex].empty() )
       {
          return getTimeStamp();
       }
       else
       {
-         return _traces.back().start;
+         return _traces[trackIndex].back().start;
       }
    }
 
    bool sendStringData()
    {
       // Add all strings to the database
-      for( const auto& t : _traces  )
+      for( const auto& tracks : _traces )
       {
-         addStringToDb( (const char*) t.fileNameId );
+         for( const auto& t : tracks  )
+         {
+            addStringToDb( (const char*) t.fileNameId );
 
-         // String that were added dynamically are already in the
-         // database and are flaged with the first bit of their start
-         // time being 1. Therefore we only need to add the
-         // non-dynamic strings. (first bit of start time being 0)
-         if( (t.start & 1) == 0 )
-            addStringToDb( (const char*) t.fctNameId );
+            // String that were added dynamically are already in the
+            // database and are flaged with the first bit of their start
+            // time being 1. Therefore we only need to add the
+            // non-dynamic strings. (first bit of start time being 0)
+            if( (t.start & 1) == 0 )
+               addStringToDb( (const char*) t.fctNameId );
+         }
       }
 
       const uint32_t stringDataSize = _stringData.size();
@@ -1309,8 +1302,8 @@ class Client
          msgInfo->type = MsgType::PROFILER_STRING_DATA;
          msgInfo->threadId = tl_threadId;
          msgInfo->threadIndex = tl_threadIndex;
-         msgInfo->timeStamp = getMsgTimeStamp();
-         msgInfo->stringData.size = stringToSendSize;
+         msgInfo->timeStamp = getMsgTimeStamp( 0 );
+         msgInfo->count = stringToSendSize;
 
          // Copy string data into its array
          const auto itFrom = _stringData.begin() + _sentStringDataSize;
@@ -1328,128 +1321,148 @@ class Client
 
    bool sendTraces()
    {
-      // Get size of profiling traces message
-      const size_t profilerMsgSize = sizeof( MsgInfo ) + sizeof( Trace ) * _traces.size();
-
-      // Allocate big enough buffer from the shared memory
-      ringbuf_t* ringbuf = ClientManager::sharedMemory().ringbuffer();
-      const bool msgWayToBig = profilerMsgSize > HOP_SHARED_MEM_SIZE;
-      ssize_t offset = -1;
-      if( !msgWayToBig )
+      for( int trackIdx = 0; trackIdx < HOP_MAX_TRACK_PER_THREAD; ++trackIdx )
       {
-         offset = ringbuf_acquire( ringbuf, _worker, profilerMsgSize );
+         const size_t traceCount = _traces[trackIdx].size();
+         if( traceCount == 0 ) continue;
+
+         // Get size of profiling traces message
+         const size_t profilerMsgSize = sizeof( MsgInfo ) + sizeof( Trace ) * traceCount;
+
+         // Allocate big enough buffer from the shared memory
+         ringbuf_t* ringbuf = ClientManager::sharedMemory().ringbuffer();
+         const bool msgWayToBig = profilerMsgSize > HOP_SHARED_MEM_SIZE;
+         ssize_t offset = -1;
+         if( !msgWayToBig )
+         {
+            offset = ringbuf_acquire( ringbuf, _worker, profilerMsgSize );
+         }
+
+          if ( offset == -1 )
+          {
+             printf("HOP - Failed to acquire enough shared memory. Consider increasing"
+                    "shared memory size if you see this message more than once\n");
+             for( ; trackIdx < HOP_MAX_TRACK_PER_THREAD; ++trackIdx )
+               _traces[trackIdx].clear();
+             return false;
+          }
+
+         uint8_t* bufferPtr = &ClientManager::sharedMemory().data()[offset];
+
+         // Fill the buffer with the profiling trace message
+         {
+            // The data layout is as follow:
+            // =========================================================
+            // msgInfo     = Profiler specific infos  - Information about the message sent
+            // traceToSend = Traces                   - Array containing all of the traces
+            MsgInfo* tracesInfo = (MsgInfo*)bufferPtr;
+            Trace* traceToSend = (Trace*)( bufferPtr + sizeof( MsgInfo ) );
+
+            tracesInfo->type = MsgType::PROFILER_TRACE;
+            tracesInfo->count = (uint32_t)_traces[trackIdx].size();
+            tracesInfo->threadId = tl_threadId;
+            tracesInfo->threadIndex = tl_threadIndex;
+            tracesInfo->trackIndex = trackIdx;
+            tracesInfo->timeStamp = getMsgTimeStamp( trackIdx );
+
+            // Copy trace information into buffer to send
+            std::copy( _traces[trackIdx].begin(), _traces[trackIdx].end(), traceToSend );
+         }
+
+         ringbuf_produce( ringbuf, _worker );
+         ClientManager::sharedMemory().signalSemaphore();
+
+         // Free the buffers
+         _traces[trackIdx].clear();
       }
-
-       if ( offset == -1 )
-       {
-          printf("HOP - Failed to acquire enough shared memory. Consider increasing"
-                 "shared memory size if you see this message more than once\n");
-          _traces.clear();
-          return false;
-       }
-
-      uint8_t* bufferPtr = &ClientManager::sharedMemory().data()[offset];
-
-      // Fill the buffer with the profiling trace message
-      {
-         // The data layout is as follow:
-         // =========================================================
-         // msgInfo     = Profiler specific infos  - Information about the message sent
-         // traceToSend = Traces                   - Array containing all of the traces
-         MsgInfo* tracesInfo = (MsgInfo*)bufferPtr;
-         Trace* traceToSend = (Trace*)( bufferPtr + sizeof( MsgInfo ) );
-
-         tracesInfo->type = MsgType::PROFILER_TRACE;
-         tracesInfo->threadId = tl_threadId;
-         tracesInfo->threadIndex = tl_threadIndex;
-         tracesInfo->timeStamp = getMsgTimeStamp();
-         tracesInfo->traces.count = (uint32_t)_traces.size();
-
-         // Copy trace information into buffer to send
-         std::copy( _traces.begin(), _traces.end(), traceToSend );
-      }
-
-      ringbuf_produce( ringbuf, _worker );
-      ClientManager::sharedMemory().signalSemaphore();
-
-      // Free the buffers
-      _traces.clear();
 
       return true;
    }
 
    bool sendLockWaits()
    {
-      if( _lockWaits.empty() ) return false;
-
-      const size_t lockMsgSize = sizeof( MsgInfo ) + _lockWaits.size() * sizeof( LockWait );
-
-      // Allocate big enough buffer from the shared memory
-      ringbuf_t* ringbuf = ClientManager::sharedMemory().ringbuffer();
-      const auto offset = ringbuf_acquire( ringbuf, _worker, lockMsgSize );
-      if ( offset == -1 )
+      for( int trackIdx = 0; trackIdx < HOP_MAX_TRACK_PER_THREAD; ++trackIdx )
       {
-         printf("HOP - Failed to acquire enough shared memory. Consider increasing shared memory size\n");
-         _lockWaits.clear();
-         return false;
+         const size_t lwCount = _lockWaits[trackIdx].size();
+         if( lwCount == 0 ) continue;
+
+         const size_t lockMsgSize = sizeof( MsgInfo ) + lwCount * sizeof( LockWait );
+
+         // Allocate big enough buffer from the shared memory
+         ringbuf_t* ringbuf = ClientManager::sharedMemory().ringbuffer();
+         const auto offset = ringbuf_acquire( ringbuf, _worker, lockMsgSize );
+         if ( offset == -1 )
+         {
+            printf("HOP - Failed to acquire enough shared memory. Consider increasing shared memory size\n");
+            for( ; trackIdx < HOP_MAX_TRACK_PER_THREAD; ++trackIdx )
+               _lockWaits[trackIdx].clear();
+            return false;
+         }
+
+         uint8_t* bufferPtr = &ClientManager::sharedMemory().data()[offset];
+
+         // Fill the buffer with the lock message
+         {
+            MsgInfo* lwInfo = (MsgInfo*)bufferPtr;
+            lwInfo->type = MsgType::PROFILER_WAIT_LOCK;
+            lwInfo->count = (uint32_t)_lockWaits[trackIdx].size();
+            lwInfo->threadId = tl_threadId;
+            lwInfo->threadIndex = tl_threadIndex;
+            lwInfo->trackIndex = trackIdx;
+            lwInfo->timeStamp = _lockWaits[trackIdx].back().start;
+            bufferPtr += sizeof( MsgInfo );
+            memcpy( bufferPtr, _lockWaits[trackIdx].data(), _lockWaits[trackIdx].size() * sizeof( LockWait ) );
+         }
+
+         ringbuf_produce( ringbuf, _worker );
+         ClientManager::sharedMemory().signalSemaphore();
+
+         _lockWaits[trackIdx].clear();
       }
-
-      uint8_t* bufferPtr = &ClientManager::sharedMemory().data()[offset];
-
-      // Fill the buffer with the lock message
-      {
-         MsgInfo* lwInfo = (MsgInfo*)bufferPtr;
-         lwInfo->type = MsgType::PROFILER_WAIT_LOCK;
-         lwInfo->threadId = tl_threadId;
-         lwInfo->threadIndex = tl_threadIndex;
-         lwInfo->timeStamp = _lockWaits.back().start;
-         lwInfo->lockwaits.count = (uint32_t)_lockWaits.size();
-         bufferPtr += sizeof( MsgInfo );
-         memcpy( bufferPtr, _lockWaits.data(), _lockWaits.size() * sizeof( LockWait ) );
-      }
-
-      ringbuf_produce( ringbuf, _worker );
-      ClientManager::sharedMemory().signalSemaphore();
-
-      _lockWaits.clear();
 
       return true;
    }
 
    bool sendUnlockEvents()
    {
-      if( _unlockEvents.empty() ) return false;
-
-      const size_t unlocksMsgSize = sizeof( MsgInfo ) + _unlockEvents.size() * sizeof( UnlockEvent );
-
-      // Allocate big enough buffer from the shared memory
-      ringbuf_t* ringbuf = ClientManager::sharedMemory().ringbuffer();
-      const auto offset = ringbuf_acquire( ringbuf, _worker, unlocksMsgSize );
-      if ( offset == -1 )
+      for( int trackIdx = 0; trackIdx < HOP_MAX_TRACK_PER_THREAD; ++trackIdx )
       {
-         printf("HOP - Failed to acquire enough shared memory. Consider increasing shared memory size\n");
-         _unlockEvents.clear();
-         return false;
+         const size_t unlockCount = _unlockEvents[trackIdx].size();
+         if( unlockCount == 0 ) continue;
+
+         const size_t unlocksMsgSize = sizeof( MsgInfo ) + unlockCount * sizeof( UnlockEvent );
+
+         // Allocate big enough buffer from the shared memory
+         ringbuf_t* ringbuf = ClientManager::sharedMemory().ringbuffer();
+         const auto offset = ringbuf_acquire( ringbuf, _worker, unlocksMsgSize );
+         if ( offset == -1 )
+         {
+            printf("HOP - Failed to acquire enough shared memory. Consider increasing shared memory size\n");
+            for( ; trackIdx < HOP_MAX_TRACK_PER_THREAD; ++trackIdx )
+               _unlockEvents[trackIdx].clear();
+            return false;
+         }
+
+         uint8_t* bufferPtr = &ClientManager::sharedMemory().data()[offset];
+
+         // Fill the buffer with the lock message
+         {
+            MsgInfo* uInfo = (MsgInfo*)bufferPtr;
+            uInfo->type = MsgType::PROFILER_UNLOCK_EVENT;
+            uInfo->count = (uint32_t)_unlockEvents[trackIdx].size();
+            uInfo->threadId = tl_threadId;
+            uInfo->threadIndex = tl_threadIndex;
+            uInfo->trackIndex = trackIdx;
+            uInfo->timeStamp = _unlockEvents[trackIdx].back().time;
+            bufferPtr += sizeof( MsgInfo );
+            memcpy( bufferPtr, _unlockEvents[trackIdx].data(), _unlockEvents[trackIdx].size() * sizeof( UnlockEvent ) );
+         }
+
+         ringbuf_produce( ringbuf, _worker );
+         ClientManager::sharedMemory().signalSemaphore();
+
+         _unlockEvents[trackIdx].clear();
       }
-
-      uint8_t* bufferPtr = &ClientManager::sharedMemory().data()[offset];
-
-      // Fill the buffer with the lock message
-      {
-         MsgInfo* uInfo = (MsgInfo*)bufferPtr;
-         uInfo->type = MsgType::PROFILER_UNLOCK_EVENT;
-         uInfo->threadId = tl_threadId;
-         uInfo->threadIndex = tl_threadIndex;
-         uInfo->timeStamp = _unlockEvents.back().time;
-         uInfo->unlockEvents.count = (uint32_t)_unlockEvents.size();
-         bufferPtr += sizeof( MsgInfo );
-         memcpy( bufferPtr, _unlockEvents.data(), _unlockEvents.size() * sizeof( UnlockEvent ) );
-      }
-
-      ringbuf_produce( ringbuf, _worker );
-      ClientManager::sharedMemory().signalSemaphore();
-
-      _unlockEvents.clear();
 
       return true;
    }
@@ -1520,9 +1533,9 @@ class Client
       sendUnlockEvents();
    }
 
-   std::vector< Trace > _traces;
-   std::vector< LockWait > _lockWaits;
-   std::vector< UnlockEvent > _unlockEvents;
+   std::vector< Trace > _traces[HOP_MAX_TRACK_PER_THREAD];
+   std::vector< LockWait > _lockWaits[HOP_MAX_TRACK_PER_THREAD];
+   std::vector< UnlockEvent > _unlockEvents[HOP_MAX_TRACK_PER_THREAD];
    std::unordered_set< TStrPtr_t > _stringPtr;
    std::vector< char > _stringData;
    TimeStamp _clientResetTimeStamp{0};
@@ -1628,7 +1641,8 @@ void ClientManager::EndProfile(
     TimeStamp start,
     TimeStamp end,
     TLineNb_t lineNb,
-    TZoneId_t zone )
+    TZoneId_t zone,
+    int trackIndex )
 {
    const int remainingPushedTraces = --tl_traceLevel;
    Client* client = ClientManager::Get();
@@ -1637,7 +1651,7 @@ void ClientManager::EndProfile(
 
    if( end - start > 50 ) // Minimum trace time is 50 ns
    {
-      client->addProfilingTrace( fileName, fctName, start, end, lineNb, zone );
+      client->addProfilingTrace( fileName, fctName, start, end, lineNb, zone, trackIndex );
    }
    if ( remainingPushedTraces <= 0 )
    {
