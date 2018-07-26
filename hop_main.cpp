@@ -346,6 +346,7 @@ int main( int argc, char* argv[] )
       }
    }
 
+   bool lastVsync = !hop::g_options.vsyncOn;
    while ( g_run )
    {
       const auto frameStart = std::chrono::system_clock::now();
@@ -356,13 +357,19 @@ int main( int argc, char* argv[] )
       const auto endFetch = std::chrono::system_clock::now();
       hop::g_stats.fetchTimeMs = std::chrono::duration< double, std::milli>( ( endFetch - startFetch ) ).count();
 
-
       int w, h, x, y;
       SDL_GetWindowSize( window, &w, &h );
       uint32_t buttonState = SDL_GetMouseState( &x, &y );
 
       // Reset cursor at start of the frame
       hop::setCursor( hop::CURSOR_ARROW );
+
+      // Set vsync if it has changed.
+      if( lastVsync != hop::g_options.vsyncOn )
+      {
+         lastVsync = hop::g_options.vsyncOn;
+         renderer::setVSync( hop::g_options.vsyncOn );
+      }
 
       const auto drawStart = std::chrono::system_clock::now();
 

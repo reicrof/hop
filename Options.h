@@ -13,6 +13,7 @@ struct Options
 {
    float traceHeight{20.0f};
    bool startFullScreen{true};
+   bool vsyncOn{true};
    bool glFinishByDefault{false};
    bool debugWindow{false};
    std::array< uint32_t, HOP_MAX_ZONES + 1 > zoneColors;

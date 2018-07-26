@@ -6,6 +6,7 @@
 #include <windows.h>
 #endif
 
+#include <SDL.h>
 #ifdef __APPLE__
 #include <OpenGL/gl.h>
 #else
@@ -170,6 +171,11 @@ void createResources()
 
    // Restore state
    glBindTexture( GL_TEXTURE_2D, last_texture );
+}
+
+void setVSync( bool on )
+{
+   SDL_GL_SetSwapInterval( (int) on );
 }
 
 }
