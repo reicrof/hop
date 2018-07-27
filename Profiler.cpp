@@ -174,9 +174,9 @@ void Profiler::addTraces( const TraceData& traces, uint32_t threadIndex )
    _tracks[threadIndex].addTraces( traces );
 
    size_t totalTracesCount = 0;
-   for( const auto& t : _tracks )
+   for( size_t i = 0; i < _tracks.size(); ++i )
    {
-      totalTracesCount += t._traces.ends.size();
+      totalTracesCount += _tracks[i]._traces.ends.size();
    }
    g_stats.traceCount = totalTracesCount;
 }
@@ -304,6 +304,7 @@ Profiler::~Profiler()
 void hop::Profiler::update( float deltaTimeMs ) noexcept
 {
    _timeline.update( deltaTimeMs );
+   _tracks.update( _timeline.timelineRange() );
 }
 
 static bool ptInRect( const ImVec2& pt, const ImVec2& a, const ImVec2& b )
@@ -509,7 +510,7 @@ void hop::Profiler::drawSearchWindow()
 
          if( selection.hoveredTraceIdx != (size_t)-1 && selection.hoveredThreadIdx != (uint32_t)-1 )
          {
-            _timeline.addTraceToHighlight( std::make_pair( selection.hoveredTraceIdx, selection.hoveredThreadIdx ) );
+            //_timeline.addTraceToHighlight( std::make_pair( selection.hoveredTraceIdx, selection.hoveredThreadIdx ) );
          }
       }
       ImGui::End();
@@ -520,30 +521,30 @@ void hop::Profiler::drawSearchWindow()
 void hop::Profiler::drawTraceDetailsWindow()
 {
    HOP_PROF_FUNC();
-   const auto traceDetailRes = drawTraceDetails( _timeline.getTraceDetails(), _tracks, _strDb );
-   if ( traceDetailRes.isWindowOpen )
-   {
-       _timeline.setTraceDetailsDisplayed();
+   // const auto traceDetailRes = drawTraceDetails( _timeline.getTraceDetails(), _tracks, _strDb );
+   // if ( traceDetailRes.isWindowOpen )
+   // {
+   //     _timeline.setTraceDetailsDisplayed();
 
-       // Add the trace that will need to be highlighted
-       std::pair<size_t, size_t> span = visibleIndexSpan(
-           _tracks[traceDetailRes.hoveredThreadIdx]._traces,
-           _timeline.absoluteTimelineStart(),
-           _timeline.absoluteTimelineEnd() );
+   //     // Add the trace that will need to be highlighted
+   //     std::pair<size_t, size_t> span = visibleIndexSpan(
+   //         _tracks[traceDetailRes.hoveredThreadIdx]._traces,
+   //         _timeline.absoluteTimelineStart(),
+   //         _timeline.absoluteTimelineEnd() );
 
-       for ( const auto& traceHoveredIdx : traceDetailRes.hoveredTraceIds )
-       {
-          if ( traceHoveredIdx >= span.first && traceHoveredIdx <= span.second )
-          {
-             _timeline.addTraceToHighlight(
-                 std::make_pair( traceHoveredIdx, traceDetailRes.hoveredThreadIdx ) );
-          }
-       }
-   }
-   else
-   {
-      _timeline.clearTraceDetails();
-   }
+   //     for ( const auto& traceHoveredIdx : traceDetailRes.hoveredTraceIds )
+   //     {
+   //        if ( traceHoveredIdx >= span.first && traceHoveredIdx <= span.second )
+   //        {
+   //           _timeline.addTraceToHighlight(
+   //               std::make_pair( traceHoveredIdx, traceDetailRes.hoveredThreadIdx ) );
+   //        }
+   //     }
+   // }
+   // else
+   // {
+   //    _timeline.clearTraceDetails();
+   // }
 }
 
 void hop::Profiler::draw( uint32_t /*windowWidth*/, uint32_t /*windowHeight*/ )
@@ -583,7 +584,7 @@ void hop::Profiler::draw( uint32_t /*windowWidth*/, uint32_t /*windowHeight*/ )
 
    auto deleteTracePos = toolbarDrawPos;
    deleteTracePos.x += (2.0f*TOOLBAR_BUTTON_PADDING) + TOOLBAR_BUTTON_WIDTH;
-   if( drawDeleteTracesButton( deleteTracePos, !_tracks.empty() ) )
+   if( drawDeleteTracesButton( deleteTracePos, _tracks.size() > 0 ) )
    {
       hop::displayModalWindow( "Delete all traces?", hop::MODAL_TYPE_YES_NO, [&](){ clear(); } );
    }
@@ -593,7 +594,7 @@ void hop::Profiler::draw( uint32_t /*windowWidth*/, uint32_t /*windowHeight*/ )
    statusPos.y += 5.0f;
    drawStatusIcon( statusPos, _server.connectionState() );
 
-   if( _tracks.empty() && !_recording )
+   if( _tracks.size() == 0 && !_recording )
    {
       displayBackgroundHelpMsg();
    }
@@ -605,12 +606,12 @@ void hop::Profiler::draw( uint32_t /*windowWidth*/, uint32_t /*windowHeight*/ )
          _timeline.moveToPresentTime( Timeline::ANIMATION_TYPE_NONE );
       }
 
-      _timeline.draw( _tracks, _strDb );
+      _timeline.draw();
    }
 
    handleHotkey();
 
-   _timeline.clearHighlightedTraces();
+   //_timeline.clearHighlightedTraces();
 
    ImGui::PopStyleVar(2);
    ImGui::End();
@@ -775,7 +776,7 @@ void hop::Profiler::handleHotkey()
    {
       _timeline.nextBookmark();
    }
-   else if( ImGui::IsKeyDown( SDLK_DELETE ) && !_tracks.empty() )
+   else if( ImGui::IsKeyDown( SDLK_DELETE ) && _tracks.size() > 0 )
    {
       if( ImGui::IsWindowFocused( ImGuiFocusedFlags_RootAndChildWindows ) && !hop::modalWindowShowing() )
          hop::displayModalWindow( "Delete all traces?", hop::MODAL_TYPE_YES_NO, [&](){ clear(); } );

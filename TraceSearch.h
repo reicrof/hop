@@ -7,7 +7,7 @@
 namespace hop
 {
    class Timeline;
-   struct TimelineTrack;
+   struct TimelineTracks;
    class StringDb;
 
    struct SearchResult
@@ -25,8 +25,8 @@ namespace hop
       uint32_t hoveredThreadIdx;
    };
 
-   void findTraces( const char* string, const StringDb& strDb, const std::vector< TimelineTrack >& tracks, SearchResult& result );
-   SearchSelection drawSearchResult( SearchResult& searchRes, const Timeline& timeline, const StringDb& strDb, const std::vector< TimelineTrack >& tracks );
+   void findTraces( const char* string, const StringDb& strDb, const TimelineTracks& tracks, SearchResult& result );
+   SearchSelection drawSearchResult( SearchResult& searchRes, const Timeline& timeline, const StringDb& strDb, const TimelineTracks& tracks );
    void clearSearchResult( SearchResult& res );
 }
 

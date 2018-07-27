@@ -62,7 +62,7 @@ TraceDetailDrawResult drawTraceDetails(
 
 
 TraceStats createTraceStats( const TraceData& traces, uint32_t threadIndex, size_t traceId );
-void drawTraceStats( TraceStats& stats, const std::vector<TimelineTrack>& tracks, const StringDb& strDb);
+void drawTraceStats( TraceStats& stats, const TimelineTracks& tracks, const StringDb& strDb);
 }
 
 #endif  // TRACE_DETAIL_H_

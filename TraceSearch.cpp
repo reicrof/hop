@@ -10,7 +10,7 @@
 template <typename CMP>
 static void sortSearchResOnTime(
     hop::SearchResult& sr,
-    const std::vector<hop::TimelineTrack>& tracks,
+    const hop::TimelineTracks& tracks,
     const CMP& cmp )
 {
    HOP_PROF_FUNC();
@@ -29,7 +29,7 @@ static void sortSearchResOnTime(
 template <typename CMP>
 static void sortSearchResOnName(
     hop::SearchResult& sr,
-    const std::vector<hop::TimelineTrack>& tracks,
+    const hop::TimelineTracks& tracks,
     const hop::StringDb& strDb,
     const CMP& cmp )
 {
@@ -52,7 +52,7 @@ static void sortSearchResOnName(
 template <typename CMP>
 static void sortSearchResOnDuration(
     hop::SearchResult& sr,
-    const std::vector<hop::TimelineTrack>& tracks,
+    const hop::TimelineTracks& tracks,
     const CMP& cmp )
 {
    HOP_PROF_FUNC();
@@ -71,7 +71,7 @@ static void sortSearchResOnDuration(
 namespace hop
 {
 
-void findTraces( const char* string, const hop::StringDb& strDb, const std::vector< hop::TimelineTrack >& tracks, SearchResult& result )
+void findTraces( const char* string, const hop::StringDb& strDb, const TimelineTracks& tracks, SearchResult& result )
 {
    HOP_PROF_FUNC();
 
@@ -102,7 +102,7 @@ void findTraces( const char* string, const hop::StringDb& strDb, const std::vect
    sortSearchResOnDuration( result, tracks, std::greater<TimeStamp>() );
 }
 
-SearchSelection drawSearchResult( SearchResult& searchRes, const Timeline& timeline, const StringDb& strDb, const std::vector< TimelineTrack >& tracks )
+SearchSelection drawSearchResult( SearchResult& searchRes, const Timeline& timeline, const StringDb& strDb, const TimelineTracks& tracks )
 {
    HOP_PROF_FUNC();
 

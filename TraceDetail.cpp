@@ -393,7 +393,7 @@ TraceDetails createGlobalTraceDetails( const TraceData& traces, uint32_t threadI
 
 TraceDetailDrawResult drawTraceDetails(
     TraceDetails& details,
-    const std::vector<TimelineTrack>& tracks,
+    const TimelineTracks& tracks,
     const StringDb& strDb )
 {
    HOP_PROF_FUNC();

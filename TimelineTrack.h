@@ -36,6 +36,45 @@ struct TimelineTrack
    friend size_t serialize( const TimelineTrack& ti, char* );
    friend size_t deserialize( const char* data, TimelineTrack& ti );
 };
+
+class StringDb;
+
+class TimelineTracks
+{
+  public:
+   struct DrawInfo
+   {
+      float drawPosX, drawPosY, hightlighPct;
+      TimeStamp timelineRelativeStartTime;
+      TimeStamp timelineAbsoluteStartTime;
+      TimeStamp timelineAbsoluteEndTime;
+      const StringDb& strDb;
+   };
+
+   void update( TimeDuration timelineDuration );
+   void draw( const DrawInfo& info );
+   void resizeAllTracksToFit();
+
+   TimelineTrack& operator[]( size_t index );
+   const TimelineTrack& operator[]( size_t index ) const;
+   size_t size() const;
+   void resize( size_t size );
+   void clear();
+
+  private:
+   void drawTraces(
+       const TimelineTrack& data,
+       uint32_t threadIndex,
+       const float posX,
+       const float posY,
+       const DrawInfo& drawInfo );
+   void drawLockWaits( uint32_t threadIndex, const float posX, const float posY );
+
+   std::vector<TimelineTrack> _tracks;
+   std::vector< std::pair< size_t, uint32_t > > _highlightedTraces;
+   int _lodLevel;
+   int _draggedTrack{-1};
+};
 }
 
 #endif  // TIMELINE_TRACK_H_

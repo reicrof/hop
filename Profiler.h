@@ -41,7 +41,7 @@ private:
 
    std::string _name;
    Timeline _timeline;
-   std::vector< TimelineTrack > _tracks;
+   TimelineTracks _tracks;
    StringDb _strDb;
    SearchResult _searchRes;
    bool _recording{ false };

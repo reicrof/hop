@@ -1,7 +1,6 @@
 #include "Timeline.h"
 #include "TimelineTrack.h"
 #include "Utils.h"
-#include "Lod.h"
 #include "ModalWindow.h"
 #include "Stats.h"
 #include "StringDb.h"
@@ -22,13 +21,6 @@
 static constexpr hop::TimeDuration MIN_NANOS_TO_DISPLAY = 500;
 static constexpr hop::TimeDuration MAX_NANOS_TO_DISPLAY = 900000000000;
 static constexpr float TIMELINE_TOTAL_HEIGHT = 50.0f;
-static constexpr float MIN_TRACE_LENGTH_PXL = 1.0f;
-static constexpr float MAX_TRACE_HEIGHT = 50.0f;
-static constexpr float MIN_TRACE_HEIGHT = 15.0f;
-static constexpr float THREAD_LABEL_HEIGHT = 20.0f;
-static constexpr uint32_t DISABLED_COLOR = 0xFF505050;
-static constexpr uint32_t HOVERED_COLOR_DELTA = 0x00191919;
-static constexpr uint32_t ACTIVE_COLOR_DELTA = 0x00333333;
 
 static void drawHoveringTimelineLine(float posInScreenX, float timelineStartPosY, const char* text )
 {
@@ -57,52 +49,6 @@ static void drawBookmarks( float posXPxl, float posYPxl )
    constexpr float LINE_PADDING = 5.0f;
    ImGui::SetCursorScreenPos( ImVec2( posXPxl - (BOOKMARK_WIDTH * 0.5f), posYPxl + LINE_PADDING ) );
    ImGui::Button("", ImVec2( BOOKMARK_WIDTH, BOOKMARK_HEIGHT ) );
-}
-
-static bool drawSeparator( uint32_t threadIndex, bool highlightSeparator )
-{
-   const float drawPosY = ImGui::GetCursorScreenPos().y - ImGui::GetWindowPos().y;
-   ImVec2 p1 = ImGui::GetWindowPos();
-   p1.y += drawPosY;
-
-   ImVec2 p2 = p1;
-   p2.x += ImGui::GetWindowSize().x;
-   p2.y += + 1;
-
-   const bool hovered = std::abs( ImGui::GetMousePos().y - p1.y ) < 7.0f && threadIndex > 0;
-
-   uint32_t color = ImGui::GetColorU32(ImGuiCol_Separator);
-   if( hovered && highlightSeparator )
-   {
-      hop::setCursor( hop::CURSOR_SIZE_NS );
-      color = 0xFFFFFFFF;
-   }
-
-   ImDrawList* drawList = ImGui::GetWindowDrawList();
-   drawList->AddLine( p1, p2, color, 2.0f );
-
-   ImGui::SetCursorPosY( ImGui::GetCursorPosY() );
-
-   return hovered;
-}
-
-static void resizeAllTracksToFit( std::vector<hop::TimelineTrack>& tracesPerThread )
-{
-   float visibleTrackCount = 0;
-   for( auto& t : tracesPerThread )
-      if( !t.empty() ) ++visibleTrackCount;
-
-   float timelineCanvasHeight = ImGui::GetIO().DisplaySize.y - TIMELINE_TOTAL_HEIGHT;
-
-   const float totalTraceHeight = timelineCanvasHeight - visibleTrackCount * THREAD_LABEL_HEIGHT;
-   const float heightPerTrack = totalTraceHeight / visibleTrackCount;
-
-   // Autofit all track except the last one
-   const size_t lastThread = tracesPerThread.size() - 1;
-   for( size_t i = 0; i < lastThread; ++i )
-      tracesPerThread[i].setTrackHeight( heightPerTrack / hop::TimelineTrack::PADDED_TRACE_SIZE );
-
-   tracesPerThread[lastThread].setTrackHeight( 9999.0f );
 }
 
 namespace hop
@@ -169,22 +115,9 @@ void Timeline::update( float deltaTimeMs ) noexcept
    static float x = 0.0f;
    x += 0.007f * deltaTimeMs;
    _animationState.highlightPercent = (std::sin( x ) + 1.3f) / 2.0f;
-
-   // Update according to options
-   TimelineTrack::TRACE_HEIGHT = hop::clamp( g_options.traceHeight, MIN_TRACE_HEIGHT, MAX_TRACE_HEIGHT );
-   TimelineTrack::PADDED_TRACE_SIZE = TimelineTrack::TRACE_HEIGHT + TimelineTrack::TRACE_VERTICAL_PADDING;
-
-   // Update current lod level
-   _lodLevel = 0;
-   while ( _lodLevel < LOD_COUNT - 1 && _timelineRange > LOD_NANOS[_lodLevel] )
-   {
-      ++_lodLevel;
-   }
 }
 
-void Timeline::draw(
-    std::vector<TimelineTrack>& tracesPerThread,
-    const StringDb& strDb )
+void Timeline::draw()
 {
    HOP_PROF_FUNC();
 
@@ -201,86 +134,85 @@ void Timeline::draw(
    // Set the scroll and get it back from ImGui to have the clamped value
    ImGui::SetScrollY(_verticalPosPxl);
 
-   char threadName[128] = "Thread ";
-   const size_t threadNamePrefix = sizeof( "Thread" );
-   for ( size_t i = 0; i < tracesPerThread.size(); ++i )
-   {
-      // Skip empty threads
-      if( tracesPerThread[i].empty() ) continue;
+   // char threadName[128] = "Thread ";
+   // const size_t threadNamePrefix = sizeof( "Thread" );
+   // for ( size_t i = 0; i < tracesPerThread.size(); ++i )
+   // {
+      // // Skip empty threads
+      // if( tracesPerThread[i].empty() ) continue;
 
-      const bool threadHidden = tracesPerThread[i].maxDisplayedDepth() <= 0.0f;
-      const float trackHeight = tracesPerThread[i].maxDisplayedDepth() * TimelineTrack::PADDED_TRACE_SIZE;
-      snprintf(
-          threadName + threadNamePrefix, sizeof( threadName ) - threadNamePrefix, "%lu", i );
-      HOP_PROF_DYN_NAME( threadName );
+      // const bool threadHidden = tracesPerThread[i].maxDisplayedDepth() <= 0.0f;
+      // const float trackHeight = tracesPerThread[i].maxDisplayedDepth() * TimelineTrack::PADDED_TRACE_SIZE;
+      // snprintf(
+      //     threadName + threadNamePrefix, sizeof( threadName ) - threadNamePrefix, "%lu", i );
+      // HOP_PROF_DYN_NAME( threadName );
 
-      // First draw the separator of the track
-      const bool highlightSeparator = ImGui::IsRootWindowOrAnyChildFocused();
-      const bool separatorHovered = drawSeparator( i, highlightSeparator );
+      // // First draw the separator of the track
+      // const bool highlightSeparator = ImGui::IsRootWindowOrAnyChildFocused();
+      // //const bool separatorHovered = drawSeparator( i, highlightSeparator );
 
-      const auto& zoneColors = g_options.zoneColors;
-      uint32_t threadLabelCol = zoneColors[ (i+1) % HOP_MAX_ZONES ];
-      if( threadHidden )
-         threadLabelCol = DISABLED_COLOR;
+      // const auto& zoneColors = g_options.zoneColors;
+      // uint32_t threadLabelCol = zoneColors[ (i+1) % HOP_MAX_ZONES ];
+      
 
-      ImGui::PushID(i);
-      ImGui::PushStyleColor( ImGuiCol_Button, threadLabelCol );
-      ImGui::PushStyleColor( ImGuiCol_ButtonHovered, addColorWithClamping( threadLabelCol, HOVERED_COLOR_DELTA ) );
-      ImGui::PushStyleColor( ImGuiCol_ButtonActive, addColorWithClamping( threadLabelCol, ACTIVE_COLOR_DELTA ) );
-      if ( ImGui::Button( threadName, ImVec2( 0, THREAD_LABEL_HEIGHT ) ) )
-      {
-         tracesPerThread[i]._trackHeight = threadHidden ? 9999.0f : -1.0f;
-      }
+      // ImGui::PushID(i);
+      // ImGui::PushStyleColor( ImGuiCol_Button, threadLabelCol );
+      // ImGui::PushStyleColor( ImGuiCol_ButtonHovered, addColorWithClamping( threadLabelCol, HOVERED_COLOR_DELTA ) );
+      // ImGui::PushStyleColor( ImGuiCol_ButtonActive, addColorWithClamping( threadLabelCol, ACTIVE_COLOR_DELTA ) );
+      // if ( ImGui::Button( threadName, ImVec2( 0, THREAD_LABEL_HEIGHT ) ) )
+      // {
+      //    tracesPerThread[i]._trackHeight = threadHidden ? 9999.0f : -1.0f;
+      // }
 
-      ImGui::PopStyleColor( 3 );
-      ImGui::PopID();
+      // ImGui::PopStyleColor( 3 );
+      // ImGui::PopID();
 
-      // Then draw the interesting stuff
-      tracesPerThread[i]._localTracesVerticalStartPos = ImGui::GetCursorPosY();
-      const float absTracesVerticalStartPos = ImGui::GetCursorScreenPos().y;
-      tracesPerThread[i]._absoluteTracesVerticalStartPos = absTracesVerticalStartPos;
+      // // Then draw the interesting stuff
+      // tracesPerThread[i]._localTracesVerticalStartPos = ImGui::GetCursorPosY();
+      // const float absTracesVerticalStartPos = ImGui::GetCursorScreenPos().y;
+      // tracesPerThread[i]._absoluteTracesVerticalStartPos = absTracesVerticalStartPos;
 
-      // Handle track resize
-      if ( separatorHovered || _draggedTrack > 0 )
-      {
-         if ( _draggedTrack == -1 && ImGui::IsMouseClicked( 0 ) )
-         {
-            _draggedTrack = (int)i;
-         }
-         if( ImGui::IsMouseReleased( 0 ) )
-         {
-            _draggedTrack = -1;
-         }
-      }
+      // // Handle track resize
+      // if ( separatorHovered || _draggedTrack > 0 )
+      // {
+      //    if ( _draggedTrack == -1 && ImGui::IsMouseClicked( 0 ) )
+      //    {
+      //       _draggedTrack = (int)i;
+      //    }
+      //    if( ImGui::IsMouseReleased( 0 ) )
+      //    {
+      //       _draggedTrack = -1;
+      //    }
+      // }
 
-      ImVec2 curDrawPos = ImGui::GetCursorScreenPos();
-      if (!threadHidden)
-      {
-         const float threadStartRelDrawPos = curDrawPos.y - ImGui::GetWindowPos().y;
-         const float threadEndRelDrawPos = threadStartRelDrawPos + trackHeight;
+      // ImVec2 curDrawPos = ImGui::GetCursorScreenPos();
+      // if (!threadHidden)
+      // {
+      //    const float threadStartRelDrawPos = curDrawPos.y - ImGui::GetWindowPos().y;
+      //    const float threadEndRelDrawPos = threadStartRelDrawPos + trackHeight;
 
-         const bool tracesVisible =
-             !( threadStartRelDrawPos > ImGui::GetWindowHeight() || threadEndRelDrawPos < 0 );
+      //    const bool tracesVisible =
+      //        !( threadStartRelDrawPos > ImGui::GetWindowHeight() || threadEndRelDrawPos < 0 );
 
-         if( tracesVisible )
-         {
-            ImGui::PushClipRect(
-                ImVec2( 0.0f, curDrawPos.y ),
-                ImVec2( 9999.0f, curDrawPos.y + trackHeight ),
-                true );
+      //    if( tracesVisible )
+      //    {
+      //       ImGui::PushClipRect(
+      //           ImVec2( 0.0f, curDrawPos.y ),
+      //           ImVec2( 9999.0f, curDrawPos.y + trackHeight ),
+      //           true );
 
-            // Draw the lock waits (before traces so that they are not hiding them)
-            drawLockWaits(tracesPerThread, i, startDrawPos.x, absTracesVerticalStartPos);
-            drawTraces( tracesPerThread[i], i, curDrawPos.x, curDrawPos.y, strDb);
+      //       // Draw the lock waits (before traces so that they are not hiding them)
+      //       drawLockWaits(tracesPerThread, i, startDrawPos.x, absTracesVerticalStartPos);
+      //       drawTraces( tracesPerThread[i], i, curDrawPos.x, curDrawPos.y, strDb);
 
-            ImGui::PopClipRect();
-         }
-      } // !threadHidden
+      //       ImGui::PopClipRect();
+      //    }
+      //} // !threadHidden
 
       // Set cursor for next drawing iterations
-      curDrawPos.y += trackHeight;
-      ImGui::SetCursorScreenPos( curDrawPos );
-   }
+      //curDrawPos.y += trackHeight;
+      //ImGui::SetCursorScreenPos( curDrawPos );
+   //}
 
    // Draw the overlay stuff after having drawn the traces
    // Draw timeline mouse indicator
@@ -310,51 +242,51 @@ void Timeline::draw(
 
    if ( _contextMenuInfo.open )
    {
-      ImGui::PushStyleVar( ImGuiStyleVar_WindowMinSize, ImVec2( 0, 0 ) );
-      ImGui::SetNextWindowBgAlpha(0.8f); // Transparent background
-      if( ImGui::BeginPopupContextItem( "Context Menu" ) )
-      {
-         if ( ImGui::Selectable( "Trace Stats" ) )
-         {
-            _traceStats = createTraceStats(
-               tracesPerThread[_contextMenuInfo.threadIndex]._traces,
-               _contextMenuInfo.threadIndex,
-               _contextMenuInfo.traceId);
-         }
-         else if ( ImGui::Selectable( "Profile Stack" ) )
-         {
-            _traceDetails = createTraceDetails(
-                tracesPerThread[_contextMenuInfo.threadIndex]._traces,
-                _contextMenuInfo.threadIndex,
-                _contextMenuInfo.traceId );
-            _contextMenuInfo.open = false;
-            ImGui::CloseCurrentPopup();
-         }
-         else if( ImGui::Selectable( "Profile Track" ) )
-         {
-            displayModalWindow( "Computing total trace size...", MODAL_TYPE_NO_CLOSE );
-            const uint32_t tIdx = _contextMenuInfo.threadIndex;
-            std::thread t( [this, tIdx, dispTrace = tracesPerThread[tIdx]._traces.copy()]() {
-               _traceDetails = createGlobalTraceDetails( dispTrace, tIdx );
-               closeModalWindow();
-            } );
-            t.detach();
-         }
-         else if( ImGui::Selectable( "Resize Tracks to Fit" ) )
-         {
-            resizeAllTracksToFit( tracesPerThread );
-         }
-         ImGui::EndPopup();
-      }
-      ImGui::PopStyleVar();
+      // ImGui::PushStyleVar( ImGuiStyleVar_WindowMinSize, ImVec2( 0, 0 ) );
+      // ImGui::SetNextWindowBgAlpha(0.8f); // Transparent background
+      // if( ImGui::BeginPopupContextItem( "Context Menu" ) )
+      // {
+      //    if ( ImGui::Selectable( "Trace Stats" ) )
+      //    {
+      //       _traceStats = createTraceStats(
+      //          tracesPerThread[_contextMenuInfo.threadIndex]._traces,
+      //          _contextMenuInfo.threadIndex,
+      //          _contextMenuInfo.traceId);
+      //    }
+      //    else if ( ImGui::Selectable( "Profile Stack" ) )
+      //    {
+      //       _traceDetails = createTraceDetails(
+      //           tracesPerThread[_contextMenuInfo.threadIndex]._traces,
+      //           _contextMenuInfo.threadIndex,
+      //           _contextMenuInfo.traceId );
+      //       _contextMenuInfo.open = false;
+      //       ImGui::CloseCurrentPopup();
+      //    }
+      //    else if( ImGui::Selectable( "Profile Track" ) )
+      //    {
+      //       displayModalWindow( "Computing total trace size...", MODAL_TYPE_NO_CLOSE );
+      //       const uint32_t tIdx = _contextMenuInfo.threadIndex;
+      //       std::thread t( [this, tIdx, dispTrace = tracesPerThread[tIdx]._traces.copy()]() {
+      //          _traceDetails = createGlobalTraceDetails( dispTrace, tIdx );
+      //          closeModalWindow();
+      //       } );
+      //       t.detach();
+      //    }
+      //    else if( ImGui::Selectable( "Resize Tracks to Fit" ) )
+      //    {
+      //       //resizeAllTracksToFit( tracesPerThread );
+      //    }
+      //    ImGui::EndPopup();
+      // }
+      // ImGui::PopStyleVar();
    }
 
    ImGui::EndChild(); // TimelineCanvas
 
-   if (_traceStats.open)
-   {
-      drawTraceStats(_traceStats, tracesPerThread, strDb);
-   }
+   // if (_traceStats.open)
+   // {
+   //    drawTraceStats(_traceStats, tracesPerThread, strDb);
+   // }
 
    if ( ImGui::IsItemHoveredRect() )
    {
@@ -365,7 +297,7 @@ void Timeline::draw(
          handleMouseWheel( mousePosInCanvas.x, mousePosInCanvas.y );
 
       if( ImGui::IsRootWindowOrAnyChildFocused() )
-         handleMouseDrag( mousePosInCanvas.x, mousePosInCanvas.y, tracesPerThread );
+         handleMouseDrag( mousePosInCanvas.x, mousePosInCanvas.y );
    }
 
    ImGui::EndChild(); // TimelineAndCanvas
@@ -552,27 +484,27 @@ void Timeline::handleMouseWheel( float mousePosX, float )
    }
 }
 
-void Timeline::handleMouseDrag( float mouseInCanvasX, float mouseInCanvasY, std::vector<TimelineTrack>& tracesPerThread )
+void Timeline::handleMouseDrag( float mouseInCanvasX, float mouseInCanvasY )
 {
    // Left mouse button dragging
    if ( ImGui::IsMouseDragging( 0 ) )
    {
       // Handle track resize
-      if( _draggedTrack > 0 )
-      {
+     // if( _draggedTrack > 0 )
+    //  {
          // Find the previous track that is visible
-         int i = _draggedTrack-1;
-         while( i > 0 && tracesPerThread[i].empty() ) {
-            --i;
-         }
+         // int i = _draggedTrack-1;
+         // while( i > 0 && tracesPerThread[i].empty() ) {
+         //    --i;
+         // }
 
-         const float trackHeight =
-             ( ImGui::GetMousePos().y - tracesPerThread[i]._absoluteTracesVerticalStartPos - THREAD_LABEL_HEIGHT ) /
-             TimelineTrack::PADDED_TRACE_SIZE;
-         tracesPerThread[i].setTrackHeight( trackHeight );
-      }
-      else // handle timeline panning
-      {
+         // const float trackHeight =
+         //     ( ImGui::GetMousePos().y - tracesPerThread[i]._absoluteTracesVerticalStartPos - THREAD_LABEL_HEIGHT ) /
+         //     TimelineTrack::PADDED_TRACE_SIZE;
+         // tracesPerThread[i].setTrackHeight( trackHeight );
+     // }
+     // else // handle timeline panning
+     // {
          const float windowWidthPxl = ImGui::GetWindowWidth();
          const auto delta = ImGui::GetMouseDragDelta();
 
@@ -587,7 +519,7 @@ void Timeline::handleMouseDrag( float mouseInCanvasX, float mouseInCanvasY, std:
 
          ImGui::ResetMouseDragDelta();
          setRealtime( false );
-      }
+ //     }
    }
    // Ctrl + right mouse dragging
    else if( ImGui::GetIO().KeyCtrl && ImGui::IsMouseDragging( 1 ) )
@@ -705,11 +637,6 @@ float Timeline::maxVerticalPosPxl() const noexcept
    return maxScrollY;
 }
 
-int Timeline::currentLodLevel() const noexcept
-{
-   return _lodLevel;
-}
-
 TraceDetails& Timeline::getTraceDetails() noexcept
 {
    return _traceDetails;
@@ -815,214 +742,6 @@ void Timeline::zoomOn( int64_t nanoToZoomOn, float zoomFactor )
    }
 }
 
-static uint32_t setBitIndex( TZoneId_t zone )
-{
-   uint32_t count = 0;
-   while ( zone )
-   {
-      zone = zone >> 1;
-      ++count;
-   }
-   return count-1;
-}
-
-void Timeline::drawTraces(
-    const TimelineTrack& data,
-    uint32_t threadIndex,
-    const float posX,
-    const float posY,
-    const StringDb& strDb )
-{
-   if ( data._traces.ends.empty() ) return;
-
-   HOP_PROF_FUNC();
-
-   const auto absoluteStart = _absoluteStartTime;
-   const float windowWidthPxl = ImGui::GetWindowWidth();
-
-   struct DrawingInfo
-   {
-      ImVec2 posPxl;
-      TimeDuration duration;
-      size_t traceIndex;
-      float lengthPxl;
-   };
-
-   static std::array< std::vector< DrawingInfo >, HOP_MAX_ZONES > tracesToDraw;
-   static std::array< std::vector< DrawingInfo >, HOP_MAX_ZONES > lodTracesToDraw;
-   for( size_t i = 0; i < lodTracesToDraw.size(); ++i )
-   {
-      tracesToDraw[ i ].clear();
-      lodTracesToDraw[ i ].clear();
-   }
-
-   static std::vector<DrawingInfo> highlightTraceToDraw;
-   highlightTraceToDraw.clear();
-
-   // Find the best lodLevel for our current zoom
-   const int lodLevel = currentLodLevel();
-
-   g_stats.currentLOD = lodLevel;
-
-   // The time range to draw in absolute time
-   const TimeStamp firstTraceAbsoluteTime = absoluteTimelineStart();
-   const TimeStamp lastTraceAbsoluteTime = absoluteTimelineEnd();
-
-   const auto span = visibleIndexSpan(
-       data._traces.lods, lodLevel, firstTraceAbsoluteTime, lastTraceAbsoluteTime, 0 );
-
-   if( span.first == hop::INVALID_IDX ) return;
-
-   for ( size_t i = span.first; i < span.second; ++i )
-   {
-      const auto& t = data._traces.lods[lodLevel][i];
-      const TimeStamp traceEndTime = ( t.end - absoluteStart );
-      const auto traceEndPxl = nanosToPxl<float>(
-          windowWidthPxl, _timelineRange, traceEndTime - _timelineStart );
-      const float traceLengthPxl = std::max(
-          MIN_TRACE_LENGTH_PXL, nanosToPxl<float>( windowWidthPxl, _timelineRange, t.delta ) );
-
-      const auto tracePos = ImVec2(
-          posX + traceEndPxl - traceLengthPxl,
-          posY + t.depth * TimelineTrack::PADDED_TRACE_SIZE);
-      const uint32_t zoneIndex = setBitIndex(data._traces.zones[t.traceIndex]);
-      if ( t.isLoded )
-      {
-         lodTracesToDraw[ zoneIndex ].push_back(
-             DrawingInfo{tracePos, t.delta, t.traceIndex, traceLengthPxl} );
-      }
-      else
-      {
-         tracesToDraw[ zoneIndex ].push_back(
-             DrawingInfo{tracePos, t.delta, t.traceIndex, traceLengthPxl} );
-         for( const auto& tid : _highlightedTraces )
-         {
-            if( threadIndex == tid.second && t.traceIndex == tid.first )
-            {
-               highlightTraceToDraw.push_back( DrawingInfo{tracePos, t.delta, t.traceIndex, traceLengthPxl} );
-            }
-         }
-      }
-   }
-
-   const bool rightMouseClicked = ImGui::IsMouseReleased( 1 );
-   const bool leftMouseDblClicked = ImGui::IsMouseDoubleClicked( 0 );
-
-   const auto& zoneColors = g_options.zoneColors;
-   const auto& enabledZone = g_options.zoneEnabled;
-   const float disabledZoneOpacity = g_options.disabledZoneOpacity;
-
-   // Draw the loded traces
-   char curName[512] = "<Multiple Elements> ~";
-   const size_t hoveredNamePrefixSize = strlen( curName );
-   for ( size_t zoneId = 0; zoneId < lodTracesToDraw.size(); ++zoneId )
-   {
-      ImGui::PushStyleColor(ImGuiCol_Button, zoneColors[zoneId] );
-      ImGui::PushStyleColor(ImGuiCol_ButtonHovered, addColorWithClamping( zoneColors[zoneId], HOVERED_COLOR_DELTA ) );
-      ImGui::PushStyleColor(ImGuiCol_ButtonActive, addColorWithClamping( zoneColors[zoneId], ACTIVE_COLOR_DELTA ) );
-      ImGui::PushStyleVar(ImGuiStyleVar_Alpha, enabledZone[zoneId] ? 1.0f : disabledZoneOpacity );
-      const auto& traces = lodTracesToDraw[ zoneId ];
-      for( const auto& t : traces )
-      {
-         ImGui::SetCursorScreenPos( t.posPxl );
-
-         ImGui::Button( "", ImVec2( t.lengthPxl, TimelineTrack::TRACE_HEIGHT ) );
-
-         if ( ImGui::IsItemHovered() )
-         {
-            if ( t.lengthPxl > 3 )
-            {
-               ImGui::BeginTooltip();
-               formatNanosDurationToDisplay( t.duration, curName + hoveredNamePrefixSize, sizeof( curName ) - hoveredNamePrefixSize );
-               ImGui::TextUnformatted( curName );
-               ImGui::EndTooltip();
-            }
-
-            if ( leftMouseDblClicked )
-            {
-               pushNavigationState();
-               const TimeStamp traceEndTime =
-                   pxlToNanos( windowWidthPxl, _timelineRange, t.posPxl.x - posX + t.lengthPxl );
-               frameToTime( _timelineStart + ( traceEndTime - t.duration ), t.duration );
-            }
-            else if ( rightMouseClicked && _rightClickStartPosInCanvas[0] == 0.0f)
-            {
-               ImGui::OpenPopup( "Context Menu" );
-               _contextMenuInfo.open = true;
-               _contextMenuInfo.threadIndex = threadIndex;
-               _contextMenuInfo.traceId = t.traceIndex;
-            }
-         }
-      }
-      ImGui::PopStyleColor( 3 );
-      ImGui::PopStyleVar();
-   }
-
-   char formattedTime[64] = {};
-   // Draw the non-loded traces
-   for ( size_t zoneId = 0; zoneId < tracesToDraw.size(); ++zoneId )
-   {
-      ImGui::PushStyleColor(ImGuiCol_Button, zoneColors[zoneId] );
-      ImGui::PushStyleColor(ImGuiCol_ButtonHovered, addColorWithClamping( zoneColors[zoneId], HOVERED_COLOR_DELTA ) );
-      ImGui::PushStyleColor(ImGuiCol_ButtonActive, addColorWithClamping( zoneColors[zoneId], ACTIVE_COLOR_DELTA ) );
-      ImGui::PushStyleVar(ImGuiStyleVar_Alpha, enabledZone[zoneId] ? 1.0f : disabledZoneOpacity );
-      const auto& traces = tracesToDraw[ zoneId ];
-      for( const auto& t : traces )
-      {
-         const size_t traceIndex = t.traceIndex;
-         snprintf( curName, sizeof(curName), "%s", strDb.getString( data._traces.fctNameIds[traceIndex] ) );
-
-         ImGui::SetCursorScreenPos( t.posPxl );
-         ImGui::Button( curName, ImVec2( t.lengthPxl, TimelineTrack::TRACE_HEIGHT ) );
-         if ( ImGui::IsItemHovered() )
-         {
-            if ( t.lengthPxl > 3 )
-            {
-               size_t lastChar = strlen( curName );
-               curName[lastChar] = ' ';
-               ImGui::BeginTooltip();
-               formatNanosDurationToDisplay( t.duration, formattedTime, sizeof( formattedTime ) );
-               snprintf(
-                   curName + lastChar,
-                   sizeof( curName ) - lastChar,
-                   " (%s)\n   %s:%d ",
-                   formattedTime,
-                   strDb.getString( data._traces.fileNameIds[traceIndex] ),
-                   data._traces.lineNbs[traceIndex] );
-               ImGui::TextUnformatted( curName );
-               ImGui::EndTooltip();
-            }
-
-            if ( leftMouseDblClicked )
-            {
-               setZoom( t.duration );
-               setStartTime(
-                   ( data._traces.ends[traceIndex] - data._traces.deltas[traceIndex] - absoluteStart ) );
-            }
-            else if ( rightMouseClicked && _rightClickStartPosInCanvas[0] == 0.0f )
-            {
-               ImGui::OpenPopup( "Context Menu" );
-               _contextMenuInfo.open = true;
-               _contextMenuInfo.threadIndex = threadIndex;
-               _contextMenuInfo.traceId = t.traceIndex;
-            }
-         }
-      }
-      ImGui::PopStyleColor( 3 );
-      ImGui::PopStyleVar();
-   }
-
-   ImGui::PushStyleColor( ImGuiCol_Button, ImColor( 1.0f, 1.0f, 1.0f, 0.5f * _animationState.highlightPercent ).Value );
-   ImGui::PushStyleColor( ImGuiCol_ButtonHovered, ImColor( 1.0f, 1.0f, 1.0f, 0.4f * _animationState.highlightPercent ).Value );
-   ImGui::PushStyleColor( ImGuiCol_ButtonActive, ImColor( 1.0f, 1.0f, 1.0f, 0.4f * _animationState.highlightPercent ).Value );
-   for( const auto& t : highlightTraceToDraw )
-   {
-      ImGui::SetCursorScreenPos( t.posPxl );
-      ImGui::Button( "", ImVec2( t.lengthPxl, TimelineTrack::TRACE_HEIGHT ) );
-   }
-   ImGui::PopStyleColor( 3 );
-}
-
 namespace
 {
    struct unlock_events_less_cmp
@@ -1039,277 +758,15 @@ namespace
    };
 }
 
-std::vector< Timeline::LockOwnerInfo > Timeline::highlightLockOwner(
-    const std::vector<TimelineTrack>& infos,
-    uint32_t threadIndex,
-    uint32_t hoveredLwIndex,
-    const float posX,
-    const float /*posY*/ )
-{
-    HOP_PROF_FUNC();
-    std::vector< LockOwnerInfo > lockInfos;
-    lockInfos.reserve( 16 );
+// void Timeline::addTraceToHighlight( const std::pair< size_t, uint32_t >& trace )
+// {
+//    _highlightedTraces.push_back( trace );
+// }
 
-    ImDrawList* DrawList = ImGui::GetWindowDrawList();
-    const float windowWidthPxl = ImGui::GetWindowWidth();
-    const auto absoluteStart = _absoluteStartTime;
-    const int highlightAlpha = 70.0f * _animationState.highlightPercent;
-
-    const void* highlightedMutexAddr = infos[threadIndex]._lockWaits.mutexAddrs[hoveredLwIndex];
-    const TimeDuration highlightedLWDelta = infos[threadIndex]._lockWaits.deltas[hoveredLwIndex];
-    const TimeStamp highlightedLWEndTime = infos[threadIndex]._lockWaits.ends[hoveredLwIndex];
-    const TimeStamp highlightedLWStartTime = highlightedLWEndTime - highlightedLWDelta;
-    for (size_t i = 0; i < infos.size(); ++i)
-    {
-        if (i == threadIndex || infos[i].maxDisplayedDepth() <= 0.0f ) continue;
-
-        const LockWaitData& lockWaits = infos[i]._lockWaits;
-
-        const float startNanosAsPxl =
-           nanosToPxl<float>(windowWidthPxl, _timelineRange, _timelineStart);
-
-        auto lastUnlock = std::lower_bound(
-            infos[i]._unlockEvents.cbegin(),
-            infos[i]._unlockEvents.cend(),
-            highlightedLWEndTime,
-            unlock_events_less_cmp() );
-
-        // lower_bound returns the first that is not smaller. We need the one just before that
-        if(lastUnlock != infos[i]._unlockEvents.cbegin() ) --lastUnlock;
-
-        while( lastUnlock != infos[i]._unlockEvents.cbegin() )
-        {
-            if(lastUnlock->mutexAddress == highlightedMutexAddr )
-            {
-               // We've gone to far, so early break
-               if(lastUnlock->time < highlightedLWStartTime )
-                  break;
-
-               // Find the associated lock wait
-               const auto lockWaitIt = std::lower_bound(
-                   lockWaits.ends.cbegin(), lockWaits.ends.cend(), lastUnlock->time );
-               size_t lockWaitIdx = std::distance( lockWaits.ends.begin(), lockWaitIt );
-
-               // lower_bound returns the first that does not compare smaller than the unlock time.
-               // Therefore, we need to start from this iterator and find the first one that matches
-               // the highlighted mutex
-               if( lockWaitIdx > 0 ) --lockWaitIdx;
-
-               while ( lockWaitIdx > 0 &&
-                       lockWaits.mutexAddrs[lockWaitIdx] != highlightedMutexAddr )
-               {
-                  --lockWaitIdx;
-               }
-
-               const TimeStamp lockWaitEndTime = lockWaits.ends[lockWaitIdx];
-               // Add info to result vector
-               bool added = false;
-               for( auto& info : lockInfos )
-               {
-                  if( info.threadIndex == i )
-                  {
-                     info.lockDuration += lastUnlock->time - lockWaitEndTime;
-                     added = true;
-                     break;
-                  }
-               }
-               if( !added )
-                  lockInfos.emplace_back( lastUnlock->time - lockWaitEndTime, i );
-
-               const int64_t lockTimeAsPxl = nanosToPxl<float>(
-                  windowWidthPxl,
-                  _timelineRange,
-                  (lockWaitEndTime - absoluteStart));
-               const int64_t unlockTimeAsPxl = nanosToPxl<float>(
-                  windowWidthPxl, _timelineRange, (lastUnlock->time - absoluteStart));
-
-               const float tracesHeight = infos[i].maxDisplayedDepth() * TimelineTrack::PADDED_TRACE_SIZE;
-
-               DrawList->AddRectFilled(
-                  ImVec2(posX - startNanosAsPxl + lockTimeAsPxl, infos[i]._absoluteTracesVerticalStartPos),
-                  ImVec2(
-                     posX - startNanosAsPxl + unlockTimeAsPxl,
-                     infos[i]._absoluteTracesVerticalStartPos + tracesHeight),
-                  ImColor(0, 255, 0, 30 + highlightAlpha));
-            }
-
-            --lastUnlock;
-        }
-    }
-
-    return lockInfos;
-}
-
-void Timeline::drawLockWaits(
-    const std::vector<TimelineTrack>& infos,
-    uint32_t threadIndex,
-    const float posX,
-    const float posY )
-{
-   const auto& data = infos[threadIndex];
-   const LockWaitData& lockWaits = data._lockWaits;
-   if ( lockWaits.ends.empty() ) return;
-
-   HOP_PROF_FUNC();
-
-   const auto absoluteStart = _absoluteStartTime;
-   const float windowWidthPxl = ImGui::GetWindowWidth();
-
-   // The time range to draw in absolute time
-   const TimeStamp firstTraceAbsoluteTime = absoluteStart + _timelineStart;
-   const TimeStamp lastTraceAbsoluteTime = firstTraceAbsoluteTime + _timelineRange;
-
-   // Find the best lodLevel for our current zoom
-   const int lodLevel = currentLodLevel();
-
-   struct DrawingInfo
-   {
-      ImVec2 posPxl;
-      TimeDuration duration;
-      size_t traceIndex;
-      float lengthPxl;
-   };
-
-   const auto span =
-       visibleIndexSpan( lockWaits.lods, lodLevel, firstTraceAbsoluteTime, lastTraceAbsoluteTime, 1 );
-
-   if ( span.first == hop::INVALID_IDX ) return;
-
-   static std::vector<DrawingInfo> tracesToDraw, lodTracesToDraw;
-   tracesToDraw.clear();
-   lodTracesToDraw.clear();
-
-   HOP_PROF_SPLIT( "Gathering drawing info" );
-
-   for ( size_t i = span.first; i < span.second; ++i )
-   {
-      const auto& t = lockWaits.lods[lodLevel][i];
-      const TimeStamp traceEndTime = ( t.end - absoluteStart );
-      const auto traceEndPxl =
-          nanosToPxl<float>( windowWidthPxl, _timelineRange, traceEndTime - _timelineStart );
-      const float traceLengthPxl = std::max(
-          MIN_TRACE_LENGTH_PXL, nanosToPxl<float>( windowWidthPxl, _timelineRange, t.delta ) );
-
-      const auto tracePos =
-          ImVec2( posX + traceEndPxl - traceLengthPxl, posY + t.depth * TimelineTrack::PADDED_TRACE_SIZE );
-      if ( t.isLoded )
-      {
-         lodTracesToDraw.push_back( DrawingInfo{tracePos, t.delta, t.traceIndex, traceLengthPxl} );
-      }
-      else
-      {
-         tracesToDraw.push_back( DrawingInfo{tracePos, t.delta, t.traceIndex, traceLengthPxl} );
-      }
-   }
-
-   const auto& zoneColors = g_options.zoneColors;
-   const auto& enabledZone = g_options.zoneEnabled;
-   const float disabledZoneOpacity = g_options.disabledZoneOpacity;
-   ImGui::PushStyleColor(ImGuiCol_Button, zoneColors[HOP_MAX_ZONES] );
-   ImGui::PushStyleColor(ImGuiCol_ButtonHovered, addColorWithClamping( zoneColors[HOP_MAX_ZONES], HOVERED_COLOR_DELTA ) );
-   ImGui::PushStyleColor(ImGuiCol_ButtonActive, addColorWithClamping( zoneColors[HOP_MAX_ZONES], ACTIVE_COLOR_DELTA ) );
-   ImGui::PushStyleVar(ImGuiStyleVar_Alpha, enabledZone[HOP_MAX_ZONES] ? 1.0f : disabledZoneOpacity );
-
-   HOP_PROF_SPLIT( "drawing lod" );
-   for ( const auto& t : lodTracesToDraw )
-   {
-      ImGui::SetCursorScreenPos( t.posPxl );
-      ImGui::Button( "", ImVec2( t.lengthPxl, TimelineTrack::TRACE_HEIGHT ) );
-      if ( ImGui::IsItemHovered() )
-      {
-         const auto lockInfo = highlightLockOwner( infos, threadIndex, t.traceIndex, posX, posY );
-         (void)lockInfo.empty();
-         if ( t.lengthPxl > 3 )
-         {
-            char lockTooltip[256] = "Waiting lock for ~";
-            ImGui::BeginTooltip();
-            formatNanosDurationToDisplay(
-                t.duration,
-                lockTooltip + strlen( lockTooltip ),
-                sizeof( lockTooltip ) - strlen( lockTooltip ) );
-
-            ImGui::TextUnformatted( lockTooltip );
-            ImGui::EndTooltip();
-         }
-
-         if ( ImGui::IsMouseDoubleClicked( 0 ) )
-         {
-            pushNavigationState();
-            const TimeDuration delta = lockWaits.deltas[t.traceIndex];
-            frameToAbsoluteTime( lockWaits.ends[t.traceIndex] - delta, delta );
-         }
-      }
-   }
-
-   HOP_PROF_SPLIT( "drawing non-lod" );
-   for ( const auto& t : tracesToDraw )
-   {
-      ImGui::SetCursorScreenPos( t.posPxl );
-      ImGui::Button( "Waiting lock...", ImVec2( t.lengthPxl, TimelineTrack::TRACE_HEIGHT ) );
-      if ( ImGui::IsItemHovered() )
-      {
-         const auto lockInfo = highlightLockOwner( infos, threadIndex, t.traceIndex, posX, posY );
-         (void)lockInfo.empty();
-         if ( t.lengthPxl > 3 )
-         {
-            char lockTooltip[256] = "Waiting lock for ";
-            ImGui::BeginTooltip();
-            formatNanosDurationToDisplay(
-                t.duration,
-                lockTooltip + strlen( lockTooltip ),
-                sizeof( lockTooltip ) - strlen( lockTooltip ) );
-
-            if ( lockInfo.empty() )
-            {
-               // Set a message to warn the user than the thread owning the lock is not part of
-               // any profiled code
-               snprintf(
-                   lockTooltip + strlen( lockTooltip ),
-                   sizeof( lockTooltip ) - strlen( lockTooltip ),
-                   "\n  Threads owning the lock were not profiled" );
-            }
-            else
-            {
-               // Print infos about which threads own the lock
-               char formattedLockTime[64] = {};
-               for ( const auto& i : lockInfo )
-               {
-                  formatNanosDurationToDisplay(
-                      i.lockDuration, formattedLockTime, sizeof( formattedLockTime ) );
-                  snprintf(
-                      lockTooltip + strlen( lockTooltip ),
-                      sizeof( lockTooltip ) - strlen( lockTooltip ),
-                      "\n  Thread #%u (%s)",
-                      i.threadIndex,
-                      formattedLockTime );
-               }
-            }
-            ImGui::TextUnformatted( lockTooltip );
-            ImGui::EndTooltip();
-         }
-
-         if ( ImGui::IsMouseDoubleClicked( 0 ) )
-         {
-            pushNavigationState();
-            const TimeDuration delta = lockWaits.deltas[t.traceIndex];
-            frameToAbsoluteTime( lockWaits.ends[t.traceIndex] - delta, delta );
-         }
-      }
-   }
-
-   ImGui::PopStyleColor( 3 );
-   ImGui::PopStyleVar();
-}
-
-void Timeline::addTraceToHighlight( const std::pair< size_t, uint32_t >& trace )
-{
-   _highlightedTraces.push_back( trace );
-}
-
-void Timeline::clearHighlightedTraces()
-{
-   _highlightedTraces.clear();
-}
+// void Timeline::clearHighlightedTraces()
+// {
+//    _highlightedTraces.clear();
+// }
 
 void Timeline::nextBookmark() noexcept
 {
