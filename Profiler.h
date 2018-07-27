@@ -25,8 +25,8 @@ struct Profiler
    void draw( uint32_t windowWidth, uint32_t windowHeight );
    void fetchClientData();
    void addStringData( const std::vector< char >& stringData );
-   void addTraces( const DisplayableTraces& traces, uint32_t threadIndex );
-   void addLockWaits( const DisplayableLockWaits& lockWaits, uint32_t threadIndex);
+   void addTraces( const TraceData& traces, uint32_t threadIndex );
+   void addLockWaits( const LockWaitData& lockWaits, uint32_t threadIndex);
    void addUnlockEvents(const std::vector<UnlockEvent>& unlockEvents, uint32_t threadIndex);
    void handleHotkey();
    void setRecording( bool recording );

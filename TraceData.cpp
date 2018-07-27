@@ -1,4 +1,4 @@
-#include "DisplayableTraces.h"
+#include "TraceData.h"
 
 #include <algorithm>
 #include <cassert>
@@ -6,7 +6,7 @@
 namespace hop
 {
 
-void DisplayableTraces::append( const DisplayableTraces& newTraces )
+void TraceData::append( const TraceData& newTraces )
 {
    const size_t prevSize = deltas.size();
 
@@ -24,7 +24,7 @@ void DisplayableTraces::append( const DisplayableTraces& newTraces )
    appendLods( lods, computeLods( newTraces, prevSize ) );
 }
 
-void DisplayableTraces::clear()
+void TraceData::clear()
 {
    ends.clear();
    deltas.clear();
@@ -37,9 +37,9 @@ void DisplayableTraces::clear()
    maxDepth = 0;
 }
 
-DisplayableTraces DisplayableTraces::copy() const
+TraceData TraceData::copy() const
 {
-   DisplayableTraces copy;
+   TraceData copy;
    copy.ends = this->ends;
    copy.deltas = this->deltas;
    copy.flags = this->flags;
@@ -53,7 +53,7 @@ DisplayableTraces DisplayableTraces::copy() const
    return copy;
 }
 
-void DisplayableLockWaits::append( const DisplayableLockWaits& newLockWaits )
+void LockWaitData::append( const LockWaitData& newLockWaits )
 {
    const size_t prevSize = ends.size();
 
@@ -65,7 +65,7 @@ void DisplayableLockWaits::append( const DisplayableLockWaits& newLockWaits )
    appendLods( lods, computeLods( newLockWaits, prevSize ) );
 }
 
-void DisplayableLockWaits::clear()
+void LockWaitData::clear()
 {
    ends.clear();
    deltas.clear();
@@ -74,13 +74,13 @@ void DisplayableLockWaits::clear()
 
 
 
-template std::pair<size_t, size_t> visibleIndexSpan<DisplayableTraces>(
-    const DisplayableTraces& traces,
+template std::pair<size_t, size_t> visibleIndexSpan<TraceData>(
+    const TraceData& traces,
     TimeStamp absoluteStart,
     TimeStamp absoluteEnd );
 
-template std::pair<size_t, size_t> visibleIndexSpan<DisplayableLockWaits>(
-    const DisplayableLockWaits& traces,
+template std::pair<size_t, size_t> visibleIndexSpan<LockWaitData>(
+    const LockWaitData& traces,
     TimeStamp absoluteStart,
     TimeStamp absoluteEnd );
 

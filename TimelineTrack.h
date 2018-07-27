@@ -2,7 +2,7 @@
 #define TIMELINE_TRACK_H_
 
 #include "Hop.h"
-#include "DisplayableTraces.h"
+#include "TraceData.h"
 
 #include <vector>
 
@@ -11,15 +11,19 @@ namespace hop
 
 struct TimelineTrack
 {
-   void addTraces( const DisplayableTraces& traces );
-   void addLockWaits( const DisplayableLockWaits& lockWaits );
+   static float TRACE_HEIGHT;
+   static float TRACE_VERTICAL_PADDING;
+   static float PADDED_TRACE_SIZE;
+
+   void addTraces( const TraceData& traces );
+   void addLockWaits( const LockWaitData& lockWaits );
    void addUnlockEvents(const std::vector<UnlockEvent>& unlockEvents);
    TDepth_t maxDepth() const noexcept;
    float maxDisplayedDepth() const noexcept;
    void setTrackHeight( float height );
    bool empty() const;
-   DisplayableTraces _traces;
-   DisplayableLockWaits _lockWaits;
+   TraceData _traces;
+   LockWaitData _lockWaits;
    std::vector<UnlockEvent> _unlockEvents;
 
    // This is the position at which the traces for the current thread ifno

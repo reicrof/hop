@@ -169,36 +169,36 @@ size_t Server::handleNewMessage( uint8_t* data, size_t maxSize, TimeStamp minTim
           const Trace* traces = (const Trace*)bufPtr;
           const size_t traceCount = msgInfo->traces.count;
 
-          DisplayableTraces dispTraces;
+          TraceData traceData;
           TDepth_t maxDepth = 0;
           for ( size_t i = 0; i < traceCount; ++i )
           {
              const auto& t = traces[i];
-             dispTraces.ends.push_back( t.end );
-             dispTraces.deltas.push_back( t.end - t.start );
-             dispTraces.fileNameIds.push_back( _stringDb.getStringIndex( t.fileNameId ) );
-             dispTraces.fctNameIds.push_back( _stringDb.getStringIndex( t.fctNameId ) );
-             dispTraces.lineNbs.push_back( t.lineNumber );
-             dispTraces.depths.push_back( t.depth );
-             dispTraces.zones.push_back( t.zone );
+             traceData.ends.push_back( t.end );
+             traceData.deltas.push_back( t.end - t.start );
+             traceData.fileNameIds.push_back( _stringDb.getStringIndex( t.fileNameId ) );
+             traceData.fctNameIds.push_back( _stringDb.getStringIndex( t.fctNameId ) );
+             traceData.lineNbs.push_back( t.lineNumber );
+             traceData.depths.push_back( t.depth );
+             traceData.zones.push_back( t.zone );
              maxDepth = std::max( maxDepth, t.depth );
           }
-          dispTraces.maxDepth = maxDepth;
+          traceData.maxDepth = maxDepth;
 
           // The ends time should already be sorted
-          assert_is_sorted( dispTraces.ends.begin(), dispTraces.ends.end() );
+          assert_is_sorted( traceData.ends.begin(), traceData.ends.end() );
 
           bufPtr += ( traceCount * sizeof( Trace ) );
           assert( ( size_t )( bufPtr - data ) <= maxSize );
 
           static_assert(
-              std::is_move_constructible<DisplayableTraces>::value,
-              "Displayble Traces not moveable" );
+              std::is_move_constructible<TraceData>::value,
+              "Trace Data not moveable" );
           if ( traceCount > 0 )
           {
              // TODO: Could lock later when we received all the messages
              std::lock_guard<std::mutex> guard( _pendingData.mutex );
-             _pendingData.traces.emplace_back( std::move( dispTraces ) );
+             _pendingData.traces.emplace_back( std::move( traceData ) );
              _pendingData.tracesThreadIndex.push_back( threadIndex );
           }
           return ( size_t )( bufPtr - data );
@@ -208,23 +208,23 @@ size_t Server::handleNewMessage( uint8_t* data, size_t maxSize, TimeStamp minTim
          const LockWait* lws = (const LockWait*)bufPtr;
          const uint32_t lwCount = msgInfo->lockwaits.count;
 
-         DisplayableLockWaits dispLw;
+         LockWaitData lockwaitData;
          for( uint32_t i = 0; i < lwCount; ++i )
          {
-            dispLw.ends.push_back( lws[i].end );
-            dispLw.deltas.push_back( lws[i].end - lws[i].start );
-            dispLw.depths.push_back( lws[i].depth );
-            dispLw.mutexAddrs.push_back( lws[i].mutexAddress );
+            lockwaitData.ends.push_back( lws[i].end );
+            lockwaitData.deltas.push_back( lws[i].end - lws[i].start );
+            lockwaitData.depths.push_back( lws[i].depth );
+            lockwaitData.mutexAddrs.push_back( lws[i].mutexAddress );
          }
 
          bufPtr += ( lwCount * sizeof( LockWait ) );
 
          // The ends time should already be sorted
-         assert_is_sorted( dispLw.ends.begin(), dispLw.ends.end() );
+         assert_is_sorted( lockwaitData.ends.begin(), lockwaitData.ends.end() );
 
          // TODO: Could lock later when we received all the messages
          std::lock_guard<std::mutex> guard( _pendingData.mutex );
-         _pendingData.lockWaits.emplace_back( std::move( dispLw ) );
+         _pendingData.lockWaits.emplace_back( std::move( lockwaitData ) );
          _pendingData.lockWaitThreadIndex.push_back( threadIndex );
 
          return (size_t)(bufPtr - data);

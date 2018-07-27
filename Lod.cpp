@@ -1,6 +1,6 @@
 #include "Lod.h"
 
-#include "DisplayableTraces.h"
+#include "TraceData.h"
 #include "Utils.h"
 
 #include <algorithm>
@@ -34,7 +34,7 @@ void setupLODResolution( uint32_t sreenResolutionX )
    }
 }
 
-LodsArray computeLods( const DisplayableTraces& traces, size_t idOffset )
+LodsArray computeLods( const TraceData& traces, size_t idOffset )
 {
    assert( LOD_MIN_GAP_PXL[LOD_COUNT-1] > 0 && "LOD resolution was not setup" );
 
@@ -201,7 +201,7 @@ void appendLods( LodsArray& dst, const LodsArray& src )
 }
 
 
-LodsArray computeLods( const DisplayableLockWaits& lockwaits, size_t idOffset )
+LodsArray computeLods( const LockWaitData& lockwaits, size_t idOffset )
 {
    assert( LOD_MIN_GAP_PXL[LOD_COUNT-1] > 0 && "LOD resolution was not setup" );
 

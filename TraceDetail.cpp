@@ -121,7 +121,7 @@ namespace std
    };
 }
 
-static std::vector<hop::TraceDetail> mergeTraceDetails( const hop::DisplayableTraces& traces, const std::vector<hop::TraceDetail>& allDetails )
+static std::vector<hop::TraceDetail> mergeTraceDetails( const hop::TraceData& traces, const std::vector<hop::TraceDetail>& allDetails )
 {
    HOP_PROF_FUNC();
 
@@ -226,7 +226,7 @@ static std::vector<hop::TraceDetail> mergeTraceDetails( const hop::DisplayableTr
 }
 
 static std::vector<hop::TraceDetail>
-gatherTraceDetails( const hop::DisplayableTraces& traces, size_t traceId )
+gatherTraceDetails( const hop::TraceData& traces, size_t traceId )
 {
    HOP_PROF_FUNC();
 
@@ -310,7 +310,7 @@ static void finalizeTraceDetails(
 namespace hop
 {
 TraceDetails
-createTraceDetails( const DisplayableTraces& traces, uint32_t threadIndex, size_t traceId )
+createTraceDetails( const TraceData& traces, uint32_t threadIndex, size_t traceId )
 {
    HOP_PROF_FUNC();
 
@@ -326,7 +326,7 @@ createTraceDetails( const DisplayableTraces& traces, uint32_t threadIndex, size_
    return details;
 }
 
-TraceStats createTraceStats(const DisplayableTraces& traces, uint32_t, size_t traceId)
+TraceStats createTraceStats(const TraceData& traces, uint32_t, size_t traceId)
 {
    const TStrPtr_t fileName = traces.fileNameIds[ traceId ];
    const TStrPtr_t fctName = traces.fctNameIds[ traceId ];
@@ -363,7 +363,7 @@ TraceStats createTraceStats(const DisplayableTraces& traces, uint32_t, size_t tr
    return TraceStats{ fctName, count, min, max, median, std::move(displayableDurations), true, true };
 }
 
-TraceDetails createGlobalTraceDetails( const DisplayableTraces& traces, uint32_t threadIndex )
+TraceDetails createGlobalTraceDetails( const TraceData& traces, uint32_t threadIndex )
 {
    HOP_PROF_FUNC();
 

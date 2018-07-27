@@ -23,10 +23,6 @@ class Timeline
       ANIMATION_TYPE_FAST
    };
 
-   static float TRACE_HEIGHT;
-   static float TRACE_VERTICAL_PADDING;
-   static float PADDED_TRACE_SIZE;
-
    void update( float deltaTimeMs ) noexcept;
    void draw( std::vector<TimelineTrack>& tracks, const StringDb& strDb  );
    TimeStamp absoluteStartTime() const noexcept;

@@ -4,7 +4,7 @@
 #include "Stats.h"
 #include "Utils.h"
 #include "TraceDetail.h"
-#include "DisplayableTraces.h"
+#include "TraceData.h"
 #include "ModalWindow.h"
 #include "miniz.h"
 #include "Options.h"
@@ -140,7 +140,7 @@ Profiler::Profiler( const char* name ) : _name( name )
    _server.start( name, g_options.glFinishByDefault );
 }
 
-void Profiler::addTraces( const DisplayableTraces& traces, uint32_t threadIndex )
+void Profiler::addTraces( const TraceData& traces, uint32_t threadIndex )
 {
    // Ignore empty traces
    if( traces.ends.empty() ) return;
@@ -219,7 +219,7 @@ void Profiler::addStringData( const std::vector<char>& strData )
    }
 }
 
-void Profiler::addLockWaits( const DisplayableLockWaits& lockWaits, uint32_t threadIndex )
+void Profiler::addLockWaits( const LockWaitData& lockWaits, uint32_t threadIndex )
 {
    HOP_PROF_FUNC();
    // Check if new thread
@@ -501,7 +501,7 @@ void hop::Profiler::drawSearchWindow()
             _tracks[selection.selectedThreadIdx]._trackHeight = 9999.0f;
 
             const TimeStamp startTime = absEndTime - delta - _timeline.absoluteStartTime();
-            const float verticalPosPxl = timelinetrack._localTracesVerticalStartPos + (depth * Timeline::PADDED_TRACE_SIZE) - (3* Timeline::PADDED_TRACE_SIZE);
+            const float verticalPosPxl = timelinetrack._localTracesVerticalStartPos + (depth * TimelineTrack::PADDED_TRACE_SIZE) - (3* TimelineTrack::PADDED_TRACE_SIZE);
             _timeline.pushNavigationState();
             _timeline.frameToTime( startTime, delta );
             _timeline.moveVerticalPositionPxl( verticalPosPxl );

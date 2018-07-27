@@ -7,15 +7,20 @@
 #include <cstring> // memcpy
 
 namespace hop
-{  
-void TimelineTrack::addTraces( const DisplayableTraces& newTraces )
+{
+
+float TimelineTrack::TRACE_HEIGHT = 20.0f;
+float TimelineTrack::TRACE_VERTICAL_PADDING = 2.0f;
+float TimelineTrack::PADDED_TRACE_SIZE = TRACE_HEIGHT + TRACE_VERTICAL_PADDING;
+
+void TimelineTrack::addTraces( const TraceData& newTraces )
 {
    _traces.append( newTraces );
 
    assert_is_sorted(_traces.ends.begin(), _traces.ends.end() );
 }
 
-void TimelineTrack::addLockWaits( const DisplayableLockWaits& lockWaits )
+void TimelineTrack::addLockWaits( const LockWaitData& lockWaits )
 {
    _lockWaits.append( lockWaits );
 }

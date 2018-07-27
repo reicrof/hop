@@ -3,7 +3,7 @@
 
 #include <Hop.h>
 #include "StringDb.h"
-#include "DisplayableTraces.h"
+#include "TraceData.h"
 
 #include <vector>
 #include <thread>
@@ -27,11 +27,11 @@ class Server
    struct PendingData
    {
        std::mutex mutex;
-       std::vector< DisplayableTraces > traces;
+       std::vector< TraceData > traces;
        std::vector<std::vector<char> > stringData;
        std::vector<uint32_t> tracesThreadIndex;
 
-       std::vector< DisplayableLockWaits > lockWaits;
+       std::vector< LockWaitData > lockWaits;
        std::vector<uint32_t> lockWaitThreadIndex;
 
        std::vector<std::vector<UnlockEvent> > unlockEvents;

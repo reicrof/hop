@@ -9,7 +9,7 @@
 namespace hop
 {
 class StringDb;
-struct DisplayableTraces;
+struct TraceData;
 struct TraceDetail
 {
    TraceDetail( size_t traceId, TimeStamp excTime )
@@ -53,15 +53,15 @@ struct TraceStats
 };
 
 TraceDetails
-createTraceDetails( const DisplayableTraces& traces, uint32_t threadIndex, size_t traceId );
-TraceDetails createGlobalTraceDetails( const DisplayableTraces& traces, uint32_t threadIndex );
+createTraceDetails( const TraceData& traces, uint32_t threadIndex, size_t traceId );
+TraceDetails createGlobalTraceDetails( const TraceData& traces, uint32_t threadIndex );
 TraceDetailDrawResult drawTraceDetails(
     TraceDetails& details,
     const std::vector<TimelineTrack>& tracks,
     const StringDb& strDb );
 
 
-TraceStats createTraceStats( const DisplayableTraces& traces, uint32_t threadIndex, size_t traceId );
+TraceStats createTraceStats( const TraceData& traces, uint32_t threadIndex, size_t traceId );
 void drawTraceStats( TraceStats& stats, const std::vector<TimelineTrack>& tracks, const StringDb& strDb);
 }
 
