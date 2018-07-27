@@ -173,8 +173,8 @@ SearchSelection drawSearchResult( SearchResult& searchRes, const Timeline& timel
 
    static size_t selectedId = -1;
    size_t hoveredId = -1;
-   const TimeStamp absoluteStartTime = timeline.absoluteStartTime();
-   const TimeDuration timelineRange = timeline.timelineRange();
+   const TimeStamp absoluteStartTime = timeline.globalStartTime();
+   const TimeDuration timelineDuration = timeline.duration();
    char traceTime[64] = {};
    char traceDuration[64] = {};
    bool selectedSomething = false;
@@ -188,7 +188,7 @@ SearchSelection drawSearchResult( SearchResult& searchRes, const Timeline& timel
 
        hop::formatNanosTimepointToDisplay(
            ti._traces.ends[ traceId ] - delta - absoluteStartTime,
-           timelineRange,
+           timelineDuration,
            traceTime,
            sizeof( traceTime ) );
        if ( ImGui::Selectable( traceTime, selectedId == i, ImGuiSelectableFlags_SpanAllColumns ) )

@@ -62,7 +62,7 @@ void Timeline::update( float deltaTimeMs ) noexcept
    {
       case ANIMATION_TYPE_NONE:
          _timelineStart = _animationState.targetTimelineStart;
-         _timelineRange = _animationState.targetTimelineRange;
+         _duration = _animationState.targetTimelineRange;
          break;
       case ANIMATION_TYPE_NORMAL:
       case ANIMATION_TYPE_FAST:
@@ -82,16 +82,16 @@ void Timeline::update( float deltaTimeMs ) noexcept
             }
          }
 
-         if ( std::abs( _timelineRange - _animationState.targetTimelineRange ) > 0.00001 )
+         if ( std::abs( _duration - _animationState.targetTimelineRange ) > 0.00001 )
          {
-            int64_t delta = _animationState.targetTimelineRange - _timelineRange;
+            int64_t delta = _animationState.targetTimelineRange - _duration;
             if ( std::abs( delta ) < 10 )
             {
-               _timelineRange = _animationState.targetTimelineRange;
+               _duration = _animationState.targetTimelineRange;
             }
             else
             {
-               _timelineRange += delta / speedFactor;
+               _duration += delta / speedFactor;
             }
          }
 
@@ -110,117 +110,37 @@ void Timeline::update( float deltaTimeMs ) noexcept
          break;
       }
    }
-
-   // Update the highlight factor
-   static float x = 0.0f;
-   x += 0.007f * deltaTimeMs;
-   _animationState.highlightPercent = (std::sin( x ) + 1.3f) / 2.0f;
 }
 
-void Timeline::draw()
+void Timeline::draw( float timelineHeight )
 {
    HOP_PROF_FUNC();
 
-   ImGui::BeginChild("TimelineAndCanvas");
+   //ImGui::BeginChild("TimelineAndCanvas");
    const auto startDrawPos = ImGui::GetCursorScreenPos();
    drawTimeline(startDrawPos.x, startDrawPos.y + 5);
 
+   // Save the canvas draw position for later
+   const auto& curDrawPos = ImGui::GetCursorScreenPos();
+   _canvasDrawPosition[0] = curDrawPos.x;
+   _canvasDrawPosition[1] = curDrawPos.y;
+
    ImGui::BeginChild(
       "TimelineCanvas",
-      ImVec2(0, 0),
+      ImVec2(0,0),
       false,
       ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse | ImGuiWindowFlags_NoMove );
 
    // Set the scroll and get it back from ImGui to have the clamped value
    ImGui::SetScrollY(_verticalPosPxl);
 
-   // char threadName[128] = "Thread ";
-   // const size_t threadNamePrefix = sizeof( "Thread" );
-   // for ( size_t i = 0; i < tracesPerThread.size(); ++i )
-   // {
-      // // Skip empty threads
-      // if( tracesPerThread[i].empty() ) continue;
-
-      // const bool threadHidden = tracesPerThread[i].maxDisplayedDepth() <= 0.0f;
-      // const float trackHeight = tracesPerThread[i].maxDisplayedDepth() * TimelineTrack::PADDED_TRACE_SIZE;
-      // snprintf(
-      //     threadName + threadNamePrefix, sizeof( threadName ) - threadNamePrefix, "%lu", i );
-      // HOP_PROF_DYN_NAME( threadName );
-
-      // // First draw the separator of the track
-      // const bool highlightSeparator = ImGui::IsRootWindowOrAnyChildFocused();
-      // //const bool separatorHovered = drawSeparator( i, highlightSeparator );
-
-      // const auto& zoneColors = g_options.zoneColors;
-      // uint32_t threadLabelCol = zoneColors[ (i+1) % HOP_MAX_ZONES ];
-      
-
-      // ImGui::PushID(i);
-      // ImGui::PushStyleColor( ImGuiCol_Button, threadLabelCol );
-      // ImGui::PushStyleColor( ImGuiCol_ButtonHovered, addColorWithClamping( threadLabelCol, HOVERED_COLOR_DELTA ) );
-      // ImGui::PushStyleColor( ImGuiCol_ButtonActive, addColorWithClamping( threadLabelCol, ACTIVE_COLOR_DELTA ) );
-      // if ( ImGui::Button( threadName, ImVec2( 0, THREAD_LABEL_HEIGHT ) ) )
-      // {
-      //    tracesPerThread[i]._trackHeight = threadHidden ? 9999.0f : -1.0f;
-      // }
-
-      // ImGui::PopStyleColor( 3 );
-      // ImGui::PopID();
-
-      // // Then draw the interesting stuff
-      // tracesPerThread[i]._localTracesVerticalStartPos = ImGui::GetCursorPosY();
-      // const float absTracesVerticalStartPos = ImGui::GetCursorScreenPos().y;
-      // tracesPerThread[i]._absoluteTracesVerticalStartPos = absTracesVerticalStartPos;
-
-      // // Handle track resize
-      // if ( separatorHovered || _draggedTrack > 0 )
-      // {
-      //    if ( _draggedTrack == -1 && ImGui::IsMouseClicked( 0 ) )
-      //    {
-      //       _draggedTrack = (int)i;
-      //    }
-      //    if( ImGui::IsMouseReleased( 0 ) )
-      //    {
-      //       _draggedTrack = -1;
-      //    }
-      // }
-
-      // ImVec2 curDrawPos = ImGui::GetCursorScreenPos();
-      // if (!threadHidden)
-      // {
-      //    const float threadStartRelDrawPos = curDrawPos.y - ImGui::GetWindowPos().y;
-      //    const float threadEndRelDrawPos = threadStartRelDrawPos + trackHeight;
-
-      //    const bool tracesVisible =
-      //        !( threadStartRelDrawPos > ImGui::GetWindowHeight() || threadEndRelDrawPos < 0 );
-
-      //    if( tracesVisible )
-      //    {
-      //       ImGui::PushClipRect(
-      //           ImVec2( 0.0f, curDrawPos.y ),
-      //           ImVec2( 9999.0f, curDrawPos.y + trackHeight ),
-      //           true );
-
-      //       // Draw the lock waits (before traces so that they are not hiding them)
-      //       drawLockWaits(tracesPerThread, i, startDrawPos.x, absTracesVerticalStartPos);
-      //       drawTraces( tracesPerThread[i], i, curDrawPos.x, curDrawPos.y, strDb);
-
-      //       ImGui::PopClipRect();
-      //    }
-      //} // !threadHidden
-
-      // Set cursor for next drawing iterations
-      //curDrawPos.y += trackHeight;
-      //ImGui::SetCursorScreenPos( curDrawPos );
-   //}
-
    // Draw the overlay stuff after having drawn the traces
    // Draw timeline mouse indicator
    if (_timelineHoverPos > 0.0f)
    {
       static char text[32] = {};
-      const int64_t hoveredNano = _timelineStart + pxlToNanos(ImGui::GetWindowWidth(), _timelineRange, _timelineHoverPos - startDrawPos.x);
-      hop::formatNanosTimepointToDisplay(hoveredNano, _timelineRange, text, sizeof(text));
+      const int64_t hoveredNano = _timelineStart + pxlToNanos(ImGui::GetWindowWidth(), _duration, _timelineHoverPos - startDrawPos.x);
+      hop::formatNanosTimepointToDisplay(hoveredNano, _duration, text, sizeof(text));
       drawHoveringTimelineLine(_timelineHoverPos, startDrawPos.y, text);
    }
 
@@ -233,7 +153,7 @@ void Timeline::draw()
       ImGui::PushStyleColor( ImGuiCol_ButtonActive, ImVec4( 0.0f, 0.0f, 1.0f, 1.0f ));
       for( auto t : _bookmarks.times )
       {
-         float posXPxl = nanosToPxl( windowSize.x, _timelineRange, t - _timelineStart );
+         float posXPxl = nanosToPxl( windowSize.x, _duration, t - _timelineStart );
          drawBookmarks( posXPxl + startDrawPos.x, startDrawPos.y );
       }
       ImGui::PopClipRect();
@@ -281,6 +201,10 @@ void Timeline::draw()
       // ImGui::PopStyleVar();
    }
 
+   // Draw an invislbe button to extend the child region to allow scrolling
+   ImGui::SetCursorScreenPos( ImVec2( 0.0f, timelineHeight ) );
+   ImGui::InvisibleButton( "ExtendRegion", ImVec2( 0.0f, 0.0f ) );
+
    ImGui::EndChild(); // TimelineCanvas
 
    // if (_traceStats.open)
@@ -288,19 +212,17 @@ void Timeline::draw()
    //    drawTraceStats(_traceStats, tracesPerThread, strDb);
    // }
 
-   if ( ImGui::IsItemHoveredRect() )
-   {
+   //if ( ImGui::IsItemHoveredRect() )
+   //{
       ImVec2 mousePosInCanvas = ImVec2(
           ImGui::GetIO().MousePos.x - startDrawPos.x, ImGui::GetIO().MousePos.y - startDrawPos.y );
 
-      if( ImGui::IsRootWindowOrAnyChildHovered() )
+      //if( ImGui::IsRootWindowOrAnyChildHovered() )
          handleMouseWheel( mousePosInCanvas.x, mousePosInCanvas.y );
 
-      if( ImGui::IsRootWindowOrAnyChildFocused() )
+      //if( ImGui::IsRootWindowOrAnyChildFocused() )
          handleMouseDrag( mousePosInCanvas.x, mousePosInCanvas.y );
-   }
-
-   ImGui::EndChild(); // TimelineAndCanvas
+   //}
 }
 
 void Timeline::drawTimeline( const float posX, const float posY )
@@ -316,7 +238,7 @@ void Timeline::drawTimeline( const float posX, const float posY )
    ImGui::BeginChild("Timeline", ImVec2( windowWidthPxl, TIMELINE_TOTAL_HEIGHT) );
 
    const uint64_t stepsCount = [=]() {
-      uint64_t stepsCount = _timelineRange / _stepSizeInNanos;
+      uint64_t stepsCount = _duration / _stepSizeInNanos;
       while ( stepsCount > maxStepCount ||
               ( stepsCount < minStepCount && _stepSizeInNanos > minStepSize ) )
       {
@@ -328,7 +250,7 @@ void Timeline::drawTimeline( const float posX, const float posY )
          {
             _stepSizeInNanos = std::max( _stepSizeInNanos / 5, minStepSize );
          }
-         stepsCount = _timelineRange / _stepSizeInNanos;
+         stepsCount = _duration / _stepSizeInNanos;
       }
       return stepsCount;
    }();
@@ -346,11 +268,11 @@ void Timeline::drawTimeline( const float posX, const float posY )
    constexpr float deltaBigLineLength = 12.0f;  // The diff between the small line and big one
    constexpr float deltaMidLineLength = 7.0f;   // The diff between the small line and mid one
 
-   const float stepSizePxl = nanosToPxl<float>( windowWidthPxl, _timelineRange, _stepSizeInNanos );
+   const float stepSizePxl = nanosToPxl<float>( windowWidthPxl, _duration, _stepSizeInNanos );
    const int64_t stepsDone = _timelineStart / _stepSizeInNanos;
    const int64_t remainder = _timelineStart % _stepSizeInNanos;
    int remainderPxl = 0;
-   if ( remainder != 0 ) remainderPxl = nanosToPxl( windowWidthPxl, _timelineRange, remainder );
+   if ( remainder != 0 ) remainderPxl = nanosToPxl( windowWidthPxl, _duration, remainder );
 
    // Start drawing one step before the start position to account for partial steps
    ImVec2 top( posX, posY );
@@ -440,7 +362,7 @@ void Timeline::drawTimeline( const float posX, const float posY )
       _timelineHoverPos = curMousePosInScreen.x;
       if( ImGui::IsMouseClicked( 1 ) )
       {
-         _bookmarks.times.push_back( _timelineStart + pxlToNanos(ImGui::GetWindowWidth(), _timelineRange, _timelineHoverPos - posX) );
+         _bookmarks.times.push_back( _timelineStart + pxlToNanos(ImGui::GetWindowWidth(), _duration, _timelineHoverPos - posX) );
          std::sort( _bookmarks.times.begin(), _bookmarks.times.end() );
       }
    }
@@ -475,11 +397,11 @@ void Timeline::handleMouseWheel( float mousePosX, float )
    {
       if( mouseWheel > 0)
       {
-         zoomOn( pxlToNanos( windowWidthPxl, _timelineRange, mousePosX ) + _timelineStart, ImGui::IsKeyDown(SDL_SCANCODE_LCTRL) ? 0.5 : 0.9f );
+         zoomOn( pxlToNanos( windowWidthPxl, _duration, mousePosX ) + _timelineStart, ImGui::IsKeyDown(SDL_SCANCODE_LCTRL) ? 0.5 : 0.9f );
       }
       else if( mouseWheel < 0 )
       {
-         zoomOn( pxlToNanos( windowWidthPxl, _timelineRange, mousePosX ) + _timelineStart, ImGui::IsKeyDown(SDL_SCANCODE_LCTRL) ? 1.5 : 1.1f );
+         zoomOn( pxlToNanos( windowWidthPxl, _duration, mousePosX ) + _timelineStart, ImGui::IsKeyDown(SDL_SCANCODE_LCTRL) ? 1.5 : 1.1f );
       }
    }
 }
@@ -510,7 +432,7 @@ void Timeline::handleMouseDrag( float mouseInCanvasX, float mouseInCanvasY )
 
          // Set horizontal position
          const int64_t deltaXInNanos =
-             pxlToNanos<int64_t>( windowWidthPxl, _timelineRange, delta.x );
+             pxlToNanos<int64_t>( windowWidthPxl, _duration, delta.x );
          setStartTime( _timelineStart - deltaXInNanos, ANIMATION_TYPE_NONE );
       
          const float maxScrollY = maxVerticalPosPxl();
@@ -571,9 +493,9 @@ void Timeline::handleMouseDrag( float mouseInCanvasX, float mouseInCanvasY )
       const float maxX = std::max( _rightClickStartPosInCanvas[0], mouseInCanvasX );
       const float windowWidthPxl = ImGui::GetWindowWidth();
       const int64_t minXinNanos =
-        pxlToNanos<int64_t>( windowWidthPxl, _timelineRange, minX - 2 );
+        pxlToNanos<int64_t>( windowWidthPxl, _duration, minX - 2 );
       setStartTime( _timelineStart + minXinNanos );
-      setZoom( pxlToNanos<TimeDuration>( windowWidthPxl, _timelineRange, maxX - minX) );
+      setZoom( pxlToNanos<TimeDuration>( windowWidthPxl, _duration, maxX - minX) );
 
       // Reset position
       _rightClickStartPosInCanvas[0] = _rightClickStartPosInCanvas[1] = 0.0f;
@@ -592,35 +514,41 @@ void Timeline::setRealtime( bool isRealtime ) noexcept
    _realtime = isRealtime;
 }
 
-hop::TimeStamp Timeline::absoluteStartTime() const noexcept
+hop::TimeStamp Timeline::globalStartTime() const noexcept
 {
-   return _absoluteStartTime;
+   return _globalStartTime;
 }
 
-hop::TimeStamp Timeline::absolutePresentTime() const noexcept
+hop::TimeStamp Timeline::globalEndTime() const noexcept
 {
-   return _absolutePresentTime;
+   return _globalEndTime;
 }
 
-void Timeline::setAbsoluteStartTime( TimeStamp time ) noexcept
+void Timeline::setGlobalStartTime( TimeStamp time ) noexcept
 {
-   _absoluteStartTime = time;
+   _globalStartTime = time;
 }
 
-void Timeline::setAbsolutePresentTime( TimeStamp time ) noexcept
+void Timeline::setGlobalEndTime( TimeStamp time ) noexcept
 {
-   _absolutePresentTime = time;
+   _globalEndTime = time;
 }
 
-TimeDuration Timeline::timelineRange() const noexcept { return _timelineRange; }
-TimeStamp Timeline::timelineStart() const noexcept { return _timelineStart; }
+TimeStamp Timeline::relativeStartTime() const noexcept { return _timelineStart; }
 
-TimeStamp Timeline::absoluteTimelineStart() const noexcept
+TimeStamp Timeline::relativeEndTime() const noexcept { return _timelineStart + _duration; }
+
+TimeStamp Timeline::absoluteStartTime() const noexcept
 {
-   return _absoluteStartTime + _timelineStart;
+   return _globalStartTime + _timelineStart;
 }
 
-TimeStamp Timeline::absoluteTimelineEnd() { return absoluteTimelineStart() + _timelineRange; }
+TimeStamp Timeline::absoluteEndTime() const noexcept
+{
+   return absoluteStartTime() + _duration;
+}
+
+TimeDuration Timeline::duration() const noexcept { return _duration; }
 
 float Timeline::verticalPosPxl() const noexcept
 {
@@ -636,6 +564,27 @@ float Timeline::maxVerticalPosPxl() const noexcept
    ImGui::EndChild();
    return maxScrollY;
 }
+
+float Timeline::canvasPosX() const noexcept
+{
+   return _canvasDrawPosition[0];
+}
+
+float Timeline::canvasPosY() const noexcept
+{
+   return _canvasDrawPosition[1];
+}
+
+float Timeline::canvasPosWithScrollX() const noexcept
+{
+   return _canvasDrawPosition[0] - _verticalPosPxl;
+}
+
+float Timeline::canvasPosWithScrollY() const noexcept
+{
+   return _canvasDrawPosition[1] - _verticalPosPxl;
+}
+
 
 TraceDetails& Timeline::getTraceDetails() noexcept
 {
@@ -681,34 +630,36 @@ void Timeline::moveVerticalPositionPxl( float positionPxl, AnimationType animTyp
 
 void Timeline::moveToAbsoluteTime( TimeStamp time, AnimationType animType ) noexcept
 {
-   moveToTime( time - _absoluteStartTime, animType );
+   moveToTime( time - _globalStartTime, animType );
 }
 
 void Timeline::moveToTime( int64_t time, AnimationType animType ) noexcept
 {
-   setStartTime( time - ( _timelineRange * 0.5 ), animType );
+   setStartTime( time - ( _duration * 0.5 ), animType );
 }
 
 void Timeline::moveToStart( AnimationType animType ) noexcept
 {
-   moveToTime( _timelineRange * 0.5f, animType );
+   moveToTime( _duration * 0.5f, animType );
    setRealtime( false );
 }
 
 void Timeline::moveToPresentTime( AnimationType animType ) noexcept
 {
-   moveToTime( ( _absolutePresentTime - _absoluteStartTime ), animType );
+   moveToTime( ( _globalEndTime - _globalStartTime ), animType );
 }
 
-void Timeline::frameToTime( int64_t time, TimeDuration duration ) noexcept
+void Timeline::frameToTime( int64_t time, TimeDuration duration, bool pushNavState ) noexcept
 {
+   if( pushNavState ) pushNavigationState();
+
    setStartTime( time );
    setZoom( duration );
 }
 
-void Timeline::frameToAbsoluteTime( TimeStamp time, TimeDuration duration ) noexcept
+void Timeline::frameToAbsoluteTime( TimeStamp time, TimeDuration duration, bool pushNavState ) noexcept
 {
-   frameToTime( time - _absoluteStartTime, duration );
+   frameToTime( time - _globalStartTime, duration, pushNavState );
 }
 
 void Timeline::setZoom( TimeDuration timelineDuration, AnimationType animType )
@@ -719,7 +670,7 @@ void Timeline::setZoom( TimeDuration timelineDuration, AnimationType animType )
    {
       // We need to update it immediately as subsequent call might need it updated
       // before the next update
-      _timelineRange = _animationState.targetTimelineRange;
+      _duration = _animationState.targetTimelineRange;
    }
 }
 
@@ -728,16 +679,16 @@ void Timeline::zoomOn( int64_t nanoToZoomOn, float zoomFactor )
    const float windowWidthPxl = ImGui::GetWindowWidth();
    const int64_t nanoToZoom = nanoToZoomOn - _timelineStart;
 
-   const auto prevTimelineRange = _timelineRange;
-   setZoom( _timelineRange * zoomFactor, ANIMATION_TYPE_NONE );
+   const auto prevTimelineRange = _duration;
+   setZoom( _duration * zoomFactor, ANIMATION_TYPE_NONE );
 
    const int64_t prevPxlPos = nanosToPxl( windowWidthPxl, prevTimelineRange, nanoToZoom );
-   const int64_t newPxlPos = nanosToPxl( windowWidthPxl, _timelineRange, nanoToZoom );
+   const int64_t newPxlPos = nanosToPxl( windowWidthPxl, _duration, nanoToZoom );
 
    const int64_t pxlDiff = newPxlPos - prevPxlPos;
    if ( pxlDiff != 0 )
    {
-      const int64_t timeDiff = pxlToNanos( windowWidthPxl, _timelineRange, pxlDiff );
+      const int64_t timeDiff = pxlToNanos( windowWidthPxl, _duration, pxlDiff );
       setStartTime( _timelineStart + timeDiff, ANIMATION_TYPE_NONE );
    }
 }
@@ -770,8 +721,8 @@ namespace
 
 void Timeline::nextBookmark() noexcept
 {
-   const TimeStamp timelineCenter = _timelineStart + _timelineRange / 2;
-   const auto delta = std::abs( _timelineRange * 0.01 );
+   const TimeStamp timelineCenter = _timelineStart + _duration / 2;
+   const auto delta = std::abs( _duration * 0.01 );
    auto it = _bookmarks.times.begin();
    while( it != _bookmarks.times.end() )
    {
@@ -786,8 +737,8 @@ void Timeline::nextBookmark() noexcept
 
 void Timeline::previousBookmark() noexcept
 {
-   const TimeStamp timelineCenter = _timelineStart + _timelineRange / 2;
-   const auto delta = std::abs( _timelineRange * 0.01 );
+   const TimeStamp timelineCenter = _timelineStart + _duration / 2;
+   const auto delta = std::abs( _duration * 0.01 );
    auto it = _bookmarks.times.rbegin();
    while( it != _bookmarks.times.rend() )
    {

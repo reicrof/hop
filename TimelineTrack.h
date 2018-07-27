@@ -44,15 +44,16 @@ class TimelineTracks
   public:
    struct DrawInfo
    {
-      float drawPosX, drawPosY, hightlighPct;
-      TimeStamp timelineRelativeStartTime;
-      TimeStamp timelineAbsoluteStartTime;
-      TimeStamp timelineAbsoluteEndTime;
+      float canvasPosX, canvasPosY;
+      TimeStamp globalTimelineStartTime;
+      TimeStamp relativeTimelineStartTime;
+      TimeStamp timelineDuration;
       const StringDb& strDb;
    };
 
-   void update( TimeDuration timelineDuration );
+   void update( float deltaTimeMs, TimeDuration timelineDuration );
    void draw( const DrawInfo& info );
+   float totalHeight() const;
    void resizeAllTracksToFit();
 
    TimelineTrack& operator[]( size_t index );
@@ -74,6 +75,7 @@ class TimelineTracks
    std::vector< std::pair< size_t, uint32_t > > _highlightedTraces;
    int _lodLevel;
    int _draggedTrack{-1};
+   float _highlightValue{0.0f};
 };
 }
 

@@ -152,8 +152,8 @@ void Profiler::addTraces( const TraceData& traces, uint32_t threadIndex )
    }
 
    // Update the current time
-   if ( traces.ends.back() > _timeline.absolutePresentTime() )
-      _timeline.setAbsolutePresentTime( traces.ends.back() );
+   if ( traces.ends.back() > _timeline.globalEndTime() )
+      _timeline.setGlobalEndTime( traces.ends.back() );
 
    // If this is the first traces received from the thread, update the
    // start time as it may be earlier.
@@ -166,9 +166,9 @@ void Profiler::addTraces( const TraceData& traces, uint32_t threadIndex )
          earliestTime = std::min( earliestTime, traces.ends[i] - traces.deltas[i] );
       }
       // Set the timeline absolute start time to this new value
-      const auto startTime = _timeline.absoluteStartTime();
+      const auto startTime = _timeline.globalStartTime();
       if ( startTime == 0 || earliestTime < startTime )
-         _timeline.setAbsoluteStartTime( earliestTime );
+         _timeline.setGlobalStartTime( earliestTime );
    }
 
    _tracks[threadIndex].addTraces( traces );
@@ -304,7 +304,7 @@ Profiler::~Profiler()
 void hop::Profiler::update( float deltaTimeMs ) noexcept
 {
    _timeline.update( deltaTimeMs );
-   _tracks.update( _timeline.timelineRange() );
+   _tracks.update( deltaTimeMs, _timeline.duration() );
 }
 
 static bool ptInRect( const ImVec2& pt, const ImVec2& a, const ImVec2& b )
@@ -501,10 +501,9 @@ void hop::Profiler::drawSearchWindow()
             // If the thread was hidden, display it so we can see the selected trace
             _tracks[selection.selectedThreadIdx]._trackHeight = 9999.0f;
 
-            const TimeStamp startTime = absEndTime - delta - _timeline.absoluteStartTime();
+            const TimeStamp startTime = absEndTime - delta - _timeline.globalStartTime();
             const float verticalPosPxl = timelinetrack._localTracesVerticalStartPos + (depth * TimelineTrack::PADDED_TRACE_SIZE) - (3* TimelineTrack::PADDED_TRACE_SIZE);
-            _timeline.pushNavigationState();
-            _timeline.frameToTime( startTime, delta );
+            _timeline.frameToTime( startTime, delta, true );
             _timeline.moveVerticalPositionPxl( verticalPosPxl );
          }
 
@@ -606,7 +605,18 @@ void hop::Profiler::draw( uint32_t /*windowWidth*/, uint32_t /*windowHeight*/ )
          _timeline.moveToPresentTime( Timeline::ANIMATION_TYPE_NONE );
       }
 
-      _timeline.draw();
+      _timeline.draw( _tracks.totalHeight() );
+
+      // Push clip rect for canvas and draw
+      ImGui::PushClipRect(
+          ImVec2( _timeline.canvasPosX(), _timeline.canvasPosY() ), ImVec2( 99999, 99999 ), true );
+      _tracks.draw( TimelineTracks::DrawInfo{_timeline.canvasPosWithScrollX(),
+                                             _timeline.canvasPosWithScrollY(),
+                                             _timeline.globalStartTime(),
+                                             _timeline.relativeStartTime(),
+                                             _timeline.duration(),
+                                             _strDb} );
+      ImGui::PopClipRect();
    }
 
    handleHotkey();
@@ -923,7 +933,7 @@ void hop::Profiler::clear()
    _server.clear();
    _strDb.clear();
    _tracks.clear();
-   _timeline.setAbsoluteStartTime( 0 );
+   _timeline.setGlobalStartTime( 0 );
    _timeline.clearTraceDetails();
    _timeline.clearBookmarks();
    _timeline.clearTraceStats();

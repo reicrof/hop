@@ -10,8 +10,6 @@ struct ImColor;
 
 namespace hop
 {
-struct TimelineTrack;
-class StringDb;
 class Timeline
 {
   public:
@@ -23,18 +21,45 @@ class Timeline
    };
 
    void update( float deltaTimeMs ) noexcept;
-   void draw();
-   TimeStamp absoluteStartTime() const noexcept;
-   TimeStamp absolutePresentTime() const noexcept;
-   void setAbsoluteStartTime( TimeStamp time ) noexcept;
-   void setAbsolutePresentTime( TimeStamp time ) noexcept;
+   void draw( float timelineHeight );
 
-   TimeStamp timelineStart() const noexcept;
-   TimeStamp absoluteTimelineStart() const noexcept;
-   TimeStamp absoluteTimelineEnd();
-   TimeDuration timelineRange() const noexcept;
+
+   /*
+                           Visible Timeline
+   ---------------------|||||||||||||||||||||||------------ > time
+   ^                    ^                     ^            ^
+   | global_start_time  |                     |           | global_end_time
+                        |                     |
+                        |                     | absolute_end_time == relative_end_time + global_start_time
+                        |
+                        | absolute_start_time == (relative_start_time + global_start_time)
+   */
+
+   // Global time represent the global minimum/maximum of the timeline
+   // not considering any pan/zoom
+   TimeStamp globalStartTime() const noexcept;
+   TimeStamp globalEndTime() const noexcept;
+   void setGlobalStartTime( TimeStamp time ) noexcept;
+   void setGlobalEndTime( TimeStamp time ) noexcept;
+
+   // Absolute timeline start is the current starting time of the timeline
+   // considering zoom/pan NOT offsetted by the global time.
+   TimeStamp absoluteStartTime() const noexcept;
+   TimeStamp absoluteEndTime() const noexcept;
+
+   // Relative timeline start is the current starting time of the timeline
+   // considering zoom/pan offsetted by the global time.
+   TimeStamp relativeStartTime() const noexcept;
+   TimeStamp relativeEndTime() const noexcept;
+   TimeDuration duration() const noexcept;
+
    float verticalPosPxl() const noexcept;
    float maxVerticalPosPxl() const noexcept;
+
+   float canvasPosX() const noexcept;
+   float canvasPosY() const noexcept;
+   float canvasPosWithScrollX() const noexcept;
+   float canvasPosWithScrollY() const noexcept;
 
    TraceDetails& getTraceDetails() noexcept;
    void clearTraceDetails();
@@ -52,8 +77,8 @@ class Timeline
    // Move timeline vertically to specified pixel position
    void moveVerticalPositionPxl( float positionPxl, AnimationType animType = ANIMATION_TYPE_NORMAL );
    // Frame the timeline to display the specified range of time
-   void frameToTime( int64_t time, TimeDuration duration ) noexcept;
-   void frameToAbsoluteTime( TimeStamp time, TimeDuration duration ) noexcept;
+   void frameToTime( int64_t time, TimeDuration duration, bool pushNavState ) noexcept;
+   void frameToAbsoluteTime( TimeStamp time, TimeDuration duration, bool pushNavState ) noexcept;
    // Update timeline to always display last race
    void setRealtime( bool isRealtime ) noexcept;
    bool realtime() const noexcept;
@@ -109,16 +134,23 @@ class Timeline
    void setStartTime( int64_t timeInMicro, AnimationType animType = ANIMATION_TYPE_NORMAL ) noexcept;
    void setZoom( TimeDuration microsToDisplay, AnimationType animType = ANIMATION_TYPE_NORMAL );
 
+   // Origin of the timeline in absolute time
+   TimeStamp _globalStartTime{0};
+   TimeStamp _globalEndTime{0};
+
+   // Current timeline start and range
    int64_t _timelineStart{0};
-   TimeDuration _timelineRange{5000000000};
+   TimeDuration _duration{5000000000};
+
    uint64_t _stepSizeInNanos{1000000};
-   TimeStamp _absoluteStartTime{0};
-   TimeStamp _absolutePresentTime{0};
+   bool _realtime{true};
+
+   // Drawing Data
    float _verticalPosPxl{0.0f};
    float _rightClickStartPosInCanvas[2] = {};
    float _ctrlRightClickStartPosInCanvas[2] = {};
    float _timelineHoverPos{-1.0f};
-   bool _realtime{true};
+   float _canvasDrawPosition[2] = {};
 
    TraceDetails _traceDetails{};
    TraceStats _traceStats{ 0, 0, 0, 0, 0, std::vector< float >(), false, false };
