@@ -1,7 +1,7 @@
 #include "TraceSearch.h"
 #include "Timeline.h"
 #include "StringDb.h"
-#include "ThreadInfo.h"
+#include "TimelineTrack.h"
 #include "Utils.h"
 #include "imgui/imgui.h"
 
@@ -10,7 +10,7 @@
 template <typename CMP>
 static void sortSearchResOnTime(
     hop::SearchResult& sr,
-    const std::vector<hop::ThreadInfo>& threadInfos,
+    const std::vector<hop::TimelineTrack>& tracks,
     const CMP& cmp )
 {
    HOP_PROF_FUNC();
@@ -18,18 +18,18 @@ static void sortSearchResOnTime(
    std::stable_sort(
        sr.tracesIdxThreadIdx.begin(),
        sr.tracesIdxThreadIdx.end(),
-       [&threadInfos, &cmp](
+       [&tracks, &cmp](
            const std::pair<size_t, uint32_t>& lhs, const std::pair<size_t, uint32_t>& rhs ) {
           return cmp(
-              threadInfos[lhs.second]._traces.ends[lhs.first] - threadInfos[lhs.second]._traces.deltas[lhs.first],
-              threadInfos[rhs.second]._traces.ends[rhs.first] - threadInfos[rhs.second]._traces.deltas[rhs.first] );
+              tracks[lhs.second]._traces.ends[lhs.first] - tracks[lhs.second]._traces.deltas[lhs.first],
+              tracks[rhs.second]._traces.ends[rhs.first] - tracks[rhs.second]._traces.deltas[rhs.first] );
        } );
 }
 
 template <typename CMP>
 static void sortSearchResOnName(
     hop::SearchResult& sr,
-    const std::vector<hop::ThreadInfo>& threadInfos,
+    const std::vector<hop::TimelineTrack>& tracks,
     const hop::StringDb& strDb,
     const CMP& cmp )
 {
@@ -39,12 +39,12 @@ static void sortSearchResOnName(
    std::stable_sort(
        sr.tracesIdxThreadIdx.begin(),
        sr.tracesIdxThreadIdx.end(),
-       [&threadInfos, &strDb, &cmp](
+       [&tracks, &strDb, &cmp](
            const std::pair<size_t, uint32_t>& lhs, const std::pair<size_t, uint32_t>& rhs ) {
           return cmp(
               strcmp(
-                  strDb.getString( threadInfos[lhs.second]._traces.fctNameIds[lhs.first] ),
-                  strDb.getString( threadInfos[rhs.second]._traces.fctNameIds[rhs.first] ) ),
+                  strDb.getString( tracks[lhs.second]._traces.fctNameIds[lhs.first] ),
+                  strDb.getString( tracks[rhs.second]._traces.fctNameIds[rhs.first] ) ),
               0 );
        } );
 }
@@ -52,7 +52,7 @@ static void sortSearchResOnName(
 template <typename CMP>
 static void sortSearchResOnDuration(
     hop::SearchResult& sr,
-    const std::vector<hop::ThreadInfo>& threadInfos,
+    const std::vector<hop::TimelineTrack>& tracks,
     const CMP& cmp )
 {
    HOP_PROF_FUNC();
@@ -60,18 +60,18 @@ static void sortSearchResOnDuration(
    std::stable_sort(
        sr.tracesIdxThreadIdx.begin(),
        sr.tracesIdxThreadIdx.end(),
-       [&threadInfos, &cmp](
+       [&tracks, &cmp](
            const std::pair<size_t, uint32_t>& lhs, const std::pair<size_t, uint32_t>& rhs ) {
           return cmp(
-              threadInfos[lhs.second]._traces.deltas[lhs.first],
-              threadInfos[rhs.second]._traces.deltas[rhs.first] );
+              tracks[lhs.second]._traces.deltas[lhs.first],
+              tracks[rhs.second]._traces.deltas[rhs.first] );
        } );
 }
 
 namespace hop
 {
 
-void findTraces( const char* string, const hop::StringDb& strDb, const std::vector< hop::ThreadInfo >& threadInfos, SearchResult& result )
+void findTraces( const char* string, const hop::StringDb& strDb, const std::vector< hop::TimelineTrack >& tracks, SearchResult& result )
 {
    HOP_PROF_FUNC();
 
@@ -81,9 +81,9 @@ void findTraces( const char* string, const hop::StringDb& strDb, const std::vect
    result.tracesIdxThreadIdx.reserve(512);
 
    auto strIds = strDb.findStringIndexMatching( string );
-   for( uint32_t threadIdx = 0; threadIdx < threadInfos.size(); ++threadIdx )
+   for( uint32_t threadIdx = 0; threadIdx < tracks.size(); ++threadIdx )
    {
-       const auto& ti = threadInfos[ threadIdx ];
+       const auto& ti = tracks[ threadIdx ];
        for( size_t idx = 0; idx < ti._traces.fctNameIds.size(); ++idx )
        {
           const size_t fctNameId = ti._traces.fctNameIds[ idx ];
@@ -99,10 +99,10 @@ void findTraces( const char* string, const hop::StringDb& strDb, const std::vect
    }
 
    // Sort them by duration
-   sortSearchResOnDuration( result, threadInfos, std::greater<TimeStamp>() );
+   sortSearchResOnDuration( result, tracks, std::greater<TimeStamp>() );
 }
 
-SearchSelection drawSearchResult( SearchResult& searchRes, const Timeline& timeline, const StringDb& strDb, const std::vector< ThreadInfo >& threadInfos )
+SearchSelection drawSearchResult( SearchResult& searchRes, const Timeline& timeline, const StringDb& strDb, const std::vector< TimelineTrack >& tracks )
 {
    HOP_PROF_FUNC();
 
@@ -125,9 +125,9 @@ SearchSelection drawSearchResult( SearchResult& searchRes, const Timeline& timel
       descending = !descending;
 
       if( descending )
-        sortSearchResOnTime( searchRes, threadInfos, std::greater<TimeStamp>() );
+        sortSearchResOnTime( searchRes, tracks, std::greater<TimeStamp>() );
       else
-        sortSearchResOnTime( searchRes, threadInfos, std::less<TimeStamp>() );
+        sortSearchResOnTime( searchRes, tracks, std::less<TimeStamp>() );
    }
    ImGui::NextColumn();
    if( ImGui::Button( "Trace Name" ) )
@@ -136,9 +136,9 @@ SearchSelection drawSearchResult( SearchResult& searchRes, const Timeline& timel
       descending = !descending;
 
       if( descending )
-        sortSearchResOnName( searchRes, threadInfos, strDb, std::greater<int>() );
+        sortSearchResOnName( searchRes, tracks, strDb, std::greater<int>() );
       else
-        sortSearchResOnName( searchRes, threadInfos, strDb, std::less<int>() );
+        sortSearchResOnName( searchRes, tracks, strDb, std::less<int>() );
    }
    ImGui::NextColumn();
    if( ImGui::Button( "Duration" ) )
@@ -147,9 +147,9 @@ SearchSelection drawSearchResult( SearchResult& searchRes, const Timeline& timel
       descending = !descending;
 
       if( descending )
-        sortSearchResOnDuration( searchRes, threadInfos, std::greater<TimeStamp>() );
+        sortSearchResOnDuration( searchRes, tracks, std::greater<TimeStamp>() );
       else
-        sortSearchResOnDuration( searchRes, threadInfos, std::less<TimeStamp>() );
+        sortSearchResOnDuration( searchRes, tracks, std::less<TimeStamp>() );
    }
    ImGui::NextColumn();
    ImGui::Separator();
@@ -182,7 +182,7 @@ SearchSelection drawSearchResult( SearchResult& searchRes, const Timeline& timel
    {
        ImGui::PushID(i);
        const auto& traceIdThreadId = searchRes.tracesIdxThreadIdx[i];
-       const auto& ti = threadInfos[ traceIdThreadId.second ];
+       const auto& ti = tracks[ traceIdThreadId.second ];
        const size_t traceId = traceIdThreadId.first;
        const TimeStamp delta = ti._traces.deltas[ traceId ];
 

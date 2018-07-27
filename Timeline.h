@@ -11,7 +11,7 @@ struct ImColor;
 
 namespace hop
 {
-struct ThreadInfo;
+struct TimelineTrack;
 class StringDb;
 class Timeline
 {
@@ -28,9 +28,7 @@ class Timeline
    static float PADDED_TRACE_SIZE;
 
    void update( float deltaTimeMs ) noexcept;
-   void draw(
-       std::vector<ThreadInfo>& _tracesPerThread,
-       const StringDb& strDb  );
+   void draw( std::vector<TimelineTrack>& tracks, const StringDb& strDb  );
    TimeStamp absoluteStartTime() const noexcept;
    TimeStamp absolutePresentTime() const noexcept;
    void setAbsoluteStartTime( TimeStamp time ) noexcept;
@@ -111,14 +109,14 @@ class Timeline
    } _contextMenuInfo;
 
    void drawTimeline( const float posX, const float posY );
-   void drawTraces( const ThreadInfo& traces, uint32_t threadIndex, const float posX, const float posY, const StringDb& strDb );
-   void drawLockWaits(const std::vector<ThreadInfo>& infos, uint32_t threadIndex, const float posX, const float posY );
-   void handleMouseDrag( float mousePosX, float mousePosY, std::vector<ThreadInfo>& tracesPerThread );
+   void drawTraces( const TimelineTrack& traces, uint32_t threadIndex, const float posX, const float posY, const StringDb& strDb );
+   void drawLockWaits(const std::vector<TimelineTrack>& infos, uint32_t threadIndex, const float posX, const float posY );
+   void handleMouseDrag( float mousePosX, float mousePosY, std::vector<TimelineTrack>& tracesPerThread );
    void handleMouseWheel( float mousePosX, float mousePosY );
    void zoomOn( int64_t microToZoomOn, float zoomFactor );
    void setStartTime( int64_t timeInMicro, AnimationType animType = ANIMATION_TYPE_NORMAL ) noexcept;
    void setZoom( TimeDuration microsToDisplay, AnimationType animType = ANIMATION_TYPE_NORMAL );
-   std::vector< LockOwnerInfo > highlightLockOwner(const std::vector<ThreadInfo>& infos, uint32_t threadIndex, uint32_t hoveredLwIndex, const float posX, const float posY );
+   std::vector< LockOwnerInfo > highlightLockOwner(const std::vector<TimelineTrack>& infos, uint32_t threadIndex, uint32_t hoveredLwIndex, const float posX, const float posY );
 
    int64_t _timelineStart{0};
    TimeDuration _timelineRange{5000000000};

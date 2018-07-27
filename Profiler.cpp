@@ -146,9 +146,9 @@ void Profiler::addTraces( const DisplayableTraces& traces, uint32_t threadIndex 
    if( traces.ends.empty() ) return;
 
    // Add new thread as they come
-   if ( threadIndex >= _tracesPerThread.size() )
+   if ( threadIndex >= _tracks.size() )
    {
-      _tracesPerThread.resize( threadIndex + 1 );
+      _tracks.resize( threadIndex + 1 );
    }
 
    // Update the current time
@@ -157,7 +157,7 @@ void Profiler::addTraces( const DisplayableTraces& traces, uint32_t threadIndex 
 
    // If this is the first traces received from the thread, update the
    // start time as it may be earlier.
-   if ( _tracesPerThread[threadIndex]._traces.ends.empty() )
+   if ( _tracks[threadIndex]._traces.ends.empty() )
    {
       // Find the earliest trace
       TimeStamp earliestTime = traces.ends[0] - traces.deltas[0];
@@ -171,10 +171,10 @@ void Profiler::addTraces( const DisplayableTraces& traces, uint32_t threadIndex 
          _timeline.setAbsoluteStartTime( earliestTime );
    }
 
-   _tracesPerThread[threadIndex].addTraces( traces );
+   _tracks[threadIndex].addTraces( traces );
 
    size_t totalTracesCount = 0;
-   for( const auto& t : _tracesPerThread )
+   for( const auto& t : _tracks )
    {
       totalTracesCount += t._traces.ends.size();
    }
@@ -223,14 +223,14 @@ void Profiler::addLockWaits( const DisplayableLockWaits& lockWaits, uint32_t thr
 {
    HOP_PROF_FUNC();
    // Check if new thread
-   if ( threadIndex >= _tracesPerThread.size() )
+   if ( threadIndex >= _tracks.size() )
    {
-      _tracesPerThread.resize( threadIndex + 1 );
+      _tracks.resize( threadIndex + 1 );
    }
 
    if( !lockWaits.ends.empty() )
    {
-      _tracesPerThread[threadIndex].addLockWaits( lockWaits );
+      _tracks[threadIndex].addLockWaits( lockWaits );
    }
 }
 
@@ -238,14 +238,14 @@ void Profiler::addUnlockEvents( const std::vector<UnlockEvent>& unlockEvents, ui
 {
    HOP_PROF_FUNC();
    // Check if new thread
-   if ( threadIndex >= _tracesPerThread.size() )
+   if ( threadIndex >= _tracks.size() )
    {
-      _tracesPerThread.resize( threadIndex + 1 );
+      _tracks.resize( threadIndex + 1 );
    }
 
    if( !unlockEvents.empty() )
    {
-      _tracesPerThread[threadIndex].addUnlockEvents( unlockEvents );
+      _tracks[threadIndex].addUnlockEvents( unlockEvents );
    }
 }
 
@@ -481,27 +481,27 @@ void hop::Profiler::drawSearchWindow()
          {
             const auto startSearch = std::chrono::system_clock::now();
 
-            findTraces( input, _strDb, _tracesPerThread, _searchRes );
+            findTraces( input, _strDb, _tracks, _searchRes );
 
             const auto endSearch = std::chrono::system_clock::now();
             hop::g_stats.searchTimeMs =
                 std::chrono::duration<double, std::milli>( ( endSearch - startSearch ) ).count();
          }
 
-         auto selection = drawSearchResult( _searchRes, _timeline, _strDb, _tracesPerThread );
+         auto selection = drawSearchResult( _searchRes, _timeline, _strDb, _tracks );
 
          if ( selection.selectedTraceIdx != (size_t)-1 && selection.selectedThreadIdx != (uint32_t)-1 )
          {
-            const auto& threadInfo = _tracesPerThread[selection.selectedThreadIdx];
-            const TimeStamp absEndTime = threadInfo._traces.ends[selection.selectedTraceIdx];
-            const TimeStamp delta = threadInfo._traces.deltas[selection.selectedTraceIdx];
-            const TDepth_t depth = threadInfo._traces.depths[selection.selectedTraceIdx];
+            const auto& timelinetrack = _tracks[selection.selectedThreadIdx];
+            const TimeStamp absEndTime = timelinetrack._traces.ends[selection.selectedTraceIdx];
+            const TimeStamp delta = timelinetrack._traces.deltas[selection.selectedTraceIdx];
+            const TDepth_t depth = timelinetrack._traces.depths[selection.selectedTraceIdx];
 
             // If the thread was hidden, display it so we can see the selected trace
-            _tracesPerThread[selection.selectedThreadIdx]._trackHeight = 9999.0f;
+            _tracks[selection.selectedThreadIdx]._trackHeight = 9999.0f;
 
             const TimeStamp startTime = absEndTime - delta - _timeline.absoluteStartTime();
-            const float verticalPosPxl = threadInfo._localTracesVerticalStartPos + (depth * Timeline::PADDED_TRACE_SIZE) - (3* Timeline::PADDED_TRACE_SIZE);
+            const float verticalPosPxl = timelinetrack._localTracesVerticalStartPos + (depth * Timeline::PADDED_TRACE_SIZE) - (3* Timeline::PADDED_TRACE_SIZE);
             _timeline.pushNavigationState();
             _timeline.frameToTime( startTime, delta );
             _timeline.moveVerticalPositionPxl( verticalPosPxl );
@@ -520,14 +520,14 @@ void hop::Profiler::drawSearchWindow()
 void hop::Profiler::drawTraceDetailsWindow()
 {
    HOP_PROF_FUNC();
-   const auto traceDetailRes = drawTraceDetails( _timeline.getTraceDetails(), _tracesPerThread, _strDb );
+   const auto traceDetailRes = drawTraceDetails( _timeline.getTraceDetails(), _tracks, _strDb );
    if ( traceDetailRes.isWindowOpen )
    {
        _timeline.setTraceDetailsDisplayed();
 
        // Add the trace that will need to be highlighted
        std::pair<size_t, size_t> span = visibleIndexSpan(
-           _tracesPerThread[traceDetailRes.hoveredThreadIdx]._traces,
+           _tracks[traceDetailRes.hoveredThreadIdx]._traces,
            _timeline.absoluteTimelineStart(),
            _timeline.absoluteTimelineEnd() );
 
@@ -583,7 +583,7 @@ void hop::Profiler::draw( uint32_t /*windowWidth*/, uint32_t /*windowHeight*/ )
 
    auto deleteTracePos = toolbarDrawPos;
    deleteTracePos.x += (2.0f*TOOLBAR_BUTTON_PADDING) + TOOLBAR_BUTTON_WIDTH;
-   if( drawDeleteTracesButton( deleteTracePos, !_tracesPerThread.empty() ) )
+   if( drawDeleteTracesButton( deleteTracePos, !_tracks.empty() ) )
    {
       hop::displayModalWindow( "Delete all traces?", hop::MODAL_TYPE_YES_NO, [&](){ clear(); } );
    }
@@ -593,7 +593,7 @@ void hop::Profiler::draw( uint32_t /*windowWidth*/, uint32_t /*windowHeight*/ )
    statusPos.y += 5.0f;
    drawStatusIcon( statusPos, _server.connectionState() );
 
-   if( _tracesPerThread.empty() && !_recording )
+   if( _tracks.empty() && !_recording )
    {
       displayBackgroundHelpMsg();
    }
@@ -605,7 +605,7 @@ void hop::Profiler::draw( uint32_t /*windowWidth*/, uint32_t /*windowHeight*/ )
          _timeline.moveToPresentTime( Timeline::ANIMATION_TYPE_NONE );
       }
 
-      _timeline.draw( _tracesPerThread, _strDb );
+      _timeline.draw( _tracks, _strDb );
    }
 
    handleHotkey();
@@ -775,7 +775,7 @@ void hop::Profiler::handleHotkey()
    {
       _timeline.nextBookmark();
    }
-   else if( ImGui::IsKeyDown( SDLK_DELETE ) && !_tracesPerThread.empty() )
+   else if( ImGui::IsKeyDown( SDLK_DELETE ) && !_tracks.empty() )
    {
       if( ImGui::IsWindowFocused( ImGuiFocusedFlags_RootAndChildWindows ) && !hop::modalWindowShowing() )
          hop::displayModalWindow( "Delete all traces?", hop::MODAL_TYPE_YES_NO, [&](){ clear(); } );
@@ -799,14 +799,14 @@ bool hop::Profiler::saveToFile( const char* path )
       // Compute the size of the serialized data
       const size_t dbSerializedSize = serializedSize( _strDb );
       const size_t timelineSerializedSize = serializedSize( _timeline );
-      std::vector<size_t> threadInfosSerializedSize( _tracesPerThread.size() );
-      for ( size_t i = 0; i < _tracesPerThread.size(); ++i )
+      std::vector<size_t> timelineTrackSerializedSize( _tracks.size() );
+      for ( size_t i = 0; i < _tracks.size(); ++i )
       {
-         threadInfosSerializedSize[i] = serializedSize( _tracesPerThread[i] );
+         timelineTrackSerializedSize[i] = serializedSize( _tracks[i] );
       }
 
       const size_t totalSerializedSize =
-          std::accumulate( threadInfosSerializedSize.begin(), threadInfosSerializedSize.end(), size_t{0} ) +
+          std::accumulate( timelineTrackSerializedSize.begin(), timelineTrackSerializedSize.end(), size_t{0} ) +
           timelineSerializedSize +
           dbSerializedSize;
 
@@ -814,9 +814,9 @@ bool hop::Profiler::saveToFile( const char* path )
 
       size_t index = serialize( _strDb, &data[0] );
       index += serialize( _timeline, &data[index] );
-      for ( size_t i = 0; i < _tracesPerThread.size(); ++i )
+      for ( size_t i = 0; i < _tracks.size(); ++i )
       {
-         index += serialize( _tracesPerThread[i], &data[index] );
+         index += serialize( _tracks[i], &data[index] );
       }
 
       mz_ulong compressedSize = compressBound( totalSerializedSize );
@@ -838,7 +838,7 @@ bool hop::Profiler::saveToFile( const char* path )
                                1,
                                totalSerializedSize,
                                (uint32_t)dbSerializedSize,
-                               (uint32_t)_tracesPerThread.size()};
+                               (uint32_t)_tracks.size()};
       of.write( (const char*)&header, sizeof( header ) );
       of.write( &compressedData[0], totalSerializedSize );
 
@@ -897,13 +897,13 @@ bool hop::Profiler::openFile( const char* path )
          const size_t timelineSize = deserialize( &uncompressedData[i], _timeline );
          i += timelineSize;
 
-         std::vector<ThreadInfo> threadInfos( header->threadCount );
+         std::vector<TimelineTrack> timelineTracks( header->threadCount );
          for ( uint32_t j = 0; j < header->threadCount; ++j )
          {
-            size_t threadInfoSize = deserialize( &uncompressedData[i], threadInfos[j] );
-            addTraces( threadInfos[j]._traces, j );
-            addLockWaits( threadInfos[j]._lockWaits, j );
-            i += threadInfoSize;
+            size_t timelineTrackSize = deserialize( &uncompressedData[i], timelineTracks[j] );
+            addTraces( timelineTracks[j]._traces, j );
+            addLockWaits( timelineTracks[j]._lockWaits, j );
+            i += timelineTrackSize;
          }
          closeModalWindow();
          return true;
@@ -921,7 +921,7 @@ void hop::Profiler::clear()
 {
    _server.clear();
    _strDb.clear();
-   _tracesPerThread.clear();
+   _tracks.clear();
    _timeline.setAbsoluteStartTime( 0 );
    _timeline.clearTraceDetails();
    _timeline.clearBookmarks();

@@ -1,4 +1,4 @@
-#include "ThreadInfo.h"
+#include "TimelineTrack.h"
 #include "Lod.h"
 #include "Utils.h"
 
@@ -8,44 +8,44 @@
 
 namespace hop
 {  
-void ThreadInfo::addTraces( const DisplayableTraces& newTraces )
+void TimelineTrack::addTraces( const DisplayableTraces& newTraces )
 {
    _traces.append( newTraces );
 
    assert_is_sorted(_traces.ends.begin(), _traces.ends.end() );
 }
 
-void ThreadInfo::addLockWaits( const DisplayableLockWaits& lockWaits )
+void TimelineTrack::addLockWaits( const DisplayableLockWaits& lockWaits )
 {
    _lockWaits.append( lockWaits );
 }
 
-void ThreadInfo::addUnlockEvents(const std::vector<UnlockEvent>& unlockEvents)
+void TimelineTrack::addUnlockEvents(const std::vector<UnlockEvent>& unlockEvents)
 {
     _unlockEvents.insert(_unlockEvents.end(), unlockEvents.begin(), unlockEvents.end());
 }
 
-TDepth_t ThreadInfo::maxDepth() const noexcept
+TDepth_t TimelineTrack::maxDepth() const noexcept
 {
    return _traces.maxDepth;
 }
 
-float ThreadInfo::maxDisplayedDepth() const noexcept
+float TimelineTrack::maxDisplayedDepth() const noexcept
 {
    return std::min( (float)_traces.maxDepth, _trackHeight ) + 1.0f;
 }
 
-void ThreadInfo::setTrackHeight( float height )
+void TimelineTrack::setTrackHeight( float height )
 {
    _trackHeight = hop::clamp( height, -1.0f, (float)maxDepth() );
 }
 
-bool ThreadInfo::empty() const
+bool TimelineTrack::empty() const
 {
    return _traces.ends.empty();
 }
 
-size_t serializedSize( const ThreadInfo& ti )
+size_t serializedSize( const TimelineTrack& ti )
 {
    const size_t tracesCount = ti._traces.ends.size();
    const size_t lockwaitsCount = ti._lockWaits.ends.size();
@@ -70,7 +70,7 @@ size_t serializedSize( const ThreadInfo& ti )
    return serializedSize;
 }
 
-size_t serialize( const ThreadInfo& ti, char* data )
+size_t serialize( const TimelineTrack& ti, char* data )
 {
     const size_t serialSize = serializedSize( ti );
     (void)serialSize; // Removed unused warning
@@ -145,7 +145,7 @@ size_t serialize( const ThreadInfo& ti, char* data )
     return i;
 }
 
-size_t deserialize( const char* data, ThreadInfo& ti )
+size_t deserialize( const char* data, TimelineTrack& ti )
 {
     size_t i = 0;
 

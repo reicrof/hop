@@ -32,7 +32,7 @@ struct TraceVecSetItem
 template <typename CMP>
 static void sortTraceDetailOnName(
     std::vector<hop::TraceDetail>& td,
-    const hop::ThreadInfo& threadInfo,
+    const hop::TimelineTrack& timelineTrack,
     const hop::StringDb& strDb,
     const CMP& cmp )
 {
@@ -41,11 +41,11 @@ static void sortTraceDetailOnName(
    std::stable_sort(
        td.begin(),
        td.end(),
-       [&threadInfo, &strDb, &cmp]( const hop::TraceDetail& lhs, const hop::TraceDetail& rhs ) {
+       [&timelineTrack, &strDb, &cmp]( const hop::TraceDetail& lhs, const hop::TraceDetail& rhs ) {
           return cmp(
               strcmp(
-                  strDb.getString( threadInfo._traces.fctNameIds[lhs.traceIds[0]] ),
-                  strDb.getString( threadInfo._traces.fctNameIds[rhs.traceIds[0]] ) ),
+                  strDb.getString( timelineTrack._traces.fctNameIds[lhs.traceIds[0]] ),
+                  strDb.getString( timelineTrack._traces.fctNameIds[rhs.traceIds[0]] ) ),
               0 );
        } );
 }
@@ -393,7 +393,7 @@ TraceDetails createGlobalTraceDetails( const DisplayableTraces& traces, uint32_t
 
 TraceDetailDrawResult drawTraceDetails(
     TraceDetails& details,
-    const std::vector<ThreadInfo>& tracesPerThread,
+    const std::vector<TimelineTrack>& tracks,
     const StringDb& strDb )
 {
    HOP_PROF_FUNC();
@@ -433,14 +433,14 @@ TraceDetailDrawResult drawTraceDetails(
             {
                sortTraceDetailOnName(
                    details.details,
-                   tracesPerThread[details.threadIndex],
+                   tracks[details.threadIndex],
                    strDb,
                    std::greater<int>() );
             }
             else
             {
                sortTraceDetailOnName(
-                   details.details, tracesPerThread[details.threadIndex], strDb, std::less<int>() );
+                   details.details, tracks[details.threadIndex], strDb, std::less<int>() );
             }
          }
 
@@ -503,7 +503,7 @@ TraceDetailDrawResult drawTraceDetails(
          ImGui::NextColumn();
          ImGui::Separator();
 
-         const auto& threadInfo = tracesPerThread[details.threadIndex];
+         const auto& track = tracks[details.threadIndex];
          char traceName[256] = {};
          char traceDuration[128] = {};
          static size_t selected = -1;
@@ -511,7 +511,7 @@ TraceDetailDrawResult drawTraceDetails(
          for ( size_t i = 0; i < details.details.size(); ++i )
          {
             const size_t traceId = details.details[i].traceIds[0];
-            const TStrPtr_t fctIdx = threadInfo._traces.fctNameIds[traceId];
+            const TStrPtr_t fctIdx = track._traces.fctNameIds[traceId];
             snprintf( traceName, sizeof( traceName ), "%s", strDb.getString( fctIdx ) );
             if ( ImGui::Selectable(
                      traceName, selected == i, ImGuiSelectableFlags_SpanAllColumns ) )
@@ -526,8 +526,8 @@ TraceDetailDrawResult drawTraceDetails(
                    fileLineNbStr,
                    sizeof( fileLineNbStr ),
                    "%s:%d",
-                   strDb.getString( threadInfo._traces.fileNameIds[traceId] ),
-                   threadInfo._traces.lineNbs[traceId] );
+                   strDb.getString( track._traces.fileNameIds[traceId] ),
+                   track._traces.lineNbs[traceId] );
                ImGui::BeginTooltip();
                ImGui::TextUnformatted( fileLineNbStr );
                ImGui::EndTooltip();
@@ -569,7 +569,7 @@ TraceDetailDrawResult drawTraceDetails(
    return result;
 }
 
-void drawTraceStats(TraceStats& stats, const std::vector<ThreadInfo>& , const StringDb& strDb)
+void drawTraceStats(TraceStats& stats, const std::vector<TimelineTrack>& , const StringDb& strDb)
 {
    if ( stats.open > 0 )
    {

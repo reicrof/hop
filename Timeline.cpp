@@ -1,5 +1,5 @@
 #include "Timeline.h"
-#include "ThreadInfo.h"
+#include "TimelineTrack.h"
 #include "Utils.h"
 #include "Lod.h"
 #include "ModalWindow.h"
@@ -86,7 +86,7 @@ static bool drawSeparator( uint32_t threadIndex, bool highlightSeparator )
    return hovered;
 }
 
-static void resizeAllTracksToFit( std::vector<hop::ThreadInfo>& tracesPerThread )
+static void resizeAllTracksToFit( std::vector<hop::TimelineTrack>& tracesPerThread )
 {
    float visibleTrackCount = 0;
    for( auto& t : tracesPerThread )
@@ -187,7 +187,7 @@ void Timeline::update( float deltaTimeMs ) noexcept
 }
 
 void Timeline::draw(
-    std::vector<ThreadInfo>& tracesPerThread,
+    std::vector<TimelineTrack>& tracesPerThread,
     const StringDb& strDb )
 {
    HOP_PROF_FUNC();
@@ -556,7 +556,7 @@ void Timeline::handleMouseWheel( float mousePosX, float )
    }
 }
 
-void Timeline::handleMouseDrag( float mouseInCanvasX, float mouseInCanvasY, std::vector<ThreadInfo>& tracesPerThread )
+void Timeline::handleMouseDrag( float mouseInCanvasX, float mouseInCanvasY, std::vector<TimelineTrack>& tracesPerThread )
 {
    // Left mouse button dragging
    if ( ImGui::IsMouseDragging( 0 ) )
@@ -831,7 +831,7 @@ static uint32_t setBitIndex( TZoneId_t zone )
 }
 
 void Timeline::drawTraces(
-    const ThreadInfo& data,
+    const TimelineTrack& data,
     uint32_t threadIndex,
     const float posX,
     const float posY,
@@ -1044,7 +1044,7 @@ namespace
 }
 
 std::vector< Timeline::LockOwnerInfo > Timeline::highlightLockOwner(
-    const std::vector<ThreadInfo>& infos,
+    const std::vector<TimelineTrack>& infos,
     uint32_t threadIndex,
     uint32_t hoveredLwIndex,
     const float posX,
@@ -1145,7 +1145,7 @@ std::vector< Timeline::LockOwnerInfo > Timeline::highlightLockOwner(
 }
 
 void Timeline::drawLockWaits(
-    const std::vector<ThreadInfo>& infos,
+    const std::vector<TimelineTrack>& infos,
     uint32_t threadIndex,
     const float posX,
     const float posY )

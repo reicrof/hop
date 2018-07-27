@@ -1,5 +1,5 @@
-#ifndef THREAD_INFO_H_
-#define THREAD_INFO_H_
+#ifndef TIMELINE_TRACK_H_
+#define TIMELINE_TRACK_H_
 
 #include "Hop.h"
 #include "DisplayableTraces.h"
@@ -9,7 +9,7 @@
 namespace hop
 {
 
-struct ThreadInfo
+struct TimelineTrack
 {
    void addTraces( const DisplayableTraces& traces );
    void addLockWaits( const DisplayableLockWaits& lockWaits );
@@ -28,10 +28,10 @@ struct ThreadInfo
    float _absoluteTracesVerticalStartPos;
    float _trackHeight{9999.0f};
 
-   friend size_t serializedSize( const ThreadInfo& ti );
-   friend size_t serialize( const ThreadInfo& ti, char* );
-   friend size_t deserialize( const char* data, ThreadInfo& ti );
+   friend size_t serializedSize( const TimelineTrack& ti );
+   friend size_t serialize( const TimelineTrack& ti, char* );
+   friend size_t deserialize( const char* data, TimelineTrack& ti );
 };
 }
 
-#endif  // THREAD_INFO_H_
+#endif  // TIMELINE_TRACK_H_

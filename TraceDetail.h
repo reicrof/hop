@@ -2,7 +2,7 @@
 #define TRACE_DETAIL_H_
 
 #include "Hop.h"
-#include "ThreadInfo.h"
+#include "TimelineTrack.h"
 
 #include <vector>
 
@@ -57,12 +57,12 @@ createTraceDetails( const DisplayableTraces& traces, uint32_t threadIndex, size_
 TraceDetails createGlobalTraceDetails( const DisplayableTraces& traces, uint32_t threadIndex );
 TraceDetailDrawResult drawTraceDetails(
     TraceDetails& details,
-    const std::vector<ThreadInfo>& tracesPerThread,
+    const std::vector<TimelineTrack>& tracks,
     const StringDb& strDb );
 
 
 TraceStats createTraceStats( const DisplayableTraces& traces, uint32_t threadIndex, size_t traceId );
-void drawTraceStats( TraceStats& stats, const std::vector<ThreadInfo>& tracesPerThread, const StringDb& strDb);
+void drawTraceStats( TraceStats& stats, const std::vector<TimelineTrack>& tracks, const StringDb& strDb);
 }
 
 #endif  // TRACE_DETAIL_H_

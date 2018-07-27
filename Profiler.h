@@ -3,7 +3,7 @@
 
 #include "Hop.h"
 #include "Timeline.h"
-#include "ThreadInfo.h"
+#include "TimelineTrack.h"
 #include "TraceSearch.h"
 #include "StringDb.h"
 #include "Server.h"
@@ -41,7 +41,7 @@ private:
 
    std::string _name;
    Timeline _timeline;
-   std::vector< ThreadInfo > _tracesPerThread;
+   std::vector< TimelineTrack > _tracks;
    StringDb _strDb;
    SearchResult _searchRes;
    bool _recording{ false };
