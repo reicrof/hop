@@ -176,8 +176,12 @@ enum HopZone
 typedef HANDLE sem_handle;
 typedef HANDLE shm_handle;
 
+#ifndef likely
 #define likely(x)   x
+#endif
+#ifndef unlikely
 #define unlikely(x) x
+#endif
 
 inline const char* HOP_GET_PROG_NAME() HOP_NOEXCEPT
 {
@@ -203,11 +207,6 @@ inline const char* HOP_GET_PROG_NAME() HOP_NOEXCEPT
 #define ssize_t __int64
 #else
 #define ssize_t long
-
-#if !defined(_WIN64)
-    #error 32 bit not supported
-#endif
-
 #endif
 
 /* Unix (Linux & MacOs) specific macros and defines */
@@ -419,15 +418,15 @@ class ClientManager
    static TZoneId_t StartProfileGlFinish();
    static TStrPtr_t StartProfileDynString( const char*, TZoneId_t* );
    static void EndProfile(
-       const char* fileName,
-       const char* fctName,
+       TStrPtr_t fileName,
+       TStrPtr_t fctName,
        TimeStamp start,
        TimeStamp end,
        TLineNb_t lineNb,
        TZoneId_t zone );
    static void EndProfileGlFinish(
-       const char* fileName,
-       const char* fctName,
+       TStrPtr_t fileName,
+       TStrPtr_t fctName,
        TimeStamp start,
        TLineNb_t lineNb,
        TZoneId_t zone );
@@ -466,8 +465,8 @@ class ProfGuard
     inline void open( const char* fileName, TLineNb_t lineNb, const char* fctName )
     {
       _start = getTimeStamp();
-      _fileName = fileName;
-      _fctName = fctName;
+      _fileName = (TStrPtr_t)fileName;
+      _fctName = (TStrPtr_t)fctName;
       _lineNb = lineNb;
       _zone = ClientManager::StartProfile();
     }
@@ -479,7 +478,7 @@ class ProfGuard
     }
 
     TimeStamp _start;
-    const char *_fileName, *_fctName;
+    TStrPtr_t _fileName, _fctName;
     TLineNb_t _lineNb;
     TZoneId_t _zone;
 };
@@ -489,8 +488,8 @@ class ProfGuardGLFinish
   public:
    ProfGuardGLFinish( const char* fileName, TLineNb_t lineNb, const char* fctName ) HOP_NOEXCEPT
        : _start( getTimeStamp() ),
-         _fileName( fileName ),
-         _fctName( fctName ),
+         _fileName( (TStrPtr_t) fileName ),
+         _fctName( (TStrPtr_t) fctName ),
          _lineNb( lineNb )
    {
       _zone = ClientManager::StartProfileGlFinish();
@@ -502,7 +501,7 @@ class ProfGuardGLFinish
 
   private:
    TimeStamp _start;
-   const char *_fileName, *_fctName;
+   TStrPtr_t _fileName, _fctName;
    TLineNb_t _lineNb;
    TZoneId_t _zone;
 };
@@ -529,19 +528,19 @@ class ProfGuardDynamicString
   public:
    ProfGuardDynamicString( const char* fileName, TLineNb_t lineNb, const char* fctName ) HOP_NOEXCEPT
        : _start( getTimeStamp() | 1 ), // Set the first bit to 1 to flag the use of dynamic strings
-         _fileName( fileName ),
+         _fileName( (TStrPtr_t) fileName ),
          _lineNb( lineNb )
    {
       _fctName = ClientManager::StartProfileDynString( fctName, &_zone );
    }
    ~ProfGuardDynamicString()
    {
-      ClientManager::EndProfile( _fileName, (const char*) _fctName, _start, getTimeStamp(), _lineNb, _zone );
+      ClientManager::EndProfile( _fileName, _fctName, _start, getTimeStamp(), _lineNb, _zone );
    }
 
   private:
    TimeStamp _start;
-   const char *_fileName;
+   TStrPtr_t _fileName;
    TStrPtr_t _fctName;
    TLineNb_t _lineNb;
    TZoneId_t _zone;
@@ -684,7 +683,7 @@ namespace
     void closeSemaphore( sem_handle sem, const char* semName )
     {
 #if defined( _MSC_VER )
-       BOOL success = CloseHandle( sem );
+       CloseHandle( sem );
 #else
        if ( sem_close( sem ) != 0 )
        {
@@ -1122,10 +1121,10 @@ namespace
    // C-style string hash inspired by Stackoverflow question
    // based on the Java string hash fct. If its good enough
    // for java, it should be good enough for me...
-   size_t cStringHash( const char* str, size_t strLen )
+   TStrPtr_t cStringHash( const char* str, size_t strLen )
    {
-      size_t result = 0;
-      HOP_CONSTEXPR size_t prime = 31;
+      TStrPtr_t result = 0;
+      HOP_CONSTEXPR TStrPtr_t prime = 31;
       for ( size_t i = 0; i < strLen; ++i )
       {
          result = str[i] + ( result * prime );
@@ -1160,14 +1159,14 @@ class Client
    }
 
    void addProfilingTrace(
-       const char* fileName,
-       const char* fctName,
+       TStrPtr_t fileName,
+       TStrPtr_t fctName,
        TimeStamp start,
        TimeStamp end,
        TLineNb_t lineNb,
        TZoneId_t zone )
    {
-      _traces.push_back( Trace{ start, end, (TStrPtr_t)fileName, (TStrPtr_t)fctName, lineNb, zone, (TDepth_t)tl_traceLevel } );
+      _traces.push_back( Trace{ start, end, fileName, fctName, lineNb, zone, (TDepth_t)tl_traceLevel } );
    }
 
    void addWaitLockTrace( void* mutexAddr, TimeStamp start, TimeStamp end, TDepth_t depth )
@@ -1187,7 +1186,7 @@ class Client
 
       const size_t strLen = strlen( dynStr );
 
-      TStrPtr_t hash = (TStrPtr_t)cStringHash( dynStr, strLen );
+      const TStrPtr_t hash = cStringHash( dynStr, strLen );
 
       auto res = _stringPtr.insert( hash );
       // If the string was inserted (meaning it was not already there),
@@ -1204,22 +1203,22 @@ class Client
       return hash;
    }
 
-   bool addStringToDb( const char* strId )
+   bool addStringToDb( TStrPtr_t strId )
    {
       // Early return on NULL. The db should always contains NULL as first
       // entry
       if( strId == NULL ) return false;
 
-      auto res = _stringPtr.insert( (TStrPtr_t) strId );
+      auto res = _stringPtr.insert( strId );
       // If the string was inserted (meaning it was not already there),
       // add it to the database, otherwise do nothing
       if( res.second )
       {
          const size_t newEntryPos = _stringData.size();
-         _stringData.resize( newEntryPos + sizeof( TStrPtr_t ) + strlen( strId ) + 1 );
+         _stringData.resize( newEntryPos + sizeof( TStrPtr_t ) + strlen( (const char*)strId ) + 1 );
          TStrPtr_t* strIdPtr = (TStrPtr_t*)&_stringData[newEntryPos];
-         *strIdPtr = (TStrPtr_t)strId;
-         strcpy( &_stringData[newEntryPos + sizeof( TStrPtr_t ) ], strId );
+         *strIdPtr = strId;
+         strcpy( &_stringData[newEntryPos + sizeof( TStrPtr_t ) ], (const char*)strId );
       }
 
       return res.second;
@@ -1264,14 +1263,14 @@ class Client
       // Add all strings to the database
       for( const auto& t : _traces  )
       {
-         addStringToDb( (const char*) t.fileNameId );
+         addStringToDb( t.fileNameId );
 
          // String that were added dynamically are already in the
          // database and are flaged with the first bit of their start
          // time being 1. Therefore we only need to add the
          // non-dynamic strings. (first bit of start time being 0)
          if( (t.start & 1) == 0 )
-            addStringToDb( (const char*) t.fctNameId );
+            addStringToDb( t.fctNameId );
       }
 
       const uint32_t stringDataSize = _stringData.size();
@@ -1623,8 +1622,8 @@ TStrPtr_t ClientManager::StartProfileDynString( const char* str, TZoneId_t* zone
 }
 
 void ClientManager::EndProfile(
-    const char* fileName,
-    const char* fctName,
+    TStrPtr_t fileName,
+    TStrPtr_t fctName,
     TimeStamp start,
     TimeStamp end,
     TLineNb_t lineNb,
@@ -1646,8 +1645,8 @@ void ClientManager::EndProfile(
 }
 
 void ClientManager::EndProfileGlFinish(
-    const char* fileName,
-    const char* fctName,
+    TStrPtr_t fileName,
+    TStrPtr_t fctName,
     TimeStamp start,
     TLineNb_t lineNb,
     TZoneId_t zone )
