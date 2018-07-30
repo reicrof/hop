@@ -212,10 +212,11 @@ inline const HOP_CHAR* HOP_GET_PROG_NAME() HOP_NOEXCEPT
 
 /* Unix (Linux & MacOs) specific macros and defines */
 #else
+
 #include <pthread.h>
 #include <semaphore.h>
 typedef sem_t* sem_handle;
-typedef int shm_handle
+typedef int shm_handle;
 typedef char HOP_CHAR;
 const HOP_CHAR HOP_SHARED_MEM_PREFIX[] = "/hop_";
 const HOP_CHAR HOP_SHARED_SEM_PREFIX[] = "_sem";
