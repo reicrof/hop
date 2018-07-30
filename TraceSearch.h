@@ -7,7 +7,7 @@
 namespace hop
 {
    class Timeline;
-   struct TimelineTracks;
+   class TimelineTracks;
    class StringDb;
 
    struct SearchResult

@@ -5,7 +5,7 @@
 #include "Utils.h"
 #include "imgui/imgui.h"
 
-#include <functional> //std::greater   
+#include <functional> //std::greater
 
 template <typename CMP>
 static void sortSearchResOnTime(
@@ -70,8 +70,7 @@ static void sortSearchResOnDuration(
 
 namespace hop
 {
-
-void findTraces( const char* string, const hop::StringDb& strDb, const TimelineTracks& tracks, SearchResult& result )
+void findTraces( const char* string, const StringDb& strDb, const TimelineTracks& tracks, SearchResult& result )
 {
    HOP_PROF_FUNC();
 

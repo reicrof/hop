@@ -11,14 +11,14 @@
 
 namespace hop
 {
-bool Server::start( const char* name, bool useGlFinishByDefault )
+bool Server::start( const char* name )
 {
    assert( name != nullptr );
 
    _running = true;
    _connectionState = SharedMemory::NOT_CONNECTED;
 
-   _thread = std::thread( [this, name, useGlFinishByDefault]() {
+   _thread = std::thread( [this, name]() {
       TimeStamp lastSignalTime = getTimeStamp();
       SharedMemory::ConnectionState localState = SharedMemory::NOT_CONNECTED;
       while ( true )
@@ -37,7 +37,6 @@ bool Server::start( const char* name, bool useGlFinishByDefault )
             }
             // Clear any remaining messages from previous execution now
             clearPendingMessages();
-            setUseGlFinish( useGlFinishByDefault );
             _sharedMem.setListeningConsumer( _recording );
             _connectionState = state;
             printf( "Connection to shared data successful.\n" );
@@ -293,16 +292,6 @@ void Server::stop()
          _thread.join();
       }
    }
-}
-
-bool Server::useGlFinish() const noexcept
-{
-   return _sharedMem.isUsingGlFinish();
-}
-
-void Server::setUseGlFinish( bool useGlFinish )
-{
-   _sharedMem.setUseGlFinish( useGlFinish );
 }
 
 void Server::PendingData::clear()

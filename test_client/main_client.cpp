@@ -238,7 +238,6 @@ int main()
       func1();
       {
       HOP_ZONE( HOP_ZONE_4 );
-      HOP_PROF_GL_FINISH( "GL finish" );
       HOP_PROF( "Creating maclass1" );
       {
          HOP_ZONE( HOP_ZONE_3 );

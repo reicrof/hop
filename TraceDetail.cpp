@@ -1,4 +1,6 @@
 #include "TraceDetail.h"
+#include "TraceData.h"
+#include "TimelineTrack.h"
 #include "StringDb.h"
 #include "Utils.h"
 

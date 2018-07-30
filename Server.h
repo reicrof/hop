@@ -15,14 +15,11 @@ namespace hop
 class Server
 {
   public:
-   bool start( const char* name, bool useGlFinishByDefault );
+   bool start( const char* name );
    void setRecording( bool recording );
    void stop();
    void clear();
    SharedMemory::ConnectionState connectionState() const;
-
-   bool useGlFinish() const noexcept;
-   void setUseGlFinish( bool );
 
    struct PendingData
    {

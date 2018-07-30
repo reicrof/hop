@@ -36,8 +36,6 @@ For more information, please refer to <http://unlicense.org/>
 #define HOP_PROF_FUNC()
 #define HOP_PROF_SPLIT( x )
 #define HOP_PROF_DYN_NAME( x )
-#define HOP_PROF_GL_FINISH( x )
-#define HOP_PROF_FUNC_GL_FINISH()
 #define HOP_PROF_MUTEX_LOCK( x )
 #define HOP_PROF_MUTEX_UNLOCK( x )
 #define HOP_ZONE( x )
@@ -101,12 +99,6 @@ enum HopZone
 // Create a new profiling trace for dynamic strings. Please use sparingly as they will incur more slowdown
 #define HOP_PROF_DYN_NAME( x ) HOP_PROF_DYN_STRING_GUARD_VAR( __LINE__, ( __FILE__, __LINE__, (x) ) )
 
-// Create a new profiling trace that will call glFinish() before being destroyed
-#define HOP_PROF_GL_FINISH( x ) HOP_PROF_GL_FINISH_GUARD_VAR( __LINE__, ( __FILE__, __LINE__, (x) ) )
-
-// Create a new profiling trace for a free function
-#define HOP_PROF_FUNC_GL_FINISH() HOP_PROF_GL_FINISH_GUARD_VAR( __LINE__, ( __FILE__, __LINE__, HOP_FCT_NAME ) )
-
 // Create a trace that represent the time waiting for a mutex. You need to provide
 // a pointer to the mutex that is being locked
 #define HOP_PROF_MUTEX_LOCK( x ) HOP_MUTEX_LOCK_GUARD_VAR( __LINE__,( x ) )
@@ -165,16 +157,25 @@ enum HopZone
 #define HOP_CONSTEXPR constexpr
 #define HOP_NOEXCEPT noexcept
 #define HOP_STATIC_ASSERT static_assert
+#define HOP_MIN(a,b) (((a)<(b))?(a):(b))
+#define HOP_MAX(a,b) (((a)>(b))?(a):(b))
 // On MacOs the max name length seems to be 30...
 #define HOP_SHARED_MEM_MAX_NAME_SIZE 30
-#define HOP_SHARED_MEM_PREFIX "/hop_"
 
 /* Windows specific macros and defines */
 #if defined(_MSC_VER)
 #define NOMINMAX
 #include <windows.h>
+#include <tchar.h>
 typedef HANDLE sem_handle;
 typedef HANDLE shm_handle;
+typedef TCHAR HOP_CHAR;
+
+const HOP_CHAR HOP_SHARED_MEM_PREFIX[] = _T("/hop_");
+const HOP_CHAR HOP_SHARED_SEM_PREFIX[] = _T("_sem");
+#define HOP_STRLEN( str ) _tcslen( (str) )
+#define HOP_STRNCPY( dst, src, count ) _tcsncpy_s( (dst), (src), (count) )
+#define HOP_STRNCAT( dst, src, count ) _tcsncat( (dst), (src), (count) )
 
 #ifndef likely
 #define likely(x)   x
@@ -183,10 +184,10 @@ typedef HANDLE shm_handle;
 #define unlikely(x) x
 #endif
 
-inline const char* HOP_GET_PROG_NAME() HOP_NOEXCEPT
+inline const HOP_CHAR* HOP_GET_PROG_NAME() HOP_NOEXCEPT
 {
-   static char fullname[MAX_PATH];
-   static char* shortname;
+   static HOP_CHAR fullname[MAX_PATH];
+   static HOP_CHAR* shortname;
    static bool first = true;
    if (first)
    {
@@ -214,7 +215,13 @@ inline const char* HOP_GET_PROG_NAME() HOP_NOEXCEPT
 #include <pthread.h>
 #include <semaphore.h>
 typedef sem_t* sem_handle;
-typedef int shm_handle;
+typedef int shm_handle
+typedef char HOP_CHAR;
+const HOP_CHAR HOP_SHARED_MEM_PREFIX[] = "/hop_";
+const HOP_CHAR HOP_SHARED_SEM_PREFIX[] = "_sem";
+#define HOP_STRLEN( str ) strlen( (str) )
+#define HOP_STRNCPY( dst, src, count ) strncpy( (dst), (src), (count) )
+#define HOP_STRNCAT( dst, src, count ) strncat( (dst), (src), (count) )
 
 #define likely(x)       __builtin_expect(!!(x), 1)
 #define unlikely(x)     __builtin_expect(!!(x), 0)
@@ -222,8 +229,8 @@ typedef int shm_handle;
 #define HOP_GET_THREAD_ID() (size_t)pthread_self()
 #define HOP_SLEEP_MS( x ) usleep( x * 1000 )
 
-extern char* __progname;
-inline const char* HOP_GET_PROG_NAME() HOP_NOEXCEPT
+extern HOP_CHAR* __progname;
+inline const HOP_CHAR* HOP_GET_PROG_NAME() HOP_NOEXCEPT
 {
    return __progname;
 }
@@ -353,7 +360,7 @@ class SharedMemory
       UNKNOWN_CONNECTION_ERROR
    };
 
-   ConnectionState create( const char* path, size_t size, bool isConsumer );
+   ConnectionState create( const HOP_CHAR* path, size_t size, bool isConsumer );
    void destroy();
 
    struct SharedMetaInfo
@@ -363,7 +370,6 @@ class SharedMemory
          CONNECTED_PRODUCER = 1 << 0,
          CONNECTED_CONSUMER = 1 << 1,
          LISTENING_CONSUMER = 1 << 2,
-         USE_GL_FINISH      = 1 << 3,
       };
       std::atomic< uint32_t > flags{0};
       const float clientVersion{0.0f};
@@ -378,8 +384,6 @@ class SharedMemory
    void setConnectedConsumer( bool ) HOP_NOEXCEPT;
    bool hasListeningConsumer() const HOP_NOEXCEPT;
    void setListeningConsumer( bool ) HOP_NOEXCEPT;
-   bool isUsingGlFinish() const HOP_NOEXCEPT;
-   void setUseGlFinish( bool ) HOP_NOEXCEPT;
    TimeStamp lastResetTimestamp() const HOP_NOEXCEPT;
    void setResetTimestamp( TimeStamp t ) HOP_NOEXCEPT;
    ringbuf_t* ringbuffer() const HOP_NOEXCEPT;
@@ -401,8 +405,8 @@ class SharedMemory
    sem_handle _semaphore{NULL};
    bool _isConsumer;
    shm_handle _sharedMemHandle{};
-   char _sharedMemPath[HOP_SHARED_MEM_MAX_NAME_SIZE];
-   char _sharedSemPath[HOP_SHARED_MEM_MAX_NAME_SIZE+5];
+   HOP_CHAR _sharedMemPath[HOP_SHARED_MEM_MAX_NAME_SIZE];
+   HOP_CHAR _sharedSemPath[HOP_SHARED_MEM_MAX_NAME_SIZE+5];
    std::atomic< bool > _valid{false};
    std::mutex _creationMutex;
 };
@@ -413,21 +417,13 @@ class ClientManager
 {
   public:
    static Client* Get();
-   static void CallGlFinish();
    static TZoneId_t StartProfile();
-   static TZoneId_t StartProfileGlFinish();
    static TStrPtr_t StartProfileDynString( const char*, TZoneId_t* );
    static void EndProfile(
        TStrPtr_t fileName,
        TStrPtr_t fctName,
        TimeStamp start,
        TimeStamp end,
-       TLineNb_t lineNb,
-       TZoneId_t zone );
-   static void EndProfileGlFinish(
-       TStrPtr_t fileName,
-       TStrPtr_t fctName,
-       TimeStamp start,
        TLineNb_t lineNb,
        TZoneId_t zone );
    static void EndLockWait(
@@ -481,29 +477,6 @@ class ProfGuard
     TStrPtr_t _fileName, _fctName;
     TLineNb_t _lineNb;
     TZoneId_t _zone;
-};
-
-class ProfGuardGLFinish
-{
-  public:
-   ProfGuardGLFinish( const char* fileName, TLineNb_t lineNb, const char* fctName ) HOP_NOEXCEPT
-       : _start( getTimeStamp() ),
-         _fileName( (TStrPtr_t) fileName ),
-         _fctName( (TStrPtr_t) fctName ),
-         _lineNb( lineNb )
-   {
-      _zone = ClientManager::StartProfileGlFinish();
-   }
-   ~ProfGuardGLFinish()
-   {
-      ClientManager::EndProfileGlFinish( _fileName, _fctName, _start, _lineNb, _zone );
-   }
-
-  private:
-   TimeStamp _start;
-   TStrPtr_t _fileName, _fctName;
-   TLineNb_t _lineNb;
-   TZoneId_t _zone;
 };
 
 class LockWaitGuard
@@ -570,8 +543,6 @@ class ZoneGuard
    hop::ProfGuard ID ARGS
 #define HOP_PROF_ID_SPLIT( ID, ARGS ) \
    ID.reset ARGS
-#define HOP_PROF_GL_FINISH_GUARD_VAR( LINE, ARGS ) \
-   hop::ProfGuardGLFinish HOP_COMBINE( hopProfGuard, LINE ) ARGS
 #define HOP_PROF_DYN_STRING_GUARD_VAR( LINE, ARGS ) \
    hop::ProfGuardDynamicString HOP_COMBINE( hopProfGuard, LINE ) ARGS
 #define HOP_MUTEX_LOCK_GUARD_VAR( LINE, ARGS ) \
@@ -662,7 +633,7 @@ namespace
 #endif
     }
 
-    sem_handle openSemaphore( const char* name, hop::SharedMemory::ConnectionState* state )
+    sem_handle openSemaphore( const HOP_CHAR* name, hop::SharedMemory::ConnectionState* state )
     {
        sem_handle sem = NULL;
 #if defined( _MSC_VER )
@@ -680,7 +651,7 @@ namespace
        return sem;
     }
 
-    void closeSemaphore( sem_handle sem, const char* semName )
+    void closeSemaphore( sem_handle sem, const HOP_CHAR* semName )
     {
 #if defined( _MSC_VER )
        CloseHandle( sem );
@@ -696,7 +667,7 @@ namespace
 #endif
    }
 
-   void* createSharedMemory(const char* path, size_t size, shm_handle* handle, hop::SharedMemory::ConnectionState* state )
+   void* createSharedMemory(const HOP_CHAR* path, size_t size, shm_handle* handle, hop::SharedMemory::ConnectionState* state )
    {
        uint8_t* sharedMem = NULL;
 #if defined ( _MSC_VER )
@@ -747,7 +718,7 @@ namespace
        return sharedMem;
    }
 
-   void* openSharedMemory( const char* path, shm_handle* handle, size_t* totalSize, hop::SharedMemory::ConnectionState* state )
+   void* openSharedMemory( const HOP_CHAR* path, shm_handle* handle, size_t* totalSize, hop::SharedMemory::ConnectionState* state )
    {
        uint8_t* sharedMem = NULL;
 #if defined ( _MSC_VER )
@@ -808,7 +779,7 @@ namespace
       return sharedMem;
    }
 
-   void closeSharedMemory( const char* name, shm_handle handle, void* dataPtr )
+   void closeSharedMemory( const HOP_CHAR* name, shm_handle handle, void* dataPtr )
    {
 #if defined( _MSC_VER )
       UnmapViewOfFile( dataPtr );
@@ -820,33 +791,13 @@ namespace
 #endif
    }
 
-   void* loadSymbol( const char* libraryName, const char* symbolName )
-   {
-      void* symbol = NULL;
-#if defined( _MSC_VER )
-      HMODULE module = LoadLibraryA( libraryName );
-      symbol = (void *)GetProcAddress( module, symbolName );
-#elif __APPLE__
-      (void)libraryName;  // Remove unused
-      char symbolNamePrefixed[256];
-      strcpy( symbolNamePrefixed + 1, symbolName );
-      symbolNamePrefixed[0] = '_';
-      symbol = dlsym( RTLD_DEFAULT, symbolName );
-#else // Linux case
-      void* lib = dlopen( libraryName, RTLD_LAZY );
-      symbol = dlsym( lib, symbolName );
-#endif
-
-      return symbol;
-   }
-
 }
 
 namespace hop
 {
 
 // ------ SharedMemory.cpp------------
-SharedMemory::ConnectionState SharedMemory::create( const char* exeName, size_t requestedSize, bool isConsumer )
+SharedMemory::ConnectionState SharedMemory::create( const HOP_CHAR* exeName, size_t requestedSize, bool isConsumer )
 {
    ConnectionState state = CONNECTED;
    std::lock_guard<std::mutex> g( _creationMutex );
@@ -857,14 +808,15 @@ SharedMemory::ConnectionState SharedMemory::create( const char* exeName, size_t 
       _isConsumer = isConsumer;
 
       // Create shared mem name
-      strncpy( _sharedMemPath, HOP_SHARED_MEM_PREFIX, sizeof( HOP_SHARED_MEM_PREFIX ) );
-      strncat(
+	  HOP_STRNCPY( _sharedMemPath, HOP_SHARED_MEM_PREFIX, HOP_STRLEN( HOP_SHARED_MEM_PREFIX ) );
+      //strncpy( _sharedMemPath, HOP_SHARED_MEM_PREFIX, sizeof( HOP_SHARED_MEM_PREFIX ) );
+	  HOP_STRNCAT(
           _sharedMemPath,
           exeName,
-          HOP_SHARED_MEM_MAX_NAME_SIZE - sizeof( HOP_SHARED_MEM_PREFIX ) - 1 );
+          HOP_SHARED_MEM_MAX_NAME_SIZE - HOP_STRLEN( HOP_SHARED_MEM_PREFIX ) - 1 );
 
-      strncpy( _sharedSemPath, _sharedMemPath, sizeof( _sharedSemPath ) );
-      strncat( _sharedSemPath, "_sem", sizeof( _sharedSemPath ) - strlen( _sharedMemPath ) -1 );
+	  HOP_STRNCPY( _sharedSemPath, _sharedMemPath, HOP_STRLEN( _sharedSemPath ) );
+	  HOP_STRNCAT( _sharedSemPath, HOP_SHARED_SEM_PREFIX, HOP_STRLEN( _sharedSemPath ) - HOP_STRLEN( _sharedMemPath ) -1 );
 
       // Open semaphore
       _semaphore = openSemaphore( _sharedSemPath, &state );
@@ -1008,19 +960,6 @@ void SharedMemory::setListeningConsumer( bool listening ) HOP_NOEXCEPT
       _sharedMetaData->flags |= SharedMetaInfo::LISTENING_CONSUMER;
    else
       _sharedMetaData->flags &= ~(SharedMetaInfo::LISTENING_CONSUMER);
-}
-
-bool SharedMemory::isUsingGlFinish() const HOP_NOEXCEPT
-{
-   return _sharedMetaData && (_sharedMetaData->flags & SharedMetaInfo::USE_GL_FINISH) > 0;
-}
-
-void SharedMemory::setUseGlFinish( bool useGlFinish ) HOP_NOEXCEPT
-{
-   if ( useGlFinish )
-      _sharedMetaData->flags |= SharedMetaInfo::USE_GL_FINISH;
-   else
-      _sharedMetaData->flags &= ~SharedMetaInfo::USE_GL_FINISH;
 }
 
 TimeStamp SharedMemory::lastResetTimestamp() const HOP_NOEXCEPT
@@ -1566,47 +1505,9 @@ Client* ClientManager::Get()
    return threadClient.get();
 }
 
-void ClientManager::CallGlFinish()
-{
-#ifdef _MSC_VER
-   static const char* glLibName = "opengl32.dll";
-#else
-   static const char* glLibName = "libGL.so";
-#endif
-
-   static void (*glFinishPtr)() = NULL;
-
-   // If we request glFinish, load the symbol and call it
-   if( ClientManager::sharedMemory().isUsingGlFinish() )
-   {
-      // Load the symobl
-      if( !glFinishPtr )
-      {
-         glFinishPtr = (void (*)())loadSymbol( glLibName, "glFinish" );
-      }
-
-      // Call the symbol
-      if( glFinishPtr )
-      {
-         (*glFinishPtr)();
-      }
-      else
-      {
-         printf(" HOP - Error loading glFinish() symbol! glFinish() was not called!\n");
-      }
-   }
-}
-
 TZoneId_t ClientManager::StartProfile()
 {
    ++tl_traceLevel;
-   return tl_zoneId;
-}
-
-TZoneId_t ClientManager::StartProfileGlFinish()
-{
-   ++tl_traceLevel;
-   ClientManager::CallGlFinish();
    return tl_zoneId;
 }
 
@@ -1634,32 +1535,6 @@ void ClientManager::EndProfile(
 
    if( unlikely( !client ) ) return;
 
-   if( end - start > 50 ) // Minimum trace time is 50 ns
-   {
-      client->addProfilingTrace( fileName, fctName, start, end, lineNb, zone );
-   }
-   if ( remainingPushedTraces <= 0 )
-   {
-      client->flushToConsumer();
-   }
-}
-
-void ClientManager::EndProfileGlFinish(
-    TStrPtr_t fileName,
-    TStrPtr_t fctName,
-    TimeStamp start,
-    TLineNb_t lineNb,
-    TZoneId_t zone )
-{
-   ClientManager::CallGlFinish();
-   
-   const int remainingPushedTraces = --tl_traceLevel;
-   Client* client = ClientManager::Get();
-
-   if( unlikely( !client ) ) return;
-
-   const TimeStamp end = getTimeStamp();
-   
    if( end - start > 50 ) // Minimum trace time is 50 ns
    {
       client->addProfilingTrace( fileName, fctName, start, end, lineNb, zone );
@@ -2030,7 +1905,7 @@ retry:
        */
       if ( seen_off >= written )
       {
-         ready = std::min( seen_off, ready );
+         ready = HOP_MIN( seen_off, ready );
       }
       assert( ready >= written );
    }
@@ -2041,7 +1916,7 @@ retry:
     */
    if ( next < written )
    {
-      const ringbuf_off_t end = std::min( (ringbuf_off_t) rbuf->space, rbuf->end );
+      const ringbuf_off_t end = HOP_MIN( (ringbuf_off_t) rbuf->space, rbuf->end );
 
       /*
        * Wrap-around case.  Check for the cut off first.
@@ -2073,7 +1948,7 @@ retry:
        * the actual end of the buffer.
        */
       assert( ready > next );
-      ready = std::min( ready, end );
+      ready = HOP_MIN( ready, end );
       assert( ready >= written );
    }
    else
@@ -2082,7 +1957,7 @@ retry:
        * Regular case.  Up to the observed 'ready' (if set)
        * or the 'next' offset.
        */
-      ready = std::min( ready, next );
+      ready = HOP_MIN( ready, next );
    }
    towrite = ready - written;
    *offset = written;

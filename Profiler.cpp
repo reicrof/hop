@@ -137,7 +137,7 @@ void addNewProfiler( Profiler* profiler )
 
 Profiler::Profiler( const char* name ) : _name( name )
 {
-   _server.start( name, g_options.glFinishByDefault );
+   _server.start( name );
 }
 
 void Profiler::addTraces( const TraceData& traces, uint32_t threadIndex )
@@ -635,7 +635,6 @@ void hop::Profiler::drawMenuBar()
    const char* const menuOpenHopFile = "Open";
    const char* const menuHelp = "Help";
    const char* menuAction = NULL;
-   static bool useGlFinish = _server.useGlFinish();
 
    if ( ImGui::BeginMenuBar() )
    {
@@ -656,11 +655,6 @@ void hop::Profiler::drawMenuBar()
          if( ImGui::MenuItem( "Options", NULL ) )
          {
             g_options.optionWindowOpened = true;
-         }
-         ImGui::Separator();
-         if( ImGui::Checkbox("Use glFinish()", &useGlFinish) )
-         {
-            _server.setUseGlFinish( useGlFinish );
          }
          ImGui::Separator();
          if ( ImGui::MenuItem( "Exit", NULL ) )

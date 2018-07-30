@@ -2,14 +2,15 @@
 #define TRACE_DETAIL_H_
 
 #include "Hop.h"
-#include "TimelineTrack.h"
-
 #include <vector>
 
 namespace hop
 {
 class StringDb;
 struct TraceData;
+struct TimelineTrack;
+class TimelineTracks;
+struct TraceStats;
 struct TraceDetail
 {
    TraceDetail( size_t traceId, TimeStamp excTime )
