@@ -1,5 +1,4 @@
 #include "TraceSearch.h"
-#include "Timeline.h"
 #include "StringDb.h"
 #include "TimelineTrack.h"
 #include "Utils.h"
@@ -101,7 +100,12 @@ void findTraces( const char* string, const StringDb& strDb, const TimelineTracks
    sortSearchResOnDuration( result, tracks, std::greater<TimeStamp>() );
 }
 
-SearchSelection drawSearchResult( SearchResult& searchRes, const Timeline& timeline, const StringDb& strDb, const TimelineTracks& tracks )
+SearchSelection drawSearchResult(
+    SearchResult& searchRes,
+    const TimeStamp globalTimelineStart,
+    const TimeDuration timelineDuration,
+    const StringDb& strDb,
+    const TimelineTracks& tracks )
 {
    HOP_PROF_FUNC();
 
@@ -172,8 +176,6 @@ SearchSelection drawSearchResult( SearchResult& searchRes, const Timeline& timel
 
    static size_t selectedId = -1;
    size_t hoveredId = -1;
-   const TimeStamp absoluteStartTime = timeline.globalStartTime();
-   const TimeDuration timelineDuration = timeline.duration();
    char traceTime[64] = {};
    char traceDuration[64] = {};
    bool selectedSomething = false;
@@ -186,7 +188,7 @@ SearchSelection drawSearchResult( SearchResult& searchRes, const Timeline& timel
        const TimeStamp delta = ti._traces.deltas[ traceId ];
 
        hop::formatNanosTimepointToDisplay(
-           ti._traces.ends[ traceId ] - delta - absoluteStartTime,
+           ti._traces.ends[ traceId ] - delta - globalTimelineStart,
            timelineDuration,
            traceTime,
            sizeof( traceTime ) );

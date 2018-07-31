@@ -172,7 +172,7 @@ typedef HANDLE shm_handle;
 typedef TCHAR HOP_CHAR;
 
 const HOP_CHAR HOP_SHARED_MEM_PREFIX[] = _T("/hop_");
-const HOP_CHAR HOP_SHARED_SEM_PREFIX[] = _T("_sem");
+const HOP_CHAR HOP_SHARED_SEM_SUFFIX[] = _T("_sem");
 #define HOP_STRLEN( str ) _tcslen( (str) )
 #define HOP_STRNCPY( dst, src, count ) _tcsncpy_s( (dst), (src), (count) )
 #define HOP_STRNCAT( dst, src, count ) _tcsncat( (dst), (src), (count) )
@@ -219,7 +219,7 @@ typedef sem_t* sem_handle;
 typedef int shm_handle;
 typedef char HOP_CHAR;
 const HOP_CHAR HOP_SHARED_MEM_PREFIX[] = "/hop_";
-const HOP_CHAR HOP_SHARED_SEM_PREFIX[] = "_sem";
+const HOP_CHAR HOP_SHARED_SEM_SUFFIX[] = "_sem";
 #define HOP_STRLEN( str ) strlen( (str) )
 #define HOP_STRNCPY( dst, src, count ) strncpy( (dst), (src), (count) )
 #define HOP_STRNCAT( dst, src, count ) strncat( (dst), (src), (count) )
@@ -809,15 +809,14 @@ SharedMemory::ConnectionState SharedMemory::create( const HOP_CHAR* exeName, siz
       _isConsumer = isConsumer;
 
       // Create shared mem name
-	  HOP_STRNCPY( _sharedMemPath, HOP_SHARED_MEM_PREFIX, HOP_STRLEN( HOP_SHARED_MEM_PREFIX ) );
-      //strncpy( _sharedMemPath, HOP_SHARED_MEM_PREFIX, sizeof( HOP_SHARED_MEM_PREFIX ) );
+	  HOP_STRNCPY( _sharedMemPath, HOP_SHARED_MEM_PREFIX, HOP_STRLEN( HOP_SHARED_MEM_PREFIX ) + 1 );
 	  HOP_STRNCAT(
           _sharedMemPath,
           exeName,
           HOP_SHARED_MEM_MAX_NAME_SIZE - HOP_STRLEN( HOP_SHARED_MEM_PREFIX ) - 1 );
 
-	  HOP_STRNCPY( _sharedSemPath, _sharedMemPath, HOP_STRLEN( _sharedSemPath ) );
-	  HOP_STRNCAT( _sharedSemPath, HOP_SHARED_SEM_PREFIX, HOP_STRLEN( _sharedSemPath ) - HOP_STRLEN( _sharedMemPath ) -1 );
+	  HOP_STRNCPY( _sharedSemPath, _sharedMemPath, HOP_SHARED_MEM_MAX_NAME_SIZE );
+	  HOP_STRNCAT( _sharedSemPath, HOP_SHARED_SEM_SUFFIX, HOP_SHARED_MEM_MAX_NAME_SIZE - HOP_STRLEN( _sharedSemPath ) -1 );
 
       // Open semaphore
       _semaphore = openSemaphore( _sharedSemPath, &state );
@@ -1147,7 +1146,7 @@ class Client
    {
       // Early return on NULL. The db should always contains NULL as first
       // entry
-      if( strId == NULL ) return false;
+      if( strId == 0 ) return false;
 
       auto res = _stringPtr.insert( strId );
       // If the string was inserted (meaning it was not already there),

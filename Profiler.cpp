@@ -452,71 +452,6 @@ static void drawStatusIcon( const ImVec2& drawPos, hop::SharedMemory::Connection
    }
 }
 
-void hop::Profiler::drawSearchWindow()
-{
-   HOP_PROF_FUNC();
-   bool inputFocus = false;
-   if ( _focusSearchWindow && _searchWindowOpen )
-   {
-      ImGui::SetNextWindowFocus();
-      inputFocus = true;
-      _focusSearchWindow = false;
-   }
-
-   if ( _searchWindowOpen )
-   {
-      ImGui::PushStyleColor( ImGuiCol_WindowBg, ImVec4( 0.20f, 0.20f, 0.20f, 0.75f ) );
-      ImGui::SetNextWindowSize( ImVec2( 600, 300 ), ImGuiSetCond_FirstUseEver );
-      if ( ImGui::Begin( "Search Window", &_searchWindowOpen ) )
-      {
-         static char input[512];
-
-         if ( inputFocus ) ImGui::SetKeyboardFocusHere();
-
-         if ( ImGui::InputText(
-                  "Search",
-                  input,
-                  sizeof( input ),
-                  ImGuiInputTextFlags_AutoSelectAll | ImGuiInputTextFlags_EnterReturnsTrue ) &&
-              strlen( input ) > 0 )
-         {
-            const auto startSearch = std::chrono::system_clock::now();
-
-            findTraces( input, _strDb, _tracks, _searchRes );
-
-            const auto endSearch = std::chrono::system_clock::now();
-            hop::g_stats.searchTimeMs =
-                std::chrono::duration<double, std::milli>( ( endSearch - startSearch ) ).count();
-         }
-
-         auto selection = drawSearchResult( _searchRes, _timeline, _strDb, _tracks );
-
-         if ( selection.selectedTraceIdx != (size_t)-1 && selection.selectedThreadIdx != (uint32_t)-1 )
-         {
-            const auto& timelinetrack = _tracks[selection.selectedThreadIdx];
-            const TimeStamp absEndTime = timelinetrack._traces.ends[selection.selectedTraceIdx];
-            const TimeStamp delta = timelinetrack._traces.deltas[selection.selectedTraceIdx];
-            const TDepth_t depth = timelinetrack._traces.depths[selection.selectedTraceIdx];
-
-            // If the thread was hidden, display it so we can see the selected trace
-            _tracks[selection.selectedThreadIdx]._trackHeight = 9999.0f;
-
-            const TimeStamp startTime = absEndTime - delta - _timeline.globalStartTime();
-            const float verticalPosPxl = timelinetrack._localTracesVerticalStartPos + (depth * TimelineTrack::PADDED_TRACE_SIZE) - (3* TimelineTrack::PADDED_TRACE_SIZE);
-            _timeline.frameToTime( startTime, delta, true );
-            _timeline.moveVerticalPositionPxl( verticalPosPxl );
-         }
-
-         if( selection.hoveredTraceIdx != (size_t)-1 && selection.hoveredThreadIdx != (uint32_t)-1 )
-         {
-            //_timeline.addTraceToHighlight( std::make_pair( selection.hoveredTraceIdx, selection.hoveredThreadIdx ) );
-         }
-      }
-      ImGui::End();
-      ImGui::PopStyleColor();
-   }
-}
-
 void hop::Profiler::drawTraceDetailsWindow()
 {
    HOP_PROF_FUNC();
@@ -572,7 +507,6 @@ void hop::Profiler::draw( uint32_t /*windowWidth*/, uint32_t /*windowHeight*/ )
 
    // These must be done before drawing the traces as we need to highlight
    // traces that might be hovered from this window
-   drawSearchWindow();
    drawTraceDetailsWindow();
 
    const auto toolbarDrawPos = ImGui::GetCursorScreenPos();
@@ -610,18 +544,20 @@ void hop::Profiler::draw( uint32_t /*windowWidth*/, uint32_t /*windowHeight*/ )
       // Push clip rect for canvas and draw
       ImGui::PushClipRect(
           ImVec2( _timeline.canvasPosX(), _timeline.canvasPosY() ), ImVec2( 99999, 99999 ), true );
-      _tracks.draw( TimelineTracks::DrawInfo{_timeline.canvasPosWithScrollX(),
-                                             _timeline.canvasPosWithScrollY(),
-                                             _timeline.globalStartTime(),
-                                             _timeline.relativeStartTime(),
-                                             _timeline.duration(),
-                                             _strDb} );
+      auto timelineActions =
+          _tracks.draw( TimelineTracks::DrawInfo{_timeline.canvasPosX(),
+                                                 _timeline.canvasPosYWithScroll(),
+                                                 _timeline.globalStartTime(),
+                                                 _timeline.relativeStartTime(),
+                                                 _timeline.duration(),
+                                                 _strDb} );
+
+      // Handle deferred timeline actions created by the module
+      _timeline.handleDeferredActions( timelineActions );
       ImGui::PopClipRect();
    }
 
    handleHotkey();
-
-   //_timeline.clearHighlightedTraces();
 
    ImGui::PopStyleVar(2);
    ImGui::End();
@@ -746,6 +682,10 @@ void hop::Profiler::drawMenuBar()
 
 void hop::Profiler::handleHotkey()
 {
+   // Let the tracks handle the hotkeys first.
+   if( _tracks.handleHotkey() )
+      return;
+
    if( ImGui::IsKeyReleased( SDL_SCANCODE_HOME ) )
    {
       _timeline.moveToStart();
@@ -758,11 +698,6 @@ void hop::Profiler::handleHotkey()
    else if( ImGui::IsKeyReleased( 'r' ) && ImGui::IsRootWindowOrAnyChildFocused() )
    {
       setRecording( !_recording );
-   }
-   else if( ImGui::GetIO().KeyCtrl && ImGui::IsKeyPressed( 'f' ) )
-   {
-      _searchWindowOpen = true;
-      _focusSearchWindow = true;
    }
    else if( ImGui::GetIO().KeyCtrl && ImGui::IsKeyPressed( 'z' ) )
    {
@@ -931,7 +866,6 @@ void hop::Profiler::clear()
    _timeline.clearTraceDetails();
    _timeline.clearBookmarks();
    _timeline.clearTraceStats();
-   clearSearchResult( _searchRes );
    _recording = false;
    g_stats.traceCount = 0;
 }

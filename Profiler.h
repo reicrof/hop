@@ -33,7 +33,6 @@ struct Profiler
 
 private:
    void drawMenuBar();
-   void drawSearchWindow();
    void drawTraceDetailsWindow();
    bool openFile( const char* path );
    bool saveToFile( const char* path );
@@ -42,10 +41,7 @@ private:
    Timeline _timeline;
    TimelineTracks _tracks;
    StringDb _strDb;
-   SearchResult _searchRes;
    bool _recording{ false };
-   bool _searchWindowOpen{ false };
-   bool _focusSearchWindow{ false };
 
    Server _server;
    Server::PendingData _serverPendingData;

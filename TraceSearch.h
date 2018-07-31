@@ -1,6 +1,8 @@
 #ifndef TRACE_SEARCH_H_
 #define TRACE_SEARCH_H_
 
+#include <Hop.h>
+
 #include <vector>
 #include <string>
 
@@ -26,7 +28,7 @@ namespace hop
    };
 
    void findTraces( const char* string, const StringDb& strDb, const TimelineTracks& tracks, SearchResult& result );
-   SearchSelection drawSearchResult( SearchResult& searchRes, const Timeline& timeline, const StringDb& strDb, const TimelineTracks& tracks );
+   SearchSelection drawSearchResult( SearchResult& searchRes, TimeStamp globalTimelineStart, TimeDuration timelineDuration, const StringDb& strDb, const TimelineTracks& tracks );
    void clearSearchResult( SearchResult& res );
 }
 

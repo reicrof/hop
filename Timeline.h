@@ -3,6 +3,7 @@
 
 #include "Hop.h"
 #include "TraceDetail.h"
+#include "TimelineMessage.h"
 
 #include <vector>
 
@@ -22,6 +23,7 @@ class Timeline
 
    void update( float deltaTimeMs ) noexcept;
    void draw( float timelineHeight );
+   void handleDeferredActions( const std::vector< TimelineMessage >& msg );
 
 
    /*
@@ -58,8 +60,7 @@ class Timeline
 
    float canvasPosX() const noexcept;
    float canvasPosY() const noexcept;
-   float canvasPosWithScrollX() const noexcept;
-   float canvasPosWithScrollY() const noexcept;
+   float canvasPosYWithScroll() const noexcept;
 
    TraceDetails& getTraceDetails() noexcept;
    void clearTraceDetails();

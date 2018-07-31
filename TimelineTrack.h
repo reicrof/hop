@@ -3,6 +3,8 @@
 
 #include "Hop.h"
 #include "TraceData.h"
+#include "TraceSearch.h"
+#include "TimelineMessage.h"
 
 #include <vector>
 
@@ -51,16 +53,19 @@ class TimelineTracks
       const StringDb& strDb;
    };
 
+   bool handleHotkey();
    void update( float deltaTimeMs, TimeDuration timelineDuration );
-   void draw( const DrawInfo& info );
+   std::vector< TimelineMessage > draw( const DrawInfo& info );
+   void clear();
    float totalHeight() const;
    void resizeAllTracksToFit();
+   
 
+   // Vector overloads
    TimelineTrack& operator[]( size_t index );
    const TimelineTrack& operator[]( size_t index ) const;
    size_t size() const;
    void resize( size_t size );
-   void clear();
 
   private:
    void drawTraces(
@@ -68,14 +73,24 @@ class TimelineTracks
        uint32_t threadIndex,
        const float posX,
        const float posY,
-       const DrawInfo& drawInfo );
-   void drawLockWaits( uint32_t threadIndex, const float posX, const float posY );
+       const DrawInfo& drawInfo,
+       std::vector< TimelineMessage >& timelineMsg );
+   void drawLockWaits(
+       uint32_t threadIndex,
+       const float posX,
+       const float posY,
+       std::vector<TimelineMessage>& timelineMsg );
+   void drawSearchWindow( const DrawInfo& di, std::vector< TimelineMessage >& timelineMsg );
 
    std::vector<TimelineTrack> _tracks;
    std::vector< std::pair< size_t, uint32_t > > _highlightedTraces;
    int _lodLevel;
    int _draggedTrack{-1};
    float _highlightValue{0.0f};
+
+   SearchResult _searchRes;
+   bool _focusSearchWindow{ false };
+   bool _searchWindowOpen{ false };
 };
 }
 

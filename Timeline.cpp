@@ -212,17 +212,17 @@ void Timeline::draw( float timelineHeight )
    //    drawTraceStats(_traceStats, tracesPerThread, strDb);
    // }
 
-   //if ( ImGui::IsItemHoveredRect() )
-   //{
+   if ( ImGui::IsItemHoveredRect() )
+   {
       ImVec2 mousePosInCanvas = ImVec2(
           ImGui::GetIO().MousePos.x - startDrawPos.x, ImGui::GetIO().MousePos.y - startDrawPos.y );
 
-      //if( ImGui::IsRootWindowOrAnyChildHovered() )
+      if( ImGui::IsRootWindowOrAnyChildHovered() )
          handleMouseWheel( mousePosInCanvas.x, mousePosInCanvas.y );
 
-      //if( ImGui::IsRootWindowOrAnyChildFocused() )
+      if( ImGui::IsRootWindowOrAnyChildFocused() )
          handleMouseDrag( mousePosInCanvas.x, mousePosInCanvas.y );
-   //}
+   }
 }
 
 void Timeline::drawTimeline( const float posX, const float posY )
@@ -502,6 +502,22 @@ void Timeline::handleMouseDrag( float mouseInCanvasX, float mouseInCanvasY )
    }
 }
 
+void Timeline::handleDeferredActions( const std::vector< TimelineMessage >& msgs )
+{
+   for( const auto& m : msgs )
+   {
+      switch( m.type )
+      {
+         case TimelineMessageType::FRAME_TO_TIME:
+            frameToTime( m.frameToTime.time, m.frameToTime.duration, m.frameToTime.pushNavState );
+            break;
+         case TimelineMessageType::MOVE_VERTICAL_POS_PXL:
+            moveVerticalPositionPxl( m.verticalPos.posPxl );
+            break;
+      }
+   }
+}
+
 bool Timeline::realtime() const noexcept { return _realtime; }
 
 void Timeline::setRealtime( bool isRealtime ) noexcept
@@ -575,12 +591,7 @@ float Timeline::canvasPosY() const noexcept
    return _canvasDrawPosition[1];
 }
 
-float Timeline::canvasPosWithScrollX() const noexcept
-{
-   return _canvasDrawPosition[0] - _verticalPosPxl;
-}
-
-float Timeline::canvasPosWithScrollY() const noexcept
+float Timeline::canvasPosYWithScroll() const noexcept
 {
    return _canvasDrawPosition[1] - _verticalPosPxl;
 }
