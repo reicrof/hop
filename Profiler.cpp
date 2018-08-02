@@ -507,7 +507,7 @@ void hop::Profiler::draw( uint32_t /*windowWidth*/, uint32_t /*windowHeight*/ )
 
    // These must be done before drawing the traces as we need to highlight
    // traces that might be hovered from this window
-   drawTraceDetailsWindow();
+   //drawTraceDetailsWindow();
 
    const auto toolbarDrawPos = ImGui::GetCursorScreenPos();
    if( drawPlayStopButton( toolbarDrawPos, _recording ) )
@@ -544,17 +544,19 @@ void hop::Profiler::draw( uint32_t /*windowWidth*/, uint32_t /*windowHeight*/ )
       // Push clip rect for canvas and draw
       ImGui::PushClipRect(
           ImVec2( _timeline.canvasPosX(), _timeline.canvasPosY() ), ImVec2( 99999, 99999 ), true );
+      ImGui::BeginChild( "TimelineCanvas" );
       auto timelineActions =
           _tracks.draw( TimelineTracks::DrawInfo{_timeline.canvasPosX(),
                                                  _timeline.canvasPosYWithScroll(),
+                                                 _timeline.verticalPosPxl(),
                                                  _timeline.globalStartTime(),
                                                  _timeline.relativeStartTime(),
                                                  _timeline.duration(),
                                                  _strDb} );
-
+      ImGui::EndChild();
+      ImGui::PopClipRect();
       // Handle deferred timeline actions created by the module
       _timeline.handleDeferredActions( timelineActions );
-      ImGui::PopClipRect();
    }
 
    handleHotkey();
@@ -863,9 +865,9 @@ void hop::Profiler::clear()
    _strDb.clear();
    _tracks.clear();
    _timeline.setGlobalStartTime( 0 );
-   _timeline.clearTraceDetails();
+   //_timeline.clearTraceDetails();
    _timeline.clearBookmarks();
-   _timeline.clearTraceStats();
+   //_timeline.clearTraceStats();
    _recording = false;
    g_stats.traceCount = 0;
 }

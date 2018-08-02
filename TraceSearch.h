@@ -17,6 +17,8 @@ namespace hop
       std::string stringSearched;
       std::vector< std::pair< size_t, uint32_t> > tracesIdxThreadIdx;
       size_t matchCount{0};
+      bool focusSearchWindow{ false };
+      bool searchWindowOpen{ false };
    };
 
    struct SearchSelection

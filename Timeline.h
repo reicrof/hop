@@ -2,7 +2,6 @@
 #define TIMELINE_H_
 
 #include "Hop.h"
-#include "TraceDetail.h"
 #include "TimelineMessage.h"
 
 #include <vector>
@@ -62,11 +61,7 @@ class Timeline
    float canvasPosY() const noexcept;
    float canvasPosYWithScroll() const noexcept;
 
-   TraceDetails& getTraceDetails() noexcept;
-   void clearTraceDetails();
-   void setTraceDetailsDisplayed();
-
-   void clearTraceStats();
+   //void clearTraceStats();
 
    // Move to first trace
    void moveToStart( AnimationType animType = ANIMATION_TYPE_NORMAL ) noexcept;
@@ -114,13 +109,6 @@ class Timeline
       std::vector< TimeStamp > times;
    } _bookmarks;
 
-   struct LockOwnerInfo
-   {
-      LockOwnerInfo( TimeDuration dur, uint32_t tIdx ) : lockDuration(dur), threadIndex(tIdx){}
-      TimeDuration lockDuration{0};
-      uint32_t threadIndex{0};
-   };
-
    struct ContextMenu
    {
       size_t traceId{0};
@@ -153,8 +141,7 @@ class Timeline
    float _timelineHoverPos{-1.0f};
    float _canvasDrawPosition[2] = {};
 
-   TraceDetails _traceDetails{};
-   TraceStats _traceStats{ 0, 0, 0, 0, 0, std::vector< float >(), false, false };
+   //TraceStats _traceStats{ 0, 0, 0, 0, 0, std::vector< float >(), false, false };
 
    std::vector< AnimationState > _undoPositionStates, _redoPositionStates;
 

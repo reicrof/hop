@@ -4,8 +4,10 @@
 #include "Hop.h"
 #include "TraceData.h"
 #include "TraceSearch.h"
+#include "TraceDetail.h"
 #include "TimelineMessage.h"
 
+#include <tuple>
 #include <vector>
 
 namespace hop
@@ -28,10 +30,10 @@ struct TimelineTrack
    LockWaitData _lockWaits;
    std::vector<UnlockEvent> _unlockEvents;
 
-   // This is the position at which the traces for the current thread ifno
-   // are being draw
-   float _localTracesVerticalStartPos;
-   float _absoluteTracesVerticalStartPos;
+   // This is the position at which the track is drawn in canvas coord
+   // The absolute position ignores the scroll but not the relative
+   float _localDrawPos[2];
+   float _absoluteDrawPos[2];
    float _trackHeight{9999.0f};
 
    friend size_t serializedSize( const TimelineTrack& ti );
@@ -46,7 +48,7 @@ class TimelineTracks
   public:
    struct DrawInfo
    {
-      float canvasPosX, canvasPosY;
+      float canvasPosX, canvasPosY, scrollAmount;
       TimeStamp globalTimelineStartTime;
       TimeStamp relativeTimelineStartTime;
       TimeStamp timelineDuration;
@@ -69,28 +71,29 @@ class TimelineTracks
 
   private:
    void drawTraces(
-       const TimelineTrack& data,
-       uint32_t threadIndex,
+       const uint32_t threadIndex,
        const float posX,
        const float posY,
        const DrawInfo& drawInfo,
        std::vector< TimelineMessage >& timelineMsg );
    void drawLockWaits(
-       uint32_t threadIndex,
+       const uint32_t threadIndex,
        const float posX,
        const float posY,
+       const DrawInfo& drawInfo,
        std::vector<TimelineMessage>& timelineMsg );
    void drawSearchWindow( const DrawInfo& di, std::vector< TimelineMessage >& timelineMsg );
+   void addTraceToHighlight( size_t traceId, uint32_t threadIndex, const DrawInfo& drawInfo );
 
    std::vector<TimelineTrack> _tracks;
-   std::vector< std::pair< size_t, uint32_t > > _highlightedTraces;
+   std::vector< std::tuple< float, float, float > > _highlightedTracesDrawData;
    int _lodLevel;
    int _draggedTrack{-1};
    float _highlightValue{0.0f};
 
    SearchResult _searchRes;
-   bool _focusSearchWindow{ false };
-   bool _searchWindowOpen{ false };
+
+   TraceDetails _traceDetails{};
 };
 }
 

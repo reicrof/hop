@@ -8,6 +8,7 @@ namespace hop
    enum class TimelineMessageType
    {
       FRAME_TO_TIME,
+      FRAME_TO_ABSOLUTE_TIME,
       MOVE_VERTICAL_POS_PXL
    };
 

@@ -511,6 +511,9 @@ void Timeline::handleDeferredActions( const std::vector< TimelineMessage >& msgs
          case TimelineMessageType::FRAME_TO_TIME:
             frameToTime( m.frameToTime.time, m.frameToTime.duration, m.frameToTime.pushNavState );
             break;
+         case TimelineMessageType::FRAME_TO_ABSOLUTE_TIME:
+            frameToAbsoluteTime( m.frameToTime.time, m.frameToTime.duration, m.frameToTime.pushNavState );
+            break;
          case TimelineMessageType::MOVE_VERTICAL_POS_PXL:
             moveVerticalPositionPxl( m.verticalPos.posPxl );
             break;
@@ -596,26 +599,10 @@ float Timeline::canvasPosYWithScroll() const noexcept
    return _canvasDrawPosition[1] - _verticalPosPxl;
 }
 
-
-TraceDetails& Timeline::getTraceDetails() noexcept
-{
-   return _traceDetails;
-}
-
-void Timeline::clearTraceDetails()
-{
-   _traceDetails = TraceDetails{};
-}
-
-void Timeline::clearTraceStats()
-{
-   _traceStats = TraceStats{ 0, 0, 0, 0, 0, std::vector< float >(), false, false };
-}
-
-void Timeline::setTraceDetailsDisplayed()
-{
-    _traceDetails.shouldFocusWindow = false;
-}
+// void Timeline::clearTraceStats()
+// {
+//    _traceStats = TraceStats{ 0, 0, 0, 0, 0, std::vector< float >(), false, false };
+// }
 
 void Timeline::setStartTime( int64_t time, AnimationType animType ) noexcept
 {
