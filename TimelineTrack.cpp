@@ -256,6 +256,34 @@ static bool drawSeparator( uint32_t threadIndex, bool highlightSeparator )
    return hovered;
 }
 
+bool TimelineTracks::handleMouse(
+    float /*mousePosX*/,
+    float mousePosY,
+    bool /*lmClicked*/,
+    bool /*rmClicked*/,
+    float /*mousewheel*/ )
+{
+   bool handled = false;
+   if ( _draggedTrack > 0 )
+   {
+      // Find the previous track that is visible
+      int i = _draggedTrack - 1;
+      while ( i > 0 && _tracks[i].empty() )
+      {
+         --i;
+      }
+
+      const float trackHeight =
+          ( mousePosY - _tracks[i]._localDrawPos[1] - THREAD_LABEL_HEIGHT ) /
+          TimelineTrack::PADDED_TRACE_SIZE;
+      _tracks[i].setTrackHeight( trackHeight );
+
+      handled = true;
+   }
+
+   return handled;
+}
+
 bool TimelineTracks::handleHotkey()
 {
    if( ImGui::GetIO().KeyCtrl && ImGui::IsKeyPressed( 'f' ) )
@@ -512,6 +540,7 @@ void TimelineTracks::drawTraces(
    for ( size_t zoneId = 0; zoneId < lodTracesToDraw.size(); ++zoneId )
    {
       ImGui::PushStyleColor(ImGuiCol_Button, zoneColors[zoneId] );
+      ImGui::PushStyleColor(ImGuiCol_ButtonHovered, zoneColors[zoneId] );
       ImGui::PushStyleVar(ImGuiStyleVar_Alpha, enabledZone[zoneId] ? 1.0f : disabledZoneOpacity );
       const auto& traces = lodTracesToDraw[ zoneId ];
       for( const auto& t : traces )
@@ -554,7 +583,7 @@ void TimelineTracks::drawTraces(
             }
          }
       }
-      ImGui::PopStyleColor();
+      ImGui::PopStyleColor(2);
       ImGui::PopStyleVar();
    }
 
@@ -563,6 +592,7 @@ void TimelineTracks::drawTraces(
    for ( size_t zoneId = 0; zoneId < tracesToDraw.size(); ++zoneId )
    {
       ImGui::PushStyleColor(ImGuiCol_Button, zoneColors[zoneId] );
+      ImGui::PushStyleColor(ImGuiCol_ButtonHovered, zoneColors[zoneId] );
       ImGui::PushStyleVar(ImGuiStyleVar_Alpha, enabledZone[zoneId] ? 1.0f : disabledZoneOpacity );
       const auto& traces = tracesToDraw[ zoneId ];
       for( const auto& t : traces )
@@ -615,23 +645,28 @@ void TimelineTracks::drawTraces(
             }
          }
       }
-      ImGui::PopStyleColor();
+      ImGui::PopStyleColor(2);
       ImGui::PopStyleVar();
    }
 
+   // The child region is needed to draw the highlighted trace over the traces
+   ImGui::BeginChild( "HighlightedTraces" );
    ImDrawList* drawList = ImGui::GetWindowDrawList();
    const float absolutCanvasStartY = drawInfo.canvasPosY + drawInfo.scrollAmount;
    drawList->PushClipRect(
-       ImVec2( drawInfo.canvasPosX, absolutCanvasStartY ), ImVec2( 9999, 9999 ), false );
+       ImVec2( drawInfo.canvasPosX, absolutCanvasStartY ),
+       ImVec2( 9999, _tracks[threadIndex]._trackHeight ),
+       false );
    const uint32_t color = 0xFFFFFF | (uint32_t(_highlightValue * 255.0f) << 24);
    for( const auto& t : _highlightedTracesDrawData )
    {
-      ImVec2 pos( std::get<0>(t), std::get<1>(t) );
-      ImVec2 pos2( std::get<0>(t) + std::get<2>(t), std::get<1>(t) + TimelineTrack::TRACE_HEIGHT );
+      ImVec2 topLeft( std::get<0>(t), std::get<1>(t) );
+      ImVec2 bottomRight( std::get<0>(t) + std::get<2>(t), std::get<1>(t) + TimelineTrack::TRACE_HEIGHT );
 
-      drawList->AddRectFilled( pos, pos2, color );
+      drawList->AddRectFilled( topLeft, bottomRight, color );
    }
    drawList->PopClipRect();
+   ImGui::EndChild();
    _highlightedTracesDrawData.clear();
 }
 
@@ -780,6 +815,7 @@ void TimelineTracks::drawLockWaits(
    const auto& enabledZone = g_options.zoneEnabled;
    const float disabledZoneOpacity = g_options.disabledZoneOpacity;
    ImGui::PushStyleColor(ImGuiCol_Button, zoneColors[HOP_MAX_ZONES] );
+   ImGui::PushStyleColor(ImGuiCol_ButtonHovered, zoneColors[HOP_MAX_ZONES] );
    ImGui::PushStyleVar(ImGuiStyleVar_Alpha, enabledZone[HOP_MAX_ZONES] ? 1.0f : disabledZoneOpacity );
 
    HOP_PROF_SPLIT( "drawing lod" );
@@ -881,7 +917,7 @@ void TimelineTracks::drawLockWaits(
       }
    }
 
-   ImGui::PopStyleColor();
+   ImGui::PopStyleColor(2);
    ImGui::PopStyleVar();
 }
 

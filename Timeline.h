@@ -22,6 +22,9 @@ class Timeline
 
    void update( float deltaTimeMs ) noexcept;
    void draw( float timelineHeight );
+
+   bool handleMouse( float posX, float posY, bool lmClicked, bool rmClicked, float wheel );
+   bool handleHotkey();
    void handleDeferredActions( const std::vector< TimelineMessage >& msg );
 
 
@@ -118,7 +121,7 @@ class Timeline
 
    void drawTimeline( const float posX, const float posY );
    void handleMouseDrag( float mousePosX, float mousePosY );
-   void handleMouseWheel( float mousePosX, float mousePosY );
+   void handleMouseWheel( float mousePosX, float mouseWheel );
    void zoomOn( int64_t microToZoomOn, float zoomFactor );
    void setStartTime( int64_t timeInMicro, AnimationType animType = ANIMATION_TYPE_NORMAL ) noexcept;
    void setZoom( TimeDuration microsToDisplay, AnimationType animType = ANIMATION_TYPE_NORMAL );
@@ -139,6 +142,7 @@ class Timeline
    float _rightClickStartPosInCanvas[2] = {};
    float _ctrlRightClickStartPosInCanvas[2] = {};
    float _timelineHoverPos{-1.0f};
+   float _timelineDrawPosition[2] = {};
    float _canvasDrawPosition[2] = {};
 
    //TraceStats _traceStats{ 0, 0, 0, 0, 0, std::vector< float >(), false, false };

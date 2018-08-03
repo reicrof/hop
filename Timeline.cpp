@@ -118,6 +118,9 @@ void Timeline::draw( float timelineHeight )
 
    //ImGui::BeginChild("TimelineAndCanvas");
    const auto startDrawPos = ImGui::GetCursorScreenPos();
+   _timelineDrawPosition[0] = startDrawPos.x;
+   _timelineDrawPosition[1] = startDrawPos.y;
+
    drawTimeline(startDrawPos.x, startDrawPos.y + 5);
 
    // Save the canvas draw position for later
@@ -211,18 +214,6 @@ void Timeline::draw( float timelineHeight )
    // {
    //    drawTraceStats(_traceStats, tracesPerThread, strDb);
    // }
-
-   if ( ImGui::IsItemHoveredRect() )
-   {
-      ImVec2 mousePosInCanvas = ImVec2(
-          ImGui::GetIO().MousePos.x - startDrawPos.x, ImGui::GetIO().MousePos.y - startDrawPos.y );
-
-      if( ImGui::IsRootWindowOrAnyChildHovered() )
-         handleMouseWheel( mousePosInCanvas.x, mousePosInCanvas.y );
-
-      if( ImGui::IsRootWindowOrAnyChildFocused() )
-         handleMouseDrag( mousePosInCanvas.x, mousePosInCanvas.y );
-   }
 }
 
 void Timeline::drawTimeline( const float posX, const float posY )
@@ -374,10 +365,38 @@ void Timeline::drawTimeline( const float posX, const float posY )
    ImGui::SetCursorScreenPos( ImVec2{posX, posY + TIMELINE_TOTAL_HEIGHT } );
 }
 
-void Timeline::handleMouseWheel( float mousePosX, float )
+bool Timeline::handleMouse( float posX, float posY, bool /*lmClicked*/, bool /*rmClicked*/, float wheel )
+{
+   bool handled = false;
+   if ( ImGui::IsItemHoveredRect() )
+   {
+      const ImVec2 mousePosInCanvas =
+          ImVec2( posX - _timelineDrawPosition[0], posY - _timelineDrawPosition[1] );
+
+      if ( ImGui::IsRootWindowOrAnyChildHovered() )
+      {
+         handleMouseWheel( mousePosInCanvas.x, wheel );
+         handled = true;
+      }
+
+      if ( ImGui::IsRootWindowOrAnyChildFocused() )
+      {
+         handleMouseDrag( mousePosInCanvas.x, mousePosInCanvas.y );
+         handled = true;
+      }
+   }
+
+   return handled;
+}
+
+bool Timeline::handleHotkey()
+{
+   return true;
+}
+
+void Timeline::handleMouseWheel( float mousePosX, float mouseWheel )
 {
    const float windowWidthPxl = ImGui::GetWindowWidth();
-   const float mouseWheel = ImGui::GetIO().MouseWheel;
 
    // Handle vertical scroll
    if( ImGui::IsKeyDown( SDL_SCANCODE_LSHIFT ) )
@@ -411,37 +430,20 @@ void Timeline::handleMouseDrag( float mouseInCanvasX, float mouseInCanvasY )
    // Left mouse button dragging
    if ( ImGui::IsMouseDragging( 0 ) )
    {
-      // Handle track resize
-     // if( _draggedTrack > 0 )
-    //  {
-         // Find the previous track that is visible
-         // int i = _draggedTrack-1;
-         // while( i > 0 && tracesPerThread[i].empty() ) {
-         //    --i;
-         // }
+      const float windowWidthPxl = ImGui::GetWindowWidth();
+      const auto delta = ImGui::GetMouseDragDelta();
 
-         // const float trackHeight =
-         //     ( ImGui::GetMousePos().y - tracesPerThread[i]._absoluteTracesVerticalStartPos - THREAD_LABEL_HEIGHT ) /
-         //     TimelineTrack::PADDED_TRACE_SIZE;
-         // tracesPerThread[i].setTrackHeight( trackHeight );
-     // }
-     // else // handle timeline panning
-     // {
-         const float windowWidthPxl = ImGui::GetWindowWidth();
-         const auto delta = ImGui::GetMouseDragDelta();
+      // Set horizontal position
+      const int64_t deltaXInNanos =
+          pxlToNanos<int64_t>( windowWidthPxl, _duration, delta.x );
+      setStartTime( _timelineStart - deltaXInNanos, ANIMATION_TYPE_NONE );
+   
+      const float maxScrollY = maxVerticalPosPxl();
 
-         // Set horizontal position
-         const int64_t deltaXInNanos =
-             pxlToNanos<int64_t>( windowWidthPxl, _duration, delta.x );
-         setStartTime( _timelineStart - deltaXInNanos, ANIMATION_TYPE_NONE );
-      
-         const float maxScrollY = maxVerticalPosPxl();
+      moveVerticalPositionPxl(hop::clamp(_verticalPosPxl - delta.y, 0.0f, maxScrollY), ANIMATION_TYPE_NONE);
 
-         moveVerticalPositionPxl(hop::clamp(_verticalPosPxl - delta.y, 0.0f, maxScrollY), ANIMATION_TYPE_NONE);
-
-         ImGui::ResetMouseDragDelta();
-         setRealtime( false );
- //     }
+      ImGui::ResetMouseDragDelta();
+      setRealtime( false );
    }
    // Ctrl + right mouse dragging
    else if( ImGui::GetIO().KeyCtrl && ImGui::IsMouseDragging( 1 ) )

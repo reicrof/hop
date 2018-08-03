@@ -560,6 +560,7 @@ void hop::Profiler::draw( uint32_t /*windowWidth*/, uint32_t /*windowHeight*/ )
    }
 
    handleHotkey();
+   handleMouse();
 
    ImGui::PopStyleVar(2);
    ImGui::End();
@@ -721,6 +722,19 @@ void hop::Profiler::handleHotkey()
    {
       if( ImGui::IsWindowFocused( ImGuiFocusedFlags_RootAndChildWindows ) && !hop::modalWindowShowing() )
          hop::displayModalWindow( "Delete all traces?", hop::MODAL_TYPE_YES_NO, [&](){ clear(); } );
+   }
+}
+
+void hop::Profiler::handleMouse()
+{
+   const auto mousePos = ImGui::GetMousePos();
+   const bool lmb = ImGui::IsMouseDown( 0 );
+   const bool rmb = ImGui::IsMouseDown( 1 );
+   const float wheel = ImGui::GetIO().MouseWheel;
+   bool mouseHandled = _tracks.handleMouse( mousePos.x, mousePos.y, lmb, rmb, wheel );
+   if ( !mouseHandled )
+   {
+      _timeline.handleMouse( mousePos.x, mousePos.y, lmb, rmb, wheel );
    }
 }
 

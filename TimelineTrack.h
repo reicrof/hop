@@ -55,6 +55,7 @@ class TimelineTracks
       const StringDb& strDb;
    };
 
+   bool handleMouse( float posX, float posY, bool lmClicked, bool rmClicked, float wheel );
    bool handleHotkey();
    void update( float deltaTimeMs, TimeDuration timelineDuration );
    std::vector< TimelineMessage > draw( const DrawInfo& info );
