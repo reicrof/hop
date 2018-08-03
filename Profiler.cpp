@@ -9,6 +9,7 @@
 #include "miniz.h"
 #include "Options.h"
 #include "RendererGL.h"
+#include "Utils.h"
 #include <SDL_keycode.h>
 
 #include <cassert>
@@ -307,21 +308,6 @@ void hop::Profiler::update( float deltaTimeMs ) noexcept
    _tracks.update( deltaTimeMs, _timeline.duration() );
 }
 
-static bool ptInRect( const ImVec2& pt, const ImVec2& a, const ImVec2& b )
-{
-   if( pt.x < a.x || pt.x > b.x ) return false;
-   if( pt.y < a.y || pt.y > b.y ) return false;
-
-   return true;
-}
-
-static bool ptInCircle( const ImVec2& pt, const ImVec2& center, float radius )
-{
-   const float dx = pt.x - center.x;
-   const float dy = pt.y - center.y;
-   return dx * dx + dy * dy <= radius * radius;
-}
-
 static constexpr float TOOLBAR_BUTTON_HEIGHT = 15.0f;
 static constexpr float TOOLBAR_BUTTON_WIDTH = 15.0f;
 static constexpr float TOOLBAR_BUTTON_PADDING = 5.0f;
@@ -334,10 +320,11 @@ static bool drawPlayStopButton( const ImVec2& drawPos, bool isRecording )
    const auto& mousePos = ImGui::GetMousePos();
    const bool hovering =
        ImGui::IsMouseHoveringWindow() &&
-       ptInRect(
-           mousePos,
-           drawPos,
-           ImVec2( drawPos.x + TOOLBAR_BUTTON_WIDTH, drawPos.y + TOOLBAR_BUTTON_HEIGHT ) );
+       hop::ptInRect(
+           mousePos.x, mousePos.y,
+           drawPos.x, drawPos.y,
+           drawPos.x + TOOLBAR_BUTTON_WIDTH,
+           drawPos.y + TOOLBAR_BUTTON_HEIGHT );
 
    if ( isRecording )
    {
@@ -382,10 +369,11 @@ static bool drawDeleteTracesButton( const ImVec2& drawPos, bool active )
    const auto& mousePos = ImGui::GetMousePos();
    const bool hovering =
        ImGui::IsMouseHoveringWindow() &&
-       ptInRect(
-           mousePos,
-           drawPos,
-           ImVec2( drawPos.x + TOOLBAR_BUTTON_WIDTH, drawPos.y + TOOLBAR_BUTTON_HEIGHT ) );
+       hop::ptInRect(
+           mousePos.x, mousePos.y,
+           drawPos.x, drawPos.y,
+           drawPos.x + TOOLBAR_BUTTON_WIDTH,
+           drawPos.y + TOOLBAR_BUTTON_HEIGHT );
 
    ImColor col = active ? ( hovering ? ImColor( 0.9f, 0.0f, 0.0f ) : ImColor( 0.7f, 0.0f, 0.0f ) )
                         : ImColor( 0.5f, 0.5f, 0.5f );
@@ -443,7 +431,8 @@ static void drawStatusIcon( const ImVec2& drawPos, hop::SharedMemory::Connection
    DrawList->AddCircleFilled( drawPos, 10.0f, col );
 
    const auto& mousePos = ImGui::GetMousePos();
-   const bool hovering = ImGui::IsMouseHoveringWindow() && ptInCircle( mousePos, drawPos, 10.0f );
+   const bool hovering = ImGui::IsMouseHoveringWindow() &&
+                         hop::ptInCircle( mousePos.x, mousePos.y, drawPos.x, drawPos.y, 10.0f );
    if( hovering && msg )
    {
       ImGui::BeginTooltip();
@@ -545,14 +534,10 @@ void hop::Profiler::draw( uint32_t /*windowWidth*/, uint32_t /*windowHeight*/ )
       ImGui::PushClipRect(
           ImVec2( _timeline.canvasPosX(), _timeline.canvasPosY() ), ImVec2( 99999, 99999 ), true );
       ImGui::BeginChild( "TimelineCanvas" );
+
       auto timelineActions =
-          _tracks.draw( TimelineTracks::DrawInfo{_timeline.canvasPosX(),
-                                                 _timeline.canvasPosYWithScroll(),
-                                                 _timeline.verticalPosPxl(),
-                                                 _timeline.globalStartTime(),
-                                                 _timeline.relativeStartTime(),
-                                                 _timeline.duration(),
-                                                 _strDb} );
+          _tracks.draw( TimelineTracks::DrawInfo{_timeline.constructTimelineInfo(), _strDb} );
+
       ImGui::EndChild();
       ImGui::PopClipRect();
       // Handle deferred timeline actions created by the module

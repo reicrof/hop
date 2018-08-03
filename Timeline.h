@@ -2,7 +2,7 @@
 #define TIMELINE_H_
 
 #include "Hop.h"
-#include "TimelineMessage.h"
+#include "TimelineInfo.h"
 
 #include <vector>
 
@@ -22,6 +22,7 @@ class Timeline
 
    void update( float deltaTimeMs ) noexcept;
    void draw( float timelineHeight );
+   TimelineInfo constructTimelineInfo() const noexcept;
 
    bool handleMouse( float posX, float posY, bool lmClicked, bool rmClicked, float wheel );
    bool handleHotkey();
@@ -111,13 +112,6 @@ class Timeline
    {
       std::vector< TimeStamp > times;
    } _bookmarks;
-
-   struct ContextMenu
-   {
-      size_t traceId{0};
-      uint32_t threadIndex{0};
-      bool open{false};
-   } _contextMenuInfo;
 
    void drawTimeline( const float posX, const float posY );
    void handleMouseDrag( float mousePosX, float mousePosY );

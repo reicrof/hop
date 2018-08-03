@@ -163,47 +163,6 @@ void Timeline::draw( float timelineHeight )
       ImGui::PopStyleColor(3);
    }
 
-   if ( _contextMenuInfo.open )
-   {
-      // ImGui::PushStyleVar( ImGuiStyleVar_WindowMinSize, ImVec2( 0, 0 ) );
-      // ImGui::SetNextWindowBgAlpha(0.8f); // Transparent background
-      // if( ImGui::BeginPopupContextItem( "Context Menu" ) )
-      // {
-      //    if ( ImGui::Selectable( "Trace Stats" ) )
-      //    {
-      //       _traceStats = createTraceStats(
-      //          tracesPerThread[_contextMenuInfo.threadIndex]._traces,
-      //          _contextMenuInfo.threadIndex,
-      //          _contextMenuInfo.traceId);
-      //    }
-      //    else if ( ImGui::Selectable( "Profile Stack" ) )
-      //    {
-      //       _traceDetails = createTraceDetails(
-      //           tracesPerThread[_contextMenuInfo.threadIndex]._traces,
-      //           _contextMenuInfo.threadIndex,
-      //           _contextMenuInfo.traceId );
-      //       _contextMenuInfo.open = false;
-      //       ImGui::CloseCurrentPopup();
-      //    }
-      //    else if( ImGui::Selectable( "Profile Track" ) )
-      //    {
-      //       displayModalWindow( "Computing total trace size...", MODAL_TYPE_NO_CLOSE );
-      //       const uint32_t tIdx = _contextMenuInfo.threadIndex;
-      //       std::thread t( [this, tIdx, dispTrace = tracesPerThread[tIdx]._traces.copy()]() {
-      //          _traceDetails = createGlobalTraceDetails( dispTrace, tIdx );
-      //          closeModalWindow();
-      //       } );
-      //       t.detach();
-      //    }
-      //    else if( ImGui::Selectable( "Resize Tracks to Fit" ) )
-      //    {
-      //       //resizeAllTracksToFit( tracesPerThread );
-      //    }
-      //    ImGui::EndPopup();
-      // }
-      // ImGui::PopStyleVar();
-   }
-
    // Draw an invislbe button to extend the child region to allow scrolling
    ImGui::SetCursorScreenPos( ImVec2( 0.0f, timelineHeight ) );
    ImGui::InvisibleButton( "ExtendRegion", ImVec2( 0.0f, 0.0f ) );
@@ -214,6 +173,17 @@ void Timeline::draw( float timelineHeight )
    // {
    //    drawTraceStats(_traceStats, tracesPerThread, strDb);
    // }
+}
+
+TimelineInfo Timeline::constructTimelineInfo() const noexcept
+{
+   return TimelineInfo{canvasPosX(),
+                       canvasPosYWithScroll(),
+                       verticalPosPxl(),
+                       globalStartTime(),
+                       relativeStartTime(),
+                       duration(),
+                       _rightClickStartPosInCanvas[0] != 0.0f};
 }
 
 void Timeline::drawTimeline( const float posX, const float posY )

@@ -1,5 +1,5 @@
 #include "TimelineTrack.h"
-#include "TimelineMessage.h"
+#include "TimelineInfo.h"
 #include "Lod.h"
 #include "Utils.h"
 #include "Options.h"
@@ -20,6 +20,8 @@ static constexpr float MIN_TRACE_HEIGHT = 15.0f;
 static constexpr uint32_t DISABLED_COLOR = 0xFF505050;
 static constexpr uint32_t HOVERED_COLOR_DELTA = 0x00191919;
 static constexpr uint32_t ACTIVE_COLOR_DELTA = 0x00333333;
+
+static const char* CTXT_MENU_STR = "Context Menu";
 
 namespace hop
 {
@@ -256,6 +258,24 @@ static bool drawSeparator( uint32_t threadIndex, bool highlightSeparator )
    return hovered;
 }
 
+static void drawTrackHighlight( float trackX, float trackY, float trackHeight )
+{
+   const ImVec2 trackTopLeft = ImVec2( trackX, trackY );
+   const ImVec2 trackBotRight = ImVec2( trackX + 9999, trackY + trackHeight );
+   const ImVec2 mousePos = ImGui::GetMousePos();
+   if ( hop::ptInRect(
+            mousePos.x,
+            mousePos.y,
+            trackTopLeft.x,
+            trackTopLeft.y,
+            trackBotRight.x,
+            trackBotRight.y ) )
+   {
+      ImDrawList* dl = ImGui::GetWindowDrawList();
+      dl->AddRectFilled( trackTopLeft, trackBotRight, 0x03FFFFFF );
+   }
+}
+
 bool TimelineTracks::handleMouse(
     float /*mousePosX*/,
     float mousePosY,
@@ -322,11 +342,11 @@ std::vector< TimelineMessage > TimelineTracks::draw( const DrawInfo& info )
 
    drawSearchWindow( info, timelineActions );
 
-   ImGui::SetCursorScreenPos( ImVec2( info.canvasPosX, info.canvasPosY ) );
+   ImGui::SetCursorScreenPos( ImVec2( info.timeline.canvasPosX, info.timeline.canvasPosY ) );
 
    char threadName[128] = "Thread ";
    const size_t threadNamePrefix = sizeof( "Thread" );
-   const float timelineOffsetY = info.canvasPosY + info.scrollAmount;
+   const float timelineOffsetY = info.timeline.canvasPosY + info.timeline.scrollAmount;
    for ( size_t i = 0; i < _tracks.size(); ++i )
    {
       // Skip empty threads
@@ -360,7 +380,7 @@ std::vector< TimelineMessage > TimelineTracks::draw( const DrawInfo& info )
       // Then draw the interesting stuff
       const auto absDrawPos = ImGui::GetCursorScreenPos();
       _tracks[i]._absoluteDrawPos[0] = absDrawPos.x;
-      _tracks[i]._absoluteDrawPos[1] = absDrawPos.y + info.scrollAmount - timelineOffsetY;
+      _tracks[i]._absoluteDrawPos[1] = absDrawPos.y + info.timeline.scrollAmount - timelineOffsetY;
       _tracks[i]._localDrawPos[0] = absDrawPos.x;
       _tracks[i]._localDrawPos[1] = absDrawPos.y;
 
@@ -388,6 +408,11 @@ std::vector< TimelineMessage > TimelineTracks::draw( const DrawInfo& info )
 
          if( tracesVisible )
          {
+            drawTrackHighlight(
+                curDrawPos.x,
+                curDrawPos.y - THREAD_LABEL_HEIGHT,
+                trackHeight + THREAD_LABEL_HEIGHT );
+
             ImGui::PushClipRect(
                 ImVec2( 0.0f, curDrawPos.y ),
                 ImVec2( 9999.0f, curDrawPos.y + trackHeight ),
@@ -405,6 +430,8 @@ std::vector< TimelineMessage > TimelineTracks::draw( const DrawInfo& info )
       curDrawPos.y += trackHeight;
       ImGui::SetCursorScreenPos( curDrawPos );
    }
+
+   drawContextMenu( info );
 
    return timelineActions;
 }
@@ -457,14 +484,14 @@ namespace
        const TimelineTracks::DrawInfo& drawInfo,
        const float windowWidthPxl )
    {
-      const TimeStamp traceEndTime = ( traceEnd - drawInfo.globalTimelineStartTime );
+      const TimeStamp traceEndTime = ( traceEnd - drawInfo.timeline.globalStartTime );
       const auto traceEndPxl = nanosToPxl<float>(
           windowWidthPxl,
-          drawInfo.timelineDuration,
-          traceEndTime - drawInfo.relativeTimelineStartTime );
+          drawInfo.timeline.duration,
+          traceEndTime - drawInfo.timeline.relativeStartTime );
       const float traceLengthPxl = std::max(
           MIN_TRACE_LENGTH_PXL,
-          nanosToPxl<float>( windowWidthPxl, drawInfo.timelineDuration, traceDelta ) );
+          nanosToPxl<float>( windowWidthPxl, drawInfo.timeline.duration, traceDelta ) );
 
       const auto tracePos = ImVec2(
           posX + traceEndPxl - traceLengthPxl,
@@ -491,8 +518,6 @@ void TimelineTracks::drawTraces(
 
    static std::array< std::vector< DrawData >, HOP_MAX_ZONES > tracesToDraw;
    static std::array< std::vector< DrawData >, HOP_MAX_ZONES > lodTracesToDraw;
-   static std::vector<std::pair< ImVec2, size_t > > highlightDrawData;
-   highlightDrawData.clear();
    for( size_t i = 0; i < lodTracesToDraw.size(); ++i )
    {
       tracesToDraw[ i ].clear();
@@ -504,9 +529,9 @@ void TimelineTracks::drawTraces(
    g_stats.currentLOD = lodLevel;
 
    // Get all the timing boundaries
-   const TimeStamp globalStartTime = drawInfo.globalTimelineStartTime;
-   const TimeStamp relativeStart = drawInfo.relativeTimelineStartTime;
-   const TimeDuration timelineRange = drawInfo.timelineDuration;
+   const TimeStamp globalStartTime = drawInfo.timeline.globalStartTime;
+   const TimeStamp relativeStart = drawInfo.timeline.relativeStartTime;
+   const TimeDuration timelineRange = drawInfo.timeline.duration;
 
    const TimeStamp absoluteStart = relativeStart + globalStartTime;
    const TimeStamp absoluteEnd = absoluteStart + timelineRange;
@@ -574,12 +599,13 @@ void TimelineTracks::drawTraces(
 
                timelineMsg.push_back( msg );
             }
-            else if ( rightMouseClicked /*&& _rightClickStartPosInCanvas[0] == 0.0f*/)
+            else if ( rightMouseClicked && !drawInfo.timeline.mouseDragging )
             {
-               ImGui::OpenPopup( "Context Menu" );
-               // _contextMenuInfo.open = true;
-               // _contextMenuInfo.threadIndex = threadIndex;
-               // _contextMenuInfo.traceId = t.traceIndex;
+               ImGui::OpenPopup( CTXT_MENU_STR );
+               _contextMenuInfo.open = true;
+               _contextMenuInfo.traceClick = true;
+               _contextMenuInfo.threadIndex = threadIndex;
+               _contextMenuInfo.traceId = t.traceIndex;
             }
          }
       }
@@ -636,12 +662,13 @@ void TimelineTracks::drawTraces(
 
                timelineMsg.push_back( msg );
             }
-            else if ( rightMouseClicked /*&& _rightClickStartPosInCanvas[0] == 0.0f*/ )
+            else if ( rightMouseClicked && !drawInfo.timeline.mouseDragging )
             {
-               ImGui::OpenPopup( "Context Menu" );
-               // _contextMenuInfo.open = true;
-               // _contextMenuInfo.threadIndex = threadIndex;
-               // _contextMenuInfo.traceId = t.traceIndex;
+               ImGui::OpenPopup( CTXT_MENU_STR );
+               _contextMenuInfo.open = true;
+               _contextMenuInfo.traceClick = true;
+               _contextMenuInfo.threadIndex = threadIndex;
+               _contextMenuInfo.traceId = t.traceIndex;
             }
          }
       }
@@ -652,9 +679,9 @@ void TimelineTracks::drawTraces(
    // The child region is needed to draw the highlighted trace over the traces
    ImGui::BeginChild( "HighlightedTraces" );
    ImDrawList* drawList = ImGui::GetWindowDrawList();
-   const float absolutCanvasStartY = drawInfo.canvasPosY + drawInfo.scrollAmount;
+   const float absolutCanvasStartY = drawInfo.timeline.canvasPosY + drawInfo.timeline.scrollAmount;
    drawList->PushClipRect(
-       ImVec2( drawInfo.canvasPosX, absolutCanvasStartY ),
+       ImVec2( drawInfo.timeline.canvasPosX, absolutCanvasStartY ),
        ImVec2( 9999, _tracks[threadIndex]._trackHeight ),
        false );
    const uint32_t color = 0xFFFFFF | (uint32_t(_highlightValue * 255.0f) << 24);
@@ -783,12 +810,12 @@ void TimelineTracks::drawLockWaits(
 
    HOP_PROF_FUNC();
 
-   const auto absoluteStart = drawInfo.globalTimelineStartTime;
+   const auto absoluteStart = drawInfo.timeline.globalStartTime;
    const float windowWidthPxl = ImGui::GetWindowWidth();
 
    // The time range to draw in absolute time
-   const TimeStamp firstTraceAbsoluteTime = absoluteStart + drawInfo.relativeTimelineStartTime;
-   const TimeStamp lastTraceAbsoluteTime = firstTraceAbsoluteTime + drawInfo.timelineDuration;
+   const TimeStamp firstTraceAbsoluteTime = absoluteStart + drawInfo.timeline.relativeStartTime;
+   const TimeStamp lastTraceAbsoluteTime = firstTraceAbsoluteTime + drawInfo.timeline.duration;
 
    const int lodLevel = _lodLevel;
 
@@ -928,7 +955,7 @@ void TimelineTracks::drawSearchWindow(
    HOP_PROF_FUNC();
 
    const auto selection = drawSearchResult(
-       _searchRes, di.globalTimelineStartTime, di.timelineDuration, di.strDb, *this );
+       _searchRes, di.timeline.globalStartTime, di.timeline.duration, di.strDb, *this );
 
    if ( selection.selectedTraceIdx != (size_t)-1 && selection.selectedThreadIdx != (uint32_t)-1 )
    {
@@ -940,7 +967,7 @@ void TimelineTracks::drawSearchWindow(
       // If the thread was hidden, display it so we can see the selected trace
       _tracks[selection.selectedThreadIdx]._trackHeight = 9999.0f;
 
-      const TimeStamp startTime = absEndTime - delta - di.globalTimelineStartTime;
+      const TimeStamp startTime = absEndTime - delta - di.timeline.globalStartTime;
       const float verticalPosPxl = timelinetrack._absoluteDrawPos[1] +
                                    ( depth * TimelineTrack::PADDED_TRACE_SIZE ) -
                                    ( 3 * TimelineTrack::PADDED_TRACE_SIZE );
@@ -960,6 +987,66 @@ void TimelineTracks::drawSearchWindow(
    if ( selection.hoveredTraceIdx != (size_t)-1 && selection.hoveredThreadIdx != (uint32_t)-1 )
    {
       addTraceToHighlight( selection.hoveredTraceIdx, selection.hoveredThreadIdx, di );
+   }
+}
+
+void TimelineTracks::drawContextMenu( const DrawInfo& info )
+{
+   // No trace were right clicked. Check for right click in canvas
+   if( ImGui::IsMouseReleased( 1 ) && !_contextMenuInfo.open && !info.timeline.mouseDragging )
+   {
+      ImGui::OpenPopup( CTXT_MENU_STR );
+      _contextMenuInfo.open = true;
+   }
+
+   if ( _contextMenuInfo.open )
+   {
+      ImGui::PushStyleVar( ImGuiStyleVar_WindowMinSize, ImVec2( 0, 0 ) );
+      ImGui::SetNextWindowBgAlpha( 0.8f );  // Transparent background
+      if ( ImGui::BeginPopupContextItem( CTXT_MENU_STR ) )
+      {
+         if( _contextMenuInfo.traceClick )
+         {
+            if ( ImGui::Selectable( "Trace Stats" ) )
+            {
+               // _traceStats = createTraceStats(
+               //     tracesPerThread[_contextMenuInfo.threadIndex]._traces,
+               //     _contextMenuInfo.threadIndex,
+               //     _contextMenuInfo.traceId );
+            }
+            else if ( ImGui::Selectable( "Profile Stack" ) )
+            {
+               // _traceDetails = createTraceDetails(
+               //     tracesPerThread[_contextMenuInfo.threadIndex]._traces,
+               //     _contextMenuInfo.threadIndex,
+               //     _contextMenuInfo.traceId );
+               // _contextMenuInfo.open = false;
+               //ImGui::CloseCurrentPopup();
+            }
+         }
+         
+         if ( ImGui::Selectable( "Profile Track" ) )
+         {
+            // displayModalWindow( "Computing total trace size...", MODAL_TYPE_NO_CLOSE );
+            // const uint32_t tIdx = _contextMenuInfo.threadIndex;
+            // std::thread t( [ this, tIdx, dispTrace = tracesPerThread[tIdx]._traces.copy() ]() {
+            //    _traceDetails = createGlobalTraceDetails( dispTrace, tIdx );
+            //    closeModalWindow();
+            // } );
+            // t.detach();
+         }
+         else if ( ImGui::Selectable( "Resize Tracks to Fit" ) )
+         {
+            resizeAllTracksToFit();
+         }
+         ImGui::EndPopup();
+      }
+      else
+      {
+         // Reset the context menu info if not used anymore
+         memset( &_contextMenuInfo, 0, sizeof( _contextMenuInfo ) );
+      }
+      ImGui::PopStyleVar();
    }
 }
 

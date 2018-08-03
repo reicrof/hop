@@ -5,7 +5,7 @@
 #include "TraceData.h"
 #include "TraceSearch.h"
 #include "TraceDetail.h"
-#include "TimelineMessage.h"
+#include "TimelineInfo.h"
 
 #include <tuple>
 #include <vector>
@@ -48,10 +48,7 @@ class TimelineTracks
   public:
    struct DrawInfo
    {
-      float canvasPosX, canvasPosY, scrollAmount;
-      TimeStamp globalTimelineStartTime;
-      TimeStamp relativeTimelineStartTime;
-      TimeStamp timelineDuration;
+      const TimelineInfo& timeline;
       const StringDb& strDb;
    };
 
@@ -84,6 +81,7 @@ class TimelineTracks
        const DrawInfo& drawInfo,
        std::vector<TimelineMessage>& timelineMsg );
    void drawSearchWindow( const DrawInfo& di, std::vector< TimelineMessage >& timelineMsg );
+   void drawContextMenu( const DrawInfo& info );
    void addTraceToHighlight( size_t traceId, uint32_t threadIndex, const DrawInfo& drawInfo );
 
    std::vector<TimelineTrack> _tracks;
@@ -95,6 +93,14 @@ class TimelineTracks
    SearchResult _searchRes;
 
    TraceDetails _traceDetails{};
+
+   struct ContextMenu
+   {
+      size_t traceId{0};
+      uint32_t threadIndex{0};
+      bool traceClick{false};
+      bool open{false};
+   } _contextMenuInfo;
 };
 }
 
