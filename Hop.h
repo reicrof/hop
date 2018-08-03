@@ -164,7 +164,9 @@ enum HopZone
 
 /* Windows specific macros and defines */
 #if defined(_MSC_VER)
+#ifndef NOMINMAX
 #define NOMINMAX
+#endif
 #include <windows.h>
 #include <tchar.h>
 typedef HANDLE sem_handle;
@@ -175,7 +177,7 @@ const HOP_CHAR HOP_SHARED_MEM_PREFIX[] = _T("/hop_");
 const HOP_CHAR HOP_SHARED_SEM_SUFFIX[] = _T("_sem");
 #define HOP_STRLEN( str ) _tcslen( (str) )
 #define HOP_STRNCPY( dst, src, count ) _tcsncpy_s( (dst), (src), (count) )
-#define HOP_STRNCAT( dst, src, count ) _tcsncat( (dst), (src), (count) )
+#define HOP_STRNCAT( dst, src, count ) _tcsncat_s( (dst), (src), (count) )
 
 #ifndef likely
 #define likely(x)   x
@@ -668,7 +670,7 @@ namespace
 #endif
    }
 
-   void* createSharedMemory(const HOP_CHAR* path, size_t size, shm_handle* handle, hop::SharedMemory::ConnectionState* state )
+   void* createSharedMemory(const HOP_CHAR* path, uint64_t size, shm_handle* handle, hop::SharedMemory::ConnectionState* state )
    {
        uint8_t* sharedMem = NULL;
 #if defined ( _MSC_VER )
@@ -676,8 +678,8 @@ namespace
            INVALID_HANDLE_VALUE,    // use paging file
            NULL,                    // default security
            PAGE_READWRITE,          // read/write access
-           0,                       // maximum object size (high-order DWORD)
-           size,                    // maximum object size (low-order DWORD)
+           HIDWORD(size),           // maximum object size (high-order DWORD)
+           LODWORD(size),           // maximum object size (low-order DWORD)
            path);                   // name of mapping object
 
        if (*handle == NULL)
@@ -719,7 +721,7 @@ namespace
        return sharedMem;
    }
 
-   void* openSharedMemory( const HOP_CHAR* path, shm_handle* handle, size_t* totalSize, hop::SharedMemory::ConnectionState* state )
+   void* openSharedMemory( const HOP_CHAR* path, shm_handle* handle, uint64_t* totalSize, hop::SharedMemory::ConnectionState* state )
    {
        uint8_t* sharedMem = NULL;
 #if defined ( _MSC_VER )
@@ -826,7 +828,7 @@ SharedMemory::ConnectionState SharedMemory::create( const HOP_CHAR* exeName, siz
       }
 
       // Try to open shared memory
-      size_t totalSize = 0;
+      uint64_t totalSize = 0;
       uint8_t* sharedMem =
           (uint8_t*)openSharedMemory( _sharedMemPath, &_sharedMemHandle, &totalSize, &state );
 
@@ -1136,7 +1138,7 @@ class Client
          _stringData.resize( newEntryPos + sizeof( TStrPtr_t ) + strLen + 1 );
          TStrPtr_t* strIdPtr = (TStrPtr_t*)&_stringData[newEntryPos];
          *strIdPtr = hash;
-         strcpy( &_stringData[newEntryPos + sizeof( TStrPtr_t )], dynStr );
+         HOP_STRNCPY( &_stringData[newEntryPos + sizeof( TStrPtr_t )], dynStr, strLen + 1 );
       }
 
       return hash;
@@ -1154,10 +1156,11 @@ class Client
       if( res.second )
       {
          const size_t newEntryPos = _stringData.size();
-         _stringData.resize( newEntryPos + sizeof( TStrPtr_t ) + strlen( (const char*)strId ) + 1 );
+         const size_t strLen = strlen( (const char*)strId );
+         _stringData.resize( newEntryPos + sizeof( TStrPtr_t ) + strLen + 1 );
          TStrPtr_t* strIdPtr = (TStrPtr_t*)&_stringData[newEntryPos];
          *strIdPtr = strId;
-         strcpy( &_stringData[newEntryPos + sizeof( TStrPtr_t ) ], (const char*)strId );
+         HOP_STRNCPY( &_stringData[newEntryPos + sizeof( TStrPtr_t ) ], (const char*)strId, strLen + 1 );
       }
 
       return res.second;
@@ -1212,7 +1215,7 @@ class Client
             addStringToDb( t.fctNameId );
       }
 
-      const uint32_t stringDataSize = _stringData.size();
+      const uint32_t stringDataSize = (uint32_t)_stringData.size();
       assert( stringDataSize >= _sentStringDataSize );
       const uint32_t stringToSendSize = stringDataSize - _sentStringDataSize;
       const size_t msgSize = sizeof( MsgInfo ) + stringToSendSize;
