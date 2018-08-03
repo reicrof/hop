@@ -115,6 +115,7 @@ SearchSelection drawSearchResult(
    if ( searchRes.focusSearchWindow && searchRes.searchWindowOpen )
    {
       ImGui::SetNextWindowFocus();
+      ImGui::SetNextWindowCollapsed( false );
       inputFocus = true;
       searchRes.focusSearchWindow = false;
    }

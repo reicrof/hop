@@ -322,6 +322,7 @@ createTraceDetails( const TraceData& traces, uint32_t threadIndex, size_t traceI
    finalizeTraceDetails( traceDetails, totalDelta );
 
    TraceDetails details;
+   details.open = true;
    details.shouldFocusWindow = true;
    details.threadIndex = threadIndex;
    std::swap( details.details, traceDetails );
@@ -395,7 +396,7 @@ TraceDetails createGlobalTraceDetails( const TraceData& traces, uint32_t threadI
 
 TraceDetailDrawResult drawTraceDetails(
     TraceDetails& details,
-    const TimelineTracks& tracks,
+    const std::vector<TimelineTrack>& tracks,
     const StringDb& strDb )
 {
    HOP_PROF_FUNC();
@@ -404,10 +405,14 @@ TraceDetailDrawResult drawTraceDetails(
    static constexpr float timeColumnWidth = 90.0f;
 
    TraceDetailDrawResult result;
-   result.isWindowOpen = details.details.size() > 0;
-   if ( details.details.size() > 0 )
+   if ( details.open )
    {
-      if (details.shouldFocusWindow) ImGui::SetNextWindowFocus();
+      if( details.shouldFocusWindow )
+      {
+         ImGui::SetNextWindowFocus();
+         ImGui::SetNextWindowCollapsed( false );
+         details.shouldFocusWindow = false;
+      }
 
       ImGui::PushStyleColor( ImGuiCol_WindowBg, ImVec4( 0.20f, 0.20f, 0.20f, 0.75f ) );
       // Draw the table header
@@ -416,7 +421,7 @@ TraceDetailDrawResult drawTraceDetails(
       ImGui::PushStyleColor( ImGuiCol_ButtonHovered, buttonCol );
       ImGui::PushStyleColor( ImGuiCol_ButtonActive, buttonCol );
       ImGui::SetNextWindowSize(ImVec2(600, 300), ImGuiSetCond_FirstUseEver);
-      if ( ImGui::Begin( "Trace Details", &result.isWindowOpen ) )
+      if ( ImGui::Begin( "Trace Details Window", &details.open ) )
       {
          ImGui::Columns( 6, "TraceDetailsTable" );
          ImGui::SetColumnWidth( 0, ImGui::GetWindowWidth() - 400 );
@@ -597,6 +602,14 @@ void drawTraceStats(TraceStats& stats, const std::vector<TimelineTrack>& , const
       ImGui::End();
       ImGui::PopStyleColor();
    }
+}
+
+void clearTraceDetails( TraceDetails& traceDetail )
+{
+   traceDetail.details.clear();
+   traceDetail.threadIndex = 0;
+   traceDetail.open = false;
+   traceDetail.shouldFocusWindow = false;
 }
 
 }

@@ -340,8 +340,6 @@ std::vector< TimelineMessage > TimelineTracks::draw( const DrawInfo& info )
    std::vector< TimelineMessage > timelineActions;
    timelineActions.reserve( 4 );
 
-   drawSearchWindow( info, timelineActions );
-
    ImGui::SetCursorScreenPos( ImVec2( info.timeline.canvasPosX, info.timeline.canvasPosY ) );
 
    char threadName[128] = "Thread ";
@@ -431,6 +429,8 @@ std::vector< TimelineMessage > TimelineTracks::draw( const DrawInfo& info )
       ImGui::SetCursorScreenPos( curDrawPos );
    }
 
+   drawTraceDetails( _traceDetails, _tracks, info.strDb );
+   drawSearchWindow( info, timelineActions );
    drawContextMenu( info );
 
    return timelineActions;
@@ -1016,28 +1016,28 @@ void TimelineTracks::drawContextMenu( const DrawInfo& info )
             }
             else if ( ImGui::Selectable( "Profile Stack" ) )
             {
-               // _traceDetails = createTraceDetails(
-               //     tracesPerThread[_contextMenuInfo.threadIndex]._traces,
-               //     _contextMenuInfo.threadIndex,
-               //     _contextMenuInfo.traceId );
-               // _contextMenuInfo.open = false;
-               //ImGui::CloseCurrentPopup();
+               _traceDetails = createTraceDetails(
+                   _tracks[_contextMenuInfo.threadIndex]._traces,
+                   _contextMenuInfo.threadIndex,
+                   _contextMenuInfo.traceId );
             }
          }
-         
-         if ( ImGui::Selectable( "Profile Track" ) )
+         else
          {
-            // displayModalWindow( "Computing total trace size...", MODAL_TYPE_NO_CLOSE );
-            // const uint32_t tIdx = _contextMenuInfo.threadIndex;
-            // std::thread t( [ this, tIdx, dispTrace = tracesPerThread[tIdx]._traces.copy() ]() {
-            //    _traceDetails = createGlobalTraceDetails( dispTrace, tIdx );
-            //    closeModalWindow();
-            // } );
-            // t.detach();
-         }
-         else if ( ImGui::Selectable( "Resize Tracks to Fit" ) )
-         {
-            resizeAllTracksToFit();
+            if ( ImGui::Selectable( "Profile Track" ) )
+            {
+               // displayModalWindow( "Computing total trace size...", MODAL_TYPE_NO_CLOSE );
+               // const uint32_t tIdx = _contextMenuInfo.threadIndex;
+               // std::thread t( [ this, tIdx, dispTrace = tracesPerThread[tIdx]._traces.copy() ]() {
+               //    _traceDetails = createGlobalTraceDetails( dispTrace, tIdx );
+               //    closeModalWindow();
+               // } );
+               // t.detach();
+            }
+            else if ( ImGui::Selectable( "Resize Tracks to Fit" ) )
+            {
+               resizeAllTracksToFit();
+            }
          }
          ImGui::EndPopup();
       }
@@ -1110,6 +1110,7 @@ void TimelineTracks::clear()
 {
    _tracks.clear();
    clearSearchResult( _searchRes );
+   clearTraceDetails( _traceDetails );
 }
 
 } // namespace hop

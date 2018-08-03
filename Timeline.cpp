@@ -4,7 +4,6 @@
 #include "ModalWindow.h"
 #include "Stats.h"
 #include "StringDb.h"
-#include "TraceDetail.h"
 #include "Options.h"
 #include "Utils.h"
 #include "Cursor.h"

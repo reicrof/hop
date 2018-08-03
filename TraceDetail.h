@@ -33,6 +33,7 @@ struct TraceDetails
 {
    std::vector<TraceDetail> details;
    uint32_t threadIndex;
+   bool open{false};
    bool shouldFocusWindow{false};
 };
 
@@ -40,7 +41,6 @@ struct TraceDetailDrawResult
 {
    std::vector< size_t > hoveredTraceIds;
    uint32_t hoveredThreadIdx;
-   bool isWindowOpen;
 };
 
 struct TraceStats
@@ -64,6 +64,7 @@ TraceDetailDrawResult drawTraceDetails(
 
 TraceStats createTraceStats( const TraceData& traces, uint32_t threadIndex, size_t traceId );
 void drawTraceStats( TraceStats& stats, const TimelineTracks& tracks, const StringDb& strDb);
+void clearTraceDetails( TraceDetails& details );
 }
 
 #endif  // TRACE_DETAIL_H_
