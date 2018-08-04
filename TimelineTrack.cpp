@@ -340,6 +340,16 @@ std::vector< TimelineMessage > TimelineTracks::draw( const DrawInfo& info )
    std::vector< TimelineMessage > timelineActions;
    timelineActions.reserve( 4 );
 
+   // Draw trace detail window
+   TraceDetailDrawResult traceDetailRes = drawTraceDetails( _traceDetails, _tracks, info.strDb );
+   for( const auto& t : traceDetailRes.hoveredTraceIds )
+   {
+      addTraceToHighlight( t, traceDetailRes.hoveredThreadIdx, info );
+   }
+
+   // Draw search window
+   drawSearchWindow( info, timelineActions );
+
    ImGui::SetCursorScreenPos( ImVec2( info.timeline.canvasPosX, info.timeline.canvasPosY ) );
 
    char threadName[128] = "Thread ";
@@ -429,8 +439,6 @@ std::vector< TimelineMessage > TimelineTracks::draw( const DrawInfo& info )
       ImGui::SetCursorScreenPos( curDrawPos );
    }
 
-   drawTraceDetails( _traceDetails, _tracks, info.strDb );
-   drawSearchWindow( info, timelineActions );
    drawContextMenu( info );
 
    return timelineActions;

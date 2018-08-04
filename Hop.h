@@ -176,8 +176,10 @@ typedef TCHAR HOP_CHAR;
 const HOP_CHAR HOP_SHARED_MEM_PREFIX[] = _T("/hop_");
 const HOP_CHAR HOP_SHARED_SEM_SUFFIX[] = _T("_sem");
 #define HOP_STRLEN( str ) _tcslen( (str) )
-#define HOP_STRNCPY( dst, src, count ) _tcsncpy_s( (dst), (src), (count) )
-#define HOP_STRNCAT( dst, src, count ) _tcsncat_s( (dst), (src), (count) )
+#define HOP_STRNCPYW( dst, src, count ) _tcsncpy_s( (dst), (count), (src), (count) )
+#define HOP_STRNCATW( dst, src, count ) _tcsncat_s( (dst), (src), (count) )
+#define HOP_STRNCPY( dst, src, count ) strncpy_s( (dst), (count), (src), (count) )
+#define HOP_STRNCAT( dst, src, count ) strncat_s( (dst), (count), (src), (count) )
 
 #ifndef likely
 #define likely(x)   x
@@ -223,6 +225,8 @@ typedef char HOP_CHAR;
 const HOP_CHAR HOP_SHARED_MEM_PREFIX[] = "/hop_";
 const HOP_CHAR HOP_SHARED_SEM_SUFFIX[] = "_sem";
 #define HOP_STRLEN( str ) strlen( (str) )
+#define HOP_STRNCPYW( dst, src, count ) strncpy( (dst), (src), (count) )
+#define HOP_STRNCATW( dst, src, count ) strncat( (dst), (src), (count) )
 #define HOP_STRNCPY( dst, src, count ) strncpy( (dst), (src), (count) )
 #define HOP_STRNCAT( dst, src, count ) strncat( (dst), (src), (count) )
 
@@ -678,8 +682,8 @@ namespace
            INVALID_HANDLE_VALUE,    // use paging file
            NULL,                    // default security
            PAGE_READWRITE,          // read/write access
-           HIDWORD(size),           // maximum object size (high-order DWORD)
-           LODWORD(size),           // maximum object size (low-order DWORD)
+           size >> 32,              // maximum object size (high-order DWORD)
+           size & 0xFFFFFFFF,       // maximum object size (low-order DWORD)
            path);                   // name of mapping object
 
        if (*handle == NULL)
@@ -811,14 +815,14 @@ SharedMemory::ConnectionState SharedMemory::create( const HOP_CHAR* exeName, siz
       _isConsumer = isConsumer;
 
       // Create shared mem name
-	  HOP_STRNCPY( _sharedMemPath, HOP_SHARED_MEM_PREFIX, HOP_STRLEN( HOP_SHARED_MEM_PREFIX ) + 1 );
-	  HOP_STRNCAT(
+	  HOP_STRNCPYW( _sharedMemPath, HOP_SHARED_MEM_PREFIX, HOP_STRLEN( HOP_SHARED_MEM_PREFIX ) + 1 );
+	  HOP_STRNCATW(
           _sharedMemPath,
           exeName,
           HOP_SHARED_MEM_MAX_NAME_SIZE - HOP_STRLEN( HOP_SHARED_MEM_PREFIX ) - 1 );
 
-	  HOP_STRNCPY( _sharedSemPath, _sharedMemPath, HOP_SHARED_MEM_MAX_NAME_SIZE );
-	  HOP_STRNCAT( _sharedSemPath, HOP_SHARED_SEM_SUFFIX, HOP_SHARED_MEM_MAX_NAME_SIZE - HOP_STRLEN( _sharedSemPath ) -1 );
+	  HOP_STRNCPYW( _sharedSemPath, _sharedMemPath, HOP_SHARED_MEM_MAX_NAME_SIZE );
+	  HOP_STRNCATW( _sharedSemPath, HOP_SHARED_SEM_SUFFIX, HOP_SHARED_MEM_MAX_NAME_SIZE - HOP_STRLEN( _sharedSemPath ) -1 );
 
       // Open semaphore
       _semaphore = openSemaphore( _sharedSemPath, &state );
