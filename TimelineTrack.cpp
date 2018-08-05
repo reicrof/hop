@@ -6,12 +6,14 @@
 #include "Cursor.h"
 #include "Stats.h"
 #include "StringDb.h"
+#include "ModalWindow.h"
 
 #include "imgui/imgui.h"
 
 #include <algorithm>
 #include <cassert>
 #include <cstring> // memcpy
+#include <thread>
 
 static constexpr float THREAD_LABEL_HEIGHT = 20.0f;
 static constexpr float MIN_TRACE_LENGTH_PXL = 1.0f;
@@ -1005,6 +1007,18 @@ void TimelineTracks::drawContextMenu( const DrawInfo& info )
    {
       ImGui::OpenPopup( CTXT_MENU_STR );
       _contextMenuInfo.open = true;
+
+      // Find out where the right click happened to figure out which track needs to be profiled
+      const float mousePosY = ImGui::GetMousePos().y;
+      size_t i = 1;
+      for( ; i < _tracks.size(); ++i)
+      {
+         if( _tracks[ i ]._localDrawPos[1] - THREAD_LABEL_HEIGHT > mousePosY )
+         {
+            break;
+         }
+      }
+      _contextMenuInfo.threadIndex = i - 1;
    }
 
    if ( _contextMenuInfo.open )
@@ -1034,13 +1048,13 @@ void TimelineTracks::drawContextMenu( const DrawInfo& info )
          {
             if ( ImGui::Selectable( "Profile Track" ) )
             {
-               // displayModalWindow( "Computing total trace size...", MODAL_TYPE_NO_CLOSE );
-               // const uint32_t tIdx = _contextMenuInfo.threadIndex;
-               // std::thread t( [ this, tIdx, dispTrace = tracesPerThread[tIdx]._traces.copy() ]() {
-               //    _traceDetails = createGlobalTraceDetails( dispTrace, tIdx );
-               //    closeModalWindow();
-               // } );
-               // t.detach();
+                displayModalWindow( "Computing total trace size...", MODAL_TYPE_NO_CLOSE );
+                const uint32_t tIdx = _contextMenuInfo.threadIndex;
+                std::thread t( [ this, tIdx, dispTrace = _tracks[tIdx]._traces.copy() ]() {
+                   _traceDetails = createGlobalTraceDetails( dispTrace, tIdx );
+                   closeModalWindow();
+                } );
+                t.detach();
             }
             else if ( ImGui::Selectable( "Resize Tracks to Fit" ) )
             {

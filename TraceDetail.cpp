@@ -389,6 +389,7 @@ TraceDetails createGlobalTraceDetails( const TraceData& traces, uint32_t threadI
    auto mergedDetails = mergeTraceDetails( traces, traceDetails );
    finalizeTraceDetails( mergedDetails, totalTime );
    details.shouldFocusWindow = true;
+   details.open = true;
    details.threadIndex = threadIndex;
    std::swap( details.details, mergedDetails );
    return details;
