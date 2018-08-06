@@ -94,6 +94,8 @@ class TimelineTracks
 
    TraceDetails _traceDetails{};
 
+   TraceStats _traceStats{ 0, 0, 0, 0, 0, std::vector< float >(), false, false };
+
    struct ContextMenu
    {
       size_t traceId{0};

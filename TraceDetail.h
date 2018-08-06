@@ -63,8 +63,9 @@ TraceDetailDrawResult drawTraceDetails(
 
 
 TraceStats createTraceStats( const TraceData& traces, uint32_t threadIndex, size_t traceId );
-void drawTraceStats( TraceStats& stats, const TimelineTracks& tracks, const StringDb& strDb);
+void drawTraceStats( TraceStats& stats, const StringDb& strDb);
 void clearTraceDetails( TraceDetails& details );
+void clearTraceStats( TraceStats& stats );
 }
 
 #endif  // TRACE_DETAIL_H_

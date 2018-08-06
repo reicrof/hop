@@ -352,6 +352,9 @@ std::vector< TimelineMessage > TimelineTracks::draw( const DrawInfo& info )
    // Draw search window
    drawSearchWindow( info, timelineActions );
 
+   // Draw detail window
+   drawTraceStats( _traceStats, info.strDb );
+
    ImGui::SetCursorScreenPos( ImVec2( info.timeline.canvasPosX, info.timeline.canvasPosY ) );
 
    char threadName[128] = "Thread ";
@@ -1031,10 +1034,10 @@ void TimelineTracks::drawContextMenu( const DrawInfo& info )
          {
             if ( ImGui::Selectable( "Trace Stats" ) )
             {
-               // _traceStats = createTraceStats(
-               //     tracesPerThread[_contextMenuInfo.threadIndex]._traces,
-               //     _contextMenuInfo.threadIndex,
-               //     _contextMenuInfo.traceId );
+               _traceStats = createTraceStats(
+                   _tracks[_contextMenuInfo.threadIndex]._traces,
+                   _contextMenuInfo.threadIndex,
+                   _contextMenuInfo.traceId );
             }
             else if ( ImGui::Selectable( "Profile Stack" ) )
             {
@@ -1133,6 +1136,7 @@ void TimelineTracks::clear()
    _tracks.clear();
    clearSearchResult( _searchRes );
    clearTraceDetails( _traceDetails );
+   clearTraceStats( _traceStats );
 }
 
 } // namespace hop

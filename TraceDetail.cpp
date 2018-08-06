@@ -577,7 +577,7 @@ TraceDetailDrawResult drawTraceDetails(
    return result;
 }
 
-void drawTraceStats(TraceStats& stats, const std::vector<TimelineTrack>& , const StringDb& strDb)
+void drawTraceStats(TraceStats& stats, const StringDb& strDb)
 {
    if ( stats.open > 0 )
    {
@@ -611,6 +611,11 @@ void clearTraceDetails( TraceDetails& traceDetail )
    traceDetail.threadIndex = 0;
    traceDetail.open = false;
    traceDetail.shouldFocusWindow = false;
+}
+
+void clearTraceStats( TraceStats& stats )
+{
+   stats = TraceStats{ 0, 0, 0, 0, 0, std::vector< float >(), false, false };
 }
 
 }

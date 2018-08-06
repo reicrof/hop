@@ -1,11 +1,8 @@
 #include "Timeline.h"
 #include "TimelineTrack.h"
 #include "Utils.h"
-#include "ModalWindow.h"
-#include "Stats.h"
 #include "StringDb.h"
 #include "Options.h"
-#include "Utils.h"
 #include "Cursor.h"
 
 #include "imgui/imgui.h"
@@ -167,11 +164,6 @@ void Timeline::draw( float timelineHeight )
    ImGui::InvisibleButton( "ExtendRegion", ImVec2( 0.0f, 0.0f ) );
 
    ImGui::EndChild(); // TimelineCanvas
-
-   // if (_traceStats.open)
-   // {
-   //    drawTraceStats(_traceStats, tracesPerThread, strDb);
-   // }
 }
 
 TimelineInfo Timeline::constructTimelineInfo() const noexcept
@@ -569,11 +561,6 @@ float Timeline::canvasPosYWithScroll() const noexcept
 {
    return _canvasDrawPosition[1] - _verticalPosPxl;
 }
-
-// void Timeline::clearTraceStats()
-// {
-//    _traceStats = TraceStats{ 0, 0, 0, 0, 0, std::vector< float >(), false, false };
-// }
 
 void Timeline::setStartTime( int64_t time, AnimationType animType ) noexcept
 {

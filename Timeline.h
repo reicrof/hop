@@ -139,8 +139,6 @@ class Timeline
    float _timelineDrawPosition[2] = {};
    float _canvasDrawPosition[2] = {};
 
-   //TraceStats _traceStats{ 0, 0, 0, 0, 0, std::vector< float >(), false, false };
-
    std::vector< AnimationState > _undoPositionStates, _redoPositionStates;
 
 };
