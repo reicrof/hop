@@ -649,32 +649,6 @@ void Timeline::zoomOn( int64_t nanoToZoomOn, float zoomFactor )
    }
 }
 
-namespace
-{
-   struct unlock_events_less_cmp
-   {
-      bool operator()(const hop::UnlockEvent& ue, hop::TimeStamp time)
-      {
-         return ue.time < time;
-      }
-
-      bool operator()(hop::TimeStamp time, const hop::UnlockEvent& ue)
-      {
-         return time < ue.time;
-      }
-   };
-}
-
-// void Timeline::addTraceToHighlight( const std::pair< size_t, uint32_t >& trace )
-// {
-//    _highlightedTraces.push_back( trace );
-// }
-
-// void Timeline::clearHighlightedTraces()
-// {
-//    _highlightedTraces.clear();
-// }
-
 void Timeline::nextBookmark() noexcept
 {
    const TimeStamp timelineCenter = _timelineStart + _duration / 2;

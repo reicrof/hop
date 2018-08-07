@@ -23,17 +23,20 @@ struct TimelineTrack
    void addLockWaits( const LockWaitData& lockWaits );
    void addUnlockEvents(const std::vector<UnlockEvent>& unlockEvents);
    TDepth_t maxDepth() const noexcept;
-   float maxDisplayedDepth() const noexcept;
+   bool hidden() const noexcept;
+   float height() const noexcept;
+   float heightWithThreadLabel() const noexcept;
    void setTrackHeight( float height );
    bool empty() const;
    TraceData _traces;
    LockWaitData _lockWaits;
-   std::vector<UnlockEvent> _unlockEvents;
 
    // This is the position at which the track is drawn in canvas coord
    // The absolute position ignores the scroll but not the relative
    float _localDrawPos[2];
    float _absoluteDrawPos[2];
+
+private:
    float _trackHeight{9999.0f};
 
    friend size_t serializedSize( const TimelineTrack& ti );
@@ -42,6 +45,13 @@ struct TimelineTrack
 };
 
 class StringDb;
+
+struct LockOwnerInfo
+{
+   LockOwnerInfo( TimeDuration dur, uint32_t tIdx ) : lockDuration(dur), threadIndex(tIdx){}
+   TimeDuration lockDuration{0};
+   uint32_t threadIndex{0};
+};
 
 class TimelineTracks
 {
@@ -82,13 +92,23 @@ class TimelineTracks
        std::vector<TimelineMessage>& timelineMsg );
    void drawSearchWindow( const DrawInfo& di, std::vector< TimelineMessage >& timelineMsg );
    void drawContextMenu( const DrawInfo& info );
+   std::vector<LockOwnerInfo> highlightLockOwner(
+       const uint32_t threadIndex,
+       const uint32_t hoveredLwIndex,
+       const DrawInfo& info );
    void addTraceToHighlight( size_t traceId, uint32_t threadIndex, const DrawInfo& drawInfo );
 
    std::vector<TimelineTrack> _tracks;
-   std::vector< std::tuple< float, float, float > > _highlightedTracesDrawData;
    int _lodLevel;
    int _draggedTrack{-1};
    float _highlightValue{0.0f};
+
+   struct HighlightedTraceInfo
+   {
+      float posPxlX, posPxlY, lengthPxl;
+      uint32_t color;
+   };
+   std::vector< HighlightedTraceInfo > _highlightedTracesDrawData;
 
    SearchResult _searchRes;
 

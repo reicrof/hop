@@ -61,6 +61,11 @@ void LockWaitData::append( const LockWaitData& newLockWaits )
    deltas.insert( deltas.end(), newLockWaits.deltas.begin(), newLockWaits.deltas.end() );
    depths.insert( depths.end(), newLockWaits.depths.begin(), newLockWaits.depths.end() );
    mutexAddrs.insert( mutexAddrs.end(), newLockWaits.mutexAddrs.begin(), newLockWaits.mutexAddrs.end() );
+   
+   // Append 0 for lock releases. They will be filled when the unlock event are received
+   lockReleases.resize(
+       lockReleases.size() + std::distance( newLockWaits.ends.begin(), newLockWaits.ends.end() ),
+       0 );
 
    appendLods( lods, computeLods( newLockWaits, prevSize ) );
 }

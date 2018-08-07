@@ -55,6 +55,7 @@ struct LockWaitData
    std::deque< TimeDuration > deltas; // in ns
    std::deque< TDepth_t > depths;
    std::deque< void* > mutexAddrs;
+   std::deque< TimeStamp > lockReleases;
 
    LodsArray lods;
 };
