@@ -194,6 +194,7 @@ void startRec()
 
 void testMutex()
 {
+   HOP_SET_THREAD_NAME( "MUTEX WORKER" );
    HOP_PROF_FUNC();
 
    {
@@ -288,6 +289,7 @@ int main()
     // std::thread t6([]() { while (g_run) { testMutex(); } });
     // std::thread t7([]() { while (g_run) { testMutex(); } });
     // std::thread t8([]() { while (g_run) { testMutex(); } });
+    HOP_SET_THREAD_NAME( "MAIN THREAD" );
     std::this_thread::sleep_for(std::chrono::microseconds(25000));
     while(g_run)
     {

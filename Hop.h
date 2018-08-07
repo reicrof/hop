@@ -39,6 +39,7 @@ For more information, please refer to <http://unlicense.org/>
 #define HOP_PROF_MUTEX_LOCK( x )
 #define HOP_PROF_MUTEX_UNLOCK( x )
 #define HOP_ZONE( x )
+#define HOP_SET_THREAD_NAME( x )
 
 #else  // We do want to profile
 
@@ -109,6 +110,10 @@ enum HopZone
 #define HOP_PROF_MUTEX_UNLOCK( x ) HOP_MUTEX_UNLOCK_EVENT( x )
 
 #define HOP_ZONE( x ) HOP_ZONE_GUARD( __LINE__, ( x ) )
+
+// Set the name of the current thread in the profiler. Only the first call will
+// be considered for each thread.
+#define HOP_SET_THREAD_NAME( x ) hop::ClientManager::SetThreadName( (uint64_t) (x) )
 
 ///////////////////////////////////////////////////////////////
 /////     EVERYTHING AFTER THIS IS IMPL DETAILS        ////////
@@ -269,6 +274,12 @@ using TimeDuration = int64_t;
 
 HOP_STATIC_ASSERT( HOP_SHARED_MEM_SIZE >= 64000, "Shared memory size must be bigger than 64kb" );
 
+// Custom trace types
+using TStrPtr_t = uint64_t;
+using TLineNb_t = uint32_t;
+using TZoneId_t = uint16_t;
+using TDepth_t = uint16_t;
+
 enum class MsgType : uint32_t
 {
    PROFILER_TRACE,
@@ -299,7 +310,7 @@ struct UnlockEventsMsgInfo
    uint32_t count;
 };
 
-HOP_CONSTEXPR uint32_t EXPECTED_MSG_INFO_SIZE = 32;
+HOP_CONSTEXPR uint32_t EXPECTED_MSG_INFO_SIZE = 40;
 struct MsgInfo
 {
    MsgType type;
@@ -307,6 +318,7 @@ struct MsgInfo
    uint32_t threadIndex;
    uint64_t threadId;
    TimeStamp timeStamp;
+   TStrPtr_t threadName;
    // Specific message data
    union {
       TracesMsgInfo traces;
@@ -318,10 +330,6 @@ struct MsgInfo
 HOP_STATIC_ASSERT( sizeof(MsgInfo) == EXPECTED_MSG_INFO_SIZE, "MsgInfo layout has changed unexpectedly" );
 
 
-using TStrPtr_t = uint64_t;
-using TLineNb_t = uint32_t;
-using TZoneId_t = uint16_t;
-using TDepth_t = uint16_t;
 HOP_CONSTEXPR uint32_t EXPECTED_TRACE_SIZE = 40;
 struct Trace
 {
@@ -399,7 +407,6 @@ class SharedMemory
    sem_handle semaphore() const HOP_NOEXCEPT;
    bool tryWaitSemaphore() const HOP_NOEXCEPT;
    void signalSemaphore() const HOP_NOEXCEPT;
-   uint32_t nextThreadId() HOP_NOEXCEPT;
    const SharedMetaInfo* sharedMetaInfo() const HOP_NOEXCEPT;
    ~SharedMemory();
 
@@ -438,6 +445,7 @@ class ClientManager
       TimeStamp start,
       TimeStamp end );
    static void UnlockEvent( void* mutexAddr, TimeStamp time );
+   static void SetThreadName( TStrPtr_t name ) HOP_NOEXCEPT;
    static TZoneId_t PushNewZone( TZoneId_t newZone );
    static bool HasConnectedConsumer() HOP_NOEXCEPT;
    static bool HasListeningConsumer() HOP_NOEXCEPT;
@@ -1085,6 +1093,7 @@ thread_local int tl_traceLevel = 0;
 thread_local uint32_t tl_threadIndex = 0;
 thread_local TZoneId_t tl_zoneId = HOP_ZONE_ALL;
 thread_local uint64_t tl_threadId = 0;
+thread_local TStrPtr_t tl_threadName = 0;
 
 class Client
 {
@@ -1122,6 +1131,15 @@ class Client
    void addUnlockEvent( void* mutexAddr, TimeStamp time )
    {
       _unlockEvents.push_back( UnlockEvent{ mutexAddr, time } );
+   }
+
+   void setThreadName( TStrPtr_t name )
+   {
+      if( !tl_threadName )
+      {
+         tl_threadName = name;
+         addStringToDb( name );
+      }
    }
 
    TStrPtr_t addDynamicStringToDb( const char* dynStr )
@@ -1182,6 +1200,8 @@ class Client
          _stringPtr.insert( 0 );
          for( size_t i = 0; i < sizeof( TStrPtr_t ); ++i )
             _stringData.push_back('\0');
+         // Push back thread name
+         addStringToDb( tl_threadName );
       }
    }
 
@@ -1253,6 +1273,7 @@ class Client
 
          msgInfo->type = MsgType::PROFILER_STRING_DATA;
          msgInfo->threadId = tl_threadId;
+         msgInfo->threadName = tl_threadName;
          msgInfo->threadIndex = tl_threadIndex;
          msgInfo->timeStamp = getMsgTimeStamp();
          msgInfo->stringData.size = stringToSendSize;
@@ -1306,6 +1327,7 @@ class Client
 
          tracesInfo->type = MsgType::PROFILER_TRACE;
          tracesInfo->threadId = tl_threadId;
+         tracesInfo->threadName = tl_threadName;
          tracesInfo->threadIndex = tl_threadIndex;
          tracesInfo->timeStamp = getMsgTimeStamp();
          tracesInfo->traces.count = (uint32_t)_traces.size();
@@ -1346,6 +1368,7 @@ class Client
          MsgInfo* lwInfo = (MsgInfo*)bufferPtr;
          lwInfo->type = MsgType::PROFILER_WAIT_LOCK;
          lwInfo->threadId = tl_threadId;
+         lwInfo->threadName = tl_threadName;
          lwInfo->threadIndex = tl_threadIndex;
          lwInfo->timeStamp = _lockWaits.back().start;
          lwInfo->lockwaits.count = (uint32_t)_lockWaits.size();
@@ -1384,6 +1407,7 @@ class Client
          MsgInfo* uInfo = (MsgInfo*)bufferPtr;
          uInfo->type = MsgType::PROFILER_UNLOCK_EVENT;
          uInfo->threadId = tl_threadId;
+         uInfo->threadName = tl_threadName;
          uInfo->threadIndex = tl_threadIndex;
          uInfo->timeStamp = _unlockEvents.back().time;
          uInfo->unlockEvents.count = (uint32_t)_unlockEvents.size();
@@ -1419,6 +1443,7 @@ class Client
          MsgInfo* hbInfo = (MsgInfo*)bufferPtr;
          hbInfo->type = MsgType::PROFILER_HEARTBEAT;
          hbInfo->threadId = tl_threadId;
+         hbInfo->threadName = tl_threadName;
          hbInfo->threadIndex = tl_threadIndex;
          hbInfo->timeStamp = getTimeStamp();
          bufferPtr += sizeof( MsgInfo );
@@ -1574,6 +1599,14 @@ void ClientManager::UnlockEvent( void* mutexAddr, TimeStamp time )
 
       client->addUnlockEvent( mutexAddr, time );
    }
+}
+
+void ClientManager::SetThreadName( TStrPtr_t name ) HOP_NOEXCEPT
+{
+   auto client = ClientManager::Get();
+   if( unlikely( !client ) ) return;
+
+   client->setThreadName( name );
 }
 
 TZoneId_t ClientManager::PushNewZone( TZoneId_t newZone )

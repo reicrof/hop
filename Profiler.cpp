@@ -204,8 +204,14 @@ void Profiler::fetchClientData()
       }
       for (size_t i = 0; i < _serverPendingData.unlockEvents.size(); ++i)
       {
-          addUnlockEvents(_serverPendingData.unlockEvents[i], _serverPendingData.unlockEventsThreadIndex[i]);
+         addUnlockEvents(_serverPendingData.unlockEvents[i], _serverPendingData.unlockEventsThreadIndex[i]);
       }
+   }
+
+   // We need to get the thread name even when not recording as they are only sent once
+   for( size_t i = 0; i < _serverPendingData.threadNames.size(); ++i )
+   {
+      addThreadName( _serverPendingData.threadNames[i].second, _serverPendingData.threadNames[i].first );
    }
 }
 
@@ -248,6 +254,19 @@ void Profiler::addUnlockEvents( const std::vector<UnlockEvent>& unlockEvents, ui
    {
       _tracks[threadIndex].addUnlockEvents( unlockEvents );
    }
+}
+
+void Profiler::addThreadName( TStrPtr_t name, uint32_t threadIndex )
+{
+   // Check if new thread
+   if ( threadIndex >= _tracks.size() )
+   {
+      _tracks.resize( threadIndex + 1 );
+   }
+
+   assert( name != 0 ); // should not be empty name
+
+   _tracks[threadIndex].setTrackName( name );
 }
 
 Profiler::~Profiler()

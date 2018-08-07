@@ -66,6 +66,7 @@ bool Server::start( const char* name )
             clearPendingMessages();
             _clearingRequested.store( false );
             _sharedMem.setResetTimestamp( getTimeStamp() );
+            _threadNamesReceived.clear();
             continue;
          }
 
@@ -128,6 +129,23 @@ void Server::getPendingData(PendingData & data)
     _pendingData.clear();
 }
 
+bool Server::addUniqueThreadName( uint32_t threadIndex, TStrPtr_t name )
+{
+   bool newInsert = false;
+   if( _threadNamesReceived.size() <= threadIndex )
+   {
+      _threadNamesReceived.resize( threadIndex + 1, 0 );
+   }
+
+   if( _threadNamesReceived[ threadIndex ] == 0 )
+   {
+      _threadNamesReceived[ threadIndex ] = name;
+      newInsert = true;
+   }
+
+   return newInsert;
+}
+
 size_t Server::handleNewMessage( uint8_t* data, size_t maxSize, TimeStamp minTimestamp )
 {
    uint8_t* bufPtr = data;
@@ -142,6 +160,13 @@ size_t Server::handleNewMessage( uint8_t* data, size_t maxSize, TimeStamp minTim
     // If the message was sent prior to the last reset timestamp, ignore it
     if( msgInfo->timeStamp < minTimestamp )
        return (size_t)(bufPtr - data);
+
+    // If the thread has an assigned name
+    if( msgInfo->threadName != 0 && addUniqueThreadName( threadIndex, msgInfo->threadName ) )
+    {
+      std::lock_guard<std::mutex> guard( _pendingData.mutex );
+      _pendingData.threadNames.emplace_back( threadIndex, msgInfo->threadName );
+    }
 
     switch ( msgType )
     {
@@ -303,6 +328,7 @@ void Server::PendingData::clear()
     lockWaitThreadIndex.clear();
     unlockEvents.clear();
     unlockEventsThreadIndex.clear();
+    threadNames.clear();
 }
 
 void Server::PendingData::swap(PendingData & rhs)
@@ -316,6 +342,7 @@ void Server::PendingData::swap(PendingData & rhs)
     swap(lockWaitThreadIndex, rhs.lockWaitThreadIndex);
     swap(unlockEvents, rhs.unlockEvents);
     swap(unlockEventsThreadIndex, rhs.unlockEventsThreadIndex);
+    swap(threadNames, rhs.threadNames);
 }
 
 }  // namespace hop

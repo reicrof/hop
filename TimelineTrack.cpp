@@ -32,6 +32,16 @@ float TimelineTrack::TRACE_HEIGHT = 20.0f;
 float TimelineTrack::TRACE_VERTICAL_PADDING = 2.0f;
 float TimelineTrack::PADDED_TRACE_SIZE = TRACE_HEIGHT + TRACE_VERTICAL_PADDING;
 
+void TimelineTrack::setTrackName( TStrPtr_t name ) noexcept
+{
+   _trackName = name;
+}
+
+TStrPtr_t TimelineTrack::trackName() const noexcept
+{
+   return _trackName;
+}
+
 void TimelineTrack::addTraces( const TraceData& newTraces )
 {
    HOP_PROF_FUNC();
@@ -397,7 +407,7 @@ std::vector< TimelineMessage > TimelineTracks::draw( const DrawInfo& info )
 
    ImGui::SetCursorScreenPos( ImVec2( info.timeline.canvasPosX, info.timeline.canvasPosY ) );
 
-   char threadName[128] = "Thread ";
+   char threadNameBuffer[128] = "Thread ";
    const size_t threadNamePrefix = sizeof( "Thread" );
    const float timelineOffsetY = info.timeline.canvasPosY + info.timeline.scrollAmount;
    for ( size_t i = 0; i < _tracks.size(); ++i )
@@ -407,8 +417,18 @@ std::vector< TimelineMessage > TimelineTracks::draw( const DrawInfo& info )
 
       const bool threadHidden = _tracks[i].hidden();
       const float trackHeight = _tracks[i].heightWithThreadLabel();
-      snprintf(
-          threadName + threadNamePrefix, sizeof( threadName ) - threadNamePrefix, "%lu", i );
+
+      const char* threadName = &threadNameBuffer[0];
+      if( _tracks[i].trackName() != 0 )
+      {
+         const size_t stringIdx = info.strDb.getStringIndex( _tracks[i].trackName() );
+         threadName = info.strDb.getString( stringIdx );
+      }
+      else
+      {
+         snprintf(
+             threadNameBuffer + threadNamePrefix, sizeof( threadNameBuffer ) - threadNamePrefix, "%lu", i );
+      }
       HOP_PROF_DYN_NAME( threadName );
 
       // First draw the separator of the track

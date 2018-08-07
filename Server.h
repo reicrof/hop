@@ -34,6 +34,8 @@ class Server
        std::vector<std::vector<UnlockEvent> > unlockEvents;
        std::vector<uint32_t> unlockEventsThreadIndex;
 
+       std::vector< std::pair< uint32_t, TStrPtr_t > > threadNames;
+
        void clear();
        void swap(PendingData& rhs);
    };
@@ -43,6 +45,7 @@ class Server
   private:
    // Returns the number of bytes processed
    size_t handleNewMessage( uint8_t* data, size_t maxSize, TimeStamp minTimestamp );
+   bool addUniqueThreadName( uint32_t threadIndex, TStrPtr_t name );
 
    void clearPendingMessages();
 
@@ -55,6 +58,7 @@ class Server
    std::atomic< bool > _clearingRequested{false};
    StringDb _stringDb;
    PendingData _pendingData;
+   std::vector< TStrPtr_t > _threadNamesReceived;
 };
 
 }  // namespace hop
