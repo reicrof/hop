@@ -192,9 +192,12 @@ void startRec()
    rec( recCount );
 }
 
+static std::atomic<int> workerId{0};
 void testMutex()
 {
-   HOP_SET_THREAD_NAME( "MUTEX WORKER" );
+   char name[256];
+   snprintf( name, 256, "MUTEX WORKER %d", workerId.fetch_add(1) );
+   HOP_SET_THREAD_NAME( name );
    HOP_PROF_FUNC();
 
    {
