@@ -33,6 +33,13 @@ struct TimelineTrack
    TraceData _traces;
    LockWaitData _lockWaits;
 
+   struct HighlightDrawInfo
+   {
+      float posPxlX, posPxlY, lengthPxl;
+      uint32_t color;
+   };
+   std::vector< HighlightDrawInfo > _highlightsDrawData;
+
    // This is the position at which the track is drawn in canvas coord
    // The absolute position ignores the scroll but not the relative
    float _localDrawPos[2];
@@ -94,6 +101,7 @@ class TimelineTracks
        const DrawInfo& drawInfo,
        std::vector<TimelineMessage>& timelineMsg );
    void drawSearchWindow( const DrawInfo& di, std::vector< TimelineMessage >& timelineMsg );
+   void drawTraceDetailsWindow( const DrawInfo& di, std::vector< TimelineMessage >& timelineMsg );
    void drawContextMenu( const DrawInfo& info );
    std::vector<LockOwnerInfo> highlightLockOwner(
        const uint32_t threadIndex,
@@ -105,13 +113,6 @@ class TimelineTracks
    int _lodLevel;
    int _draggedTrack{-1};
    float _highlightValue{0.0f};
-
-   struct HighlightedTraceInfo
-   {
-      float posPxlX, posPxlY, lengthPxl;
-      uint32_t color;
-   };
-   std::vector< HighlightedTraceInfo > _highlightedTracesDrawData;
 
    SearchResult _searchRes;
 

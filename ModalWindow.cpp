@@ -46,7 +46,11 @@ namespace hop
                      modalWindowMessage = nullptr;
                      modalWindowOpen = false;
                      shouldCloseModalWindow = false;
-                     if( modalFct ) modalFct();
+                     if( modalFct )
+                     {
+                        modalFct();
+                        modalFct = nullptr;
+                     }
                   }
                   ImGui::EndPopup();
                   break;
@@ -64,7 +68,11 @@ namespace hop
                         modalWindowMessage = nullptr;
                         modalWindowOpen = false;
                         shouldCloseModalWindow = false;
-                        if( modalFct ) modalFct();
+                        if( modalFct )
+                        {
+                           modalFct();
+                           modalFct = nullptr;
+                        }
                      }
                      ImGui::EndPopup();
                   }
@@ -100,6 +108,7 @@ namespace hop
                      if( execCallback && modalFct )
                      {
                         modalFct();
+                        modalFct = nullptr;
                      }
                   }
                   break;

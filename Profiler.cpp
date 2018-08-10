@@ -190,18 +190,22 @@ void Profiler::fetchClientData()
 
    if( _recording )
    {
+      HOP_PROF_SPLIT( "Fetching Str Data" );
       for( size_t i = 0; i <_serverPendingData.stringData.size(); ++i )
       {
          addStringData( _serverPendingData.stringData[i] );
       }
+      HOP_PROF_SPLIT( "Fetching Traces" );
       for( size_t i = 0; i <_serverPendingData.traces.size(); ++i )
       {
          addTraces(_serverPendingData.traces[i], _serverPendingData.tracesThreadIndex[i] );
       }
+      HOP_PROF_SPLIT( "Fetching Lock Waits" );
       for( size_t i = 0; i < _serverPendingData.lockWaits.size(); ++i )
       {
          addLockWaits(_serverPendingData.lockWaits[i], _serverPendingData.lockWaitThreadIndex[i] );
       }
+      HOP_PROF_SPLIT( "Fetching Unlock Events" );
       for (size_t i = 0; i < _serverPendingData.unlockEvents.size(); ++i)
       {
          addUnlockEvents(_serverPendingData.unlockEvents[i], _serverPendingData.unlockEventsThreadIndex[i]);
@@ -460,35 +464,6 @@ static void drawStatusIcon( const ImVec2& drawPos, hop::SharedMemory::Connection
    }
 }
 
-void hop::Profiler::drawTraceDetailsWindow()
-{
-   HOP_PROF_FUNC();
-   // const auto traceDetailRes = drawTraceDetails( _timeline.getTraceDetails(), _tracks, _strDb );
-   // if ( traceDetailRes.isWindowOpen )
-   // {
-   //     _timeline.setTraceDetailsDisplayed();
-
-   //     // Add the trace that will need to be highlighted
-   //     std::pair<size_t, size_t> span = visibleIndexSpan(
-   //         _tracks[traceDetailRes.hoveredThreadIdx]._traces,
-   //         _timeline.absoluteTimelineStart(),
-   //         _timeline.absoluteTimelineEnd() );
-
-   //     for ( const auto& traceHoveredIdx : traceDetailRes.hoveredTraceIds )
-   //     {
-   //        if ( traceHoveredIdx >= span.first && traceHoveredIdx <= span.second )
-   //        {
-   //           _timeline.addTraceToHighlight(
-   //               std::make_pair( traceHoveredIdx, traceDetailRes.hoveredThreadIdx ) );
-   //        }
-   //     }
-   // }
-   // else
-   // {
-   //    _timeline.clearTraceDetails();
-   // }
-}
-
 void hop::Profiler::draw( uint32_t /*windowWidth*/, uint32_t /*windowHeight*/ )
 {
    HOP_PROF_FUNC();
@@ -512,10 +487,6 @@ void hop::Profiler::draw( uint32_t /*windowWidth*/, uint32_t /*windowHeight*/ )
    // Render modal window, if any
    renderModalWindow();
    drawOptionsWindow( g_options );
-
-   // These must be done before drawing the traces as we need to highlight
-   // traces that might be hovered from this window
-   //drawTraceDetailsWindow();
 
    const auto toolbarDrawPos = ImGui::GetCursorScreenPos();
    if( drawPlayStopButton( toolbarDrawPos, _recording ) )
@@ -883,9 +854,7 @@ void hop::Profiler::clear()
    _strDb.clear();
    _tracks.clear();
    _timeline.setGlobalStartTime( 0 );
-   //_timeline.clearTraceDetails();
    _timeline.clearBookmarks();
-   //_timeline.clearTraceStats();
    _recording = false;
    g_stats.traceCount = 0;
 }

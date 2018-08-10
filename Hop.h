@@ -156,14 +156,17 @@ enum HopZone
 #include <stdint.h>
 #include <stdio.h>
 
-// ------ platform.h ------------
-// This is most things that are potentially non-portable.
-#define HOP_VERSION 0.4f
+// Useful macros
+#define HOP_VERSION 0.5f
 #define HOP_CONSTEXPR constexpr
 #define HOP_NOEXCEPT noexcept
 #define HOP_STATIC_ASSERT static_assert
 #define HOP_MIN(a,b) (((a)<(b))?(a):(b))
 #define HOP_MAX(a,b) (((a)>(b))?(a):(b))
+#define HOP_UNUSED(x) (void)(x)
+
+// This is most things that are potentially non-portable.
+
 // On MacOs the max name length seems to be 30...
 #define HOP_SHARED_MEM_MAX_NAME_SIZE 30
 
@@ -628,7 +631,6 @@ void ringbuf_release( ringbuf_t*, size_t );
 #include <sys/mman.h> // shm_open
 #include <sys/stat.h> // stat
 #include <unistd.h> // ftruncate
-#include <dlfcn.h> // dlsym
 #include <time.h> // timespec
 
 #endif
@@ -800,8 +802,8 @@ namespace
       UnmapViewOfFile( dataPtr );
       CloseHandle( handle );
 #else
-      (void)handle;  // Remove unuesed warning
-      (void)dataPtr;
+      HOP_UNUSED(handle);  // Remove unuesed warning
+      HOP_UNUSED(dataPtr);
       if ( shm_unlink( name ) != 0 ) perror( " HOP - Could not unlink shared memory" );
 #endif
    }
@@ -1205,6 +1207,7 @@ class Client
             _stringData.push_back('\0');
          // Push back thread name
          const auto hash = addDynamicStringToDb( tl_threadNameBuffer );
+         HOP_UNUSED(hash);
          assert( hash == tl_threadName );
       }
    }
@@ -1751,10 +1754,9 @@ ringbuf_worker_t* ringbuf_register( ringbuf_t* rbuf, unsigned i )
    return w;
 }
 
-void ringbuf_unregister( ringbuf_t* rbuf, ringbuf_worker_t* w )
+void ringbuf_unregister( ringbuf_t*, ringbuf_worker_t* w )
 {
    w->registered = false;
-   (void)rbuf;
 }
 
 /*
@@ -1882,9 +1884,8 @@ ssize_t ringbuf_acquire( ringbuf_t* rbuf, ringbuf_worker_t* w, size_t len )
  * ringbuf_produce: indicate the acquired range in the buffer is produced
  * and is ready to be consumed.
  */
-void ringbuf_produce( ringbuf_t* rbuf, ringbuf_worker_t* w )
+void ringbuf_produce( ringbuf_t* , ringbuf_worker_t* w )
 {
-   (void)rbuf;
    assert( w->registered );
    assert( w->seen_off != RBUF_OFF_MAX );
    std::atomic_thread_fence( std::memory_order_release );

@@ -41,6 +41,7 @@ struct TraceDetailDrawResult
 {
    std::vector< size_t > hoveredTraceIds;
    uint32_t hoveredThreadIdx;
+   bool clicked;
 };
 
 struct TraceStats

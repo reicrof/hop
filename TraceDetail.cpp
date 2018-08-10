@@ -306,7 +306,7 @@ static void finalizeTraceDetails(
       return lhs.exclusivePct > rhs.exclusivePct;
    } );
 
-   assert( std::abs( totalPct - 1.0f ) < 0.01f );
+   assert( std::abs( totalPct - 1.0f ) < 0.01f || details.empty() );
 }
 
 namespace hop
@@ -370,7 +370,7 @@ TraceDetails createGlobalTraceDetails( const TraceData& traces, uint32_t threadI
 {
    HOP_PROF_FUNC();
 
-   TraceDetails details;
+   TraceDetails details = {};
 
    std::vector<hop::TraceDetail> traceDetails;
    traceDetails.reserve( 1024 );
@@ -405,7 +405,7 @@ TraceDetailDrawResult drawTraceDetails(
    static constexpr float pctColumnWidth = 65.0f;
    static constexpr float timeColumnWidth = 90.0f;
 
-   TraceDetailDrawResult result;
+   TraceDetailDrawResult result = { std::vector< size_t >(), 0, false };
    if ( details.open )
    {
       if( details.shouldFocusWindow )
@@ -516,6 +516,7 @@ TraceDetailDrawResult drawTraceDetails(
          char traceDuration[128] = {};
          static size_t selected = -1;
          size_t hoveredId = -1;
+         bool selectedSomething = false;
          for ( size_t i = 0; i < details.details.size(); ++i )
          {
             const size_t traceId = details.details[i].traceIds[0];
@@ -525,6 +526,7 @@ TraceDetailDrawResult drawTraceDetails(
                      traceName, selected == i, ImGuiSelectableFlags_SpanAllColumns ) )
             {
                selected = i;
+               selectedSomething = true;
             }
 
             if ( ImGui::IsItemHovered() )
@@ -566,6 +568,7 @@ TraceDetailDrawResult drawTraceDetails(
          if( hoveredId != (size_t) -1 )
          {
             result.hoveredTraceIds = details.details[hoveredId].traceIds;
+            result.clicked = selectedSomething;
          }
       }
       ImGui::End();

@@ -12,7 +12,6 @@ void TraceData::append( const TraceData& newTraces )
 
    deltas.insert( deltas.end(), newTraces.deltas.begin(), newTraces.deltas.end() );
    ends.insert( ends.end(), newTraces.ends.begin(), newTraces.ends.end() );
-   flags.insert( flags.end(), newTraces.flags.begin(), newTraces.flags.end() );
    fileNameIds.insert(
        fileNameIds.end(), newTraces.fileNameIds.begin(), newTraces.fileNameIds.end() );
    fctNameIds.insert( fctNameIds.end(), newTraces.fctNameIds.begin(), newTraces.fctNameIds.end() );
@@ -28,13 +27,14 @@ void TraceData::clear()
 {
    ends.clear();
    deltas.clear();
-   flags.clear();
    fileNameIds.clear();
    fctNameIds.clear();
    lineNbs.clear();
    zones.clear();
    depths.clear();
    maxDepth = 0;
+   for( auto& dq : lods )
+      dq.clear();
 }
 
 TraceData TraceData::copy() const
@@ -42,7 +42,6 @@ TraceData TraceData::copy() const
    TraceData copy;
    copy.ends = this->ends;
    copy.deltas = this->deltas;
-   copy.flags = this->flags;
    copy.fileNameIds = this->fileNameIds;
    copy.fctNameIds = this->fctNameIds;
    copy.lineNbs = this->lineNbs;
@@ -61,11 +60,21 @@ void LockWaitData::append( const LockWaitData& newLockWaits )
    deltas.insert( deltas.end(), newLockWaits.deltas.begin(), newLockWaits.deltas.end() );
    depths.insert( depths.end(), newLockWaits.depths.begin(), newLockWaits.depths.end() );
    mutexAddrs.insert( mutexAddrs.end(), newLockWaits.mutexAddrs.begin(), newLockWaits.mutexAddrs.end() );
-   
-   // Append 0 for lock releases. They will be filled when the unlock event are received
-   lockReleases.resize(
-       lockReleases.size() + std::distance( newLockWaits.ends.begin(), newLockWaits.ends.end() ),
-       0 );
+
+   const size_t lockReleaseSize = newLockWaits.lockReleases.size();
+   if( lockReleaseSize == 0 )
+   {
+      // Append 0 for lock releases. They will be filled when the unlock event are received
+      lockReleases.resize(
+          lockReleases.size() + std::distance( newLockWaits.ends.begin(), newLockWaits.ends.end() ),
+          0 );
+   }
+   else
+   {
+      // We are probably reading from a file since the lockrealse are already processed.
+      assert( lockReleaseSize == newLockWaits.ends.size() );
+      lockReleases.insert( lockReleases.end(), newLockWaits.lockReleases.begin(), newLockWaits.lockReleases.end() );
+   }
 
    appendLods( lods, computeLods( newLockWaits, prevSize ) );
 }
@@ -75,6 +84,10 @@ void LockWaitData::clear()
    ends.clear();
    deltas.clear();
    depths.clear();
+   mutexAddrs.clear();
+   lockReleases.clear();
+   for( auto& dq : lods )
+      dq.clear();
 }
 
 

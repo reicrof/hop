@@ -35,7 +35,6 @@ struct TraceData
    std::deque< TLineNb_t > lineNbs;
    std::deque< TZoneId_t > zones;
    std::deque< TDepth_t > depths;
-   std::deque< uint32_t > flags;
 
    LodsArray lods;
    TDepth_t maxDepth{ 0 };

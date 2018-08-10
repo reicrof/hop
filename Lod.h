@@ -4,7 +4,7 @@
 #include "Hop.h"
 
 #include <array>
-#include <vector>
+#include <deque>
 
 namespace hop
 {
@@ -25,11 +25,11 @@ struct LodInfo
    bool operator<( const LodInfo& rhs ) const noexcept { return end < rhs.end; }
 };
 
-using LodsArray = std::array< std::vector< LodInfo >, LOD_COUNT >;
+using LodsArray = std::array< std::deque< LodInfo >, LOD_COUNT >;
 
 void setupLODResolution( uint32_t sreenResolutionX );
 
-// Returns a vector of LodInfo for each LOD level. The lod infos are sorted.
+// Returns a array of LodInfo for each LOD level. The lod infos are sorted.
 LodsArray computeLods( const TraceData& traces, size_t idOffset );
 LodsArray computeLods( const LockWaitData& lockwaits, size_t idOffset );
 

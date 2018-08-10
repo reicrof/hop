@@ -36,10 +36,10 @@ void setupLODResolution( uint32_t sreenResolutionX )
 
 LodsArray computeLods( const TraceData& traces, size_t idOffset )
 {
+   HOP_PROF_FUNC();
    assert( LOD_MIN_GAP_PXL[LOD_COUNT-1] > 0 && "LOD resolution was not setup" );
 
-   std::array<std::vector<LodInfo>, LOD_COUNT> resLods;
-   for ( auto& lodInfo : resLods ) lodInfo.reserve( 256 );
+   LodsArray resLods;
 
    // Compute LODs.
    TDepth_t maxDepth = *std::max_element( traces.depths.begin(), traces.depths.end() );
@@ -84,7 +84,7 @@ LodsArray computeLods( const TraceData& traces, size_t idOffset )
    }
 
    // Compute the LOD based on the previous LOD levels
-   const std::vector<LodInfo>* lastComputedLod = &resLods[lodLvl];
+   const std::deque<LodInfo>* lastComputedLod = &resLods[lodLvl];
    for ( lodLvl = 1; lodLvl < LOD_COUNT; ++lodLvl )
    {
       for ( const auto& l : *lastComputedLod )
@@ -129,6 +129,7 @@ LodsArray computeLods( const TraceData& traces, size_t idOffset )
 
 void appendLods( LodsArray& dst, const LodsArray& src )
 {
+   HOP_PROF_FUNC();
    std::vector< LodInfo > nonLodedInfos;
    nonLodedInfos.reserve( src[0].size() );
 
@@ -205,8 +206,7 @@ LodsArray computeLods( const LockWaitData& lockwaits, size_t idOffset )
 {
    assert( LOD_MIN_GAP_PXL[LOD_COUNT-1] > 0 && "LOD resolution was not setup" );
 
-   std::array<std::vector<LodInfo>, LOD_COUNT> resLods;
-   for ( auto& lodInfo : resLods ) lodInfo.reserve( 256 );
+   LodsArray resLods;
 
    // Compute LODs.
    TDepth_t maxDepth = *std::max_element( lockwaits.depths.begin(), lockwaits.depths.end() );
@@ -252,7 +252,7 @@ LodsArray computeLods( const LockWaitData& lockwaits, size_t idOffset )
    }
 
    // Compute the LOD based on the previous LOD levels
-   const std::vector<LodInfo>* lastComputedLod = &resLods[lodLvl];
+   const std::deque<LodInfo>* lastComputedLod = &resLods[lodLvl];
    for ( lodLvl = 1; lodLvl < LOD_COUNT; ++lodLvl )
    {
       for ( const auto& l : *lastComputedLod )

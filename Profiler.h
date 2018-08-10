@@ -35,7 +35,6 @@ struct Profiler
 
 private:
    void drawMenuBar();
-   void drawTraceDetailsWindow();
    bool openFile( const char* path );
    bool saveToFile( const char* path );
 
