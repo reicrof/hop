@@ -1,4 +1,6 @@
 #include "TraceDetail.h"
+#include "TraceData.h"
+#include "TimelineTrack.h"
 #include "StringDb.h"
 #include "Utils.h"
 
@@ -32,7 +34,7 @@ struct TraceVecSetItem
 template <typename CMP>
 static void sortTraceDetailOnName(
     std::vector<hop::TraceDetail>& td,
-    const hop::ThreadInfo& threadInfo,
+    const hop::TimelineTrack& timelineTrack,
     const hop::StringDb& strDb,
     const CMP& cmp )
 {
@@ -41,11 +43,11 @@ static void sortTraceDetailOnName(
    std::stable_sort(
        td.begin(),
        td.end(),
-       [&threadInfo, &strDb, &cmp]( const hop::TraceDetail& lhs, const hop::TraceDetail& rhs ) {
+       [&timelineTrack, &strDb, &cmp]( const hop::TraceDetail& lhs, const hop::TraceDetail& rhs ) {
           return cmp(
               strcmp(
-                  strDb.getString( threadInfo._traces.fctNameIds[lhs.traceIds[0]] ),
-                  strDb.getString( threadInfo._traces.fctNameIds[rhs.traceIds[0]] ) ),
+                  strDb.getString( timelineTrack._traces.fctNameIds[lhs.traceIds[0]] ),
+                  strDb.getString( timelineTrack._traces.fctNameIds[rhs.traceIds[0]] ) ),
               0 );
        } );
 }
@@ -121,7 +123,7 @@ namespace std
    };
 }
 
-static std::vector<hop::TraceDetail> mergeTraceDetails( const hop::DisplayableTraces& traces, const std::vector<hop::TraceDetail>& allDetails )
+static std::vector<hop::TraceDetail> mergeTraceDetails( const hop::TraceData& traces, const std::vector<hop::TraceDetail>& allDetails )
 {
    HOP_PROF_FUNC();
 
@@ -226,7 +228,7 @@ static std::vector<hop::TraceDetail> mergeTraceDetails( const hop::DisplayableTr
 }
 
 static std::vector<hop::TraceDetail>
-gatherTraceDetails( const hop::DisplayableTraces& traces, size_t traceId )
+gatherTraceDetails( const hop::TraceData& traces, size_t traceId )
 {
    HOP_PROF_FUNC();
 
@@ -304,13 +306,13 @@ static void finalizeTraceDetails(
       return lhs.exclusivePct > rhs.exclusivePct;
    } );
 
-   assert( std::abs( totalPct - 1.0f ) < 0.01f );
+   assert( std::abs( totalPct - 1.0f ) < 0.01f || details.empty() );
 }
 
 namespace hop
 {
 TraceDetails
-createTraceDetails( const DisplayableTraces& traces, uint32_t threadIndex, size_t traceId )
+createTraceDetails( const TraceData& traces, uint32_t threadIndex, size_t traceId )
 {
    HOP_PROF_FUNC();
 
@@ -320,13 +322,14 @@ createTraceDetails( const DisplayableTraces& traces, uint32_t threadIndex, size_
    finalizeTraceDetails( traceDetails, totalDelta );
 
    TraceDetails details;
+   details.open = true;
    details.shouldFocusWindow = true;
    details.threadIndex = threadIndex;
    std::swap( details.details, traceDetails );
    return details;
 }
 
-TraceStats createTraceStats(const DisplayableTraces& traces, uint32_t, size_t traceId)
+TraceStats createTraceStats(const TraceData& traces, uint32_t, size_t traceId)
 {
    const TStrPtr_t fileName = traces.fileNameIds[ traceId ];
    const TStrPtr_t fctName = traces.fctNameIds[ traceId ];
@@ -363,11 +366,11 @@ TraceStats createTraceStats(const DisplayableTraces& traces, uint32_t, size_t tr
    return TraceStats{ fctName, count, min, max, median, std::move(displayableDurations), true, true };
 }
 
-TraceDetails createGlobalTraceDetails( const DisplayableTraces& traces, uint32_t threadIndex )
+TraceDetails createGlobalTraceDetails( const TraceData& traces, uint32_t threadIndex )
 {
    HOP_PROF_FUNC();
 
-   TraceDetails details;
+   TraceDetails details = {};
 
    std::vector<hop::TraceDetail> traceDetails;
    traceDetails.reserve( 1024 );
@@ -386,6 +389,7 @@ TraceDetails createGlobalTraceDetails( const DisplayableTraces& traces, uint32_t
    auto mergedDetails = mergeTraceDetails( traces, traceDetails );
    finalizeTraceDetails( mergedDetails, totalTime );
    details.shouldFocusWindow = true;
+   details.open = true;
    details.threadIndex = threadIndex;
    std::swap( details.details, mergedDetails );
    return details;
@@ -393,7 +397,7 @@ TraceDetails createGlobalTraceDetails( const DisplayableTraces& traces, uint32_t
 
 TraceDetailDrawResult drawTraceDetails(
     TraceDetails& details,
-    const std::vector<ThreadInfo>& tracesPerThread,
+    const std::vector<TimelineTrack>& tracks,
     const StringDb& strDb )
 {
    HOP_PROF_FUNC();
@@ -401,11 +405,15 @@ TraceDetailDrawResult drawTraceDetails(
    static constexpr float pctColumnWidth = 65.0f;
    static constexpr float timeColumnWidth = 90.0f;
 
-   TraceDetailDrawResult result;
-   result.isWindowOpen = details.details.size() > 0;
-   if ( details.details.size() > 0 )
+   TraceDetailDrawResult result = { std::vector< size_t >(), 0, false };
+   if ( details.open )
    {
-      if (details.shouldFocusWindow) ImGui::SetNextWindowFocus();
+      if( details.shouldFocusWindow )
+      {
+         ImGui::SetNextWindowFocus();
+         ImGui::SetNextWindowCollapsed( false );
+         details.shouldFocusWindow = false;
+      }
 
       ImGui::PushStyleColor( ImGuiCol_WindowBg, ImVec4( 0.20f, 0.20f, 0.20f, 0.75f ) );
       // Draw the table header
@@ -414,7 +422,7 @@ TraceDetailDrawResult drawTraceDetails(
       ImGui::PushStyleColor( ImGuiCol_ButtonHovered, buttonCol );
       ImGui::PushStyleColor( ImGuiCol_ButtonActive, buttonCol );
       ImGui::SetNextWindowSize(ImVec2(600, 300), ImGuiSetCond_FirstUseEver);
-      if ( ImGui::Begin( "Trace Details", &result.isWindowOpen ) )
+      if ( ImGui::Begin( "Trace Details Window", &details.open ) )
       {
          ImGui::Columns( 6, "TraceDetailsTable" );
          ImGui::SetColumnWidth( 0, ImGui::GetWindowWidth() - 400 );
@@ -433,14 +441,14 @@ TraceDetailDrawResult drawTraceDetails(
             {
                sortTraceDetailOnName(
                    details.details,
-                   tracesPerThread[details.threadIndex],
+                   tracks[details.threadIndex],
                    strDb,
                    std::greater<int>() );
             }
             else
             {
                sortTraceDetailOnName(
-                   details.details, tracesPerThread[details.threadIndex], strDb, std::less<int>() );
+                   details.details, tracks[details.threadIndex], strDb, std::less<int>() );
             }
          }
 
@@ -503,20 +511,22 @@ TraceDetailDrawResult drawTraceDetails(
          ImGui::NextColumn();
          ImGui::Separator();
 
-         const auto& threadInfo = tracesPerThread[details.threadIndex];
+         const auto& track = tracks[details.threadIndex];
          char traceName[256] = {};
          char traceDuration[128] = {};
          static size_t selected = -1;
          size_t hoveredId = -1;
+         bool selectedSomething = false;
          for ( size_t i = 0; i < details.details.size(); ++i )
          {
             const size_t traceId = details.details[i].traceIds[0];
-            const TStrPtr_t fctIdx = threadInfo._traces.fctNameIds[traceId];
+            const TStrPtr_t fctIdx = track._traces.fctNameIds[traceId];
             snprintf( traceName, sizeof( traceName ), "%s", strDb.getString( fctIdx ) );
             if ( ImGui::Selectable(
                      traceName, selected == i, ImGuiSelectableFlags_SpanAllColumns ) )
             {
                selected = i;
+               selectedSomething = true;
             }
 
             if ( ImGui::IsItemHovered() )
@@ -526,8 +536,8 @@ TraceDetailDrawResult drawTraceDetails(
                    fileLineNbStr,
                    sizeof( fileLineNbStr ),
                    "%s:%d",
-                   strDb.getString( threadInfo._traces.fileNameIds[traceId] ),
-                   threadInfo._traces.lineNbs[traceId] );
+                   strDb.getString( track._traces.fileNameIds[traceId] ),
+                   track._traces.lineNbs[traceId] );
                ImGui::BeginTooltip();
                ImGui::TextUnformatted( fileLineNbStr );
                ImGui::EndTooltip();
@@ -558,6 +568,7 @@ TraceDetailDrawResult drawTraceDetails(
          if( hoveredId != (size_t) -1 )
          {
             result.hoveredTraceIds = details.details[hoveredId].traceIds;
+            result.clicked = selectedSomething;
          }
       }
       ImGui::End();
@@ -569,7 +580,7 @@ TraceDetailDrawResult drawTraceDetails(
    return result;
 }
 
-void drawTraceStats(TraceStats& stats, const std::vector<ThreadInfo>& , const StringDb& strDb)
+void drawTraceStats(TraceStats& stats, const StringDb& strDb)
 {
    if ( stats.open > 0 )
    {
@@ -595,6 +606,19 @@ void drawTraceStats(TraceStats& stats, const std::vector<ThreadInfo>& , const St
       ImGui::End();
       ImGui::PopStyleColor();
    }
+}
+
+void clearTraceDetails( TraceDetails& traceDetail )
+{
+   traceDetail.details.clear();
+   traceDetail.threadIndex = 0;
+   traceDetail.open = false;
+   traceDetail.shouldFocusWindow = false;
+}
+
+void clearTraceStats( TraceStats& stats )
+{
+   stats = TraceStats{ 0, 0, 0, 0, 0, std::vector< float >(), false, false };
 }
 
 }

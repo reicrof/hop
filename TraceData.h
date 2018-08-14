@@ -1,5 +1,5 @@
-#ifndef DISPLAYABLE_TRACE_H_
-#define DISPLAYABLE_TRACE_H_
+#ifndef TRACE_DATA_H_
+#define TRACE_DATA_H_
 
 #include "Hop.h"
 #include "Lod.h"
@@ -12,17 +12,17 @@ namespace hop
 {
 static constexpr size_t INVALID_IDX = std::numeric_limits<size_t>::max();
 
-struct DisplayableTraces
+struct TraceData
 {
-   DisplayableTraces() = default;
-   DisplayableTraces(DisplayableTraces&& ) = default;
-   DisplayableTraces(const DisplayableTraces& ) = delete;
-   DisplayableTraces& operator=(const DisplayableTraces& ) = delete;
+   TraceData() = default;
+   TraceData(TraceData&& ) = default;
+   TraceData(const TraceData& ) = delete;
+   TraceData& operator=(const TraceData& ) = delete;
 
    // Explicit copy to avoid accidental one
-   DisplayableTraces copy() const;
+   TraceData copy() const;
 
-   void append( const DisplayableTraces& newTraces );
+   void append( const TraceData& newTraces );
    void clear();
 
    std::deque< TimeStamp > ends; // in ns
@@ -35,26 +35,26 @@ struct DisplayableTraces
    std::deque< TLineNb_t > lineNbs;
    std::deque< TZoneId_t > zones;
    std::deque< TDepth_t > depths;
-   std::deque< uint32_t > flags;
 
    LodsArray lods;
    TDepth_t maxDepth{ 0 };
 };
 
-struct DisplayableLockWaits
+struct LockWaitData
 {
-   DisplayableLockWaits() = default;
-   DisplayableLockWaits(DisplayableLockWaits&& ) = default;
-   DisplayableLockWaits(const DisplayableLockWaits& ) = delete;
-   DisplayableLockWaits& operator=(const DisplayableLockWaits& ) = delete;
+   LockWaitData() = default;
+   LockWaitData(LockWaitData&& ) = default;
+   LockWaitData(const LockWaitData& ) = delete;
+   LockWaitData& operator=(const LockWaitData& ) = delete;
 
-   void append( const DisplayableLockWaits& newLockWaits );
+   void append( const LockWaitData& newLockWaits );
    void clear();
 
    std::deque< TimeStamp > ends; // in ns
    std::deque< TimeDuration > deltas; // in ns
    std::deque< TDepth_t > depths;
    std::deque< void* > mutexAddrs;
+   std::deque< TimeStamp > lockReleases;
 
    LodsArray lods;
 };
@@ -68,4 +68,4 @@ visibleIndexSpan( const LodsArray& lodsArr, int lodLvl, TimeStamp absoluteStart,
 
 }
 
-#endif // DISPLAYABLE_TRACE_H_
+#endif // TRACE_DATA_H_

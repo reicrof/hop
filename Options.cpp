@@ -9,7 +9,6 @@
 static const char* startFullScreenStr = "start_full_screen";
 static const char* traceHeights = "trace_height";
 static const char* zoneColors = "zone_colors";
-static const char* glFinishByDefault = "gl_finish_by_default";
 static const char* debugWindow = "show_debug_window";
 static const char* vsyncOn = "vsync_on";
 
@@ -30,9 +29,6 @@ bool saveOptions()
    {
       // Full screen option
       outOptions << startFullScreenStr << " " << (g_options.startFullScreen ? 1 : 0) << '\n';
-
-      // Use gl finish by defualt option
-      outOptions << glFinishByDefault << " " << (g_options.glFinishByDefault ? 1 : 0) << '\n';
 
       // Display debug window
       outOptions << debugWindow << " " << (g_options.debugWindow ? 1 : 0) << '\n';
@@ -78,10 +74,6 @@ bool loadOptions()
          {
             inOptions >> g_options.vsyncOn;
          }
-         else if( strcmp( token.c_str(), glFinishByDefault ) == 0 )
-         {
-            inOptions >> g_options.glFinishByDefault;
-         }
          else if( strcmp( token.c_str(), debugWindow ) == 0 )
          {
             inOptions >> g_options.debugWindow;
@@ -118,7 +110,6 @@ void drawOptionsWindow( Options& opt )
       ImGui::Checkbox( "Start in Fullscreen", &opt.startFullScreen );
       ImGui::Checkbox("Show Debug Window", &opt.debugWindow );
       ImGui::Checkbox("Vsync Enabled", &opt.vsyncOn );
-      ImGui::Checkbox( "glFinish() by default", &opt.glFinishByDefault );
       ImGui::SliderFloat( "Trace Height", &opt.traceHeight, 15.0f, 50.0f );
 
       ImGui::Spacing();

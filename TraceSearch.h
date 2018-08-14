@@ -1,20 +1,24 @@
 #ifndef TRACE_SEARCH_H_
 #define TRACE_SEARCH_H_
 
+#include <Hop.h>
+
 #include <vector>
 #include <string>
 
 namespace hop
 {
    class Timeline;
+   class TimelineTracks;
    class StringDb;
-   struct ThreadInfo;
 
    struct SearchResult
    {
       std::string stringSearched;
       std::vector< std::pair< size_t, uint32_t> > tracesIdxThreadIdx;
       size_t matchCount{0};
+      bool focusSearchWindow{ false };
+      bool searchWindowOpen{ false };
    };
 
    struct SearchSelection
@@ -25,8 +29,8 @@ namespace hop
       uint32_t hoveredThreadIdx;
    };
 
-   void findTraces( const char* string, const StringDb& strDb, const std::vector< ThreadInfo >& threadInfos, SearchResult& result );
-   SearchSelection drawSearchResult( SearchResult& searchRes, const Timeline& timeline, const StringDb& strDb, const std::vector< ThreadInfo >& threadInfos );
+   void findTraces( const char* string, const StringDb& strDb, const TimelineTracks& tracks, SearchResult& result );
+   SearchSelection drawSearchResult( SearchResult& searchRes, TimeStamp globalTimelineStart, TimeDuration timelineDuration, const StringDb& strDb, const TimelineTracks& tracks );
    void clearSearchResult( SearchResult& res );
 }
 

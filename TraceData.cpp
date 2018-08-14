@@ -1,4 +1,4 @@
-#include "DisplayableTraces.h"
+#include "TraceData.h"
 
 #include <algorithm>
 #include <cassert>
@@ -6,13 +6,12 @@
 namespace hop
 {
 
-void DisplayableTraces::append( const DisplayableTraces& newTraces )
+void TraceData::append( const TraceData& newTraces )
 {
    const size_t prevSize = deltas.size();
 
    deltas.insert( deltas.end(), newTraces.deltas.begin(), newTraces.deltas.end() );
    ends.insert( ends.end(), newTraces.ends.begin(), newTraces.ends.end() );
-   flags.insert( flags.end(), newTraces.flags.begin(), newTraces.flags.end() );
    fileNameIds.insert(
        fileNameIds.end(), newTraces.fileNameIds.begin(), newTraces.fileNameIds.end() );
    fctNameIds.insert( fctNameIds.end(), newTraces.fctNameIds.begin(), newTraces.fctNameIds.end() );
@@ -24,25 +23,25 @@ void DisplayableTraces::append( const DisplayableTraces& newTraces )
    appendLods( lods, computeLods( newTraces, prevSize ) );
 }
 
-void DisplayableTraces::clear()
+void TraceData::clear()
 {
    ends.clear();
    deltas.clear();
-   flags.clear();
    fileNameIds.clear();
    fctNameIds.clear();
    lineNbs.clear();
    zones.clear();
    depths.clear();
    maxDepth = 0;
+   for( auto& dq : lods )
+      dq.clear();
 }
 
-DisplayableTraces DisplayableTraces::copy() const
+TraceData TraceData::copy() const
 {
-   DisplayableTraces copy;
+   TraceData copy;
    copy.ends = this->ends;
    copy.deltas = this->deltas;
-   copy.flags = this->flags;
    copy.fileNameIds = this->fileNameIds;
    copy.fctNameIds = this->fctNameIds;
    copy.lineNbs = this->lineNbs;
@@ -53,7 +52,7 @@ DisplayableTraces DisplayableTraces::copy() const
    return copy;
 }
 
-void DisplayableLockWaits::append( const DisplayableLockWaits& newLockWaits )
+void LockWaitData::append( const LockWaitData& newLockWaits )
 {
    const size_t prevSize = ends.size();
 
@@ -62,25 +61,44 @@ void DisplayableLockWaits::append( const DisplayableLockWaits& newLockWaits )
    depths.insert( depths.end(), newLockWaits.depths.begin(), newLockWaits.depths.end() );
    mutexAddrs.insert( mutexAddrs.end(), newLockWaits.mutexAddrs.begin(), newLockWaits.mutexAddrs.end() );
 
+   const size_t lockReleaseSize = newLockWaits.lockReleases.size();
+   if( lockReleaseSize == 0 )
+   {
+      // Append 0 for lock releases. They will be filled when the unlock event are received
+      lockReleases.resize(
+          lockReleases.size() + std::distance( newLockWaits.ends.begin(), newLockWaits.ends.end() ),
+          0 );
+   }
+   else
+   {
+      // We are probably reading from a file since the lockrealse are already processed.
+      assert( lockReleaseSize == newLockWaits.ends.size() );
+      lockReleases.insert( lockReleases.end(), newLockWaits.lockReleases.begin(), newLockWaits.lockReleases.end() );
+   }
+
    appendLods( lods, computeLods( newLockWaits, prevSize ) );
 }
 
-void DisplayableLockWaits::clear()
+void LockWaitData::clear()
 {
    ends.clear();
    deltas.clear();
    depths.clear();
+   mutexAddrs.clear();
+   lockReleases.clear();
+   for( auto& dq : lods )
+      dq.clear();
 }
 
 
 
-template std::pair<size_t, size_t> visibleIndexSpan<DisplayableTraces>(
-    const DisplayableTraces& traces,
+template std::pair<size_t, size_t> visibleIndexSpan<TraceData>(
+    const TraceData& traces,
     TimeStamp absoluteStart,
     TimeStamp absoluteEnd );
 
-template std::pair<size_t, size_t> visibleIndexSpan<DisplayableLockWaits>(
-    const DisplayableLockWaits& traces,
+template std::pair<size_t, size_t> visibleIndexSpan<LockWaitData>(
+    const LockWaitData& traces,
     TimeStamp absoluteStart,
     TimeStamp absoluteEnd );
 

@@ -3,7 +3,7 @@
 
 #include <Hop.h>
 #include "StringDb.h"
-#include "DisplayableTraces.h"
+#include "TraceData.h"
 
 #include <vector>
 #include <thread>
@@ -15,27 +15,26 @@ namespace hop
 class Server
 {
   public:
-   bool start( const char* name, bool useGlFinishByDefault );
+   bool start( const char* name );
    void setRecording( bool recording );
    void stop();
    void clear();
    SharedMemory::ConnectionState connectionState() const;
 
-   bool useGlFinish() const noexcept;
-   void setUseGlFinish( bool );
-
    struct PendingData
    {
        std::mutex mutex;
-       std::vector< DisplayableTraces > traces;
+       std::vector< TraceData > traces;
        std::vector<std::vector<char> > stringData;
        std::vector<uint32_t> tracesThreadIndex;
 
-       std::vector< DisplayableLockWaits > lockWaits;
+       std::vector< LockWaitData > lockWaits;
        std::vector<uint32_t> lockWaitThreadIndex;
 
        std::vector<std::vector<UnlockEvent> > unlockEvents;
        std::vector<uint32_t> unlockEventsThreadIndex;
+
+       std::vector< std::pair< uint32_t, TStrPtr_t > > threadNames;
 
        void clear();
        void swap(PendingData& rhs);
@@ -46,6 +45,7 @@ class Server
   private:
    // Returns the number of bytes processed
    size_t handleNewMessage( uint8_t* data, size_t maxSize, TimeStamp minTimestamp );
+   bool addUniqueThreadName( uint32_t threadIndex, TStrPtr_t name );
 
    void clearPendingMessages();
 
@@ -58,6 +58,7 @@ class Server
    std::atomic< bool > _clearingRequested{false};
    StringDb _stringDb;
    PendingData _pendingData;
+   std::vector< TStrPtr_t > _threadNamesReceived;
 };
 
 }  // namespace hop

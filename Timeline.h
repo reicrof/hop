@@ -2,8 +2,7 @@
 #define TIMELINE_H_
 
 #include "Hop.h"
-#include "Lod.h"
-#include "TraceDetail.h"
+#include "TimelineInfo.h"
 
 #include <vector>
 
@@ -11,8 +10,6 @@ struct ImColor;
 
 namespace hop
 {
-struct ThreadInfo;
-class StringDb;
 class Timeline
 {
   public:
@@ -23,32 +20,52 @@ class Timeline
       ANIMATION_TYPE_FAST
    };
 
-   static float TRACE_HEIGHT;
-   static float TRACE_VERTICAL_PADDING;
-   static float PADDED_TRACE_SIZE;
-
    void update( float deltaTimeMs ) noexcept;
-   void draw(
-       std::vector<ThreadInfo>& _tracesPerThread,
-       const StringDb& strDb  );
-   TimeStamp absoluteStartTime() const noexcept;
-   TimeStamp absolutePresentTime() const noexcept;
-   void setAbsoluteStartTime( TimeStamp time ) noexcept;
-   void setAbsolutePresentTime( TimeStamp time ) noexcept;
+   void draw( float timelineHeight );
+   TimelineInfo constructTimelineInfo() const noexcept;
 
-   TimeStamp timelineStart() const noexcept;
-   TimeStamp absoluteTimelineStart() const noexcept;
-   TimeStamp absoluteTimelineEnd();
-   TimeDuration timelineRange() const noexcept;
+   bool handleMouse( float posX, float posY, bool lmClicked, bool rmClicked, float wheel );
+   bool handleHotkey();
+   void handleDeferredActions( const std::vector< TimelineMessage >& msg );
+
+
+   /*
+                           Visible Timeline
+   ---------------------|||||||||||||||||||||||------------ > time
+   ^                    ^                     ^            ^
+   | global_start_time  |                     |           | global_end_time
+                        |                     |
+                        |                     | absolute_end_time == relative_end_time + global_start_time
+                        |
+                        | absolute_start_time == (relative_start_time + global_start_time)
+   */
+
+   // Global time represent the global minimum/maximum of the timeline
+   // not considering any pan/zoom
+   TimeStamp globalStartTime() const noexcept;
+   TimeStamp globalEndTime() const noexcept;
+   void setGlobalStartTime( TimeStamp time ) noexcept;
+   void setGlobalEndTime( TimeStamp time ) noexcept;
+
+   // Absolute timeline start is the current starting time of the timeline
+   // considering zoom/pan NOT offsetted by the global time.
+   TimeStamp absoluteStartTime() const noexcept;
+   TimeStamp absoluteEndTime() const noexcept;
+
+   // Relative timeline start is the current starting time of the timeline
+   // considering zoom/pan offsetted by the global time.
+   TimeStamp relativeStartTime() const noexcept;
+   TimeStamp relativeEndTime() const noexcept;
+   TimeDuration duration() const noexcept;
+
    float verticalPosPxl() const noexcept;
    float maxVerticalPosPxl() const noexcept;
-   int currentLodLevel() const noexcept;
 
-   TraceDetails& getTraceDetails() noexcept;
-   void clearTraceDetails();
-   void setTraceDetailsDisplayed();
+   float canvasPosX() const noexcept;
+   float canvasPosY() const noexcept;
+   float canvasPosYWithScroll() const noexcept;
 
-   void clearTraceStats();
+   //void clearTraceStats();
 
    // Move to first trace
    void moveToStart( AnimationType animType = ANIMATION_TYPE_NORMAL ) noexcept;
@@ -60,8 +77,8 @@ class Timeline
    // Move timeline vertically to specified pixel position
    void moveVerticalPositionPxl( float positionPxl, AnimationType animType = ANIMATION_TYPE_NORMAL );
    // Frame the timeline to display the specified range of time
-   void frameToTime( int64_t time, TimeDuration duration ) noexcept;
-   void frameToAbsoluteTime( TimeStamp time, TimeDuration duration ) noexcept;
+   void frameToTime( int64_t time, TimeDuration duration, bool pushNavState ) noexcept;
+   void frameToAbsoluteTime( TimeStamp time, TimeDuration duration, bool pushNavState ) noexcept;
    // Update timeline to always display last race
    void setRealtime( bool isRealtime ) noexcept;
    bool realtime() const noexcept;
@@ -96,47 +113,31 @@ class Timeline
       std::vector< TimeStamp > times;
    } _bookmarks;
 
-   struct LockOwnerInfo
-   {
-      LockOwnerInfo( TimeDuration dur, uint32_t tIdx ) : lockDuration(dur), threadIndex(tIdx){}
-      TimeDuration lockDuration{0};
-      uint32_t threadIndex{0};
-   };
-
-   struct ContextMenu
-   {
-      size_t traceId{0};
-      uint32_t threadIndex{0};
-      bool open{false};
-   } _contextMenuInfo;
-
    void drawTimeline( const float posX, const float posY );
-   void drawTraces( const ThreadInfo& traces, uint32_t threadIndex, const float posX, const float posY, const StringDb& strDb );
-   void drawLockWaits(const std::vector<ThreadInfo>& infos, uint32_t threadIndex, const float posX, const float posY );
-   void handleMouseDrag( float mousePosX, float mousePosY, std::vector<ThreadInfo>& tracesPerThread );
-   void handleMouseWheel( float mousePosX, float mousePosY );
+   void handleMouseDrag( float mousePosX, float mousePosY );
+   void handleMouseWheel( float mousePosX, float mouseWheel );
    void zoomOn( int64_t microToZoomOn, float zoomFactor );
    void setStartTime( int64_t timeInMicro, AnimationType animType = ANIMATION_TYPE_NORMAL ) noexcept;
    void setZoom( TimeDuration microsToDisplay, AnimationType animType = ANIMATION_TYPE_NORMAL );
-   std::vector< LockOwnerInfo > highlightLockOwner(const std::vector<ThreadInfo>& infos, uint32_t threadIndex, uint32_t hoveredLwIndex, const float posX, const float posY );
 
+   // Origin of the timeline in absolute time
+   TimeStamp _globalStartTime{0};
+   TimeStamp _globalEndTime{0};
+
+   // Current timeline start and range
    int64_t _timelineStart{0};
-   TimeDuration _timelineRange{5000000000};
+   TimeDuration _duration{5000000000};
+
    uint64_t _stepSizeInNanos{1000000};
-   TimeStamp _absoluteStartTime{0};
-   TimeStamp _absolutePresentTime{0};
+   bool _realtime{true};
+
+   // Drawing Data
    float _verticalPosPxl{0.0f};
    float _rightClickStartPosInCanvas[2] = {};
    float _ctrlRightClickStartPosInCanvas[2] = {};
    float _timelineHoverPos{-1.0f};
-   int _lodLevel;
-   bool _realtime{true};
-   int _draggedTrack{-1};
-
-   std::vector< std::pair< size_t, uint32_t > > _highlightedTraces;
-
-   TraceDetails _traceDetails{};
-   TraceStats _traceStats{ 0, 0, 0, 0, 0, std::vector< float >(), false, false };
+   float _timelineDrawPosition[2] = {};
+   float _canvasDrawPosition[2] = {};
 
    std::vector< AnimationState > _undoPositionStates, _redoPositionStates;
 

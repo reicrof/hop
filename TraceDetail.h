@@ -2,14 +2,15 @@
 #define TRACE_DETAIL_H_
 
 #include "Hop.h"
-#include "ThreadInfo.h"
-
 #include <vector>
 
 namespace hop
 {
 class StringDb;
-struct DisplayableTraces;
+struct TraceData;
+struct TimelineTrack;
+class TimelineTracks;
+struct TraceStats;
 struct TraceDetail
 {
    TraceDetail( size_t traceId, TimeStamp excTime )
@@ -32,6 +33,7 @@ struct TraceDetails
 {
    std::vector<TraceDetail> details;
    uint32_t threadIndex;
+   bool open{false};
    bool shouldFocusWindow{false};
 };
 
@@ -39,7 +41,7 @@ struct TraceDetailDrawResult
 {
    std::vector< size_t > hoveredTraceIds;
    uint32_t hoveredThreadIdx;
-   bool isWindowOpen;
+   bool clicked;
 };
 
 struct TraceStats
@@ -53,16 +55,18 @@ struct TraceStats
 };
 
 TraceDetails
-createTraceDetails( const DisplayableTraces& traces, uint32_t threadIndex, size_t traceId );
-TraceDetails createGlobalTraceDetails( const DisplayableTraces& traces, uint32_t threadIndex );
+createTraceDetails( const TraceData& traces, uint32_t threadIndex, size_t traceId );
+TraceDetails createGlobalTraceDetails( const TraceData& traces, uint32_t threadIndex );
 TraceDetailDrawResult drawTraceDetails(
     TraceDetails& details,
-    const std::vector<ThreadInfo>& tracesPerThread,
+    const std::vector<TimelineTrack>& tracks,
     const StringDb& strDb );
 
 
-TraceStats createTraceStats( const DisplayableTraces& traces, uint32_t threadIndex, size_t traceId );
-void drawTraceStats( TraceStats& stats, const std::vector<ThreadInfo>& tracesPerThread, const StringDb& strDb);
+TraceStats createTraceStats( const TraceData& traces, uint32_t threadIndex, size_t traceId );
+void drawTraceStats( TraceStats& stats, const StringDb& strDb);
+void clearTraceDetails( TraceDetails& details );
+void clearTraceStats( TraceStats& stats );
 }
 
 #endif  // TRACE_DETAIL_H_

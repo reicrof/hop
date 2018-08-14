@@ -122,6 +122,21 @@ inline void formatSizeInBytesToDisplay( size_t sizeInBytes, char* str, size_t st
    }
 }
 
+inline bool ptInRect( float ptx, float pty, float ax, float ay, float bx, float by )
+{
+   if( ptx < ax || ptx > bx ) return false;
+   if( pty < ay || pty > by ) return false;
+
+   return true;
+}
+
+inline bool ptInCircle( float ptx, float pty, float centerx, float centery, float radius )
+{
+   const float dx = ptx - centerx;
+   const float dy = pty - centery;
+   return dx * dx + dy * dy <= radius * radius;
+}
+
 } // namespace hop
 
 #endif  // UTILS_H_

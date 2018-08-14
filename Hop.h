@@ -36,11 +36,10 @@ For more information, please refer to <http://unlicense.org/>
 #define HOP_PROF_FUNC()
 #define HOP_PROF_SPLIT( x )
 #define HOP_PROF_DYN_NAME( x )
-#define HOP_PROF_GL_FINISH( x )
-#define HOP_PROF_FUNC_GL_FINISH()
 #define HOP_PROF_MUTEX_LOCK( x )
 #define HOP_PROF_MUTEX_UNLOCK( x )
 #define HOP_ZONE( x )
+#define HOP_SET_THREAD_NAME( x )
 
 #else  // We do want to profile
 
@@ -101,12 +100,6 @@ enum HopZone
 // Create a new profiling trace for dynamic strings. Please use sparingly as they will incur more slowdown
 #define HOP_PROF_DYN_NAME( x ) HOP_PROF_DYN_STRING_GUARD_VAR( __LINE__, ( __FILE__, __LINE__, (x) ) )
 
-// Create a new profiling trace that will call glFinish() before being destroyed
-#define HOP_PROF_GL_FINISH( x ) HOP_PROF_GL_FINISH_GUARD_VAR( __LINE__, ( __FILE__, __LINE__, (x) ) )
-
-// Create a new profiling trace for a free function
-#define HOP_PROF_FUNC_GL_FINISH() HOP_PROF_GL_FINISH_GUARD_VAR( __LINE__, ( __FILE__, __LINE__, HOP_FCT_NAME ) )
-
 // Create a trace that represent the time waiting for a mutex. You need to provide
 // a pointer to the mutex that is being locked
 #define HOP_PROF_MUTEX_LOCK( x ) HOP_MUTEX_LOCK_GUARD_VAR( __LINE__,( x ) )
@@ -117,6 +110,10 @@ enum HopZone
 #define HOP_PROF_MUTEX_UNLOCK( x ) HOP_MUTEX_UNLOCK_EVENT( x )
 
 #define HOP_ZONE( x ) HOP_ZONE_GUARD( __LINE__, ( x ) )
+
+// Set the name of the current thread in the profiler. Only the first call will
+// be considered for each thread.
+#define HOP_SET_THREAD_NAME( x ) hop::ClientManager::SetThreadName( (x) )
 
 ///////////////////////////////////////////////////////////////
 /////     EVERYTHING AFTER THIS IS IMPL DETAILS        ////////
@@ -159,22 +156,38 @@ enum HopZone
 #include <stdint.h>
 #include <stdio.h>
 
-// ------ platform.h ------------
-// This is most things that are potentially non-portable.
-#define HOP_VERSION 0.4f
+// Useful macros
+#define HOP_VERSION 0.5f
 #define HOP_CONSTEXPR constexpr
 #define HOP_NOEXCEPT noexcept
 #define HOP_STATIC_ASSERT static_assert
+#define HOP_MIN(a,b) (((a)<(b))?(a):(b))
+#define HOP_MAX(a,b) (((a)>(b))?(a):(b))
+#define HOP_UNUSED(x) (void)(x)
+
+// This is most things that are potentially non-portable.
+
 // On MacOs the max name length seems to be 30...
 #define HOP_SHARED_MEM_MAX_NAME_SIZE 30
-#define HOP_SHARED_MEM_PREFIX "/hop_"
 
 /* Windows specific macros and defines */
 #if defined(_MSC_VER)
+#ifndef NOMINMAX
 #define NOMINMAX
+#endif
 #include <windows.h>
+#include <tchar.h>
 typedef HANDLE sem_handle;
 typedef HANDLE shm_handle;
+typedef TCHAR HOP_CHAR;
+
+const HOP_CHAR HOP_SHARED_MEM_PREFIX[] = _T("/hop_");
+const HOP_CHAR HOP_SHARED_SEM_SUFFIX[] = _T("_sem");
+#define HOP_STRLEN( str ) _tcslen( (str) )
+#define HOP_STRNCPYW( dst, src, count ) _tcsncpy_s( (dst), (count), (src), (count) )
+#define HOP_STRNCATW( dst, src, count ) _tcsncat_s( (dst), (src), (count) )
+#define HOP_STRNCPY( dst, src, count ) strncpy_s( (dst), (count), (src), (count) )
+#define HOP_STRNCAT( dst, src, count ) strncat_s( (dst), (count), (src), (count) )
 
 #ifndef likely
 #define likely(x)   x
@@ -183,10 +196,10 @@ typedef HANDLE shm_handle;
 #define unlikely(x) x
 #endif
 
-inline const char* HOP_GET_PROG_NAME() HOP_NOEXCEPT
+inline const HOP_CHAR* HOP_GET_PROG_NAME() HOP_NOEXCEPT
 {
-   static char fullname[MAX_PATH];
-   static char* shortname;
+   static HOP_CHAR fullname[MAX_PATH];
+   static HOP_CHAR* shortname;
    static bool first = true;
    if (first)
    {
@@ -211,10 +224,19 @@ inline const char* HOP_GET_PROG_NAME() HOP_NOEXCEPT
 
 /* Unix (Linux & MacOs) specific macros and defines */
 #else
+
 #include <pthread.h>
 #include <semaphore.h>
 typedef sem_t* sem_handle;
 typedef int shm_handle;
+typedef char HOP_CHAR;
+const HOP_CHAR HOP_SHARED_MEM_PREFIX[] = "/hop_";
+const HOP_CHAR HOP_SHARED_SEM_SUFFIX[] = "_sem";
+#define HOP_STRLEN( str ) strlen( (str) )
+#define HOP_STRNCPYW( dst, src, count ) strncpy( (dst), (src), (count) )
+#define HOP_STRNCATW( dst, src, count ) strncat( (dst), (src), (count) )
+#define HOP_STRNCPY( dst, src, count ) strncpy( (dst), (src), (count) )
+#define HOP_STRNCAT( dst, src, count ) strncat( (dst), (src), (count) )
 
 #define likely(x)       __builtin_expect(!!(x), 1)
 #define unlikely(x)     __builtin_expect(!!(x), 0)
@@ -222,8 +244,8 @@ typedef int shm_handle;
 #define HOP_GET_THREAD_ID() (size_t)pthread_self()
 #define HOP_SLEEP_MS( x ) usleep( x * 1000 )
 
-extern char* __progname;
-inline const char* HOP_GET_PROG_NAME() HOP_NOEXCEPT
+extern HOP_CHAR* __progname;
+inline const HOP_CHAR* HOP_GET_PROG_NAME() HOP_NOEXCEPT
 {
    return __progname;
 }
@@ -255,6 +277,12 @@ using TimeDuration = int64_t;
 
 HOP_STATIC_ASSERT( HOP_SHARED_MEM_SIZE >= 64000, "Shared memory size must be bigger than 64kb" );
 
+// Custom trace types
+using TStrPtr_t = uint64_t;
+using TLineNb_t = uint32_t;
+using TZoneId_t = uint16_t;
+using TDepth_t = uint16_t;
+
 enum class MsgType : uint32_t
 {
    PROFILER_TRACE,
@@ -285,7 +313,7 @@ struct UnlockEventsMsgInfo
    uint32_t count;
 };
 
-HOP_CONSTEXPR uint32_t EXPECTED_MSG_INFO_SIZE = 32;
+HOP_CONSTEXPR uint32_t EXPECTED_MSG_INFO_SIZE = 40;
 struct MsgInfo
 {
    MsgType type;
@@ -293,6 +321,7 @@ struct MsgInfo
    uint32_t threadIndex;
    uint64_t threadId;
    TimeStamp timeStamp;
+   TStrPtr_t threadName;
    // Specific message data
    union {
       TracesMsgInfo traces;
@@ -304,10 +333,6 @@ struct MsgInfo
 HOP_STATIC_ASSERT( sizeof(MsgInfo) == EXPECTED_MSG_INFO_SIZE, "MsgInfo layout has changed unexpectedly" );
 
 
-using TStrPtr_t = uint64_t;
-using TLineNb_t = uint32_t;
-using TZoneId_t = uint16_t;
-using TDepth_t = uint16_t;
 HOP_CONSTEXPR uint32_t EXPECTED_TRACE_SIZE = 40;
 struct Trace
 {
@@ -353,7 +378,7 @@ class SharedMemory
       UNKNOWN_CONNECTION_ERROR
    };
 
-   ConnectionState create( const char* path, size_t size, bool isConsumer );
+   ConnectionState create( const HOP_CHAR* path, size_t size, bool isConsumer );
    void destroy();
 
    struct SharedMetaInfo
@@ -363,7 +388,6 @@ class SharedMemory
          CONNECTED_PRODUCER = 1 << 0,
          CONNECTED_CONSUMER = 1 << 1,
          LISTENING_CONSUMER = 1 << 2,
-         USE_GL_FINISH      = 1 << 3,
       };
       std::atomic< uint32_t > flags{0};
       const float clientVersion{0.0f};
@@ -378,8 +402,6 @@ class SharedMemory
    void setConnectedConsumer( bool ) HOP_NOEXCEPT;
    bool hasListeningConsumer() const HOP_NOEXCEPT;
    void setListeningConsumer( bool ) HOP_NOEXCEPT;
-   bool isUsingGlFinish() const HOP_NOEXCEPT;
-   void setUseGlFinish( bool ) HOP_NOEXCEPT;
    TimeStamp lastResetTimestamp() const HOP_NOEXCEPT;
    void setResetTimestamp( TimeStamp t ) HOP_NOEXCEPT;
    ringbuf_t* ringbuffer() const HOP_NOEXCEPT;
@@ -388,7 +410,6 @@ class SharedMemory
    sem_handle semaphore() const HOP_NOEXCEPT;
    bool tryWaitSemaphore() const HOP_NOEXCEPT;
    void signalSemaphore() const HOP_NOEXCEPT;
-   uint32_t nextThreadId() HOP_NOEXCEPT;
    const SharedMetaInfo* sharedMetaInfo() const HOP_NOEXCEPT;
    ~SharedMemory();
 
@@ -401,8 +422,8 @@ class SharedMemory
    sem_handle _semaphore{NULL};
    bool _isConsumer;
    shm_handle _sharedMemHandle{};
-   char _sharedMemPath[HOP_SHARED_MEM_MAX_NAME_SIZE];
-   char _sharedSemPath[HOP_SHARED_MEM_MAX_NAME_SIZE+5];
+   HOP_CHAR _sharedMemPath[HOP_SHARED_MEM_MAX_NAME_SIZE];
+   HOP_CHAR _sharedSemPath[HOP_SHARED_MEM_MAX_NAME_SIZE+5];
    std::atomic< bool > _valid{false};
    std::mutex _creationMutex;
 };
@@ -413,9 +434,7 @@ class ClientManager
 {
   public:
    static Client* Get();
-   static void CallGlFinish();
    static TZoneId_t StartProfile();
-   static TZoneId_t StartProfileGlFinish();
    static TStrPtr_t StartProfileDynString( const char*, TZoneId_t* );
    static void EndProfile(
        TStrPtr_t fileName,
@@ -424,17 +443,12 @@ class ClientManager
        TimeStamp end,
        TLineNb_t lineNb,
        TZoneId_t zone );
-   static void EndProfileGlFinish(
-       TStrPtr_t fileName,
-       TStrPtr_t fctName,
-       TimeStamp start,
-       TLineNb_t lineNb,
-       TZoneId_t zone );
    static void EndLockWait(
       void* mutexAddr,
       TimeStamp start,
       TimeStamp end );
    static void UnlockEvent( void* mutexAddr, TimeStamp time );
+   static void SetThreadName( const char* name ) HOP_NOEXCEPT;
    static TZoneId_t PushNewZone( TZoneId_t newZone );
    static bool HasConnectedConsumer() HOP_NOEXCEPT;
    static bool HasListeningConsumer() HOP_NOEXCEPT;
@@ -481,29 +495,6 @@ class ProfGuard
     TStrPtr_t _fileName, _fctName;
     TLineNb_t _lineNb;
     TZoneId_t _zone;
-};
-
-class ProfGuardGLFinish
-{
-  public:
-   ProfGuardGLFinish( const char* fileName, TLineNb_t lineNb, const char* fctName ) HOP_NOEXCEPT
-       : _start( getTimeStamp() ),
-         _fileName( (TStrPtr_t) fileName ),
-         _fctName( (TStrPtr_t) fctName ),
-         _lineNb( lineNb )
-   {
-      _zone = ClientManager::StartProfileGlFinish();
-   }
-   ~ProfGuardGLFinish()
-   {
-      ClientManager::EndProfileGlFinish( _fileName, _fctName, _start, _lineNb, _zone );
-   }
-
-  private:
-   TimeStamp _start;
-   TStrPtr_t _fileName, _fctName;
-   TLineNb_t _lineNb;
-   TZoneId_t _zone;
 };
 
 class LockWaitGuard
@@ -570,8 +561,6 @@ class ZoneGuard
    hop::ProfGuard ID ARGS
 #define HOP_PROF_ID_SPLIT( ID, ARGS ) \
    ID.reset ARGS
-#define HOP_PROF_GL_FINISH_GUARD_VAR( LINE, ARGS ) \
-   hop::ProfGuardGLFinish HOP_COMBINE( hopProfGuard, LINE ) ARGS
 #define HOP_PROF_DYN_STRING_GUARD_VAR( LINE, ARGS ) \
    hop::ProfGuardDynamicString HOP_COMBINE( hopProfGuard, LINE ) ARGS
 #define HOP_MUTEX_LOCK_GUARD_VAR( LINE, ARGS ) \
@@ -642,7 +631,6 @@ void ringbuf_release( ringbuf_t*, size_t );
 #include <sys/mman.h> // shm_open
 #include <sys/stat.h> // stat
 #include <unistd.h> // ftruncate
-#include <dlfcn.h> // dlsym
 #include <time.h> // timespec
 
 #endif
@@ -662,7 +650,7 @@ namespace
 #endif
     }
 
-    sem_handle openSemaphore( const char* name, hop::SharedMemory::ConnectionState* state )
+    sem_handle openSemaphore( const HOP_CHAR* name, hop::SharedMemory::ConnectionState* state )
     {
        sem_handle sem = NULL;
 #if defined( _MSC_VER )
@@ -680,7 +668,7 @@ namespace
        return sem;
     }
 
-    void closeSemaphore( sem_handle sem, const char* semName )
+    void closeSemaphore( sem_handle sem, const HOP_CHAR* semName )
     {
 #if defined( _MSC_VER )
        CloseHandle( sem );
@@ -696,7 +684,7 @@ namespace
 #endif
    }
 
-   void* createSharedMemory(const char* path, size_t size, shm_handle* handle, hop::SharedMemory::ConnectionState* state )
+   void* createSharedMemory(const HOP_CHAR* path, uint64_t size, shm_handle* handle, hop::SharedMemory::ConnectionState* state )
    {
        uint8_t* sharedMem = NULL;
 #if defined ( _MSC_VER )
@@ -704,8 +692,8 @@ namespace
            INVALID_HANDLE_VALUE,    // use paging file
            NULL,                    // default security
            PAGE_READWRITE,          // read/write access
-           0,                       // maximum object size (high-order DWORD)
-           size,                    // maximum object size (low-order DWORD)
+           size >> 32,              // maximum object size (high-order DWORD)
+           size & 0xFFFFFFFF,       // maximum object size (low-order DWORD)
            path);                   // name of mapping object
 
        if (*handle == NULL)
@@ -747,7 +735,7 @@ namespace
        return sharedMem;
    }
 
-   void* openSharedMemory( const char* path, shm_handle* handle, size_t* totalSize, hop::SharedMemory::ConnectionState* state )
+   void* openSharedMemory( const HOP_CHAR* path, shm_handle* handle, uint64_t* totalSize, hop::SharedMemory::ConnectionState* state )
    {
        uint8_t* sharedMem = NULL;
 #if defined ( _MSC_VER )
@@ -808,36 +796,16 @@ namespace
       return sharedMem;
    }
 
-   void closeSharedMemory( const char* name, shm_handle handle, void* dataPtr )
+   void closeSharedMemory( const HOP_CHAR* name, shm_handle handle, void* dataPtr )
    {
 #if defined( _MSC_VER )
       UnmapViewOfFile( dataPtr );
       CloseHandle( handle );
 #else
-      (void)handle;  // Remove unuesed warning
-      (void)dataPtr;
+      HOP_UNUSED(handle);  // Remove unuesed warning
+      HOP_UNUSED(dataPtr);
       if ( shm_unlink( name ) != 0 ) perror( " HOP - Could not unlink shared memory" );
 #endif
-   }
-
-   void* loadSymbol( const char* libraryName, const char* symbolName )
-   {
-      void* symbol = NULL;
-#if defined( _MSC_VER )
-      HMODULE module = LoadLibraryA( libraryName );
-      symbol = (void *)GetProcAddress( module, symbolName );
-#elif __APPLE__
-      (void)libraryName;  // Remove unused
-      char symbolNamePrefixed[256];
-      strcpy( symbolNamePrefixed + 1, symbolName );
-      symbolNamePrefixed[0] = '_';
-      symbol = dlsym( RTLD_DEFAULT, symbolName );
-#else // Linux case
-      void* lib = dlopen( libraryName, RTLD_LAZY );
-      symbol = dlsym( lib, symbolName );
-#endif
-
-      return symbol;
    }
 
 }
@@ -846,7 +814,7 @@ namespace hop
 {
 
 // ------ SharedMemory.cpp------------
-SharedMemory::ConnectionState SharedMemory::create( const char* exeName, size_t requestedSize, bool isConsumer )
+SharedMemory::ConnectionState SharedMemory::create( const HOP_CHAR* exeName, size_t requestedSize, bool isConsumer )
 {
    ConnectionState state = CONNECTED;
    std::lock_guard<std::mutex> g( _creationMutex );
@@ -857,14 +825,14 @@ SharedMemory::ConnectionState SharedMemory::create( const char* exeName, size_t 
       _isConsumer = isConsumer;
 
       // Create shared mem name
-      strncpy( _sharedMemPath, HOP_SHARED_MEM_PREFIX, sizeof( HOP_SHARED_MEM_PREFIX ) );
-      strncat(
+	  HOP_STRNCPYW( _sharedMemPath, HOP_SHARED_MEM_PREFIX, HOP_STRLEN( HOP_SHARED_MEM_PREFIX ) + 1 );
+	  HOP_STRNCATW(
           _sharedMemPath,
           exeName,
-          HOP_SHARED_MEM_MAX_NAME_SIZE - sizeof( HOP_SHARED_MEM_PREFIX ) - 1 );
+          HOP_SHARED_MEM_MAX_NAME_SIZE - HOP_STRLEN( HOP_SHARED_MEM_PREFIX ) - 1 );
 
-      strncpy( _sharedSemPath, _sharedMemPath, sizeof( _sharedSemPath ) );
-      strncat( _sharedSemPath, "_sem", sizeof( _sharedSemPath ) - strlen( _sharedMemPath ) -1 );
+	  HOP_STRNCPYW( _sharedSemPath, _sharedMemPath, HOP_SHARED_MEM_MAX_NAME_SIZE );
+	  HOP_STRNCATW( _sharedSemPath, HOP_SHARED_SEM_SUFFIX, HOP_SHARED_MEM_MAX_NAME_SIZE - HOP_STRLEN( _sharedSemPath ) -1 );
 
       // Open semaphore
       _semaphore = openSemaphore( _sharedSemPath, &state );
@@ -874,7 +842,7 @@ SharedMemory::ConnectionState SharedMemory::create( const char* exeName, size_t 
       }
 
       // Try to open shared memory
-      size_t totalSize = 0;
+      uint64_t totalSize = 0;
       uint8_t* sharedMem =
           (uint8_t*)openSharedMemory( _sharedMemPath, &_sharedMemHandle, &totalSize, &state );
 
@@ -1010,19 +978,6 @@ void SharedMemory::setListeningConsumer( bool listening ) HOP_NOEXCEPT
       _sharedMetaData->flags &= ~(SharedMetaInfo::LISTENING_CONSUMER);
 }
 
-bool SharedMemory::isUsingGlFinish() const HOP_NOEXCEPT
-{
-   return _sharedMetaData && (_sharedMetaData->flags & SharedMetaInfo::USE_GL_FINISH) > 0;
-}
-
-void SharedMemory::setUseGlFinish( bool useGlFinish ) HOP_NOEXCEPT
-{
-   if ( useGlFinish )
-      _sharedMetaData->flags |= SharedMetaInfo::USE_GL_FINISH;
-   else
-      _sharedMetaData->flags &= ~SharedMetaInfo::USE_GL_FINISH;
-}
-
 TimeStamp SharedMemory::lastResetTimestamp() const HOP_NOEXCEPT
 {
    return _sharedMetaData->lastResetTimeStamp.load();
@@ -1140,6 +1095,8 @@ thread_local int tl_traceLevel = 0;
 thread_local uint32_t tl_threadIndex = 0;
 thread_local TZoneId_t tl_zoneId = HOP_ZONE_ALL;
 thread_local uint64_t tl_threadId = 0;
+thread_local const char* tl_threadNameBuffer = 0;
+thread_local TStrPtr_t tl_threadName = 0;
 
 class Client
 {
@@ -1179,6 +1136,17 @@ class Client
       _unlockEvents.push_back( UnlockEvent{ mutexAddr, time } );
    }
 
+   void setThreadName( TStrPtr_t name )
+   {
+      if( !tl_threadName )
+      {
+         // This will "leak", but since it's a static string that will not
+         // be created more than once, it should not be an issue.
+         tl_threadNameBuffer = strdup( (const char*)name );
+         tl_threadName = addDynamicStringToDb( tl_threadNameBuffer );
+      }
+   }
+
    TStrPtr_t addDynamicStringToDb( const char* dynStr )
    {
       // Should not have null as dyn string, but just in case...
@@ -1197,7 +1165,7 @@ class Client
          _stringData.resize( newEntryPos + sizeof( TStrPtr_t ) + strLen + 1 );
          TStrPtr_t* strIdPtr = (TStrPtr_t*)&_stringData[newEntryPos];
          *strIdPtr = hash;
-         strcpy( &_stringData[newEntryPos + sizeof( TStrPtr_t )], dynStr );
+         HOP_STRNCPY( &_stringData[newEntryPos + sizeof( TStrPtr_t )], dynStr, strLen + 1 );
       }
 
       return hash;
@@ -1207,7 +1175,7 @@ class Client
    {
       // Early return on NULL. The db should always contains NULL as first
       // entry
-      if( strId == NULL ) return false;
+      if( strId == 0 ) return false;
 
       auto res = _stringPtr.insert( strId );
       // If the string was inserted (meaning it was not already there),
@@ -1215,10 +1183,11 @@ class Client
       if( res.second )
       {
          const size_t newEntryPos = _stringData.size();
-         _stringData.resize( newEntryPos + sizeof( TStrPtr_t ) + strlen( (const char*)strId ) + 1 );
+         const size_t strLen = strlen( (const char*)strId );
+         _stringData.resize( newEntryPos + sizeof( TStrPtr_t ) + strLen + 1 );
          TStrPtr_t* strIdPtr = (TStrPtr_t*)&_stringData[newEntryPos];
          *strIdPtr = strId;
-         strcpy( &_stringData[newEntryPos + sizeof( TStrPtr_t ) ], (const char*)strId );
+         HOP_STRNCPY( &_stringData[newEntryPos + sizeof( TStrPtr_t ) ], (const char*)strId, strLen + 1 );
       }
 
       return res.second;
@@ -1236,6 +1205,10 @@ class Client
          _stringPtr.insert( 0 );
          for( size_t i = 0; i < sizeof( TStrPtr_t ); ++i )
             _stringData.push_back('\0');
+         // Push back thread name
+         const auto hash = addDynamicStringToDb( tl_threadNameBuffer );
+         HOP_UNUSED(hash);
+         assert( hash == tl_threadName );
       }
    }
 
@@ -1273,7 +1246,7 @@ class Client
             addStringToDb( t.fctNameId );
       }
 
-      const uint32_t stringDataSize = _stringData.size();
+      const uint32_t stringDataSize = (uint32_t)_stringData.size();
       assert( stringDataSize >= _sentStringDataSize );
       const uint32_t stringToSendSize = stringDataSize - _sentStringDataSize;
       const size_t msgSize = sizeof( MsgInfo ) + stringToSendSize;
@@ -1307,6 +1280,7 @@ class Client
 
          msgInfo->type = MsgType::PROFILER_STRING_DATA;
          msgInfo->threadId = tl_threadId;
+         msgInfo->threadName = tl_threadName;
          msgInfo->threadIndex = tl_threadIndex;
          msgInfo->timeStamp = getMsgTimeStamp();
          msgInfo->stringData.size = stringToSendSize;
@@ -1360,6 +1334,7 @@ class Client
 
          tracesInfo->type = MsgType::PROFILER_TRACE;
          tracesInfo->threadId = tl_threadId;
+         tracesInfo->threadName = tl_threadName;
          tracesInfo->threadIndex = tl_threadIndex;
          tracesInfo->timeStamp = getMsgTimeStamp();
          tracesInfo->traces.count = (uint32_t)_traces.size();
@@ -1400,6 +1375,7 @@ class Client
          MsgInfo* lwInfo = (MsgInfo*)bufferPtr;
          lwInfo->type = MsgType::PROFILER_WAIT_LOCK;
          lwInfo->threadId = tl_threadId;
+         lwInfo->threadName = tl_threadName;
          lwInfo->threadIndex = tl_threadIndex;
          lwInfo->timeStamp = _lockWaits.back().start;
          lwInfo->lockwaits.count = (uint32_t)_lockWaits.size();
@@ -1438,6 +1414,7 @@ class Client
          MsgInfo* uInfo = (MsgInfo*)bufferPtr;
          uInfo->type = MsgType::PROFILER_UNLOCK_EVENT;
          uInfo->threadId = tl_threadId;
+         uInfo->threadName = tl_threadName;
          uInfo->threadIndex = tl_threadIndex;
          uInfo->timeStamp = _unlockEvents.back().time;
          uInfo->unlockEvents.count = (uint32_t)_unlockEvents.size();
@@ -1473,6 +1450,7 @@ class Client
          MsgInfo* hbInfo = (MsgInfo*)bufferPtr;
          hbInfo->type = MsgType::PROFILER_HEARTBEAT;
          hbInfo->threadId = tl_threadId;
+         hbInfo->threadName = tl_threadName;
          hbInfo->threadIndex = tl_threadIndex;
          hbInfo->timeStamp = getTimeStamp();
          bufferPtr += sizeof( MsgInfo );
@@ -1566,47 +1544,9 @@ Client* ClientManager::Get()
    return threadClient.get();
 }
 
-void ClientManager::CallGlFinish()
-{
-#ifdef _MSC_VER
-   static const char* glLibName = "opengl32.dll";
-#else
-   static const char* glLibName = "libGL.so";
-#endif
-
-   static void (*glFinishPtr)() = NULL;
-
-   // If we request glFinish, load the symbol and call it
-   if( ClientManager::sharedMemory().isUsingGlFinish() )
-   {
-      // Load the symobl
-      if( !glFinishPtr )
-      {
-         glFinishPtr = (void (*)())loadSymbol( glLibName, "glFinish" );
-      }
-
-      // Call the symbol
-      if( glFinishPtr )
-      {
-         (*glFinishPtr)();
-      }
-      else
-      {
-         printf(" HOP - Error loading glFinish() symbol! glFinish() was not called!\n");
-      }
-   }
-}
-
 TZoneId_t ClientManager::StartProfile()
 {
    ++tl_traceLevel;
-   return tl_zoneId;
-}
-
-TZoneId_t ClientManager::StartProfileGlFinish()
-{
-   ++tl_traceLevel;
-   ClientManager::CallGlFinish();
    return tl_zoneId;
 }
 
@@ -1644,32 +1584,6 @@ void ClientManager::EndProfile(
    }
 }
 
-void ClientManager::EndProfileGlFinish(
-    TStrPtr_t fileName,
-    TStrPtr_t fctName,
-    TimeStamp start,
-    TLineNb_t lineNb,
-    TZoneId_t zone )
-{
-   ClientManager::CallGlFinish();
-   
-   const int remainingPushedTraces = --tl_traceLevel;
-   Client* client = ClientManager::Get();
-
-   if( unlikely( !client ) ) return;
-
-   const TimeStamp end = getTimeStamp();
-   
-   if( end - start > 50 ) // Minimum trace time is 50 ns
-   {
-      client->addProfilingTrace( fileName, fctName, start, end, lineNb, zone );
-   }
-   if ( remainingPushedTraces <= 0 )
-   {
-      client->flushToConsumer();
-   }
-}
-
 void ClientManager::EndLockWait( void* mutexAddr, TimeStamp start, TimeStamp end )
 {
    // Only add lock wait event if the lock is coming from within
@@ -1692,6 +1606,14 @@ void ClientManager::UnlockEvent( void* mutexAddr, TimeStamp time )
 
       client->addUnlockEvent( mutexAddr, time );
    }
+}
+
+void ClientManager::SetThreadName( const char* name ) HOP_NOEXCEPT
+{
+   auto client = ClientManager::Get();
+   if( unlikely( !client ) ) return;
+
+   client->setThreadName( (TStrPtr_t) name );
 }
 
 TZoneId_t ClientManager::PushNewZone( TZoneId_t newZone )
@@ -1832,10 +1754,9 @@ ringbuf_worker_t* ringbuf_register( ringbuf_t* rbuf, unsigned i )
    return w;
 }
 
-void ringbuf_unregister( ringbuf_t* rbuf, ringbuf_worker_t* w )
+void ringbuf_unregister( ringbuf_t*, ringbuf_worker_t* w )
 {
    w->registered = false;
-   (void)rbuf;
 }
 
 /*
@@ -1963,9 +1884,8 @@ ssize_t ringbuf_acquire( ringbuf_t* rbuf, ringbuf_worker_t* w, size_t len )
  * ringbuf_produce: indicate the acquired range in the buffer is produced
  * and is ready to be consumed.
  */
-void ringbuf_produce( ringbuf_t* rbuf, ringbuf_worker_t* w )
+void ringbuf_produce( ringbuf_t* , ringbuf_worker_t* w )
 {
-   (void)rbuf;
    assert( w->registered );
    assert( w->seen_off != RBUF_OFF_MAX );
    std::atomic_thread_fence( std::memory_order_release );
@@ -2030,7 +1950,7 @@ retry:
        */
       if ( seen_off >= written )
       {
-         ready = std::min( seen_off, ready );
+         ready = HOP_MIN( seen_off, ready );
       }
       assert( ready >= written );
    }
@@ -2041,7 +1961,7 @@ retry:
     */
    if ( next < written )
    {
-      const ringbuf_off_t end = std::min( (ringbuf_off_t) rbuf->space, rbuf->end );
+      const ringbuf_off_t end = HOP_MIN( (ringbuf_off_t) rbuf->space, rbuf->end );
 
       /*
        * Wrap-around case.  Check for the cut off first.
@@ -2073,7 +1993,7 @@ retry:
        * the actual end of the buffer.
        */
       assert( ready > next );
-      ready = std::min( ready, end );
+      ready = HOP_MIN( ready, end );
       assert( ready >= written );
    }
    else
@@ -2082,7 +2002,7 @@ retry:
        * Regular case.  Up to the observed 'ready' (if set)
        * or the 'next' offset.
        */
-      ready = std::min( ready, next );
+      ready = HOP_MIN( ready, next );
    }
    towrite = ready - written;
    *offset = written;

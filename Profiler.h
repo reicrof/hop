@@ -3,7 +3,7 @@
 
 #include "Hop.h"
 #include "Timeline.h"
-#include "ThreadInfo.h"
+#include "TimelineTrack.h"
 #include "TraceSearch.h"
 #include "StringDb.h"
 #include "Server.h"
@@ -12,7 +12,6 @@
 #include <chrono>
 #include <string>
 #include <vector>
-#include <future>
 
 namespace hop
 {
@@ -25,28 +24,25 @@ struct Profiler
    void draw( uint32_t windowWidth, uint32_t windowHeight );
    void fetchClientData();
    void addStringData( const std::vector< char >& stringData );
-   void addTraces( const DisplayableTraces& traces, uint32_t threadIndex );
-   void addLockWaits( const DisplayableLockWaits& lockWaits, uint32_t threadIndex);
+   void addTraces( const TraceData& traces, uint32_t threadIndex );
+   void addLockWaits( const LockWaitData& lockWaits, uint32_t threadIndex);
    void addUnlockEvents(const std::vector<UnlockEvent>& unlockEvents, uint32_t threadIndex);
+   void addThreadName( TStrPtr_t name, uint32_t threadIndex );
    void handleHotkey();
+   void handleMouse();
    void setRecording( bool recording );
    void clear();
 
 private:
    void drawMenuBar();
-   void drawSearchWindow();
-   void drawTraceDetailsWindow();
    bool openFile( const char* path );
    bool saveToFile( const char* path );
 
    std::string _name;
    Timeline _timeline;
-   std::vector< ThreadInfo > _tracesPerThread;
+   TimelineTracks _tracks;
    StringDb _strDb;
-   SearchResult _searchRes;
    bool _recording{ false };
-   bool _searchWindowOpen{ false };
-   bool _focusSearchWindow{ false };
 
    Server _server;
    Server::PendingData _serverPendingData;
