@@ -113,7 +113,7 @@ enum HopZone
 
 // Set the name of the current thread in the profiler. Only the first call will
 // be considered for each thread.
-#define HOP_SET_THREAD_NAME( x ) hop::ClientManager::SetThreadName( (uint64_t) (x) )
+#define HOP_SET_THREAD_NAME( x ) hop::ClientManager::SetThreadName( (x) )
 
 ///////////////////////////////////////////////////////////////
 /////     EVERYTHING AFTER THIS IS IMPL DETAILS        ////////
@@ -448,7 +448,7 @@ class ClientManager
       TimeStamp start,
       TimeStamp end );
    static void UnlockEvent( void* mutexAddr, TimeStamp time );
-   static void SetThreadName( TStrPtr_t name ) HOP_NOEXCEPT;
+   static void SetThreadName( const char* name ) HOP_NOEXCEPT;
    static TZoneId_t PushNewZone( TZoneId_t newZone );
    static bool HasConnectedConsumer() HOP_NOEXCEPT;
    static bool HasListeningConsumer() HOP_NOEXCEPT;
@@ -1608,12 +1608,12 @@ void ClientManager::UnlockEvent( void* mutexAddr, TimeStamp time )
    }
 }
 
-void ClientManager::SetThreadName( TStrPtr_t name ) HOP_NOEXCEPT
+void ClientManager::SetThreadName( const char* name ) HOP_NOEXCEPT
 {
    auto client = ClientManager::Get();
    if( unlikely( !client ) ) return;
 
-   client->setThreadName( name );
+   client->setThreadName( (TStrPtr_t) name );
 }
 
 TZoneId_t ClientManager::PushNewZone( TZoneId_t newZone )
