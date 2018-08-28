@@ -72,7 +72,6 @@ void TimelineTrack::addUnlockEvents(const std::vector<UnlockEvent>& unlockEvents
    HOP_PROF_FUNC();
    for( const auto& ue : unlockEvents )
    {
-      bool found = false;
       const auto first = std::lower_bound( _lockWaits.ends.begin(), _lockWaits.ends.end(), ue.time );
       int64_t firstIdx = std::distance( _lockWaits.ends.begin(), first );
       if( firstIdx != 0 ) --firstIdx;
@@ -84,12 +83,9 @@ void TimelineTrack::addUnlockEvents(const std::vector<UnlockEvent>& unlockEvents
          {
             assert( _lockWaits.lockReleases[ i ] == 0 );
             _lockWaits.lockReleases[ i ] = ue.time;
-            found = true;
             break;
          }
       }
-      HOP_UNUSED( found );
-      assert( found );
    }
 }
 
@@ -817,7 +813,7 @@ std::vector< LockOwnerInfo > TimelineTracks::highlightLockOwner(
                const TimeStamp unlockTime = lockWaits.lockReleases[lockDataIdx];
 
                // We've gone to far, so early break
-               if( unlockTime < highlightedLWStartTime )
+               if( unlockTime != 0 && unlockTime < highlightedLWStartTime )
                   break;
 
                const TimeDuration lockHoldDuration = unlockTime - lockWaitEndTime;
