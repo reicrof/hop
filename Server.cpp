@@ -1,5 +1,6 @@
 #include "Server.h"
 #include "Utils.h"
+#include "Stats.h"
 
 #include <stdio.h>
 #include <errno.h>
@@ -38,6 +39,7 @@ bool Server::start( const char* name )
             // Clear any remaining messages from previous execution now
             clearPendingMessages();
             _sharedMem.setListeningConsumer( _recording );
+            g_stats.clientSharedMemSize = _sharedMem.sharedMetaInfo()->requestedSize;
             _connectionState = state;
             printf( "Connection to shared data successful.\n" );
          }

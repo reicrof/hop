@@ -5,7 +5,7 @@
 namespace hop
 {
 
-Stats g_stats = { 0.0, 0.0, 0.0, 0.0, 0, 0, 0, 0 };
+Stats g_stats = { 0.0, 0.0, 0.0, 0.0, 0, 0, 0, 0, 0 };
 
 void drawStatsWindow( const Stats& stats )
 {
@@ -14,8 +14,10 @@ void drawStatsWindow( const Stats& stats )
                 "   Drawing  took %f ms\n"
                 "   Search   took %f ms\n"
                 "---------------------", stats.fetchTimeMs, stats.drawingTimeMs, stats.searchTimeMs );
-
    char formatStr[32];
+   formatSizeInBytesToDisplay( stats.clientSharedMemSize, formatStr, sizeof(formatStr) );
+   ImGui::Text( "Shared Memory Size : %s\n", formatStr );
+
    formatSizeInBytesToDisplay( stats.stringDbSize, formatStr, sizeof(formatStr) );
    ImGui::Text("String Db size : %s", formatStr);
    //ImGui::Text("Total traces size : %zu", stats.traceSize);

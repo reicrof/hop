@@ -15,6 +15,7 @@ namespace hop
       size_t stringDbSize;
       size_t traceCount;
       size_t traceSize;
+      size_t clientSharedMemSize;
    };
 
    extern Stats g_stats;
