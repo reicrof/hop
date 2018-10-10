@@ -54,21 +54,6 @@ target_include_directories( hop SYSTEM PRIVATE  ${OPENGL_INCLUDE_DIRS} ${SDL2_IN
 target_link_libraries( hop PUBLIC -lpthread ${HOP_LIBRT_FLAG} ${HOP_WINDOWS_LIB} ${OPENGL_LIBRARIES} ${SDL2_LIBRARY} -ldl )
 
 #####################
-### Library for function wrapping
-#####################
-set(CMAKE_MACOSX_RPATH 1)
-add_library(hop_wrap SHARED ${HOP_WRAP_SRC})
-set (CMAKE_SHARED_LINKER_FLAGS "-ldl")
-
-# With clang on MacOs, we need to ignore the missing symbols as they are going to be resolved
-# at runtime when linking against the executable that uses hop.
-if(${CMAKE_CXX_COMPILER_ID} STREQUAL "Clang")
-  set(CMAKE_SHARED_LINKER_FLAGS "${CMAKE_SHARED_LINKER_FLAGS} -undefined dynamic_lookup")
-endif()
-
-set_property(TARGET hop_wrap PROPERTY POSITION_INDEPENDENT_CODE ON)
-
-#####################
 ### Test client
 #####################
 file(GLOB hop_client_src
