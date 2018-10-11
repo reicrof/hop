@@ -14,6 +14,8 @@
 #define __STDC_FORMAT_MACROS
 #include <inttypes.h>
 
+#include <cstdlib> // fix for std::abs for older libc++ impl
+
 static constexpr hop::TimeDuration MIN_NANOS_TO_DISPLAY = 500;
 static constexpr hop::TimeDuration MAX_NANOS_TO_DISPLAY = 900000000000;
 static constexpr float TIMELINE_TOTAL_HEIGHT = 50.0f;
