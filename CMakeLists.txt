@@ -20,6 +20,7 @@ endif()
 
 set( default_build_type "Release" )
 set( CMAKE_CXX_STANDARD 14 )
+set(ROOT_DIR ${CMAKE_SOURCE_DIR})
 
 # includes cmake/FindSDL2.cmake
 set(CMAKE_MODULE_PATH ${PROJECT_SOURCE_DIR}/cmake)
@@ -27,6 +28,8 @@ find_package(SDL2 REQUIRED)
 find_package(OpenGL REQUIRED)
 
 set(CMAKE_CXX_FLAGS "-ffast-math -fno-exceptions -fno-rtti ${CMAKE_CXX_FLAGS}")
+
+set( CMAKE_VERBOSE_MAKEFILE on )
 
 #####################
 ### Asan
@@ -50,20 +53,12 @@ file(GLOB hop_server_src
 )
 add_executable(hop ${hop_server_src})
 
-target_include_directories( hop SYSTEM PRIVATE  ${OPENGL_INCLUDE_DIRS} ${SDL2_INCLUDE_DIR} )
+target_include_directories( hop SYSTEM PRIVATE ${ROOT_DIR} ${OPENGL_INCLUDE_DIRS} ${SDL2_INCLUDE_DIR} )
 target_link_libraries( hop PUBLIC -lpthread ${HOP_LIBRT_FLAG} ${HOP_WINDOWS_LIB} ${OPENGL_LIBRARIES} ${SDL2_LIBRARY} -ldl )
 
 #####################
-### Test client
+### Test clients
 #####################
-file(GLOB hop_client_src
-    "test_client/*.h"
-    "test_client/*.cpp"
-)
-add_executable(hop_client ${hop_client_src})
-target_link_libraries( hop_client PUBLIC -lpthread ${HOP_LIBRT_FLAG} -ldl )
-include_directories( ${CMAKE_CURRENT_SOURCE_DIR})
-
-set( CMAKE_VERBOSE_MAKEFILE on )
+add_subdirectory(test_clients)
 
 #windows build : cmake -G "Visual Studio 15 2017 Win64" -DSDL2_INCLUDE_DIR:STRING=C:\\Users\\XXXX\\source\\repos\\SDL2\\include -DSDL2_LIBRARY:STRING=C:\\Users\\XXXX\\source\\repos\\SDL2\\lib\\x64\\SDL2.lib .. 
