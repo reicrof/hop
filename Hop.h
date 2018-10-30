@@ -1530,15 +1530,17 @@ Client* ClientManager::Get()
    tl_threadIndex = threadCount.fetch_add(1);
    tl_threadId = HOP_GET_THREAD_ID();
 
-   threadClient.reset( new Client() );
-
    // Register producer in the ringbuffer
    assert(tl_threadIndex <= HOP_MAX_THREAD_NB);
    auto ringBuffer = ClientManager::sharedMemory().ringbuffer();
-   threadClient->_worker = ringbuf_register( ringBuffer, tl_threadIndex);
-   if ( threadClient->_worker  == NULL )
+   if( ringBuffer )
    {
-      assert( false && "ringbuf_register" );
+      threadClient.reset( new Client() );
+      threadClient->_worker = ringbuf_register( ringBuffer, tl_threadIndex);
+      if ( threadClient->_worker == NULL )
+      {
+         assert( false && "ringbuf_register" );
+      }
    }
 
    return threadClient.get();
