@@ -54,6 +54,10 @@ For more information, please refer to <http://unlicense.org/>
 // include the meta-data size
 #define HOP_SHARED_MEM_SIZE 32000000
 
+// Minimum time in nanosecond for a lock to be considered in the
+// profiled data
+#define HOP_MIN_LOCK_TIME_NS 1000
+
 // These are the zone that can be used. You can change the name
 // but you must not change the values.
 enum { HOP_MAX_ZONES = 16 };
@@ -1590,7 +1594,7 @@ void ClientManager::EndLockWait( void* mutexAddr, TimeStamp start, TimeStamp end
 {
    // Only add lock wait event if the lock is coming from within
    // measured code
-   if( tl_traceLevel > 0 )
+   if( tl_traceLevel > 0 && end - start >= HOP_MIN_LOCK_TIME_NS )
    {
       auto client = ClientManager::Get();
       if( unlikely( !client ) ) return;
