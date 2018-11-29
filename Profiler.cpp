@@ -855,6 +855,7 @@ void hop::Profiler::clear()
    _tracks.clear();
    _timeline.setGlobalStartTime( 0 );
    _timeline.clearBookmarks();
+   _timeline.moveVerticalPositionPxl( 0.0f, Timeline::ANIMATION_TYPE_FAST );
    _recording = false;
    g_stats.traceCount = 0;
 }
