@@ -2,6 +2,7 @@
 #include <vector>
 #include <chrono>
 #include <mutex>
+#include <signal.h>
 
 #define HOP_IMPLEMENTATION
 #include <Hop.h>

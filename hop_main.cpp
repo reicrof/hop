@@ -11,7 +11,8 @@
 #include <SDL.h>
 #undef main
 
-//#include "hop_icon_data.inline"
+#include "hop_icon_data.inline"
+#include "miniz.h"
 
 #include <signal.h>
 
@@ -21,6 +22,7 @@
 
 bool g_run = true;
 static float g_mouseWheel = 0.0f;
+static SDL_Surface* iconSurface = nullptr;
 
 void terminateCallback( int sig )
 {
@@ -39,6 +41,42 @@ static const char* getClipboardText(void*)
 static void setClipboardText(void*, const char* text)
 {
    SDL_SetClipboardText(text);
+}
+
+static void createIcon( SDL_Window* window )
+{
+   const uint32_t width = hop_icon.width;
+   const uint32_t height = hop_icon.height;
+   const uint32_t bytesPerPxl = hop_icon.bytesPerPxl;
+
+   size_t uncompressedSize = width * height * bytesPerPxl + 1;
+   std::vector<unsigned char> uncompressedIcon( uncompressedSize );
+   int res = mz_uncompress(
+       uncompressedIcon.data(),
+       &uncompressedSize,
+       hop_icon.pixelData,
+       sizeof( hop_icon.pixelData ) );
+   if ( res == MZ_OK )
+   {
+      // Load fab icon
+      SDL_Surface* iconSurface = SDL_CreateRGBSurfaceFrom(
+          uncompressedIcon.data(),
+          width,
+          height,
+          bytesPerPxl * 8,
+          width * bytesPerPxl,
+          0x000000ff,
+          0x0000ff00,
+          0x00ff0000,
+          0xff000000 );
+
+      if ( iconSurface != nullptr ) SDL_SetWindowIcon( window, iconSurface );
+   }
+}
+
+static void destroyIcon()
+{
+   if ( iconSurface ) SDL_FreeSurface( iconSurface );
 }
 
 static void sdlImGuiInit()
@@ -309,19 +347,7 @@ int main( int argc, char* argv[] )
    SDL_GL_SetAttribute(SDL_GL_DOUBLEBUFFER, 1);
    SDL_GL_SetSwapInterval(1);
 
-   // Load fabulous icon
-   /*SDL_Surface* iconSurface = SDL_CreateRGBSurfaceFrom(
-       (void*)hop_icon.pixel_data,
-       hop_icon.width,
-       hop_icon.height,
-       hop_icon.bytes_per_pixel * 8,
-       hop_icon.width * hop_icon.bytes_per_pixel,
-       0x000000ff,
-       0x0000ff00,
-       0x00ff0000,
-       0xff000000 );
-
-   if( iconSurface != nullptr ) SDL_SetWindowIcon( window, iconSurface );*/
+   createIcon( window );
 
    hop::initCursors();
 
@@ -412,7 +438,7 @@ int main( int argc, char* argv[] )
       terminateProcess( childProcess );
    }
 
-   //if( iconSurface ) SDL_FreeSurface( iconSurface );
+   destroyIcon();
 
    hop::uninitCursors();
 

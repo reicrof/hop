@@ -76,7 +76,10 @@ void TimelineTrack::addUnlockEvents(const std::vector<UnlockEvent>& unlockEvents
       int64_t firstIdx = std::distance( _lockWaits.ends.begin(), first );
       if( firstIdx != 0 ) --firstIdx;
 
-      for( int64_t i = firstIdx; i >= 0; --i )
+      // Try to find the associated lockwait with a maximum lock time of 10 seconds. This is to
+      // ensure we do not traverse the whole lockwaits array in the case where we would have skipped
+      // logging a lock 
+      for( int64_t i = firstIdx; i >= 0 && (ue.time - _lockWaits.ends[ i ] < 10000000000); --i )
       {
          if( _lockWaits.mutexAddrs[ i ] == ue.mutexAddress &&
              _lockWaits.ends[ i ] < ue.time  )

@@ -54,6 +54,10 @@ For more information, please refer to <http://unlicense.org/>
 // include the meta-data size
 #define HOP_SHARED_MEM_SIZE 32000000
 
+// Minimum time in nanosecond for a lock to be considered in the
+// profiled data
+#define HOP_MIN_LOCK_TIME_NS 1000
+
 // These are the zone that can be used. You can change the name
 // but you must not change the values.
 enum { HOP_MAX_ZONES = 16 };
@@ -1530,15 +1534,17 @@ Client* ClientManager::Get()
    tl_threadIndex = threadCount.fetch_add(1);
    tl_threadId = HOP_GET_THREAD_ID();
 
-   threadClient.reset( new Client() );
-
    // Register producer in the ringbuffer
    assert(tl_threadIndex <= HOP_MAX_THREAD_NB);
    auto ringBuffer = ClientManager::sharedMemory().ringbuffer();
-   threadClient->_worker = ringbuf_register( ringBuffer, tl_threadIndex);
-   if ( threadClient->_worker  == NULL )
+   if( ringBuffer )
    {
-      assert( false && "ringbuf_register" );
+      threadClient.reset( new Client() );
+      threadClient->_worker = ringbuf_register( ringBuffer, tl_threadIndex);
+      if ( threadClient->_worker == NULL )
+      {
+         assert( false && "ringbuf_register" );
+      }
    }
 
    return threadClient.get();
@@ -1588,7 +1594,7 @@ void ClientManager::EndLockWait( void* mutexAddr, TimeStamp start, TimeStamp end
 {
    // Only add lock wait event if the lock is coming from within
    // measured code
-   if( tl_traceLevel > 0 )
+   if( tl_traceLevel > 0 && end - start >= HOP_MIN_LOCK_TIME_NS )
    {
       auto client = ClientManager::Get();
       if( unlikely( !client ) ) return;
@@ -1736,8 +1742,14 @@ int ringbuf_setup( ringbuf_t* rbuf, unsigned nworkers, size_t length )
  */
 void ringbuf_get_sizes( const unsigned nworkers, size_t* ringbuf_size, size_t* ringbuf_worker_size )
 {
-   if ( ringbuf_size ) *ringbuf_size = offsetof( ringbuf_t, workers[nworkers] );
-   if ( ringbuf_worker_size ) *ringbuf_worker_size = sizeof( ringbuf_worker_t );
+   if ( ringbuf_size )
+   {
+      *ringbuf_size = offsetof( ringbuf_t, workers ) + sizeof( ringbuf_worker_t ) * nworkers;
+   }
+   if ( ringbuf_worker_size )
+   {
+      *ringbuf_worker_size = sizeof( ringbuf_worker_t );
+   }
 }
 
 /*
