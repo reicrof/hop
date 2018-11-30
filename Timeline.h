@@ -27,7 +27,10 @@ class Timeline
    };
 
    void update( float deltaTimeMs ) noexcept;
-   void draw( float timelineHeight );
+   void draw();
+   void beginDrawCanvas( float canvasHeightPxl );
+   void endDrawCanvas();
+   void drawOverlay();
    TimelineInfo constructTimelineInfo() const noexcept;
 
    bool handleMouse( float posX, float posY, bool lmClicked, bool rmClicked, float wheel );
@@ -140,12 +143,13 @@ class Timeline
 
    // Drawing Data
    float _verticalPosPxl{0.0f};
-   float _rightClickStartPosInCanvas[2] = {};
-   float _ctrlRightClickStartPosInCanvas[2] = {};
+   float _rangeZoomStartPosInCanvas{0.0f};
    float _timelineHoverPos{-1.0f};
    float _timelineDrawPosition[2] = {};
    float _canvasDrawPosition[2] = {};
    DisplayType _displayType{DISPLAY_TIMES};
+
+   int64_t _rangeSelectTimeStamp[2] = {};
 
    std::vector< AnimationState > _undoPositionStates, _redoPositionStates;
 
