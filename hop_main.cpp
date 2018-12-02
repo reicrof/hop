@@ -49,7 +49,7 @@ static void createIcon( SDL_Window* window )
    const uint32_t height = hop_icon.height;
    const uint32_t bytesPerPxl = hop_icon.bytesPerPxl;
 
-   size_t uncompressedSize = width * height * bytesPerPxl + 1;
+   mz_ulong uncompressedSize = width * height * bytesPerPxl + 1;
    std::vector<unsigned char> uncompressedIcon( uncompressedSize );
    int res = mz_uncompress(
        uncompressedIcon.data(),
@@ -59,7 +59,7 @@ static void createIcon( SDL_Window* window )
    if ( res == MZ_OK )
    {
       // Load fab icon
-      SDL_Surface* iconSurface = SDL_CreateRGBSurfaceFrom(
+      iconSurface = SDL_CreateRGBSurfaceFrom(
           uncompressedIcon.data(),
           width,
           height,

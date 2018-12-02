@@ -47,17 +47,21 @@ void startRec()
    rec( recCount );
 }
 
+#if !defined(_MSC_VER)
 void terminateCallback(int sig)
 {
    signal(sig, SIG_IGN);
    g_run = false;
 }
+#endif
 
 int main( int argc, const char** argv )
 {
+#if !defined(_MSC_VER)
    // Setup signal handlers
    signal(SIGINT, terminateCallback);
    signal(SIGTERM, terminateCallback);
+#endif
 
    int threadNum = 1;
    if( argc > 1 )
