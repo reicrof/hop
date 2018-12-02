@@ -103,14 +103,20 @@ static void drawTextPositionsTime( const TimelineTextPositions& textPos, uint64_
    }
 }
 
-static void drawRangeSelection( float fromPxl, float toPxl, const char* durationText )
+static void drawRangeSelection( float fromPxl, float toPxl, float heightPos, const char* durationText )
 {
+   static const float TEXT_X_PADDING = 10.0f;
+   static const float TEXT_BG_PADDING = 2.0f;
+   const ImVec2 textSize = ImGui::CalcTextSize( durationText );
    ImDrawList* drawList = ImGui::GetWindowDrawList();
    drawList->AddRectFilled(
        ImVec2( fromPxl, 0 ),
        ImVec2( toPxl, 9999 ),
-       ImColor( 64, 64, 255, 128 ) );
-   drawList->AddText( ImVec2( toPxl - 300, 500 ), ImColor(255,255,255), durationText);
+       ImColor( 255, 159, 0, 96 ) );
+
+   const ImVec2 textPos( toPxl - textSize.x - TEXT_X_PADDING, heightPos + textSize.y );
+   drawList->AddRectFilled( ImVec2(textPos.x - TEXT_BG_PADDING, textPos.y - TEXT_BG_PADDING), ImVec2(textPos.x + textSize.x + TEXT_BG_PADDING, textPos.y + textSize.y + TEXT_BG_PADDING), 0X7F000000, 0.2f );
+   drawList->AddText( textPos, ImColor(255,255,255), durationText );
 }
 
 namespace hop
@@ -254,16 +260,15 @@ void Timeline::drawOverlay()
    {
       const auto minmaxX = std::minmax( _rangeSelectTimeStamp[0], _rangeSelectTimeStamp[1] );
       const float fromPxl = cyclesToPxl( windowSize.x, _duration, minmaxX.first - _timelineStart ) + _timelineDrawPosition[0];
-      const TimeDuration deltaNs = minmaxX.second - minmaxX.first;
-      const float durationPxl = cyclesToPxl( windowSize.x, _duration, deltaNs );
+      const TimeDuration deltaCycles = minmaxX.second - minmaxX.first;
+      const float durationPxl = cyclesToPxl( windowSize.x, _duration, deltaCycles );
 
-      hop::formatCyclesTimepointToDisplay(
-          deltaNs,
-          _duration,
+      hop::formatCyclesDurationToDisplay(
+          deltaCycles,
           durationText,
           sizeof( durationText ),
           _displayType == DISPLAY_CYCLES );
-      drawRangeSelection( fromPxl, fromPxl + durationPxl, durationText );
+      drawRangeSelection( fromPxl, fromPxl + durationPxl, _canvasDrawPosition[1], durationText );
    }
 }
 
