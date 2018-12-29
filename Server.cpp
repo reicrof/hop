@@ -75,17 +75,17 @@ bool Server::start( const char* name )
             continue;
          }
 
-         if( !wasSignaled )
+         if ( !wasSignaled )
          {
             // We timed out.
-            // If the profiled app has stopped, we need to signal the shared memory we are still
-            // listening in case it connects back
-            if( !_sharedMem.hasConnectedProducer() )
-            {
-               std::this_thread::sleep_for( std::chrono::milliseconds( 1000 ) );
-            }
 
-            // Otherwise, it simply means the app is either not very productive or is being debuged
+            // If we have a connected producer and we timed out, it simply means the app is either
+            // not very productive or is being debuged. If we do not have a producer, it means the
+            // app was closed.
+            using namespace std::chrono;
+            const auto timeToSleep =
+                _sharedMem.hasConnectedProducer() ? milliseconds( 100 ) : milliseconds( 1000 );
+            std::this_thread::sleep_for( timeToSleep );
             continue;
          }
 
