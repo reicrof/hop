@@ -83,7 +83,6 @@ class Timeline
    void setRealtime( bool isRealtime ) noexcept;
    bool realtime() const noexcept;
 
-   void addTraceToHighlight( const std::pair< size_t, uint32_t >& trace );
    void clearHighlightedTraces();
 
    void nextBookmark() noexcept;

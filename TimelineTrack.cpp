@@ -21,10 +21,71 @@ static constexpr float MIN_TRACE_LENGTH_PXL = 1.0f;
 static constexpr float MAX_TRACE_HEIGHT = 50.0f;
 static constexpr float MIN_TRACE_HEIGHT = 15.0f;
 static constexpr uint32_t DISABLED_COLOR = 0xFF505050;
-static constexpr uint32_t HOVERED_COLOR_DELTA = 0x00191919;
-static constexpr uint32_t ACTIVE_COLOR_DELTA = 0x00333333;
 
 static const char* CTXT_MENU_STR = "Context Menu";
+
+static bool drawSeparator( uint32_t threadIndex, bool highlightSeparator )
+{
+   const float drawPosY = ImGui::GetCursorScreenPos().y - ImGui::GetWindowPos().y;
+   ImVec2 p1 = ImGui::GetWindowPos();
+   p1.y += drawPosY;
+
+   ImVec2 p2 = p1;
+   p2.x += ImGui::GetWindowSize().x;
+   p2.y += + 1;
+
+   const bool hovered = std::abs( ImGui::GetMousePos().y - p1.y ) < 7.0f && threadIndex > 0;
+
+   uint32_t color = ImGui::GetColorU32(ImGuiCol_Separator);
+   if( hovered && highlightSeparator )
+   {
+      hop::setCursor( hop::CURSOR_SIZE_NS );
+      color = 0xFFFFFFFF;
+   }
+
+   ImDrawList* drawList = ImGui::GetWindowDrawList();
+   drawList->AddLine( p1, p2, color, 2.0f );
+
+   ImGui::SetCursorPosY( ImGui::GetCursorPosY() );
+
+   return hovered && highlightSeparator ;
+}
+
+static void drawTrackHighlight( float trackX, float trackY, float trackHeight )
+{
+   if( ImGui::IsRootWindowOrAnyChildFocused() )
+   {
+      const ImVec2 trackTopLeft = ImVec2( trackX, trackY );
+      const ImVec2 trackBotRight = ImVec2( trackX + 9999, trackY + trackHeight );
+      const ImVec2 mousePos = ImGui::GetMousePos();
+      if ( hop::ptInRect(
+               mousePos.x,
+               mousePos.y,
+               trackTopLeft.x,
+               trackTopLeft.y,
+               trackBotRight.x,
+               trackBotRight.y ) )
+      {
+         ImDrawList* dl = ImGui::GetWindowDrawList();
+         dl->AddRectFilled( trackTopLeft, trackBotRight, 0x03FFFFFF );
+      }
+   }
+}
+
+static void drawHighlightedTraces(
+    const std::vector<hop::TimelineTrack::HighlightDrawInfo>& highlightDrawData,
+    float highlightVal )
+{
+   ImDrawList* drawList = ImGui::GetWindowDrawList();
+   for( const auto& t : highlightDrawData )
+   {
+      const uint32_t color = (t.color & 0x00FFFFFF) | (uint32_t(highlightVal * 255.0f) << 24);
+      ImVec2 topLeft( t.posPxlX, t.posPxlY );
+      ImVec2 bottomRight( t.posPxlX + t.lengthPxl, t.posPxlY + hop::TimelineTrack::TRACE_HEIGHT );
+
+      drawList->AddRectFilled( topLeft, bottomRight, color );
+   }
+}
 
 namespace hop
 {
@@ -295,54 +356,6 @@ size_t deserialize( const char* data, TimelineTrack& ti )
     return i;
 }
 
-static bool drawSeparator( uint32_t threadIndex, bool highlightSeparator )
-{
-   const float drawPosY = ImGui::GetCursorScreenPos().y - ImGui::GetWindowPos().y;
-   ImVec2 p1 = ImGui::GetWindowPos();
-   p1.y += drawPosY;
-
-   ImVec2 p2 = p1;
-   p2.x += ImGui::GetWindowSize().x;
-   p2.y += + 1;
-
-   const bool hovered = std::abs( ImGui::GetMousePos().y - p1.y ) < 7.0f && threadIndex > 0;
-
-   uint32_t color = ImGui::GetColorU32(ImGuiCol_Separator);
-   if( hovered && highlightSeparator )
-   {
-      hop::setCursor( hop::CURSOR_SIZE_NS );
-      color = 0xFFFFFFFF;
-   }
-
-   ImDrawList* drawList = ImGui::GetWindowDrawList();
-   drawList->AddLine( p1, p2, color, 2.0f );
-
-   ImGui::SetCursorPosY( ImGui::GetCursorPosY() );
-
-   return hovered;
-}
-
-static void drawTrackHighlight( float trackX, float trackY, float trackHeight )
-{
-   if( ImGui::IsRootWindowOrAnyChildFocused() )
-   {
-      const ImVec2 trackTopLeft = ImVec2( trackX, trackY );
-      const ImVec2 trackBotRight = ImVec2( trackX + 9999, trackY + trackHeight );
-      const ImVec2 mousePos = ImGui::GetMousePos();
-      if ( hop::ptInRect(
-               mousePos.x,
-               mousePos.y,
-               trackTopLeft.x,
-               trackTopLeft.y,
-               trackBotRight.x,
-               trackBotRight.y ) )
-      {
-         ImDrawList* dl = ImGui::GetWindowDrawList();
-         dl->AddRectFilled( trackTopLeft, trackBotRight, 0x03FFFFFF );
-      }
-   }
-}
-
 bool TimelineTracks::handleMouse(
     float /*mousePosX*/,
     float mousePosY,
@@ -485,6 +498,7 @@ std::vector< TimelineMessage > TimelineTracks::draw( const DrawInfo& info )
 
          if( tracesVisible )
          {
+            // Track highlights needs to be drawn before the traces themselves as it acts as a background
             drawTrackHighlight(
                 curDrawPos.x,
                 curDrawPos.y - THREAD_LABEL_HEIGHT,
@@ -498,6 +512,11 @@ std::vector< TimelineMessage > TimelineTracks::draw( const DrawInfo& info )
             // Draw the lock waits (before traces so that they are not hiding them)
             drawLockWaits( i, curDrawPos.x, curDrawPos.y, info, timelineActions );
             drawTraces( i, curDrawPos.x, curDrawPos.y, info, timelineActions );
+
+            drawHighlightedTraces(
+                _tracks[i]._highlightsDrawData,
+                _highlightValue );
+            _tracks[i]._highlightsDrawData.clear();
 
             ImGui::PopClipRect();
          }
@@ -750,26 +769,6 @@ void TimelineTracks::drawTraces(
       ImGui::PopStyleColor(2);
       ImGui::PopStyleVar();
    }
-
-   // The child region is needed to draw the highlighted trace over the traces
-   ImGui::BeginChild( "HighlightedTraces" );
-   ImDrawList* drawList = ImGui::GetWindowDrawList();
-   //const float absolutCanvasStartY = drawInfo.timeline.canvasPosY + drawInfo.timeline.scrollAmount;
-   drawList->PushClipRect(
-       ImVec2( drawInfo.timeline.canvasPosX, _tracks[threadIndex]._localDrawPos[1] ),
-       ImVec2( 9999, _tracks[threadIndex]._localDrawPos[1] + _tracks[threadIndex].heightWithThreadLabel() ),
-       false );
-   for( const auto& t : _tracks[threadIndex]._highlightsDrawData )
-   {
-      const uint32_t color = (t.color & 0x00FFFFFF) | (uint32_t(_highlightValue * 255.0f) << 24);
-      ImVec2 topLeft( t.posPxlX, t.posPxlY );
-      ImVec2 bottomRight( t.posPxlX + t.lengthPxl, t.posPxlY + TimelineTrack::TRACE_HEIGHT );
-
-      drawList->AddRectFilled( topLeft, bottomRight, color );
-   }
-   drawList->PopClipRect();
-   ImGui::EndChild();
-   _tracks[threadIndex]._highlightsDrawData.clear();
 }
 
 std::vector< LockOwnerInfo > TimelineTracks::highlightLockOwner(
@@ -1020,7 +1019,7 @@ void TimelineTracks::drawSearchWindow(
 {
    HOP_PROF_FUNC();
 
-   const auto selection = drawSearchResult(
+   const SearchSelection selection = drawSearchResult(
        _searchRes, di.timeline.globalStartTime, di.timeline.duration, di.strDb, *this );
 
    if ( selection.selectedTraceIdx != (size_t)-1 && selection.selectedThreadIdx != (uint32_t)-1 )
