@@ -1524,7 +1524,11 @@ Client* ClientManager::Get()
           ClientManager::sharedMemory().create( HOP_GET_PROG_NAME(), HOP_SHARED_MEM_SIZE, false );
       if ( state != SharedMemory::CONNECTED )
       {
-         printf("HOP - Could not create shared memory. HOP will not be able to run\n");
+         const char* reason = "";
+         if( state == SharedMemory::PERMISSION_DENIED )
+            reason = " : Permission Denied";
+            
+         printf("HOP - Could not create shared memory%s. HOP will not be able to run\n", reason );
          return NULL;
       }
    }
@@ -1534,8 +1538,13 @@ Client* ClientManager::Get()
    tl_threadIndex = threadCount.fetch_add(1);
    tl_threadId = HOP_GET_THREAD_ID();
 
+   if( tl_threadIndex > HOP_MAX_THREAD_NB )
+   {
+      printf( "Maximum number of threads reached. No trace will be available for this thread\n" );
+      return nullptr;
+   }
+
    // Register producer in the ringbuffer
-   assert(tl_threadIndex <= HOP_MAX_THREAD_NB);
    auto ringBuffer = ClientManager::sharedMemory().ringbuffer();
    if( ringBuffer )
    {
