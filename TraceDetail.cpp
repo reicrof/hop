@@ -166,8 +166,8 @@ static std::vector<hop::TraceDetail> mergeTraceDetails( const hop::TraceData& tr
       {
          // Try to merge it with exsiting time
          bool merged = false;
-         const TimeStamp end = traces.ends[ idx ];
-         const TimeStamp delta = traces.deltas[ idx ];
+         const TimeStamp end = traces.entries.ends[ idx ];
+         const TimeStamp delta = traces.entries.deltas[ idx ];
          const TimeStamp start = end - delta;
          for( size_t i = 0; i < endTimes.size(); ++i )
          {
@@ -236,12 +236,12 @@ gatherTraceDetails( const hop::TraceData& traces, size_t traceId )
    std::vector<TraceDetail> traceDetails;
 
    // Find the traces to analyze
-   const TimeStamp end = traces.ends[traceId];
-   const TimeStamp totalDelta = traces.deltas[traceId];
+   const TimeStamp end = traces.entries.ends[traceId];
+   const TimeStamp totalDelta = traces.entries.deltas[traceId];
 
    size_t firstTraceId = traceId;
    const TimeStamp firstTraceTime = end - totalDelta;
-   while ( firstTraceId > 0 && traces.ends[firstTraceId] >= firstTraceTime ) firstTraceId--;
+   while ( firstTraceId > 0 && traces.entries.ends[firstTraceId] >= firstTraceTime ) firstTraceId--;
 
    ++firstTraceId;
 
@@ -252,14 +252,14 @@ gatherTraceDetails( const hop::TraceData& traces, size_t traceId )
    traceDetails.reserve( traceId - firstTraceId );
 
    const TDepth_t maxDepth = *std::max_element(
-       traces.depths.begin() + firstTraceId, traces.depths.begin() + traceId + 1 );
+       traces.entries.depths.begin() + firstTraceId, traces.entries.depths.begin() + traceId + 1 );
    std::vector<TimeStamp> accumulatedTimePerDepth( maxDepth + 1, 0 );
 
-   TDepth_t lastDepth = traces.depths[firstTraceId];
+   TDepth_t lastDepth = traces.entries.depths[firstTraceId];
    for ( size_t i = firstTraceId; i <= traceId; ++i )
    {
-      TimeStamp excTime = traces.deltas[i];
-      const TDepth_t curDepth = traces.depths[i];
+      TimeStamp excTime = traces.entries.deltas[i];
+      const TDepth_t curDepth = traces.entries.depths[i];
 
       if ( curDepth == lastDepth )
       {
@@ -274,7 +274,7 @@ gatherTraceDetails( const hop::TraceData& traces, size_t traceId )
       else if ( curDepth < lastDepth )
       {
          excTime -= accumulatedTimePerDepth[lastDepth];
-         accumulatedTimePerDepth[curDepth] += traces.deltas[i];
+         accumulatedTimePerDepth[curDepth] += traces.entries.deltas[i];
       }
 
       lastDepth = curDepth;
@@ -316,7 +316,7 @@ createTraceDetails( const TraceData& traces, uint32_t threadIndex, size_t traceI
 {
    HOP_PROF_FUNC();
 
-   const TimeStamp totalDelta = traces.deltas[traceId];
+   const TimeStamp totalDelta = traces.entries.deltas[traceId];
 
    std::vector<TraceDetail> traceDetails = mergeTraceDetails( traces, gatherTraceDetails( traces, traceId ) );
    finalizeTraceDetails( traceDetails, totalDelta );
@@ -348,7 +348,7 @@ TraceStats createTraceStats(const TraceData& traces, uint32_t, size_t traceId)
    {
       if (traces.fileNameIds[i] == fileName && traces.fctNameIds[i] == fctName && traces.lineNbs[i] == lineNb)
       {
-         const TimeDuration delta = traces.deltas[i];
+         const TimeDuration delta = traces.entries.deltas[i];
          displayableDurations.push_back( (float) delta );
          medianValues.push_back( delta );
          min = std::min( min, delta );
@@ -376,11 +376,11 @@ TraceDetails createGlobalTraceDetails( const TraceData& traces, uint32_t threadI
    traceDetails.reserve( 1024 );
 
    TimeDuration totalTime = 0;
-   for( size_t i = 0; i < traces.depths.size(); ++i )
+   for( size_t i = 0; i < traces.entries.depths.size(); ++i )
    {
-      if( traces.depths[i] == 0 )
+      if( traces.entries.depths[i] == 0 )
       {
-         totalTime += traces.deltas[i];
+         totalTime += traces.entries.deltas[i];
          auto details = gatherTraceDetails( traces, i );
          traceDetails.insert( traceDetails.end(), details.begin(), details.end() );
       }

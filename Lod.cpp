@@ -42,32 +42,32 @@ LodsArray computeLods( const TraceData& traces, size_t idOffset )
    LodsArray resLods;
 
    // Compute LODs.
-   TDepth_t maxDepth = *std::max_element( traces.depths.begin(), traces.depths.end() );
+   TDepth_t maxDepth = *std::max_element( traces.entries.depths.begin(), traces.entries.depths.end() );
    std::vector<std::vector<LodInfo> > lods( maxDepth + 1 );
 
    // Compute first LOD from raw data
    int lodLvl = 0;
-   for ( size_t i = 0; i < traces.ends.size(); ++i )
+   for ( size_t i = 0; i < traces.entries.ends.size(); ++i )
    {
-      const TDepth_t curDepth = traces.depths[i];
+      const TDepth_t curDepth = traces.entries.depths[i];
       if ( lods[curDepth].empty() )
       {
-         lods[curDepth].push_back( LodInfo{traces.ends[i], traces.deltas[i], idOffset + i, curDepth, false} );
+         lods[curDepth].push_back( LodInfo{traces.entries.ends[i], traces.entries.deltas[i], idOffset + i, curDepth, false} );
          continue;
       }
 
       auto& lastTrace = lods[curDepth].back();
-      const TimeDuration timeBetweenTrace = (traces.ends[i] - traces.deltas[i]) - lastTrace.end;
-      if( canBeLoded( lodLvl, timeBetweenTrace, lastTrace.delta, traces.deltas[i] ) )
+      const TimeDuration timeBetweenTrace = (traces.entries.ends[i] - traces.entries.deltas[i]) - lastTrace.end;
+      if( canBeLoded( lodLvl, timeBetweenTrace, lastTrace.delta, traces.entries.deltas[i] ) )
       {
          assert( lastTrace.depth == curDepth );
-         lastTrace.end = traces.ends[i];
-         lastTrace.delta += timeBetweenTrace + traces.deltas[i];
+         lastTrace.end = traces.entries.ends[i];
+         lastTrace.delta += timeBetweenTrace + traces.entries.deltas[i];
          lastTrace.isLoded = true;
       }
       else
       {
-         lods[curDepth].push_back( LodInfo{traces.ends[i], traces.deltas[i], idOffset + i, curDepth, false} );
+         lods[curDepth].push_back( LodInfo{traces.entries.ends[i], traces.entries.deltas[i], idOffset + i, curDepth, false} );
       }
    }
 
@@ -209,33 +209,33 @@ LodsArray computeLods( const LockWaitData& lockwaits, size_t idOffset )
    LodsArray resLods;
 
    // Compute LODs.
-   TDepth_t maxDepth = *std::max_element( lockwaits.depths.begin(), lockwaits.depths.end() );
+   TDepth_t maxDepth = *std::max_element( lockwaits.entries.depths.begin(), lockwaits.entries.depths.end() );
    std::vector< std::vector<LodInfo> > lods( maxDepth + 1 );
 
    // Compute first LOD from raw data
    int lodLvl = 0;
-   for ( size_t i = 0; i < lockwaits.ends.size(); ++i )
+   for ( size_t i = 0; i < lockwaits.entries.ends.size(); ++i )
    {
-      const TDepth_t curDepth = lockwaits.depths[i];
-      const TimeDuration curDelta = lockwaits.deltas[i];
+      const TDepth_t curDepth = lockwaits.entries.depths[i];
+      const TimeDuration curDelta = lockwaits.entries.deltas[i];
       if ( lods[curDepth].empty() )
       {
-         lods[curDepth].push_back( LodInfo{lockwaits.ends[i], curDelta, idOffset + i, curDepth, false} );
+         lods[curDepth].push_back( LodInfo{lockwaits.entries.ends[i], curDelta, idOffset + i, curDepth, false} );
          continue;
       }
 
       auto& lastTrace = lods[curDepth].back();
-      const TimeDuration timeBetweenTrace = (lockwaits.ends[i] - lockwaits.deltas[i]) - lastTrace.end;
+      const TimeDuration timeBetweenTrace = (lockwaits.entries.ends[i] - lockwaits.entries.deltas[i]) - lastTrace.end;
       if( canBeLoded( lodLvl, timeBetweenTrace, lastTrace.delta, curDelta ) )
       {
          assert( lastTrace.depth == curDepth );
-         lastTrace.end = lockwaits.ends[i];
+         lastTrace.end = lockwaits.entries.ends[i];
          lastTrace.delta += timeBetweenTrace + curDelta;
          lastTrace.isLoded = true;
       }
       else
       {
-         lods[curDepth].push_back( LodInfo{lockwaits.ends[i], curDelta, idOffset + i, curDepth, false} );
+         lods[curDepth].push_back( LodInfo{lockwaits.entries.ends[i], curDelta, idOffset + i, curDepth, false} );
       }
    }
 

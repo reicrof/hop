@@ -22,8 +22,8 @@ static void sortSearchResOnTime(
        [&tracks, &cmp](
            const std::pair<size_t, uint32_t>& lhs, const std::pair<size_t, uint32_t>& rhs ) {
           return cmp(
-              tracks[lhs.second]._traces.ends[lhs.first] - tracks[lhs.second]._traces.deltas[lhs.first],
-              tracks[rhs.second]._traces.ends[rhs.first] - tracks[rhs.second]._traces.deltas[rhs.first] );
+              tracks[lhs.second]._traces.entries.ends[lhs.first] - tracks[lhs.second]._traces.entries.deltas[lhs.first],
+              tracks[rhs.second]._traces.entries.ends[rhs.first] - tracks[rhs.second]._traces.entries.deltas[rhs.first] );
        } );
 }
 
@@ -64,8 +64,8 @@ static void sortSearchResOnDuration(
        [&tracks, &cmp](
            const std::pair<size_t, uint32_t>& lhs, const std::pair<size_t, uint32_t>& rhs ) {
           return cmp(
-              tracks[lhs.second]._traces.deltas[lhs.first],
-              tracks[rhs.second]._traces.deltas[rhs.first] );
+              tracks[lhs.second]._traces.entries.deltas[lhs.first],
+              tracks[rhs.second]._traces.entries.deltas[rhs.first] );
        } );
 }
 
@@ -228,10 +228,10 @@ SearchSelection drawSearchResult(
             const auto& traceIdThreadId = searchRes.tracesIdxThreadIdx[i];
             const auto& ti = tracks[traceIdThreadId.second];
             const size_t traceId = traceIdThreadId.first;
-            const TimeStamp delta = ti._traces.deltas[traceId];
+            const TimeStamp delta = ti._traces.entries.deltas[traceId];
 
             hop::formatNanosTimepointToDisplay(
-                ti._traces.ends[traceId] - delta - globalTimelineStart,
+                ti._traces.entries.ends[traceId] - delta - globalTimelineStart,
                 timelineDuration,
                 traceTime,
                 sizeof( traceTime ) );
