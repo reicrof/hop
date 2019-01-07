@@ -34,7 +34,7 @@ void setupLODResolution( uint32_t sreenResolutionX )
    }
 }
 
-LodsArray computeLods( const TraceData& traces, size_t idOffset )
+LodsArray computeLods( const Entries& entries, size_t idOffset )
 {
    HOP_PROF_FUNC();
    assert( LOD_MIN_GAP_PXL[LOD_COUNT-1] > 0 && "LOD resolution was not setup" );
@@ -42,32 +42,31 @@ LodsArray computeLods( const TraceData& traces, size_t idOffset )
    LodsArray resLods;
 
    // Compute LODs.
-   TDepth_t maxDepth = *std::max_element( traces.entries.depths.begin(), traces.entries.depths.end() );
-   std::vector<std::vector<LodInfo> > lods( maxDepth + 1 );
+   std::vector<std::vector<LodInfo> > lods( entries.maxDepth + 1 );
 
    // Compute first LOD from raw data
    int lodLvl = 0;
-   for ( size_t i = 0; i < traces.entries.ends.size(); ++i )
+   for ( size_t i = 0; i < entries.ends.size(); ++i )
    {
-      const TDepth_t curDepth = traces.entries.depths[i];
+      const TDepth_t curDepth = entries.depths[i];
       if ( lods[curDepth].empty() )
       {
-         lods[curDepth].push_back( LodInfo{traces.entries.ends[i], traces.entries.deltas[i], idOffset + i, curDepth, false} );
+         lods[curDepth].push_back( LodInfo{entries.ends[i], entries.deltas[i], idOffset + i, curDepth, false} );
          continue;
       }
 
       auto& lastTrace = lods[curDepth].back();
-      const TimeDuration timeBetweenTrace = (traces.entries.ends[i] - traces.entries.deltas[i]) - lastTrace.end;
-      if( canBeLoded( lodLvl, timeBetweenTrace, lastTrace.delta, traces.entries.deltas[i] ) )
+      const TimeDuration timeBetweenTrace = (entries.ends[i] - entries.deltas[i]) - lastTrace.end;
+      if( canBeLoded( lodLvl, timeBetweenTrace, lastTrace.delta, entries.deltas[i] ) )
       {
          assert( lastTrace.depth == curDepth );
-         lastTrace.end = traces.entries.ends[i];
-         lastTrace.delta += timeBetweenTrace + traces.entries.deltas[i];
+         lastTrace.end = entries.ends[i];
+         lastTrace.delta += timeBetweenTrace + entries.deltas[i];
          lastTrace.isLoded = true;
       }
       else
       {
-         lods[curDepth].push_back( LodInfo{traces.entries.ends[i], traces.entries.deltas[i], idOffset + i, curDepth, false} );
+         lods[curDepth].push_back( LodInfo{entries.ends[i], entries.deltas[i], idOffset + i, curDepth, false} );
       }
    }
 
@@ -199,100 +198,6 @@ void appendLods( LodsArray& dst, const LodsArray& src )
 
       nonLodedInfos.clear();
    }
-}
-
-
-LodsArray computeLods( const LockWaitData& lockwaits, size_t idOffset )
-{
-   assert( LOD_MIN_GAP_PXL[LOD_COUNT-1] > 0 && "LOD resolution was not setup" );
-
-   LodsArray resLods;
-
-   // Compute LODs.
-   TDepth_t maxDepth = *std::max_element( lockwaits.entries.depths.begin(), lockwaits.entries.depths.end() );
-   std::vector< std::vector<LodInfo> > lods( maxDepth + 1 );
-
-   // Compute first LOD from raw data
-   int lodLvl = 0;
-   for ( size_t i = 0; i < lockwaits.entries.ends.size(); ++i )
-   {
-      const TDepth_t curDepth = lockwaits.entries.depths[i];
-      const TimeDuration curDelta = lockwaits.entries.deltas[i];
-      if ( lods[curDepth].empty() )
-      {
-         lods[curDepth].push_back( LodInfo{lockwaits.entries.ends[i], curDelta, idOffset + i, curDepth, false} );
-         continue;
-      }
-
-      auto& lastTrace = lods[curDepth].back();
-      const TimeDuration timeBetweenTrace = (lockwaits.entries.ends[i] - lockwaits.entries.deltas[i]) - lastTrace.end;
-      if( canBeLoded( lodLvl, timeBetweenTrace, lastTrace.delta, curDelta ) )
-      {
-         assert( lastTrace.depth == curDepth );
-         lastTrace.end = lockwaits.entries.ends[i];
-         lastTrace.delta += timeBetweenTrace + curDelta;
-         lastTrace.isLoded = true;
-      }
-      else
-      {
-         lods[curDepth].push_back( LodInfo{lockwaits.entries.ends[i], curDelta, idOffset + i, curDepth, false} );
-      }
-   }
-
-   for ( const auto& l : lods )
-   {
-      resLods[lodLvl].insert( resLods[lodLvl].end(), l.begin(), l.end() );
-   }
-   std::sort( resLods[lodLvl].begin(), resLods[lodLvl].end() );
-
-   // Clear depth lods to reuse them for next lods
-   for ( auto& l : lods )
-   {
-      l.clear();
-   }
-
-   // Compute the LOD based on the previous LOD levels
-   const std::deque<LodInfo>* lastComputedLod = &resLods[lodLvl];
-   for ( lodLvl = 1; lodLvl < LOD_COUNT; ++lodLvl )
-   {
-      for ( const auto& l : *lastComputedLod )
-      {
-         const TDepth_t curDepth = l.depth;
-         if ( lods[curDepth].empty() )
-         {
-            lods[curDepth].emplace_back( l );
-            continue;
-         }
-
-         auto& lastTrace = lods[curDepth].back();
-         const auto timeBetweenTrace = (l.end - l.delta) - lastTrace.end;
-         if( canBeLoded( lodLvl, timeBetweenTrace, lastTrace.delta, l.delta ) )
-         {
-            assert( lastTrace.depth == curDepth );
-            lastTrace.end = l.end;
-            lastTrace.delta += timeBetweenTrace + l.delta;
-            lastTrace.isLoded = true;
-         }
-         else
-         {
-            lods[curDepth].emplace_back( l );
-         }
-      }
-
-      for ( const auto& l : lods )
-      {
-         resLods[lodLvl].insert( resLods[lodLvl].end(), l.begin(), l.end() );
-      }
-      std::sort( resLods[lodLvl].begin(), resLods[lodLvl].end() );
-
-      // Clear for reuse
-      for ( auto& l : lods ) l.clear();
-
-      // Update the last compute lod ptr
-      lastComputedLod = &resLods[lodLvl];
-   }
-
-   return resLods;
 }
 
 } // namespace hop

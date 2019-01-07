@@ -14,11 +14,15 @@ static constexpr size_t INVALID_IDX = std::numeric_limits<size_t>::max();
 
 struct Entries
 {
-   Entries() = default;
-   Entries(Entries&&) = default;
    std::deque< TimeStamp > ends; // in ns
    std::deque< TimeDuration > deltas; // in ns
    std::deque< TDepth_t > depths;
+
+   void clear();
+   void append( const Entries& newEntries );
+   Entries copy() const;
+
+   TDepth_t maxDepth{ 0 };
 };
 
 struct TraceData
@@ -44,7 +48,6 @@ struct TraceData
    std::deque< TZoneId_t > zones;
 
    LodsArray lods;
-   TDepth_t maxDepth{ 0 };
 };
 
 struct LockWaitData
@@ -63,10 +66,6 @@ struct LockWaitData
 
    LodsArray lods;
 };
-
-template <typename Ts>
-std::pair<size_t, size_t>
-visibleIndexSpan( const Ts& traces, TimeStamp absoluteStart, TimeStamp absoluteEnd );
 
 std::pair<size_t, size_t>
 visibleIndexSpan( const LodsArray& lodsArr, int lodLvl, TimeStamp absoluteStart, TimeStamp absoluteEnd, int baseDepth );

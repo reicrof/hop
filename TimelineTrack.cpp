@@ -155,7 +155,7 @@ void TimelineTrack::addUnlockEvents(const std::vector<UnlockEvent>& unlockEvents
 
 TDepth_t TimelineTrack::maxDepth() const noexcept
 {
-   return _traces.maxDepth;
+   return _traces.entries.maxDepth;
 }
 
 bool TimelineTrack::hidden() const noexcept
@@ -223,7 +223,7 @@ size_t serialize( const TimelineTrack& ti, char* data )
     i += sizeof( size_t );
 
     // Max depth
-    memcpy( &data[i], &ti._traces.maxDepth, sizeof( hop::TDepth_t ) );
+    memcpy( &data[i], &ti._traces.entries.maxDepth, sizeof( hop::TDepth_t ) );
     i += sizeof( hop::TDepth_t );
 
     //ends
@@ -296,7 +296,7 @@ size_t deserialize( const char* data, TimelineTrack& ti )
     {
     const size_t tracesCount = *(size_t*)&data[i];
     i += sizeof( size_t );
-    ti._traces.maxDepth = *(hop::TDepth_t*)&data[i];
+    ti._traces.entries.maxDepth = *(hop::TDepth_t*)&data[i];
     i += sizeof( hop::TDepth_t );
 
     // ends
@@ -587,6 +587,11 @@ namespace
           posY + traceDepth * TimelineTrack::PADDED_TRACE_SIZE );
 
       return DrawData{tracePos, traceDelta, traceIdx, traceLengthPxl};
+   }
+
+   void createDrawData( size_t startIdx, size_t endIdx )
+   {
+
    }
 } // anonymous namespace
 

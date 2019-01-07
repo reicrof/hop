@@ -212,7 +212,7 @@ size_t Server::handleNewMessage( uint8_t* data, size_t maxSize, TimeStamp minTim
              traceData.zones.push_back( t.zone );
              maxDepth = std::max( maxDepth, t.depth );
           }
-          traceData.maxDepth = maxDepth;
+          traceData.entries.maxDepth = maxDepth;
 
           // The ends time should already be sorted
           assert_is_sorted( traceData.entries.ends.begin(), traceData.entries.ends.end() );
@@ -238,13 +238,16 @@ size_t Server::handleNewMessage( uint8_t* data, size_t maxSize, TimeStamp minTim
          const uint32_t lwCount = msgInfo->lockwaits.count;
 
          LockWaitData lockwaitData;
+         TDepth_t maxDepth = 0;
          for( uint32_t i = 0; i < lwCount; ++i )
          {
             lockwaitData.entries.ends.push_back( lws[i].end );
             lockwaitData.entries.deltas.push_back( lws[i].end - lws[i].start );
             lockwaitData.entries.depths.push_back( lws[i].depth );
             lockwaitData.mutexAddrs.push_back( lws[i].mutexAddress );
+            maxDepth = std::max( maxDepth, lws[i].depth );
          }
+         lockwaitData.entries.maxDepth = maxDepth;
 
          bufPtr += ( lwCount * sizeof( LockWait ) );
 
