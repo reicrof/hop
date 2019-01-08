@@ -145,8 +145,13 @@ void TimelineTrack::addUnlockEvents(const std::vector<UnlockEvent>& unlockEvents
          if( _lockWaits.mutexAddrs[ i ] == ue.mutexAddress &&
              _lockWaits.entries.ends[ i ] < ue.time  )
          {
-            assert( _lockWaits.lockReleases[ i ] == 0 );
-            _lockWaits.lockReleases[ i ] = ue.time;
+            // In some cases, we can receive an orphan unlock events. In those case we must not
+            // overwrite the previous value as they are unrelated. This can happen if we start
+            // recording after the lock has been acquired or if we missed a lock message because
+            // of insufficient memory
+            if( _lockWaits.lockReleases[ i ] == 0 )
+               _lockWaits.lockReleases[ i ] = ue.time;
+
             break;
          }
       }
