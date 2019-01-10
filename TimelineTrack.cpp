@@ -593,11 +593,6 @@ namespace
 
       return DrawData{tracePos, traceDelta, traceIdx, traceLengthPxl};
    }
-
-   void createDrawData( size_t startIdx, size_t endIdx )
-   {
-
-   }
 } // anonymous namespace
 
 void TimelineTracks::drawTraces(
