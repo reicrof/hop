@@ -144,7 +144,7 @@ Profiler::Profiler( const char* name ) : _name( name )
 void Profiler::addTraces( const TraceData& traces, uint32_t threadIndex )
 {
    // Ignore empty traces
-   if( traces.ends.empty() ) return;
+   if( traces.entries.ends.empty() ) return;
 
    // Add new thread as they come
    if ( threadIndex >= _tracks.size() )
@@ -153,18 +153,18 @@ void Profiler::addTraces( const TraceData& traces, uint32_t threadIndex )
    }
 
    // Update the current time
-   if ( traces.ends.back() > _timeline.globalEndTime() )
-      _timeline.setGlobalEndTime( traces.ends.back() );
+   if ( traces.entries.ends.back() > _timeline.globalEndTime() )
+      _timeline.setGlobalEndTime( traces.entries.ends.back() );
 
    // If this is the first traces received from the thread, update the
    // start time as it may be earlier.
-   if ( _tracks[threadIndex]._traces.ends.empty() )
+   if ( _tracks[threadIndex]._traces.entries.ends.empty() )
    {
       // Find the earliest trace
-      TimeStamp earliestTime = traces.ends[0] - traces.deltas[0];
-      for ( size_t i = 1; i < traces.ends.size(); ++i )
+      TimeStamp earliestTime = traces.entries.ends[0] - traces.entries.deltas[0];
+      for ( size_t i = 1; i < traces.entries.ends.size(); ++i )
       {
-         earliestTime = std::min( earliestTime, traces.ends[i] - traces.deltas[i] );
+         earliestTime = std::min( earliestTime, traces.entries.ends[i] - traces.entries.deltas[i] );
       }
       // Set the timeline absolute start time to this new value
       const auto startTime = _timeline.globalStartTime();
@@ -177,7 +177,7 @@ void Profiler::addTraces( const TraceData& traces, uint32_t threadIndex )
    size_t totalTracesCount = 0;
    for( size_t i = 0; i < _tracks.size(); ++i )
    {
-      totalTracesCount += _tracks[i]._traces.ends.size();
+      totalTracesCount += _tracks[i]._traces.entries.ends.size();
    }
    g_stats.traceCount = totalTracesCount;
 }
@@ -239,7 +239,7 @@ void Profiler::addLockWaits( const LockWaitData& lockWaits, uint32_t threadIndex
       _tracks.resize( threadIndex + 1 );
    }
 
-   if( !lockWaits.ends.empty() )
+   if( !lockWaits.entries.ends.empty() )
    {
       _tracks[threadIndex].addLockWaits( lockWaits );
    }

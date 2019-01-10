@@ -203,19 +203,19 @@ size_t Server::handleNewMessage( uint8_t* data, size_t maxSize, TimeStamp minTim
           for ( size_t i = 0; i < traceCount; ++i )
           {
              const auto& t = traces[i];
-             traceData.ends.push_back( t.end );
-             traceData.deltas.push_back( t.end - t.start );
+             traceData.entries.ends.push_back( t.end );
+             traceData.entries.deltas.push_back( t.end - t.start );
              traceData.fileNameIds.push_back( _stringDb.getStringIndex( t.fileNameId ) );
              traceData.fctNameIds.push_back( _stringDb.getStringIndex( t.fctNameId ) );
              traceData.lineNbs.push_back( t.lineNumber );
-             traceData.depths.push_back( t.depth );
+             traceData.entries.depths.push_back( t.depth );
              traceData.zones.push_back( t.zone );
              maxDepth = std::max( maxDepth, t.depth );
           }
-          traceData.maxDepth = maxDepth;
+          traceData.entries.maxDepth = maxDepth;
 
           // The ends time should already be sorted
-          assert_is_sorted( traceData.ends.begin(), traceData.ends.end() );
+          assert_is_sorted( traceData.entries.ends.begin(), traceData.entries.ends.end() );
 
           bufPtr += ( traceCount * sizeof( Trace ) );
           assert( ( size_t )( bufPtr - data ) <= maxSize );
@@ -238,18 +238,21 @@ size_t Server::handleNewMessage( uint8_t* data, size_t maxSize, TimeStamp minTim
          const uint32_t lwCount = msgInfo->lockwaits.count;
 
          LockWaitData lockwaitData;
+         TDepth_t maxDepth = 0;
          for( uint32_t i = 0; i < lwCount; ++i )
          {
-            lockwaitData.ends.push_back( lws[i].end );
-            lockwaitData.deltas.push_back( lws[i].end - lws[i].start );
-            lockwaitData.depths.push_back( lws[i].depth );
+            lockwaitData.entries.ends.push_back( lws[i].end );
+            lockwaitData.entries.deltas.push_back( lws[i].end - lws[i].start );
+            lockwaitData.entries.depths.push_back( lws[i].depth );
             lockwaitData.mutexAddrs.push_back( lws[i].mutexAddress );
+            maxDepth = std::max( maxDepth, lws[i].depth );
          }
+         lockwaitData.entries.maxDepth = maxDepth;
 
          bufPtr += ( lwCount * sizeof( LockWait ) );
 
          // The ends time should already be sorted
-         assert_is_sorted( lockwaitData.ends.begin(), lockwaitData.ends.end() );
+         assert_is_sorted( lockwaitData.entries.ends.begin(), lockwaitData.entries.ends.end() );
 
          // TODO: Could lock later when we received all the messages
          std::lock_guard<std::mutex> guard( _pendingData.mutex );

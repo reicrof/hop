@@ -119,7 +119,7 @@ void TimelineTrack::addTraces( const TraceData& newTraces )
       setTrackHeight( (maxDepth() + 1) * PADDED_TRACE_SIZE );
    }
 
-   assert_is_sorted(_traces.ends.begin(), _traces.ends.end() );
+   assert_is_sorted( _traces.entries.ends.begin(), _traces.entries.ends.end() );
 }
 
 void TimelineTrack::addLockWaits( const LockWaitData& lockWaits )
@@ -133,20 +133,25 @@ void TimelineTrack::addUnlockEvents(const std::vector<UnlockEvent>& unlockEvents
    HOP_PROF_FUNC();
    for( const auto& ue : unlockEvents )
    {
-      const auto first = std::lower_bound( _lockWaits.ends.begin(), _lockWaits.ends.end(), ue.time );
-      int64_t firstIdx = std::distance( _lockWaits.ends.begin(), first );
+      const auto first = std::lower_bound( _lockWaits.entries.ends.begin(), _lockWaits.entries.ends.end(), ue.time );
+      int64_t firstIdx = std::distance( _lockWaits.entries.ends.begin(), first );
       if( firstIdx != 0 ) --firstIdx;
 
       // Try to find the associated lockwait with a maximum lock time of 10 seconds. This is to
       // ensure we do not traverse the whole lockwaits array in the case where we would have skipped
       // logging a lock 
-      for( int64_t i = firstIdx; i >= 0 && (ue.time - _lockWaits.ends[ i ] < 10000000000); --i )
+      for( int64_t i = firstIdx; i >= 0 && (ue.time - _lockWaits.entries.ends[ i ] < 10000000000); --i )
       {
          if( _lockWaits.mutexAddrs[ i ] == ue.mutexAddress &&
-             _lockWaits.ends[ i ] < ue.time  )
+             _lockWaits.entries.ends[ i ] < ue.time  )
          {
-            assert( _lockWaits.lockReleases[ i ] == 0 );
-            _lockWaits.lockReleases[ i ] = ue.time;
+            // In some cases, we can receive an orphan unlock events. In those case we must not
+            // overwrite the previous value as they are unrelated. This can happen if we start
+            // recording after the lock has been acquired or if we missed a lock message because
+            // of insufficient memory
+            if( _lockWaits.lockReleases[ i ] == 0 )
+               _lockWaits.lockReleases[ i ] = ue.time;
+
             break;
          }
       }
@@ -155,7 +160,7 @@ void TimelineTrack::addUnlockEvents(const std::vector<UnlockEvent>& unlockEvents
 
 TDepth_t TimelineTrack::maxDepth() const noexcept
 {
-   return _traces.maxDepth;
+   return _traces.entries.maxDepth;
 }
 
 bool TimelineTrack::hidden() const noexcept
@@ -180,13 +185,13 @@ void TimelineTrack::setTrackHeight( float height )
 
 bool TimelineTrack::empty() const
 {
-   return _traces.ends.empty();
+   return _traces.entries.ends.empty();
 }
 
 size_t serializedSize( const TimelineTrack& ti )
 {
-   const size_t tracesCount = ti._traces.ends.size();
-   const size_t lockwaitsCount = ti._lockWaits.ends.size();
+   const size_t tracesCount = ti._traces.entries.ends.size();
+   const size_t lockwaitsCount = ti._lockWaits.entries.ends.size();
    const size_t serializedSize =
        // Traces
        sizeof( size_t ) +                            // Traces count
@@ -218,20 +223,20 @@ size_t serialize( const TimelineTrack& ti, char* data )
     // Serialize Traces
     {
     // Traces count
-    const size_t tracesCount = ti._traces.ends.size();
+    const size_t tracesCount = ti._traces.entries.ends.size();
     memcpy( &data[i], &tracesCount, sizeof( size_t ) );
     i += sizeof( size_t );
 
     // Max depth
-    memcpy( &data[i], &ti._traces.maxDepth, sizeof( hop::TDepth_t ) );
+    memcpy( &data[i], &ti._traces.entries.maxDepth, sizeof( hop::TDepth_t ) );
     i += sizeof( hop::TDepth_t );
 
     //ends
-    std::copy(ti._traces.ends.begin(), ti._traces.ends.end(), (hop::TimeStamp*)&data[i] );
+    std::copy( ti._traces.entries.ends.begin(), ti._traces.entries.ends.end(), (hop::TimeStamp*)&data[i] );
     i += sizeof( hop::TimeStamp ) * tracesCount;
 
     // deltas
-    std::copy( ti._traces.deltas.begin(), ti._traces.deltas.end(), (hop::TimeDuration*)&data[i] );
+    std::copy( ti._traces.entries.deltas.begin(), ti._traces.entries.deltas.end(), (hop::TimeDuration*)&data[i] );
     i += sizeof( hop::TimeDuration ) * tracesCount;
 
     // fileNameIds
@@ -251,27 +256,27 @@ size_t serialize( const TimelineTrack& ti, char* data )
     i += sizeof( hop::TZoneId_t ) * tracesCount;
 
     // depths
-    std::copy( ti._traces.depths.begin(), ti._traces.depths.end(), (hop::TDepth_t*)&data[i] );
+    std::copy( ti._traces.entries.depths.begin(), ti._traces.entries.depths.end(), (hop::TDepth_t*)&data[i] );
     i += sizeof( hop::TDepth_t ) * tracesCount;
     }
 
     // Serialize LockWaits
     {
     // LockWaits count
-    const size_t lockwaitsCount = ti._lockWaits.ends.size();
+    const size_t lockwaitsCount = ti._lockWaits.entries.ends.size();
     memcpy( &data[i], &lockwaitsCount, sizeof( size_t ) );
     i += sizeof( size_t );
 
     // ends
-    std::copy(ti._lockWaits.ends.begin(), ti._lockWaits.ends.end(), (hop::TimeStamp*)&data[i] );
+    std::copy( ti._lockWaits.entries.ends.begin(), ti._lockWaits.entries.ends.end(), (hop::TimeStamp*)&data[i] );
     i += sizeof( hop::TimeStamp ) * lockwaitsCount;
 
     // deltas
-    std::copy( ti._lockWaits.deltas.begin(), ti._lockWaits.deltas.end(), (hop::TimeDuration*)&data[i] );
+    std::copy( ti._lockWaits.entries.deltas.begin(), ti._lockWaits.entries.deltas.end(), (hop::TimeDuration*)&data[i] );
     i += sizeof( hop::TimeDuration ) * lockwaitsCount;
 
     // depths
-    std::copy( ti._lockWaits.depths.begin(), ti._lockWaits.depths.end(), (hop::TDepth_t*)&data[i] );
+    std::copy( ti._lockWaits.entries.depths.begin(), ti._lockWaits.entries.depths.end(), (hop::TDepth_t*)&data[i] );
     i += sizeof( hop::TDepth_t ) * lockwaitsCount;
 
     // mutexAddrs
@@ -296,15 +301,15 @@ size_t deserialize( const char* data, TimelineTrack& ti )
     {
     const size_t tracesCount = *(size_t*)&data[i];
     i += sizeof( size_t );
-    ti._traces.maxDepth = *(hop::TDepth_t*)&data[i];
+    ti._traces.entries.maxDepth = *(hop::TDepth_t*)&data[i];
     i += sizeof( hop::TDepth_t );
 
     // ends
-    std::copy((hop::TimeStamp*)&data[i], ((hop::TimeStamp*) &data[i]) + tracesCount, std::back_inserter(ti._traces.ends));
+    std::copy((hop::TimeStamp*)&data[i], ((hop::TimeStamp*) &data[i]) + tracesCount, std::back_inserter(ti._traces.entries.ends));
     i += sizeof( hop::TimeStamp ) * tracesCount;
 
     // deltas
-    std::copy((hop::TimeDuration*)&data[i], ((hop::TimeDuration*)&data[i]) + tracesCount, std::back_inserter(ti._traces.deltas));
+    std::copy((hop::TimeDuration*)&data[i], ((hop::TimeDuration*)&data[i]) + tracesCount, std::back_inserter(ti._traces.entries.deltas));
     i += sizeof( hop::TimeDuration ) * tracesCount;
 
     // fileNameIds
@@ -324,7 +329,7 @@ size_t deserialize( const char* data, TimelineTrack& ti )
     i += sizeof( hop::TZoneId_t ) * tracesCount;
 
     // depths
-    std::copy((hop::TDepth_t*)&data[i], ((hop::TDepth_t*) &data[i]) + tracesCount, std::back_inserter(ti._traces.depths));
+    std::copy((hop::TDepth_t*)&data[i], ((hop::TDepth_t*) &data[i]) + tracesCount, std::back_inserter(ti._traces.entries.depths));
     i += sizeof( hop::TDepth_t ) * tracesCount;
     }
 
@@ -333,15 +338,15 @@ size_t deserialize( const char* data, TimelineTrack& ti )
     const size_t lockWaitsCount = *(size_t*)&data[i];
     i += sizeof( size_t );
     // ends
-    std::copy((hop::TimeStamp*)&data[i], ((hop::TimeStamp*) &data[i]) + lockWaitsCount, std::back_inserter(ti._lockWaits.ends));
+    std::copy((hop::TimeStamp*)&data[i], ((hop::TimeStamp*) &data[i]) + lockWaitsCount, std::back_inserter(ti._lockWaits.entries.ends));
     i += sizeof( hop::TimeStamp ) * lockWaitsCount;
 
     // deltas
-    std::copy((hop::TimeDuration*)&data[i], ((hop::TimeDuration*)&data[i]) + lockWaitsCount, std::back_inserter(ti._lockWaits.deltas));
+    std::copy((hop::TimeDuration*)&data[i], ((hop::TimeDuration*)&data[i]) + lockWaitsCount, std::back_inserter(ti._lockWaits.entries.deltas));
     i += sizeof( hop::TimeDuration ) * lockWaitsCount;
 
     // depths
-    std::copy((hop::TDepth_t*)&data[i], ((hop::TDepth_t*) &data[i]) + lockWaitsCount, std::back_inserter(ti._lockWaits.depths));
+    std::copy((hop::TDepth_t*)&data[i], ((hop::TDepth_t*) &data[i]) + lockWaitsCount, std::back_inserter(ti._lockWaits.entries.depths));
     i += sizeof( hop::TDepth_t ) * lockWaitsCount;
 
     // mutexAddrs
@@ -599,7 +604,7 @@ void TimelineTracks::drawTraces(
 {
    const TimelineTrack& data = _tracks[ threadIndex ];
 
-   if ( data._traces.ends.empty() ) return;
+   if ( data._traces.entries.ends.empty() ) return;
 
    HOP_PROF_FUNC();
 
@@ -746,8 +751,8 @@ void TimelineTracks::drawTraces(
 
             if ( leftMouseDblClicked )
             {
-               const TimeStamp startTime = data._traces.ends[traceIndex] -
-                                           data._traces.deltas[traceIndex] - globalStartTime;
+               const TimeStamp startTime = data._traces.entries.ends[traceIndex] -
+                                           data._traces.entries.deltas[traceIndex] - globalStartTime;
                TimelineMessage msg;
                msg.type = TimelineMessageType::FRAME_TO_TIME;
                msg.frameToTime.time = startTime;
@@ -786,8 +791,8 @@ std::vector< LockOwnerInfo > TimelineTracks::highlightLockOwner(
 
     // Info of the currently highlighted lock wait
     const void* highlightedMutexAddr = _tracks[threadIndex]._lockWaits.mutexAddrs[hoveredLwIndex];
-    const TimeDuration highlightedLWDelta = _tracks[threadIndex]._lockWaits.deltas[hoveredLwIndex];
-    const TimeStamp highlightedLWEndTime = _tracks[threadIndex]._lockWaits.ends[hoveredLwIndex];
+    const TimeDuration highlightedLWDelta = _tracks[threadIndex]._lockWaits.entries.deltas[hoveredLwIndex];
+    const TimeStamp highlightedLWEndTime = _tracks[threadIndex]._lockWaits.entries.ends[hoveredLwIndex];
     const TimeStamp highlightedLWStartTime = highlightedLWEndTime - highlightedLWDelta;
 
     // Go through all the threads and find the one that owned the lock during the
@@ -799,19 +804,19 @@ std::vector< LockOwnerInfo > TimelineTracks::highlightLockOwner(
         const LockWaitData& lockWaits = _tracks[i]._lockWaits;
 
         const auto lastUnlock = std::lower_bound(
-            _tracks[i]._lockWaits.ends.cbegin(),
-            _tracks[i]._lockWaits.ends.cend(),
+            _tracks[i]._lockWaits.entries.ends.cbegin(),
+            _tracks[i]._lockWaits.entries.ends.cend(),
             highlightedLWEndTime );
 
         // This is the first lockdata that was acquired after the highlighted trace end
-        auto lockDataIdx = std::distance( _tracks[i]._lockWaits.ends.cbegin(), lastUnlock );
+        auto lockDataIdx = std::distance( _tracks[i]._lockWaits.entries.ends.cbegin(), lastUnlock );
         if( lockDataIdx != 0 ) --lockDataIdx;
 
         while( lockDataIdx != 0 )
         {
             if( lockWaits.mutexAddrs[ lockDataIdx ] == highlightedMutexAddr )
             {
-               const TimeStamp lockWaitEndTime = lockWaits.ends[lockDataIdx];
+               const TimeStamp lockWaitEndTime = lockWaits.entries.ends[lockDataIdx];
                const TimeStamp unlockTime = lockWaits.lockReleases[lockDataIdx];
 
                // We've gone to far, so early break
@@ -871,7 +876,7 @@ void TimelineTracks::drawLockWaits(
     std::vector< TimelineMessage >& timelineMsg )
 {
    const LockWaitData& lockWaits =_tracks[ threadIndex ]._lockWaits;
-   if ( lockWaits.ends.empty() ) return;
+   if ( lockWaits.entries.ends.empty() ) return;
 
    HOP_PROF_FUNC();
 
@@ -936,10 +941,10 @@ void TimelineTracks::drawLockWaits(
 
          if ( ImGui::IsMouseDoubleClicked( 0 ) )
          {
-            const TimeDuration delta = lockWaits.deltas[t.traceIndex];
+            const TimeDuration delta = lockWaits.entries.deltas[t.traceIndex];
             TimelineMessage msg;
             msg.type = TimelineMessageType::FRAME_TO_ABSOLUTE_TIME;
-            msg.frameToTime.time = lockWaits.ends[t.traceIndex] - delta;
+            msg.frameToTime.time = lockWaits.entries.ends[t.traceIndex] - delta;
             msg.frameToTime.duration = delta;
             msg.frameToTime.pushNavState = true;
             timelineMsg.push_back( msg );
@@ -998,10 +1003,10 @@ void TimelineTracks::drawLockWaits(
 
          if ( ImGui::IsMouseDoubleClicked( 0 ) )
          {
-            const TimeDuration delta = lockWaits.deltas[t.traceIndex];
+            const TimeDuration delta = lockWaits.entries.deltas[t.traceIndex];
             TimelineMessage msg;
             msg.type = TimelineMessageType::FRAME_TO_ABSOLUTE_TIME;
-            msg.frameToTime.time = lockWaits.ends[t.traceIndex] - delta;
+            msg.frameToTime.time = lockWaits.entries.ends[t.traceIndex] - delta;
             msg.frameToTime.duration = delta;
             msg.frameToTime.pushNavState = true;
             timelineMsg.push_back( msg );
@@ -1025,9 +1030,9 @@ void TimelineTracks::drawSearchWindow(
    if ( selection.selectedTraceIdx != (size_t)-1 && selection.selectedThreadIdx != (uint32_t)-1 )
    {
       const auto& timelinetrack = _tracks[selection.selectedThreadIdx];
-      const TimeStamp absEndTime = timelinetrack._traces.ends[selection.selectedTraceIdx];
-      const TimeStamp delta = timelinetrack._traces.deltas[selection.selectedTraceIdx];
-      const TDepth_t depth = timelinetrack._traces.depths[selection.selectedTraceIdx];
+      const TimeStamp absEndTime = timelinetrack._traces.entries.ends[selection.selectedTraceIdx];
+      const TimeStamp delta = timelinetrack._traces.entries.deltas[selection.selectedTraceIdx];
+      const TDepth_t depth = timelinetrack._traces.entries.depths[selection.selectedTraceIdx];
 
       // If the thread was hidden, display it so we can see the selected trace
       _tracks[selection.selectedThreadIdx].setTrackHeight( 9999.0f );
@@ -1067,10 +1072,10 @@ void TimelineTracks::drawTraceDetailsWindow( const DrawInfo& info, std::vector< 
       const auto& timelinetrack = _tracks[traceDetailRes.hoveredThreadIdx];
       for( size_t idx : traceDetailRes.hoveredTraceIds )
       {
-         minDepth = std::min( timelinetrack._traces.depths[ idx ], minDepth );
-         const TimeStamp end = timelinetrack._traces.ends[ idx ];
+         minDepth = std::min( timelinetrack._traces.entries.depths[ idx ], minDepth );
+         const TimeStamp end = timelinetrack._traces.entries.ends[ idx ];
          maxTime = std::max( end, maxTime );
-         minTime = std::min( end - timelinetrack._traces.deltas[ idx ], minTime );
+         minTime = std::min( end - timelinetrack._traces.entries.deltas[ idx ], minTime );
       }
 
       const float verticalPosPxl = timelinetrack._absoluteDrawPos[1] +
@@ -1180,9 +1185,9 @@ void TimelineTracks::addTraceToHighlight( size_t traceId, uint32_t threadIndex, 
    // Gather draw data for visible highlighted traces
    const TimelineTrack& data = _tracks[ threadIndex ];
    const DrawData dd = createDrawDataForTrace(
-       data._traces.ends[traceId],
-       data._traces.deltas[traceId],
-       data._traces.depths[traceId],
+       data._traces.entries.ends[traceId],
+       data._traces.entries.deltas[traceId],
+       data._traces.entries.depths[traceId],
        traceId,
        data._localDrawPos[0],
        data._localDrawPos[1],
