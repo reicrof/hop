@@ -25,21 +25,23 @@ namespace hop
 
    struct TimelineMessage
    {
-      TimelineMessageType type;
+      struct FrameToTime
+      {
+         TimeStamp time;
+         TimeDuration duration;
+         bool pushNavState;
+      };
 
+      struct VerticalPos
+      {
+         float posPxl;
+      };
+
+      TimelineMessageType type;
       union
       {
-         struct
-         {
-            TimeStamp time;
-            TimeDuration duration;
-            bool pushNavState;
-         } frameToTime;
-
-         struct
-         {
-            float posPxl;
-         } verticalPos;
+         FrameToTime frameToTime;
+         VerticalPos verticalPos;
       };
    };
 }
