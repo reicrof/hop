@@ -180,9 +180,38 @@ typedef TCHAR HOP_CHAR;
 #else /* Unix (Linux & MacOs) specific macros and defines */
 
 #include <semaphore.h>
+#include <sched.h> // sched_getcpu
 typedef sem_t* sem_handle;
 typedef int shm_handle;
 typedef char HOP_CHAR;
+<<<<<<< HEAD
+=======
+const HOP_CHAR HOP_SHARED_MEM_PREFIX[] = "/hop_";
+const HOP_CHAR HOP_SHARED_SEM_SUFFIX[] = "_sem";
+#define HOP_STRLEN( str ) strlen( (str) )
+#define HOP_STRNCPYW( dst, src, count ) strncpy( (dst), (src), (count) )
+#define HOP_STRNCATW( dst, src, count ) strncat( (dst), (src), (count) )
+#define HOP_STRNCPY( dst, src, count ) strncpy( (dst), (src), (count) )
+#define HOP_STRNCAT( dst, src, count ) strncat( (dst), (src), (count) )
+
+#define likely(x)       __builtin_expect(!!(x), 1)
+#define unlikely(x)     __builtin_expect(!!(x), 0)
+
+#define HOP_GET_THREAD_ID() (size_t)pthread_self()
+#define HOP_SLEEP_MS( x ) usleep( x * 1000 )
+
+extern HOP_CHAR* __progname;
+inline const HOP_CHAR* HOP_GET_PROG_NAME() HOP_NOEXCEPT
+{
+   return __progname;
+}
+
+inline int HOP_GET_CPU()
+{
+   return sched_getcpu();
+}
+
+>>>>>>> Attempt to add core info
 #endif
 
 // -----------------------------
@@ -294,6 +323,81 @@ struct UnlockEvent
 };
 HOP_STATIC_ASSERT( sizeof(UnlockEvent) == EXPECTED_UNLOCK_EVENT_SIZE, "Unlock Event layout has changed unexpectedly" );
 
+<<<<<<< HEAD
+=======
+struct CoreEvent
+{
+   TimeStamp time;
+   int core;
+};
+
+// ------ end of message.h ------------
+
+// ------ SharedMemory.h ------------
+class SharedMemory
+{
+  public:
+   enum ConnectionState
+   {
+      NOT_CONNECTED,
+      CONNECTED,
+      CONNECTED_NO_CLIENT,
+      PERMISSION_DENIED,
+      UNKNOWN_CONNECTION_ERROR
+   };
+
+   ConnectionState create( const HOP_CHAR* path, size_t size, bool isConsumer );
+   void destroy();
+
+   struct SharedMetaInfo
+   {
+      enum Flags
+      {
+         CONNECTED_PRODUCER = 1 << 0,
+         CONNECTED_CONSUMER = 1 << 1,
+         LISTENING_CONSUMER = 1 << 2,
+      };
+      std::atomic< uint32_t > flags{0};
+      const float clientVersion{0.0f};
+      const uint32_t maxThreadNb{0};
+      const size_t requestedSize{0};
+      std::atomic< TimeStamp > lastResetTimeStamp{0};
+   };
+
+   bool hasConnectedProducer() const HOP_NOEXCEPT;
+   void setConnectedProducer( bool ) HOP_NOEXCEPT;
+   bool hasConnectedConsumer() const HOP_NOEXCEPT;
+   void setConnectedConsumer( bool ) HOP_NOEXCEPT;
+   bool hasListeningConsumer() const HOP_NOEXCEPT;
+   void setListeningConsumer( bool ) HOP_NOEXCEPT;
+   TimeStamp lastResetTimestamp() const HOP_NOEXCEPT;
+   void setResetTimestamp( TimeStamp t ) HOP_NOEXCEPT;
+   ringbuf_t* ringbuffer() const HOP_NOEXCEPT;
+   uint8_t* data() const HOP_NOEXCEPT;
+   bool valid() const HOP_NOEXCEPT;
+   sem_handle semaphore() const HOP_NOEXCEPT;
+   bool tryWaitSemaphore() const HOP_NOEXCEPT;
+   void signalSemaphore() const HOP_NOEXCEPT;
+   const SharedMetaInfo* sharedMetaInfo() const HOP_NOEXCEPT;
+   ~SharedMemory();
+
+  private:
+   // Pointer into the shared memory
+   SharedMetaInfo* _sharedMetaData{NULL};
+   ringbuf_t* _ringbuf{NULL};
+   uint8_t* _data{NULL};
+   // ----------------
+   sem_handle _semaphore{NULL};
+   bool _isConsumer;
+   shm_handle _sharedMemHandle{};
+   HOP_CHAR _sharedMemPath[HOP_SHARED_MEM_MAX_NAME_SIZE];
+   HOP_CHAR _sharedSemPath[HOP_SHARED_MEM_MAX_NAME_SIZE+5];
+   std::atomic< bool > _valid{false};
+   std::mutex _creationMutex;
+};
+// ------ end of SharedMemory.h ------------
+
+>>>>>>> Attempt to add core info
 class Client;
 class SharedMemory;
 class ClientManager
@@ -308,7 +412,8 @@ class ClientManager
        TimeStamp start,
        TimeStamp end,
        TLineNb_t lineNb,
-       TZoneId_t zone );
+       TZoneId_t zone,
+       int core );
    static void EndLockWait(
       void* mutexAddr,
       TimeStamp start,
@@ -352,7 +457,8 @@ class ProfGuard
     }
     inline void close()
     {
-      ClientManager::EndProfile( _fileName, _fctName, _start, getTimeStamp(), _lineNb, _zone );
+      _core = HOP_GET_CPU();
+      ClientManager::EndProfile( _fileName, _fctName, _start, getTimeStamp(), _lineNb, _zone, _core );
       // Please uncomment the following line if close() is made public!
       // _fctName = nullptr;
     }
@@ -360,6 +466,7 @@ class ProfGuard
     TimeStamp _start;
     TStrPtr_t _fileName, _fctName;
     TLineNb_t _lineNb;
+    int _core;
     TZoneId_t _zone;
 };
 
@@ -392,7 +499,7 @@ class ProfGuardDynamicString
    }
    ~ProfGuardDynamicString()
    {
-      ClientManager::EndProfile( _fileName, _fctName, _start, getTimeStamp(), _lineNb, _zone );
+      ClientManager::EndProfile( _fileName, _fctName, _start, getTimeStamp(), _lineNb, _zone, 0 );
    }
 
   private:
@@ -1093,6 +1200,7 @@ class Client
    Client()
    {
       _traces.reserve( 256 );
+      _cores.reserve( 64 );
       _lockWaits.reserve( 64 );
       _unlockEvents.reserve( 64 );
       _stringPtr.reserve( 256 );
@@ -1113,6 +1221,12 @@ class Client
        TZoneId_t zone )
    {
       _traces.push_back( Trace{ start, end, fileName, fctName, lineNb, zone, (TDepth_t)tl_traceLevel } );
+   }
+
+   void addCoreEvent( int core, TimeStamp endTime )
+   {
+      if( _cores.back().core != core )
+         _cores.emplace_back( CoreEvent{ endTime, core } );
    }
 
    void addWaitLockTrace( void* mutexAddr, TimeStamp start, TimeStamp end, TDepth_t depth )
@@ -1204,6 +1318,7 @@ class Client
    void resetPendingTraces()
    {
       _traces.clear();
+      _cores.clear();
       _lockWaits.clear();
       _unlockEvents.clear();
    }
@@ -1218,6 +1333,23 @@ class Client
       {
          return _traces.back().start;
       }
+   }
+
+   uint8_t* acquireSharedChunk( size_t size )
+   {
+      uint8_t* data = NULL;
+      ringbuf_t* ringbuf = ClientManager::sharedMemory().ringbuffer();
+      const bool msgWayToBig = size > HOP_SHARED_MEM_SIZE;
+      if( !msgWayToBig )
+      {
+         const ssize_t offset = ringbuf_acquire( ringbuf, _worker, size );
+         if( offset != -1 )
+         {
+            data = &ClientManager::sharedMemory().data()[offset];
+         }
+      }
+
+      return data;
    }
 
    bool sendStringData()
@@ -1240,23 +1372,14 @@ class Client
       const uint32_t stringToSendSize = stringDataSize - _sentStringDataSize;
       const size_t msgSize = sizeof( MsgInfo ) + stringToSendSize;
 
-      // Allocate big enough buffer from the shared memory
-      ringbuf_t* ringbuf = ClientManager::sharedMemory().ringbuffer();
-      const bool msgWayToBig = msgSize > HOP_SHARED_MEM_SIZE;
-      ssize_t offset = -1;
-      if( !msgWayToBig )
-      {
-         offset = ringbuf_acquire( ringbuf, _worker, msgSize );
-      }
+      uint8_t* bufferPtr = acquireSharedChunk( msgSize );
 
-      if ( offset == -1 )
+      if ( !bufferPtr )
       {
          printf("HOP - String to send are bigger than shared memory size. Consider"
                 " increasing shared memory size \n");
          return false;
       }
-
-      uint8_t* bufferPtr = &ClientManager::sharedMemory().data()[offset];
 
       // Fill the buffer with the string data
       {
@@ -1293,24 +1416,14 @@ class Client
       // Get size of profiling traces message
       const size_t profilerMsgSize = sizeof( MsgInfo ) + sizeof( Trace ) * _traces.size();
 
-      // Allocate big enough buffer from the shared memory
-      ringbuf_t* ringbuf = ClientManager::sharedMemory().ringbuffer();
-      const bool msgWayToBig = profilerMsgSize > HOP_SHARED_MEM_SIZE;
-      ssize_t offset = -1;
-      if( !msgWayToBig )
+      uint8_t* bufferPtr = acquireSharedChunk( profilerMsgSize );
+      if ( !bufferPtr )
       {
-         offset = ringbuf_acquire( ringbuf, _worker, profilerMsgSize );
+         printf("HOP - Failed to acquire enough shared memory. Consider increasing"
+              "shared memory size if you see this message more than once\n");
+         _traces.clear();
+         return false;
       }
-
-       if ( offset == -1 )
-       {
-          printf("HOP - Failed to acquire enough shared memory. Consider increasing"
-                 "shared memory size if you see this message more than once\n");
-          _traces.clear();
-          return false;
-       }
-
-      uint8_t* bufferPtr = &ClientManager::sharedMemory().data()[offset];
 
       // Fill the buffer with the profiling trace message
       {
@@ -1341,23 +1454,40 @@ class Client
       return true;
    }
 
+   bool sendCores()
+   {
+      if( _cores.empty() ) return false;
+
+      const size_t coreMsgSize = sizeof( MsgInfo ) + _cores.size() * sizeof( CoreEvent );
+
+      uint8_t* bufferPtr = = acquireSharedChunk( coreMsgSize );
+      if ( !bufferPtr )
+      {
+         printf("HOP - Failed to acquire enough shared memory. Consider increasing shared memory size\n");
+         _cores.clear();
+         return false;
+      }
+
+      const auto lastEntry = _cores.back();
+
+
+      _cores.clear();
+      _cores.emplace_back( lastEntry );
+   }
+
    bool sendLockWaits()
    {
       if( _lockWaits.empty() ) return false;
 
       const size_t lockMsgSize = sizeof( MsgInfo ) + _lockWaits.size() * sizeof( LockWait );
 
-      // Allocate big enough buffer from the shared memory
-      ringbuf_t* ringbuf = ClientManager::sharedMemory().ringbuffer();
-      const auto offset = ringbuf_acquire( ringbuf, _worker, lockMsgSize );
-      if ( offset == -1 )
+      uint8_t* bufferPtr = acquireSharedChunk( lockMsgSize );
+      if ( !bufferPtr )
       {
          printf("HOP - Failed to acquire enough shared memory. Consider increasing shared memory size\n");
          _lockWaits.clear();
          return false;
       }
-
-      uint8_t* bufferPtr = &ClientManager::sharedMemory().data()[offset];
 
       // Fill the buffer with the lock message
       {
@@ -1386,17 +1516,13 @@ class Client
 
       const size_t unlocksMsgSize = sizeof( MsgInfo ) + _unlockEvents.size() * sizeof( UnlockEvent );
 
-      // Allocate big enough buffer from the shared memory
-      ringbuf_t* ringbuf = ClientManager::sharedMemory().ringbuffer();
-      const auto offset = ringbuf_acquire( ringbuf, _worker, unlocksMsgSize );
-      if ( offset == -1 )
+      uint8_t* bufferPtr = acquireSharedChunk( unlocksMsgSize );
+      if ( !bufferPtr )
       {
          printf("HOP - Failed to acquire enough shared memory. Consider increasing shared memory size\n");
          _unlockEvents.clear();
          return false;
       }
-
-      uint8_t* bufferPtr = &ClientManager::sharedMemory().data()[offset];
 
       // Fill the buffer with the lock message
       {
@@ -1423,16 +1549,12 @@ class Client
    {
       const size_t heartbeatSize = sizeof( MsgInfo );
 
-      // Allocate big enough buffer from the shared memory
-      ringbuf_t* ringbuf = ClientManager::sharedMemory().ringbuffer();
-      const auto offset = ringbuf_acquire( ringbuf, _worker, heartbeatSize );
-      if ( offset == -1 )
+      uint8_t* bufferPtr = acquireSharedChunk( heartbeatSize );
+      if ( !bufferPtr )
       {
          printf("HOP - Failed to acquire enough shared memory. Consider increasing shared memory size\n");
          return false;
       }
-
-      uint8_t* bufferPtr = &ClientManager::sharedMemory().data()[offset];
 
       // Fill the buffer with the lock message
       {
@@ -1484,9 +1606,11 @@ class Client
       sendTraces();
       sendLockWaits();
       sendUnlockEvents();
+      sendCores();
    }
 
    std::vector< Trace > _traces;
+   std::vector< CoreEvent > _cores;
    std::vector< LockWait > _lockWaits;
    std::vector< UnlockEvent > _unlockEvents;
    std::unordered_set< TStrPtr_t > _stringPtr;
@@ -1567,7 +1691,8 @@ void ClientManager::EndProfile(
     TimeStamp start,
     TimeStamp end,
     TLineNb_t lineNb,
-    TZoneId_t zone )
+    TZoneId_t zone,
+    int core )
 {
    const int remainingPushedTraces = --tl_traceLevel;
    Client* client = ClientManager::Get();
@@ -1577,6 +1702,7 @@ void ClientManager::EndProfile(
    if( end - start > 50 ) // Minimum trace time is 50 ns
    {
       client->addProfilingTrace( fileName, fctName, start, end, lineNb, zone );
+      client->addCoreEvent( core, end );
    }
    if ( remainingPushedTraces <= 0 )
    {
