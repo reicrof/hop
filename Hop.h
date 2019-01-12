@@ -170,6 +170,13 @@ typedef HANDLE sem_handle;
 typedef HANDLE shm_handle;
 typedef TCHAR HOP_CHAR;
 
+// Type defined in unistd.h
+#ifdef _WIN64
+#define ssize_t __int64
+#else
+#define ssize_t long
+#endif // _WIN64
+
 #else /* Unix (Linux & MacOs) specific macros and defines */
 
 #include <semaphore.h>
@@ -603,15 +610,11 @@ const HOP_CHAR HOP_SHARED_SEM_SUFFIX[] = _T("_sem");
 #define HOP_STRNCPY( dst, src, count ) strncpy_s( (dst), (count), (src), (count) )
 #define HOP_STRNCAT( dst, src, count ) strncat_s( (dst), (count), (src), (count) )
 
+#define likely(x)   (x)
+#define unlikely(x) (x)
+
 #define HOP_GET_THREAD_ID() (size_t)GetCurrentThreadId()
 #define HOP_SLEEP_MS( x ) Sleep( x )
-
-// Type defined in unistd.h
-#ifdef _WIN64
-#define ssize_t __int64
-#else
-#define ssize_t long
-#endif // _WIN64
 
 inline const HOP_CHAR* HOP_GET_PROG_NAME() HOP_NOEXCEPT
 {
