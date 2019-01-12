@@ -86,34 +86,28 @@ enum HopZone
 /////       THESE ARE THE MACROS YOU SHOULD USE     ///////////
 ///////////////////////////////////////////////////////////////
 
-#if defined(_MSC_VER)
-#define HOP_FCT_NAME __FUNCTION__
-#else
-#define HOP_FCT_NAME __PRETTY_FUNCTION__
-#endif
-
 // Create a new profiling trace with specified name. Name must be static
-#define HOP_PROF( x ) HOP_PROF_GUARD_VAR( __LINE__, ( __FILE__, __LINE__, (x) ) )
+#define HOP_PROF( x ) __HOP_PROF_GUARD_VAR( __LINE__, ( __FILE__, __LINE__, (x) ) )
 
 // Create a new profiling trace with the compiler provided name
-#define HOP_PROF_FUNC() HOP_PROF_ID_GUARD( hop__, ( __FILE__, __LINE__, HOP_FCT_NAME ) )
+#define HOP_PROF_FUNC() __HOP_PROF_ID_GUARD( hop__, ( __FILE__, __LINE__, __HOP_FCT_NAME ) )
 
 // Split a profiling trace with a new provided name. Name must be static.
-#define HOP_PROF_SPLIT( x ) HOP_PROF_ID_SPLIT( hop__, ( __FILE__, __LINE__, (x) ) )
+#define HOP_PROF_SPLIT( x ) __HOP_PROF_ID_SPLIT( hop__, ( __FILE__, __LINE__, (x) ) )
 
 // Create a new profiling trace for dynamic strings. Please use sparingly as they will incur more slowdown
-#define HOP_PROF_DYN_NAME( x ) HOP_PROF_DYN_STRING_GUARD_VAR( __LINE__, ( __FILE__, __LINE__, (x) ) )
+#define HOP_PROF_DYN_NAME( x ) __HOP_PROF_DYN_STRING_GUARD_VAR( __LINE__, ( __FILE__, __LINE__, (x) ) )
 
 // Create a trace that represent the time waiting for a mutex. You need to provide
 // a pointer to the mutex that is being locked
-#define HOP_PROF_MUTEX_LOCK( x ) HOP_MUTEX_LOCK_GUARD_VAR( __LINE__,( x ) )
+#define HOP_PROF_MUTEX_LOCK( x ) __HOP_MUTEX_LOCK_GUARD_VAR( __LINE__,( x ) )
 
 // Create an event that correspond to the unlock of the specified mutex. This is
 // used to provide stall region. You should provide a pointer to the mutex that
 // is being unlocked.
-#define HOP_PROF_MUTEX_UNLOCK( x ) HOP_MUTEX_UNLOCK_EVENT( x )
+#define HOP_PROF_MUTEX_UNLOCK( x ) __HOP_MUTEX_UNLOCK_EVENT( x )
 
-#define HOP_ZONE( x ) HOP_ZONE_GUARD( __LINE__, ( x ) )
+#define HOP_ZONE( x ) __HOP_ZONE_GUARD( __LINE__, ( x ) )
 
 // Set the name of the current thread in the profiler. Only the first call will
 // be considered for each thread.
@@ -158,21 +152,12 @@ enum HopZone
 #include <mutex>
 #include <chrono>
 #include <stdint.h>
-#include <stdio.h>
 
 // Useful macros
 #define HOP_VERSION 0.5f
 #define HOP_CONSTEXPR constexpr
 #define HOP_NOEXCEPT noexcept
 #define HOP_STATIC_ASSERT static_assert
-#define HOP_MIN(a,b) (((a)<(b))?(a):(b))
-#define HOP_MAX(a,b) (((a)>(b))?(a):(b))
-#define HOP_UNUSED(x) (void)(x)
-
-// This is most things that are potentially non-portable.
-
-// On MacOs the max name length seems to be 30...
-#define HOP_SHARED_MEM_MAX_NAME_SIZE 30
 
 /* Windows specific macros and defines */
 #if defined(_MSC_VER)
@@ -185,85 +170,28 @@ typedef HANDLE sem_handle;
 typedef HANDLE shm_handle;
 typedef TCHAR HOP_CHAR;
 
-const HOP_CHAR HOP_SHARED_MEM_PREFIX[] = _T("/hop_");
-const HOP_CHAR HOP_SHARED_SEM_SUFFIX[] = _T("_sem");
-#define HOP_STRLEN( str ) _tcslen( (str) )
-#define HOP_STRNCPYW( dst, src, count ) _tcsncpy_s( (dst), (count), (src), (count) )
-#define HOP_STRNCATW( dst, src, count ) _tcsncat_s( (dst), (src), (count) )
-#define HOP_STRNCPY( dst, src, count ) strncpy_s( (dst), (count), (src), (count) )
-#define HOP_STRNCAT( dst, src, count ) strncat_s( (dst), (count), (src), (count) )
-
-#ifndef likely
-#define likely(x)   x
-#endif
-#ifndef unlikely
-#define unlikely(x) x
-#endif
-
-inline const HOP_CHAR* HOP_GET_PROG_NAME() HOP_NOEXCEPT
-{
-   static HOP_CHAR fullname[MAX_PATH];
-   static HOP_CHAR* shortname;
-   static bool first = true;
-   if (first)
-   {
-      DWORD size = GetModuleFileName(NULL, fullname, MAX_PATH);
-      while (size > 0 && fullname[size] != '\\')
-         --size;
-      shortname = &fullname[size + 1];
-      first = false;
-   }
-   return shortname;
-}
-
-#define HOP_GET_THREAD_ID() (size_t)GetCurrentThreadId()
-#define HOP_SLEEP_MS( x ) Sleep( x )
-
 // Type defined in unistd.h
 #ifdef _WIN64
 #define ssize_t __int64
 #else
 #define ssize_t long
-#endif
+#endif // _WIN64
 
-/* Unix (Linux & MacOs) specific macros and defines */
-#else
+#else /* Unix (Linux & MacOs) specific macros and defines */
 
-#include <pthread.h>
 #include <semaphore.h>
 typedef sem_t* sem_handle;
 typedef int shm_handle;
 typedef char HOP_CHAR;
-const HOP_CHAR HOP_SHARED_MEM_PREFIX[] = "/hop_";
-const HOP_CHAR HOP_SHARED_SEM_SUFFIX[] = "_sem";
-#define HOP_STRLEN( str ) strlen( (str) )
-#define HOP_STRNCPYW( dst, src, count ) strncpy( (dst), (src), (count) )
-#define HOP_STRNCATW( dst, src, count ) strncat( (dst), (src), (count) )
-#define HOP_STRNCPY( dst, src, count ) strncpy( (dst), (src), (count) )
-#define HOP_STRNCAT( dst, src, count ) strncat( (dst), (src), (count) )
-
-#define likely(x)       __builtin_expect(!!(x), 1)
-#define unlikely(x)     __builtin_expect(!!(x), 0)
-
-#define HOP_GET_THREAD_ID() (size_t)pthread_self()
-#define HOP_SLEEP_MS( x ) usleep( x * 1000 )
-
-extern HOP_CHAR* __progname;
-inline const HOP_CHAR* HOP_GET_PROG_NAME() HOP_NOEXCEPT
-{
-   return __progname;
-}
-
 #endif
 
 // -----------------------------
-
 // Forward declarations of type used by ringbuffer as adapted from
 // Mindaugas Rasiukevicius. See below for Copyright/Disclaimer
 typedef struct ringbuf ringbuf_t;
 typedef struct ringbuf_worker ringbuf_worker_t;
+// -----------------------------
 
-// ------ message.h ------------
 namespace hop
 {
 
@@ -336,7 +264,6 @@ struct MsgInfo
 };
 HOP_STATIC_ASSERT( sizeof(MsgInfo) == EXPECTED_MSG_INFO_SIZE, "MsgInfo layout has changed unexpectedly" );
 
-
 HOP_CONSTEXPR uint32_t EXPECTED_TRACE_SIZE = 40;
 struct Trace
 {
@@ -367,73 +294,8 @@ struct UnlockEvent
 };
 HOP_STATIC_ASSERT( sizeof(UnlockEvent) == EXPECTED_UNLOCK_EVENT_SIZE, "Unlock Event layout has changed unexpectedly" );
 
-// ------ end of message.h ------------
-
-// ------ SharedMemory.h ------------
-class SharedMemory
-{
-  public:
-   enum ConnectionState
-   {
-      NOT_CONNECTED,
-      CONNECTED,
-      CONNECTED_NO_CLIENT,
-      PERMISSION_DENIED,
-      UNKNOWN_CONNECTION_ERROR
-   };
-
-   ConnectionState create( const HOP_CHAR* path, size_t size, bool isConsumer );
-   void destroy();
-
-   struct SharedMetaInfo
-   {
-      enum Flags
-      {
-         CONNECTED_PRODUCER = 1 << 0,
-         CONNECTED_CONSUMER = 1 << 1,
-         LISTENING_CONSUMER = 1 << 2,
-      };
-      std::atomic< uint32_t > flags{0};
-      const float clientVersion{0.0f};
-      const uint32_t maxThreadNb{0};
-      const size_t requestedSize{0};
-      std::atomic< TimeStamp > lastResetTimeStamp{0};
-   };
-
-   bool hasConnectedProducer() const HOP_NOEXCEPT;
-   void setConnectedProducer( bool ) HOP_NOEXCEPT;
-   bool hasConnectedConsumer() const HOP_NOEXCEPT;
-   void setConnectedConsumer( bool ) HOP_NOEXCEPT;
-   bool hasListeningConsumer() const HOP_NOEXCEPT;
-   void setListeningConsumer( bool ) HOP_NOEXCEPT;
-   TimeStamp lastResetTimestamp() const HOP_NOEXCEPT;
-   void setResetTimestamp( TimeStamp t ) HOP_NOEXCEPT;
-   ringbuf_t* ringbuffer() const HOP_NOEXCEPT;
-   uint8_t* data() const HOP_NOEXCEPT;
-   bool valid() const HOP_NOEXCEPT;
-   sem_handle semaphore() const HOP_NOEXCEPT;
-   bool tryWaitSemaphore() const HOP_NOEXCEPT;
-   void signalSemaphore() const HOP_NOEXCEPT;
-   const SharedMetaInfo* sharedMetaInfo() const HOP_NOEXCEPT;
-   ~SharedMemory();
-
-  private:
-   // Pointer into the shared memory
-   SharedMetaInfo* _sharedMetaData{NULL};
-   ringbuf_t* _ringbuf{NULL};
-   uint8_t* _data{NULL};
-   // ----------------
-   sem_handle _semaphore{NULL};
-   bool _isConsumer;
-   shm_handle _sharedMemHandle{};
-   HOP_CHAR _sharedMemPath[HOP_SHARED_MEM_MAX_NAME_SIZE];
-   HOP_CHAR _sharedSemPath[HOP_SHARED_MEM_MAX_NAME_SIZE+5];
-   std::atomic< bool > _valid{false};
-   std::mutex _creationMutex;
-};
-// ------ end of SharedMemory.h ------------
-
 class Client;
+class SharedMemory;
 class ClientManager
 {
   public:
@@ -557,25 +419,29 @@ class ZoneGuard
    TZoneId_t _prevZoneId;
 };
 
-
-#define HOP_COMBINE( X, Y ) X##Y
-#define HOP_PROF_GUARD_VAR( LINE, ARGS ) \
-   hop::ProfGuard HOP_COMBINE( hopProfGuard, LINE ) ARGS
-#define HOP_PROF_ID_GUARD( ID, ARGS ) \
+#define __HOP_PROF_GUARD_VAR( LINE, ARGS ) \
+   hop::ProfGuard __HOP_COMBINE( hopProfGuard, LINE ) ARGS
+#define __HOP_PROF_ID_GUARD( ID, ARGS ) \
    hop::ProfGuard ID ARGS
-#define HOP_PROF_ID_SPLIT( ID, ARGS ) \
+#define __HOP_PROF_ID_SPLIT( ID, ARGS ) \
    ID.reset ARGS
-#define HOP_PROF_DYN_STRING_GUARD_VAR( LINE, ARGS ) \
-   hop::ProfGuardDynamicString HOP_COMBINE( hopProfGuard, LINE ) ARGS
-#define HOP_MUTEX_LOCK_GUARD_VAR( LINE, ARGS ) \
-   hop::LockWaitGuard HOP_COMBINE( hopMutexLock, LINE ) ARGS
-#define HOP_MUTEX_UNLOCK_EVENT( x ) \
+#define __HOP_PROF_DYN_STRING_GUARD_VAR( LINE, ARGS ) \
+   hop::ProfGuardDynamicString __HOP_COMBINE( hopProfGuard, LINE ) ARGS
+#define __HOP_MUTEX_LOCK_GUARD_VAR( LINE, ARGS ) \
+   hop::LockWaitGuard __HOP_COMBINE( hopMutexLock, LINE ) ARGS
+#define __HOP_MUTEX_UNLOCK_EVENT( x ) \
    hop::ClientManager::UnlockEvent( x, hop::getTimeStamp() );
-#define HOP_ZONE_GUARD( LINE, ARGS ) \
-   hop::ZoneGuard HOP_COMBINE( hopZoneGuard, LINE ) ARGS
+#define __HOP_ZONE_GUARD( LINE, ARGS ) \
+   hop::ZoneGuard __HOP_COMBINE( hopZoneGuard, LINE ) ARGS
+
+#define __HOP_COMBINE( X, Y ) X##Y
+#if defined(_MSC_VER)
+#define __HOP_FCT_NAME __FUNCTION__
+#else
+#define __HOP_FCT_NAME __PRETTY_FUNCTION__
+#endif
 
 }  // namespace hop
-
 
 
 /*
@@ -614,11 +480,84 @@ void ringbuf_produce( ringbuf_t*, ringbuf_worker_t* );
 size_t ringbuf_consume( ringbuf_t*, size_t* );
 void ringbuf_release( ringbuf_t*, size_t );
 
-/* ====================================================================== */
+/* ======================================================================
+                    End of public declarations
+   ==================================================================== */
 
-// End of hop declarations
+#if defined(HOP_VIEWER)
+// On MacOs the max name length seems to be 30...
+#define HOP_SHARED_MEM_MAX_NAME_SIZE 30
+namespace hop
+{
+class SharedMemory
+{
+  public:
+   enum ConnectionState
+   {
+      NOT_CONNECTED,
+      CONNECTED,
+      CONNECTED_NO_CLIENT,
+      PERMISSION_DENIED,
+      UNKNOWN_CONNECTION_ERROR
+   };
 
-#if defined(HOP_IMPLEMENTATION) || defined(HOP_SERVER_IMPLEMENTATION)
+   ConnectionState create( const HOP_CHAR* path, size_t size, bool isConsumer );
+   void destroy();
+
+   struct SharedMetaInfo
+   {
+      enum Flags
+      {
+         CONNECTED_PRODUCER = 1 << 0,
+         CONNECTED_CONSUMER = 1 << 1,
+         LISTENING_CONSUMER = 1 << 2,
+      };
+      std::atomic< uint32_t > flags{0};
+      const float clientVersion{0.0f};
+      const uint32_t maxThreadNb{0};
+      const size_t requestedSize{0};
+      std::atomic< TimeStamp > lastResetTimeStamp{0};
+   };
+
+   bool hasConnectedProducer() const HOP_NOEXCEPT;
+   void setConnectedProducer( bool ) HOP_NOEXCEPT;
+   bool hasConnectedConsumer() const HOP_NOEXCEPT;
+   void setConnectedConsumer( bool ) HOP_NOEXCEPT;
+   bool hasListeningConsumer() const HOP_NOEXCEPT;
+   void setListeningConsumer( bool ) HOP_NOEXCEPT;
+   TimeStamp lastResetTimestamp() const HOP_NOEXCEPT;
+   void setResetTimestamp( TimeStamp t ) HOP_NOEXCEPT;
+   ringbuf_t* ringbuffer() const HOP_NOEXCEPT;
+   uint8_t* data() const HOP_NOEXCEPT;
+   bool valid() const HOP_NOEXCEPT;
+   sem_handle semaphore() const HOP_NOEXCEPT;
+   bool tryWaitSemaphore() const HOP_NOEXCEPT;
+   void signalSemaphore() const HOP_NOEXCEPT;
+   const SharedMetaInfo* sharedMetaInfo() const HOP_NOEXCEPT;
+   ~SharedMemory();
+
+  private:
+   // Pointer into the shared memory
+   SharedMetaInfo* _sharedMetaData{NULL};
+   ringbuf_t* _ringbuf{NULL};
+   uint8_t* _data{NULL};
+   // ----------------
+   sem_handle _semaphore{NULL};
+   bool _isConsumer;
+   shm_handle _sharedMemHandle{};
+   HOP_CHAR _sharedMemPath[HOP_SHARED_MEM_MAX_NAME_SIZE];
+   HOP_CHAR _sharedSemPath[HOP_SHARED_MEM_MAX_NAME_SIZE+5];
+   std::atomic< bool > _valid{false};
+   std::mutex _creationMutex;
+};
+} // namespace hop
+#endif // defined(HOP_VIEWER)
+
+/* ======================================================================
+                    End of private declarations
+   ==================================================================== */
+
+#if defined(HOP_IMPLEMENTATION)
 
 // standard includes
 #include <algorithm>
@@ -627,17 +566,73 @@ void ringbuf_release( ringbuf_t*, size_t );
 #include <vector>
 #include <mutex>
 
+#define HOP_MIN(a,b) (((a)<(b))?(a):(b))
+#define HOP_MAX(a,b) (((a)>(b))?(a):(b))
+#define HOP_UNUSED(x) (void)(x)
+
 #if !defined( _MSC_VER )
 
 // Unix shared memory includes
 #include <fcntl.h> // O_CREAT
 #include <cstring> // memcpy
+#include <pthread.h> // pthread_self
 #include <sys/mman.h> // shm_open
 #include <sys/stat.h> // stat
 #include <unistd.h> // ftruncate
-#include <time.h> // timespec
 
-#endif
+const HOP_CHAR HOP_SHARED_MEM_PREFIX[] = "/hop_";
+const HOP_CHAR HOP_SHARED_SEM_SUFFIX[] = "_sem";
+#define HOP_STRLEN( str ) strlen( (str) )
+#define HOP_STRNCPYW( dst, src, count ) strncpy( (dst), (src), (count) )
+#define HOP_STRNCATW( dst, src, count ) strncat( (dst), (src), (count) )
+#define HOP_STRNCPY( dst, src, count ) strncpy( (dst), (src), (count) )
+#define HOP_STRNCAT( dst, src, count ) strncat( (dst), (src), (count) )
+
+#define likely(x)       __builtin_expect(!!(x), 1)
+#define unlikely(x)     __builtin_expect(!!(x), 0)
+
+#define HOP_GET_THREAD_ID() (size_t)pthread_self()
+#define HOP_SLEEP_MS( x ) usleep( x * 1000 )
+
+extern HOP_CHAR* __progname;
+inline const HOP_CHAR* HOP_GET_PROG_NAME() HOP_NOEXCEPT
+{
+   return __progname;
+}
+
+#else // !defined( _MSC_VER )
+
+const HOP_CHAR HOP_SHARED_MEM_PREFIX[] = _T("/hop_");
+const HOP_CHAR HOP_SHARED_SEM_SUFFIX[] = _T("_sem");
+#define HOP_STRLEN( str ) _tcslen( (str) )
+#define HOP_STRNCPYW( dst, src, count ) _tcsncpy_s( (dst), (count), (src), (count) )
+#define HOP_STRNCATW( dst, src, count ) _tcsncat_s( (dst), (src), (count) )
+#define HOP_STRNCPY( dst, src, count ) strncpy_s( (dst), (count), (src), (count) )
+#define HOP_STRNCAT( dst, src, count ) strncat_s( (dst), (count), (src), (count) )
+
+#define likely(x)   (x)
+#define unlikely(x) (x)
+
+#define HOP_GET_THREAD_ID() (size_t)GetCurrentThreadId()
+#define HOP_SLEEP_MS( x ) Sleep( x )
+
+inline const HOP_CHAR* HOP_GET_PROG_NAME() HOP_NOEXCEPT
+{
+   static HOP_CHAR fullname[MAX_PATH];
+   static HOP_CHAR* shortname;
+   static bool first = true;
+   if (first)
+   {
+      DWORD size = GetModuleFileName(NULL, fullname, MAX_PATH);
+      while (size > 0 && fullname[size] != '\\')
+         --size;
+      shortname = &fullname[size + 1];
+      first = false;
+   }
+   return shortname;
+}
+
+#endif // !defined( _MSC_VER )
 
 namespace
 {
@@ -817,7 +812,6 @@ namespace
 namespace hop
 {
 
-// ------ SharedMemory.cpp------------
 SharedMemory::ConnectionState SharedMemory::create( const HOP_CHAR* exeName, size_t requestedSize, bool isConsumer )
 {
    ConnectionState state = CONNECTED;
@@ -1070,29 +1064,20 @@ SharedMemory::~SharedMemory()
 {
    destroy();
 }
-// ------ end of SharedMemory.cpp------------
 
-// Following is the impelementation specific to client side (not server side)
-#ifndef HOP_SERVER_IMPLEMENTATION
-
-namespace
+// C-style string hash inspired by Stackoverflow question
+// based on the Java string hash fct. If its good enough
+// for java, it should be good enough for me...
+static TStrPtr_t cStringHash( const char* str, size_t strLen )
 {
-   // C-style string hash inspired by Stackoverflow question
-   // based on the Java string hash fct. If its good enough
-   // for java, it should be good enough for me...
-   TStrPtr_t cStringHash( const char* str, size_t strLen )
+   TStrPtr_t result = 0;
+   HOP_CONSTEXPR TStrPtr_t prime = 31;
+   for ( size_t i = 0; i < strLen; ++i )
    {
-      TStrPtr_t result = 0;
-      HOP_CONSTEXPR TStrPtr_t prime = 31;
-      for ( size_t i = 0; i < strLen; ++i )
-      {
-         result = str[i] + ( result * prime );
-      }
-      return result;
+      result = str[i] + ( result * prime );
    }
+   return result;
 }
-
-// ------ cdbg_client.cpp------------
 
 // The call stack depth of the current measured trace. One variable per thread
 thread_local int tl_traceLevel = 0;
@@ -1508,7 +1493,7 @@ class Client
    std::vector< char > _stringData;
    TimeStamp _clientResetTimeStamp{0};
    ringbuf_worker_t* _worker{NULL};
-   uint32_t _sentStringDataSize{0}; // The size of the string array on the server side
+   uint32_t _sentStringDataSize{0}; // The size of the string array on viewer side
 };
 
 Client* ClientManager::Get()
@@ -1656,22 +1641,15 @@ SharedMemory& ClientManager::sharedMemory() HOP_NOEXCEPT
    return _sharedMemory;
 }
 
-#endif  // end !HOP_SERVER_IMPLEMENTATION
-
 } // end of namespace hop
-
 
 #include <stdio.h>
 #include <stdlib.h>
 #include <stddef.h>
-#include <stdbool.h>
 #include <inttypes.h>
 #include <string.h>
-#include <limits.h>
 #include <assert.h>
 #include <algorithm>
-
-/*  Utils.h */
 
 /*
  * Exponential back-off for the spinning paths.
@@ -1693,9 +1671,6 @@ SharedMemory& ClientManager::sharedMemory() HOP_NOEXCEPT
       if ( ( count ) < SPINLOCK_BACKOFF_MAX ) ( count ) += ( count ); \
    } while ( /* CONSTCOND */ 0 );
 
-/* end of Utils.h */
-
-/* ringbuf.c */
 #define RBUF_OFF_MASK ( 0x00000000ffffffffUL )
 #define WRAP_LOCK_BIT ( 0x8000000000000000UL )
 #define RBUF_OFF_MAX ( UINT64_MAX & ~WRAP_LOCK_BIT )
@@ -2046,8 +2021,6 @@ void ringbuf_release( ringbuf_t* rbuf, size_t nbytes )
 
    rbuf->written = ( nwritten == rbuf->space ) ? 0 : nwritten;
 }
-
-/* end of ringbuf.c */
 
 #endif  // end HOP_IMPLEMENTATION
 
