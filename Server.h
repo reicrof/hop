@@ -34,6 +34,9 @@ class Server
        std::vector<std::vector<UnlockEvent> > unlockEvents;
        std::vector<uint32_t> unlockEventsThreadIndex;
 
+       std::vector<std::vector<CoreEvent> > coreEvents;
+       std::vector<uint32_t> coreEventsThreadIndex;
+
        std::vector< std::pair< uint32_t, TStrPtr_t > > threadNames;
 
        void clear();

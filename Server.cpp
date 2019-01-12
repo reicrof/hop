@@ -284,6 +284,22 @@ size_t Server::handleNewMessage( uint8_t* data, size_t maxSize, TimeStamp minTim
       {
          return (size_t)(bufPtr - data);
       }
+      case MsgType::PROFILER_CORE_EVENT:
+      {
+         std::vector< CoreEvent > coreEvents( msgInfo->coreEvents.count );
+         memcpy( coreEvents.data(), bufPtr, coreEvents.size() * sizeof(CoreEvent) );
+
+         bufPtr += coreEvents.size() * sizeof(CoreEvent);
+         assert( (size_t)(bufPtr - data) <= maxSize );
+
+         assert_is_sorted( coreEvents.begin(), coreEvents.end() );
+
+         // TODO: Could lock later when we received all the messages
+         std::lock_guard<std::mutex> guard(_pendingData.mutex);
+         _pendingData.coreEvents.emplace_back( std::move( coreEvents ) );
+         _pendingData.coreEventsThreadIndex.push_back( threadIndex );
+        return (size_t)(bufPtr - data);
+      }
       default:
          assert( false );
          return (size_t)(bufPtr - data);

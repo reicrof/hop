@@ -206,10 +206,23 @@ inline const HOP_CHAR* HOP_GET_PROG_NAME() HOP_NOEXCEPT
    return __progname;
 }
 
+#ifdef __APPLE__
+#include <cpuid.h>
+inline uint32_t HOP_GET_CPU()
+{
+  #define CPUID(INFO, LEAF, SUBLEAF) __cpuid_count(LEAF, SUBLEAF, INFO[0], INFO[1], INFO[2], INFO[3])
+   int CPUInfo[4];
+   CPUID(CPUInfo, 1, 0);
+   // CPUInfo[1] is EBX, bits 24-31 are APIC ID
+   if ((CPUInfo[3] & (1 << 9)) == 0) return -1;  // no APIC on chip
+   return (unsigned)CPUInfo[1] >> 24;
+}
+#else
 inline int HOP_GET_CPU()
 {
    return sched_getcpu();
 }
+#endif
 
 >>>>>>> Attempt to add core info
 #endif
@@ -251,6 +264,7 @@ enum class MsgType : uint32_t
    PROFILER_WAIT_LOCK,
    PROFILER_UNLOCK_EVENT,
    PROFILER_HEARTBEAT,
+   PROFILER_CORE_EVENT,
    INVALID_MESSAGE,
 };
 
@@ -274,6 +288,11 @@ struct UnlockEventsMsgInfo
    uint32_t count;
 };
 
+struct CoreEventMsgInfo
+{
+   uint32_t count;
+};
+
 HOP_CONSTEXPR uint32_t EXPECTED_MSG_INFO_SIZE = 40;
 struct MsgInfo
 {
@@ -289,6 +308,7 @@ struct MsgInfo
       StringDataMsgInfo stringData;
       LockWaitsMsgInfo lockwaits;
       UnlockEventsMsgInfo unlockEvents;
+      CoreEventMsgInfo coreEvents;
    };
 };
 HOP_STATIC_ASSERT( sizeof(MsgInfo) == EXPECTED_MSG_INFO_SIZE, "MsgInfo layout has changed unexpectedly" );
@@ -1335,10 +1355,9 @@ class Client
       }
    }
 
-   uint8_t* acquireSharedChunk( size_t size )
+   uint8_t* acquireSharedChunk( ringbuf_t* ringbuf, size_t size )
    {
       uint8_t* data = NULL;
-      ringbuf_t* ringbuf = ClientManager::sharedMemory().ringbuffer();
       const bool msgWayToBig = size > HOP_SHARED_MEM_SIZE;
       if( !msgWayToBig )
       {
@@ -1372,7 +1391,8 @@ class Client
       const uint32_t stringToSendSize = stringDataSize - _sentStringDataSize;
       const size_t msgSize = sizeof( MsgInfo ) + stringToSendSize;
 
-      uint8_t* bufferPtr = acquireSharedChunk( msgSize );
+      ringbuf_t* ringbuf = ClientManager::sharedMemory().ringbuffer();
+      uint8_t* bufferPtr = acquireSharedChunk( ringbuf, msgSize );
 
       if ( !bufferPtr )
       {
@@ -1416,7 +1436,8 @@ class Client
       // Get size of profiling traces message
       const size_t profilerMsgSize = sizeof( MsgInfo ) + sizeof( Trace ) * _traces.size();
 
-      uint8_t* bufferPtr = acquireSharedChunk( profilerMsgSize );
+      ringbuf_t* ringbuf = ClientManager::sharedMemory().ringbuffer();
+      uint8_t* bufferPtr = acquireSharedChunk( ringbuf, profilerMsgSize );
       if ( !bufferPtr )
       {
          printf("HOP - Failed to acquire enough shared memory. Consider increasing"
@@ -1460,7 +1481,8 @@ class Client
 
       const size_t coreMsgSize = sizeof( MsgInfo ) + _cores.size() * sizeof( CoreEvent );
 
-      uint8_t* bufferPtr = = acquireSharedChunk( coreMsgSize );
+      ringbuf_t* ringbuf = ClientManager::sharedMemory().ringbuffer();
+      uint8_t* bufferPtr = acquireSharedChunk( ringbuf, coreMsgSize );
       if ( !bufferPtr )
       {
          printf("HOP - Failed to acquire enough shared memory. Consider increasing shared memory size\n");
@@ -1468,9 +1490,23 @@ class Client
          return false;
       }
 
+      // Fill the buffer with the core event message
+      {
+         MsgInfo* coreInfo = (MsgInfo*)bufferPtr;
+         coreInfo->type = MsgType::PROFILER_CORE_EVENT;
+         coreInfo->threadId = tl_threadId;
+         coreInfo->threadName = tl_threadName;
+         coreInfo->threadIndex = tl_threadIndex;
+         coreInfo->timeStamp = getMsgTimeStamp();
+         coreInfo->coreEvents.count = (uint32_t)_cores.size();
+         bufferPtr += sizeof( MsgInfo );
+         memcpy( bufferPtr, _cores.data(), _cores.size() * sizeof( CoreEvent ) );
+      }
+
+      ringbuf_produce( ringbuf, _worker );
+      ClientManager::sharedMemory().signalSemaphore();
+
       const auto lastEntry = _cores.back();
-
-
       _cores.clear();
       _cores.emplace_back( lastEntry );
    }
@@ -1481,7 +1517,8 @@ class Client
 
       const size_t lockMsgSize = sizeof( MsgInfo ) + _lockWaits.size() * sizeof( LockWait );
 
-      uint8_t* bufferPtr = acquireSharedChunk( lockMsgSize );
+      ringbuf_t* ringbuf = ClientManager::sharedMemory().ringbuffer();
+      uint8_t* bufferPtr = acquireSharedChunk( ringbuf, lockMsgSize );
       if ( !bufferPtr )
       {
          printf("HOP - Failed to acquire enough shared memory. Consider increasing shared memory size\n");
@@ -1516,7 +1553,8 @@ class Client
 
       const size_t unlocksMsgSize = sizeof( MsgInfo ) + _unlockEvents.size() * sizeof( UnlockEvent );
 
-      uint8_t* bufferPtr = acquireSharedChunk( unlocksMsgSize );
+      ringbuf_t* ringbuf = ClientManager::sharedMemory().ringbuffer();
+      uint8_t* bufferPtr = acquireSharedChunk( ringbuf, unlocksMsgSize );
       if ( !bufferPtr )
       {
          printf("HOP - Failed to acquire enough shared memory. Consider increasing shared memory size\n");
@@ -1549,7 +1587,8 @@ class Client
    {
       const size_t heartbeatSize = sizeof( MsgInfo );
 
-      uint8_t* bufferPtr = acquireSharedChunk( heartbeatSize );
+      ringbuf_t* ringbuf = ClientManager::sharedMemory().ringbuffer();
+      uint8_t* bufferPtr = acquireSharedChunk( ringbuf, heartbeatSize );
       if ( !bufferPtr )
       {
          printf("HOP - Failed to acquire enough shared memory. Consider increasing shared memory size\n");
