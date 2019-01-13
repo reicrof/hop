@@ -210,6 +210,11 @@ void Profiler::fetchClientData()
       {
          addUnlockEvents(_serverPendingData.unlockEvents[i], _serverPendingData.unlockEventsThreadIndex[i]);
       }
+      HOP_PROF_SPLIT( "Fetching CoreEvents" );
+      for (size_t i = 0; i < _serverPendingData.coreEvents.size(); ++i)
+      {
+         addCoreEvents( _serverPendingData.coreEvents[i], _serverPendingData.coreEventsThreadIndex[i] );
+      }
    }
 
    // We need to get the thread name even when not recording as they are only sent once
@@ -257,6 +262,21 @@ void Profiler::addUnlockEvents( const std::vector<UnlockEvent>& unlockEvents, ui
    if( !unlockEvents.empty() )
    {
       _tracks[threadIndex].addUnlockEvents( unlockEvents );
+   }
+}
+
+void Profiler::addCoreEvents( const std::vector<CoreEvent>& coreEvents, uint32_t threadIndex )
+{
+   HOP_PROF_FUNC();
+   // Check if new thread
+   if (threadIndex >= _tracks.size())
+   {
+      _tracks.resize( threadIndex + 1 );
+   }
+
+   if ( !coreEvents.empty() )
+   {
+      _tracks[threadIndex].addCoreEvents( coreEvents );
    }
 }
 

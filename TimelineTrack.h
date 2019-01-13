@@ -24,6 +24,7 @@ struct TimelineTrack
    void addTraces( const TraceData& traces );
    void addLockWaits( const LockWaitData& lockWaits );
    void addUnlockEvents(const std::vector<UnlockEvent>& unlockEvents);
+   void addCoreEvents( const std::vector<CoreEvent>& coreEvents );
    TDepth_t maxDepth() const noexcept;
    bool hidden() const noexcept;
    float height() const noexcept;
@@ -32,6 +33,7 @@ struct TimelineTrack
    bool empty() const;
    TraceData _traces;
    LockWaitData _lockWaits;
+   CoreEventData _coreEvents;
 
    struct HighlightDrawInfo
    {

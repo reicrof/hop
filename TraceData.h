@@ -67,6 +67,11 @@ struct LockWaitData
    LodsArray lods;
 };
 
+struct CoreEventData
+{
+   std::deque<CoreEvent> data;
+};
+
 std::pair<size_t, size_t>
 visibleIndexSpan( const LodsArray& lodsArr, int lodLvl, TimeStamp absoluteStart, TimeStamp absoluteEnd, int baseDepth );
 

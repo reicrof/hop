@@ -184,47 +184,7 @@ typedef TCHAR HOP_CHAR;
 typedef sem_t* sem_handle;
 typedef int shm_handle;
 typedef char HOP_CHAR;
-<<<<<<< HEAD
-=======
-const HOP_CHAR HOP_SHARED_MEM_PREFIX[] = "/hop_";
-const HOP_CHAR HOP_SHARED_SEM_SUFFIX[] = "_sem";
-#define HOP_STRLEN( str ) strlen( (str) )
-#define HOP_STRNCPYW( dst, src, count ) strncpy( (dst), (src), (count) )
-#define HOP_STRNCATW( dst, src, count ) strncat( (dst), (src), (count) )
-#define HOP_STRNCPY( dst, src, count ) strncpy( (dst), (src), (count) )
-#define HOP_STRNCAT( dst, src, count ) strncat( (dst), (src), (count) )
 
-#define likely(x)       __builtin_expect(!!(x), 1)
-#define unlikely(x)     __builtin_expect(!!(x), 0)
-
-#define HOP_GET_THREAD_ID() (size_t)pthread_self()
-#define HOP_SLEEP_MS( x ) usleep( x * 1000 )
-
-extern HOP_CHAR* __progname;
-inline const HOP_CHAR* HOP_GET_PROG_NAME() HOP_NOEXCEPT
-{
-   return __progname;
-}
-
-#ifdef __APPLE__
-#include <cpuid.h>
-inline uint32_t HOP_GET_CPU()
-{
-  #define CPUID(INFO, LEAF, SUBLEAF) __cpuid_count(LEAF, SUBLEAF, INFO[0], INFO[1], INFO[2], INFO[3])
-   int CPUInfo[4];
-   CPUID(CPUInfo, 1, 0);
-   // CPUInfo[1] is EBX, bits 24-31 are APIC ID
-   if ((CPUInfo[3] & (1 << 9)) == 0) return -1;  // no APIC on chip
-   return (unsigned)CPUInfo[1] >> 24;
-}
-#else
-inline int HOP_GET_CPU()
-{
-   return sched_getcpu();
-}
-#endif
-
->>>>>>> Attempt to add core info
 #endif
 
 // -----------------------------
@@ -249,7 +209,37 @@ inline decltype( std::chrono::duration_cast<Precision>( Clock::now().time_since_
 using TimeStamp = decltype( getTimeStamp() );
 using TimeDuration = int64_t;
 
-HOP_STATIC_ASSERT( HOP_SHARED_MEM_SIZE >= 64000, "Shared memory size must be bigger than 64kb" );
+#if defined( _MSC_VER )
+
+inline int HOP_GET_CPU()
+{
+   return GetCurrentProcessorNumber();
+}
+
+#else // defined( _MSC_VER )
+#ifdef __APPLE__
+
+#include <cpuid.h>
+inline uint32_t HOP_GET_CPU()
+{
+#define CPUID(INFO, LEAF, SUBLEAF) __cpuid_count(LEAF, SUBLEAF, INFO[0], INFO[1], INFO[2], INFO[3])
+   int CPUInfo[4];
+   CPUID( CPUInfo, 1, 0 );
+   // CPUInfo[1] is EBX, bits 24-31 are APIC ID
+   if ((CPUInfo[3] & (1 << 9)) == 0) return -1;  // no APIC on chip
+   return (unsigned)CPUInfo[1] >> 24;
+}
+
+#else // !__APPLE__
+
+inline int HOP_GET_CPU()
+{
+   return sched_getcpu();
+}
+
+#endif // __APPLE__
+
+#endif // defined( _MSC_VER )
 
 // Custom trace types
 using TStrPtr_t = uint64_t;
@@ -343,81 +333,12 @@ struct UnlockEvent
 };
 HOP_STATIC_ASSERT( sizeof(UnlockEvent) == EXPECTED_UNLOCK_EVENT_SIZE, "Unlock Event layout has changed unexpectedly" );
 
-<<<<<<< HEAD
-=======
 struct CoreEvent
 {
    TimeStamp time;
    int core;
 };
 
-// ------ end of message.h ------------
-
-// ------ SharedMemory.h ------------
-class SharedMemory
-{
-  public:
-   enum ConnectionState
-   {
-      NOT_CONNECTED,
-      CONNECTED,
-      CONNECTED_NO_CLIENT,
-      PERMISSION_DENIED,
-      UNKNOWN_CONNECTION_ERROR
-   };
-
-   ConnectionState create( const HOP_CHAR* path, size_t size, bool isConsumer );
-   void destroy();
-
-   struct SharedMetaInfo
-   {
-      enum Flags
-      {
-         CONNECTED_PRODUCER = 1 << 0,
-         CONNECTED_CONSUMER = 1 << 1,
-         LISTENING_CONSUMER = 1 << 2,
-      };
-      std::atomic< uint32_t > flags{0};
-      const float clientVersion{0.0f};
-      const uint32_t maxThreadNb{0};
-      const size_t requestedSize{0};
-      std::atomic< TimeStamp > lastResetTimeStamp{0};
-   };
-
-   bool hasConnectedProducer() const HOP_NOEXCEPT;
-   void setConnectedProducer( bool ) HOP_NOEXCEPT;
-   bool hasConnectedConsumer() const HOP_NOEXCEPT;
-   void setConnectedConsumer( bool ) HOP_NOEXCEPT;
-   bool hasListeningConsumer() const HOP_NOEXCEPT;
-   void setListeningConsumer( bool ) HOP_NOEXCEPT;
-   TimeStamp lastResetTimestamp() const HOP_NOEXCEPT;
-   void setResetTimestamp( TimeStamp t ) HOP_NOEXCEPT;
-   ringbuf_t* ringbuffer() const HOP_NOEXCEPT;
-   uint8_t* data() const HOP_NOEXCEPT;
-   bool valid() const HOP_NOEXCEPT;
-   sem_handle semaphore() const HOP_NOEXCEPT;
-   bool tryWaitSemaphore() const HOP_NOEXCEPT;
-   void signalSemaphore() const HOP_NOEXCEPT;
-   const SharedMetaInfo* sharedMetaInfo() const HOP_NOEXCEPT;
-   ~SharedMemory();
-
-  private:
-   // Pointer into the shared memory
-   SharedMetaInfo* _sharedMetaData{NULL};
-   ringbuf_t* _ringbuf{NULL};
-   uint8_t* _data{NULL};
-   // ----------------
-   sem_handle _semaphore{NULL};
-   bool _isConsumer;
-   shm_handle _sharedMemHandle{};
-   HOP_CHAR _sharedMemPath[HOP_SHARED_MEM_MAX_NAME_SIZE];
-   HOP_CHAR _sharedSemPath[HOP_SHARED_MEM_MAX_NAME_SIZE+5];
-   std::atomic< bool > _valid{false};
-   std::mutex _creationMutex;
-};
-// ------ end of SharedMemory.h ------------
-
->>>>>>> Attempt to add core info
 class Client;
 class SharedMemory;
 class ClientManager
@@ -1245,7 +1166,7 @@ class Client
 
    void addCoreEvent( int core, TimeStamp endTime )
    {
-      if( _cores.back().core != core )
+      if( _cores.empty() || _cores.back().core != core )
          _cores.emplace_back( CoreEvent{ endTime, core } );
    }
 

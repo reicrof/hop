@@ -366,6 +366,8 @@ void Server::PendingData::swap(PendingData & rhs)
     swap(lockWaitThreadIndex, rhs.lockWaitThreadIndex);
     swap(unlockEvents, rhs.unlockEvents);
     swap(unlockEventsThreadIndex, rhs.unlockEventsThreadIndex);
+    swap(coreEvents, rhs.coreEvents);
+    swap(coreEventsThreadIndex, rhs.coreEventsThreadIndex );
     swap(threadNames, rhs.threadNames);
 }
 

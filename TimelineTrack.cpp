@@ -161,6 +161,13 @@ void TimelineTrack::addUnlockEvents(const std::vector<UnlockEvent>& unlockEvents
    }
 }
 
+void TimelineTrack::addCoreEvents( const std::vector<CoreEvent>& coreEvents )
+{
+   _coreEvents.data.insert( _coreEvents.data.end(), coreEvents.begin(), coreEvents.end() );
+
+   assert_is_sorted( _coreEvents.data.begin(), _coreEvents.data.end() );
+}
+
 TDepth_t TimelineTrack::maxDepth() const noexcept
 {
    return _traces.entries.maxDepth;
