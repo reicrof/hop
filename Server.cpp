@@ -10,6 +10,29 @@
 #include <algorithm>
 #include <chrono>
 
+static void removeDuplicates( std::vector< hop::CoreEvent >& coreEvents )
+{
+   auto first = coreEvents.begin();
+   const auto last = coreEvents.end();
+   auto curEl = coreEvents.begin();
+   while( ++first != last )
+   {
+      if( first->core != curEl->core )
+      {
+         std::swap( *( first - 1 ), *curEl );
+         curEl = first;
+      }
+   }
+   std::swap( *( first - 1 ), *curEl );
+   auto newEnd = std::unique(
+       coreEvents.begin(),
+       coreEvents.end(),
+       []( const hop::CoreEvent& lhs, const hop::CoreEvent& rhs ) {
+          return lhs.core == rhs.core;
+       } );
+   coreEvents.erase( newEnd, coreEvents.end() );
+}
+
 namespace hop
 {
 bool Server::start( const char* name )
@@ -287,7 +310,10 @@ size_t Server::handleNewMessage( uint8_t* data, size_t maxSize, TimeStamp minTim
       case MsgType::PROFILER_CORE_EVENT:
       {
          std::vector< CoreEvent > coreEvents( msgInfo->coreEvents.count );
+
          memcpy( coreEvents.data(), bufPtr, coreEvents.size() * sizeof(CoreEvent) );
+
+         removeDuplicates( coreEvents );
 
          bufPtr += coreEvents.size() * sizeof(CoreEvent);
          assert( (size_t)(bufPtr - data) <= maxSize );

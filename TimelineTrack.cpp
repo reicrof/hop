@@ -150,8 +150,8 @@ static void drawCoresLabels(
 
    std::vector<DrawData> drawData;
    auto curIdx = firstIdx;
-   TimeStamp prevTime = it1->time;
-   for( ++it1; it1 != it2; ++it1, ++curIdx )
+   TimeStamp prevTime = 0;
+   for( ; it1 != it2; ++it1, ++curIdx )
    {
       drawData.push_back(createDrawDataForTrace(
               it1->time, it1->time - prevTime, 0, 0, drawPos.x, drawPos.y, di, windowWidthPxl ) );
@@ -173,60 +173,6 @@ static void drawCoresLabels(
       ImGui::PopID();
    }
    ImGui::PopStyleColor();
-
-   // HOP_PROF_SPLIT( "Gathering lock waits drawing info" );
-
-   // for ( size_t i = spanLodIndex.first; i < spanLodIndex.second; ++i )
-   // {
-   //    const auto& t = lockWaits.lods[lodLevel][i];
-   //    auto& lodToDraw = t.isLoded ? lodTracesToDraw : tracesToDraw;
-   //    lodToDraw.push_back( createDrawDataForTrace(
-   //           t.end, t.delta, t.depth, t.traceIndex, posX, posY, drawInfo, windowWidthPxl ) );
-   // }
-
-   // const auto& zoneColors = g_options.zoneColors;
-   // const auto& enabledZone = g_options.zoneEnabled;
-   // const float disabledZoneOpacity = g_options.disabledZoneOpacity;
-   // ImGui::PushStyleColor(ImGuiCol_Button, zoneColors[HOP_MAX_ZONES] );
-   // ImGui::PushStyleColor(ImGuiCol_ButtonHovered, zoneColors[HOP_MAX_ZONES] );
-   // ImGui::PushStyleVar(ImGuiStyleVar_Alpha, enabledZone[HOP_MAX_ZONES] ? 1.0f : disabledZoneOpacity );
-
-   // HOP_PROF_SPLIT( "Drawing Lock Wait Lod" );
-   // for ( const auto& t : lodTracesToDraw )
-   // {
-   //    ImGui::SetCursorScreenPos( t.posPxl );
-   //    ImGui::Button( "", ImVec2( t.lengthPxl, TimelineTrack::TRACE_HEIGHT ) );
-   //    if ( ImGui::IsItemHovered() )
-   //    {
-   //       const auto lockInfo = highlightLockOwner( threadIndex, t.traceIndex, drawInfo );
-   //       if ( t.lengthPxl > 3 )
-   //       {
-   //          char lockTooltip[256] = "Waiting lock for ~";
-   //          ImGui::BeginTooltip();
-   //          formatNanosDurationToDisplay(
-   //              t.duration,
-   //              lockTooltip + strlen( lockTooltip ),
-   //              sizeof( lockTooltip ) - strlen( lockTooltip ) );
-
-   //          ImGui::TextUnformatted( lockTooltip );
-   //          ImGui::EndTooltip();
-   //       }
-
-   //       _tracks[threadIndex]._highlightsDrawData.emplace_back(
-   //           TimelineTrack::HighlightDrawInfo{t.posPxl[0], t.posPxl[1], t.lengthPxl, 0xFFFFFF} );
-
-   //       if ( ImGui::IsMouseDoubleClicked( 0 ) )
-   //       {
-   //          const TimeDuration delta = lockWaits.entries.deltas[t.traceIndex];
-   //          TimelineMessage msg;
-   //          msg.type = TimelineMessageType::FRAME_TO_ABSOLUTE_TIME;
-   //          msg.frameToTime.time = lockWaits.entries.ends[t.traceIndex] - delta;
-   //          msg.frameToTime.duration = delta;
-   //          msg.frameToTime.pushNavState = true;
-   //          timelineMsg.push_back( msg );
-   //       }
-   //    }
-   // }
 }
 
 namespace hop
@@ -305,7 +251,20 @@ void TimelineTrack::addUnlockEvents(const std::vector<UnlockEvent>& unlockEvents
 
 void TimelineTrack::addCoreEvents( const std::vector<CoreEvent>& coreEvents )
 {
-   _coreEvents.data.insert( _coreEvents.data.end(), coreEvents.begin(), coreEvents.end() );
+   auto firstNewCoreEv = coreEvents.begin();
+   if( !_coreEvents.data.empty() )
+   {
+      auto& lastCoreEv = _coreEvents.data.back();
+
+      // If we are still on the same core, merge the last with the first new event
+      if( lastCoreEv.core == firstNewCoreEv->core )
+      {
+         lastCoreEv.time = firstNewCoreEv->time;
+         ++firstNewCoreEv;
+      }
+   }
+
+   _coreEvents.data.insert( _coreEvents.data.end(), firstNewCoreEv, coreEvents.end() );
 
    assert_is_sorted( _coreEvents.data.begin(), _coreEvents.data.end() );
 }
