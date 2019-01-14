@@ -24,6 +24,43 @@ static constexpr uint32_t DISABLED_COLOR = 0xFF505050;
 
 static const char* CTXT_MENU_STR = "Context Menu";
 
+namespace
+{
+   struct DrawData
+   {
+      ImVec2 posPxl;
+      hop::TimeDuration duration;
+      size_t traceIndex;
+      float lengthPxl;
+   };
+}  // namespace
+
+static DrawData createDrawDataForTrace(
+    hop::TimeStamp traceEnd,
+    hop::TimeDuration traceDelta,
+    hop::TDepth_t traceDepth,
+    size_t traceIdx,
+    const float posX,
+    const float posY,
+    const hop::TimelineTracks::DrawInfo& drawInfo,
+    const float windowWidthPxl )
+{
+   using namespace hop;
+   const TimeStamp traceEndTime = ( traceEnd - drawInfo.timeline.globalStartTime );
+   const auto traceEndPxl = nanosToPxl<float>(
+       windowWidthPxl,
+       drawInfo.timeline.duration,
+       traceEndTime - drawInfo.timeline.relativeStartTime );
+   const float traceLengthPxl = std::max(
+       MIN_TRACE_LENGTH_PXL,
+       nanosToPxl<float>( windowWidthPxl, drawInfo.timeline.duration, traceDelta ) );
+
+   const auto tracePos = ImVec2(
+       posX + traceEndPxl - traceLengthPxl, posY + traceDepth * TimelineTrack::PADDED_TRACE_SIZE );
+
+   return DrawData{tracePos, traceDelta, traceIdx, traceLengthPxl};
+}
+
 static bool drawSeparator( uint32_t threadIndex, bool highlightSeparator )
 {
    const float drawPosY = ImGui::GetCursorScreenPos().y - ImGui::GetWindowPos().y;
@@ -85,6 +122,111 @@ static void drawHighlightedTraces(
 
       drawList->AddRectFilled( topLeft, bottomRight, color );
    }
+}
+
+static void drawCoresLabels(
+    const ImVec2& drawPos,
+    const hop::CoreEventData& coreData,
+    const hop::TimelineTracks::DrawInfo& di )
+{
+   if( coreData.data.empty() ) return;
+
+   using namespace hop;
+
+   const auto absoluteStart = di.timeline.globalStartTime;
+   const float windowWidthPxl = ImGui::GetWindowWidth();
+
+   // The time range to draw in absolute time
+   const TimeStamp firstTraceAbsoluteTime = absoluteStart + di.timeline.relativeStartTime;
+   const TimeStamp lastTraceAbsoluteTime = firstTraceAbsoluteTime + di.timeline.duration;
+
+   CoreEvent firstEv = { firstTraceAbsoluteTime, 0 };
+   CoreEvent lastEv = { lastTraceAbsoluteTime, 0 };
+   auto cmp = []( const CoreEvent& lhs, const CoreEvent& rhs) { return lhs.time < rhs.time; };
+   auto it1 = std::lower_bound( coreData.data.begin(), coreData.data.end(), firstEv, cmp );
+   auto it2 = std::upper_bound( coreData.data.begin(), coreData.data.end(), lastEv, cmp );
+
+   const auto firstIdx = std::distance( coreData.data.begin(), it1 );
+
+   std::vector<DrawData> drawData;
+   auto curIdx = firstIdx;
+   TimeStamp prevTime = it1->time;
+   for( ++it1; it1 != it2; ++it1, ++curIdx )
+   {
+      drawData.push_back(createDrawDataForTrace(
+              it1->time, it1->time - prevTime, 0, 0, drawPos.x, drawPos.y, di, windowWidthPxl ) );
+      prevTime = it1->time;
+   }
+
+   char curName[32] = "Core ";
+   const int prefixSize = strlen( curName );
+
+   ImGui::PushStyleColor(ImGuiCol_Button, 0xFF666666 );
+
+   curIdx = firstIdx;
+   for ( const auto& t : drawData )
+   {
+      ImGui::PushID(curIdx);
+      snprintf( curName + prefixSize, sizeof(curName)-prefixSize, "%u", coreData.data[curIdx++].core );
+      ImGui::SetCursorScreenPos( t.posPxl );
+      ImGui::Button( curName, ImVec2( t.lengthPxl, TimelineTrack::TRACE_HEIGHT - 5 ) );
+      ImGui::PopID();
+   }
+   ImGui::PopStyleColor();
+
+   // HOP_PROF_SPLIT( "Gathering lock waits drawing info" );
+
+   // for ( size_t i = spanLodIndex.first; i < spanLodIndex.second; ++i )
+   // {
+   //    const auto& t = lockWaits.lods[lodLevel][i];
+   //    auto& lodToDraw = t.isLoded ? lodTracesToDraw : tracesToDraw;
+   //    lodToDraw.push_back( createDrawDataForTrace(
+   //           t.end, t.delta, t.depth, t.traceIndex, posX, posY, drawInfo, windowWidthPxl ) );
+   // }
+
+   // const auto& zoneColors = g_options.zoneColors;
+   // const auto& enabledZone = g_options.zoneEnabled;
+   // const float disabledZoneOpacity = g_options.disabledZoneOpacity;
+   // ImGui::PushStyleColor(ImGuiCol_Button, zoneColors[HOP_MAX_ZONES] );
+   // ImGui::PushStyleColor(ImGuiCol_ButtonHovered, zoneColors[HOP_MAX_ZONES] );
+   // ImGui::PushStyleVar(ImGuiStyleVar_Alpha, enabledZone[HOP_MAX_ZONES] ? 1.0f : disabledZoneOpacity );
+
+   // HOP_PROF_SPLIT( "Drawing Lock Wait Lod" );
+   // for ( const auto& t : lodTracesToDraw )
+   // {
+   //    ImGui::SetCursorScreenPos( t.posPxl );
+   //    ImGui::Button( "", ImVec2( t.lengthPxl, TimelineTrack::TRACE_HEIGHT ) );
+   //    if ( ImGui::IsItemHovered() )
+   //    {
+   //       const auto lockInfo = highlightLockOwner( threadIndex, t.traceIndex, drawInfo );
+   //       if ( t.lengthPxl > 3 )
+   //       {
+   //          char lockTooltip[256] = "Waiting lock for ~";
+   //          ImGui::BeginTooltip();
+   //          formatNanosDurationToDisplay(
+   //              t.duration,
+   //              lockTooltip + strlen( lockTooltip ),
+   //              sizeof( lockTooltip ) - strlen( lockTooltip ) );
+
+   //          ImGui::TextUnformatted( lockTooltip );
+   //          ImGui::EndTooltip();
+   //       }
+
+   //       _tracks[threadIndex]._highlightsDrawData.emplace_back(
+   //           TimelineTrack::HighlightDrawInfo{t.posPxl[0], t.posPxl[1], t.lengthPxl, 0xFFFFFF} );
+
+   //       if ( ImGui::IsMouseDoubleClicked( 0 ) )
+   //       {
+   //          const TimeDuration delta = lockWaits.entries.deltas[t.traceIndex];
+   //          TimelineMessage msg;
+   //          msg.type = TimelineMessageType::FRAME_TO_ABSOLUTE_TIME;
+   //          msg.frameToTime.time = lockWaits.entries.ends[t.traceIndex] - delta;
+   //          msg.frameToTime.duration = delta;
+   //          msg.frameToTime.pushNavState = true;
+   //          timelineMsg.push_back( msg );
+   //       }
+   //    }
+   // }
 }
 
 namespace hop
@@ -472,6 +614,9 @@ std::vector< TimelineMessage > TimelineTracks::draw( const DrawInfo& info )
       if( threadHidden )
          threadLabelCol = DISABLED_COLOR;
 
+      // Draw the core labels
+      drawCoresLabels( ImGui::GetCursorScreenPos(), _tracks[i]._coreEvents, info );
+
       // Draw thread label
       ImGui::PushID(i);
       ImGui::PushStyleColor( ImGuiCol_Button, threadLabelCol );
@@ -567,43 +712,6 @@ static uint32_t setBitIndex( TZoneId_t zone )
    }
    return count-1;
 }
-
-namespace
-{
-   struct DrawData
-   {
-      ImVec2 posPxl;
-      TimeDuration duration;
-      size_t traceIndex;
-      float lengthPxl;
-   };
-
-   DrawData createDrawDataForTrace(
-       TimeStamp traceEnd,
-       TimeDuration traceDelta,
-       TDepth_t traceDepth,
-       size_t traceIdx,
-       const float posX,
-       const float posY,
-       const TimelineTracks::DrawInfo& drawInfo,
-       const float windowWidthPxl )
-   {
-      const TimeStamp traceEndTime = ( traceEnd - drawInfo.timeline.globalStartTime );
-      const auto traceEndPxl = nanosToPxl<float>(
-          windowWidthPxl,
-          drawInfo.timeline.duration,
-          traceEndTime - drawInfo.timeline.relativeStartTime );
-      const float traceLengthPxl = std::max(
-          MIN_TRACE_LENGTH_PXL,
-          nanosToPxl<float>( windowWidthPxl, drawInfo.timeline.duration, traceDelta ) );
-
-      const auto tracePos = ImVec2(
-          posX + traceEndPxl - traceLengthPxl,
-          posY + traceDepth * TimelineTrack::PADDED_TRACE_SIZE );
-
-      return DrawData{tracePos, traceDelta, traceIdx, traceLengthPxl};
-   }
-} // anonymous namespace
 
 void TimelineTracks::drawTraces(
     uint32_t threadIndex,
