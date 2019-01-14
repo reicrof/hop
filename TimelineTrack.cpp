@@ -146,11 +146,15 @@ static void drawCoresLabels(
    auto it1 = std::lower_bound( coreData.data.begin(), coreData.data.end(), firstEv, cmp );
    auto it2 = std::upper_bound( coreData.data.begin(), coreData.data.end(), lastEv, cmp );
 
+   if( it1 != coreData.data.begin() ) --it1;
+   if( it2 != coreData.data.end() ) ++it2;
+
    const auto firstIdx = std::distance( coreData.data.begin(), it1 );
 
    std::vector<DrawData> drawData;
+   drawData.reserve( std::distance( it1, it2 ) );
    auto curIdx = firstIdx;
-   TimeStamp prevTime = 0;
+   TimeStamp prevTime = it1 == coreData.data.begin() ? absoluteStart : (it1-1)->time;
    for( ; it1 != it2; ++it1, ++curIdx )
    {
       drawData.push_back(createDrawDataForTrace(

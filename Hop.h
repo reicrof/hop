@@ -1166,8 +1166,7 @@ class Client
 
    void addCoreEvent( int core, TimeStamp endTime )
    {
-      if( _cores.empty() || _cores.back().core != core )
-         _cores.emplace_back( CoreEvent{ endTime, core } );
+      _cores.emplace_back( CoreEvent{ endTime, core } );
    }
 
    void addWaitLockTrace( void* mutexAddr, TimeStamp start, TimeStamp end, TDepth_t depth )

@@ -313,10 +313,11 @@ size_t Server::handleNewMessage( uint8_t* data, size_t maxSize, TimeStamp minTim
 
          memcpy( coreEvents.data(), bufPtr, coreEvents.size() * sizeof(CoreEvent) );
 
-         removeDuplicates( coreEvents );
-
+         // Must be done before removing duplicates
          bufPtr += coreEvents.size() * sizeof(CoreEvent);
          assert( (size_t)(bufPtr - data) <= maxSize );
+
+         removeDuplicates( coreEvents );
 
          assert_is_sorted( coreEvents.begin(), coreEvents.end() );
 
@@ -378,6 +379,8 @@ void Server::PendingData::clear()
     lockWaitThreadIndex.clear();
     unlockEvents.clear();
     unlockEventsThreadIndex.clear();
+    coreEvents.clear();
+    coreEventsThreadIndex.clear();
     threadNames.clear();
 }
 
