@@ -504,8 +504,14 @@ void hop::Profiler::draw( uint32_t /*windowWidth*/, uint32_t /*windowHeight*/ )
    ImGui::PushStyleVar( ImGuiStyleVar_WindowRounding, 5.0f );
 
    drawMenuBar();
+
    // Render modal window, if any
-   renderModalWindow();
+   const bool modalOpen = modalWindowShowing();
+   if( modalOpen )
+   {
+      renderModalWindow();
+   }
+
    drawOptionsWindow( g_options );
 
    const auto toolbarDrawPos = ImGui::GetCursorScreenPos();
@@ -554,7 +560,7 @@ void hop::Profiler::draw( uint32_t /*windowWidth*/, uint32_t /*windowHeight*/ )
       _timeline.handleDeferredActions( timelineActions );
    }
 
-   handleHotkey();
+   handleHotkey( modalOpen );
    handleMouse();
 
    ImGui::PopStyleVar(2);
@@ -678,17 +684,17 @@ void hop::Profiler::drawMenuBar()
    }
 }
 
-void hop::Profiler::handleHotkey()
+void hop::Profiler::handleHotkey( bool modalWindowOpened )
 {
    // Let the tracks handle the hotkeys first.
    if( _tracks.handleHotkey() )
       return;
 
-   if( ImGui::IsKeyReleased( SDL_SCANCODE_HOME ) )
+   if( ImGui::IsKeyReleased( ImGui::GetKeyIndex( ImGuiKey_Home ) ) )
    {
       _timeline.moveToStart();
    }
-   else if( ImGui::IsKeyReleased( SDL_SCANCODE_END ) )
+   else if( ImGui::IsKeyReleased( ImGui::GetKeyIndex( ImGuiKey_End ) ) )
    {
       _timeline.moveToPresentTime();
       _timeline.setRealtime ( true );
@@ -705,18 +711,22 @@ void hop::Profiler::handleHotkey()
    {
       _timeline.redoNavigation();
    }
-   else if( ImGui::IsKeyPressed( SDL_SCANCODE_LEFT ) )
+   else if( ImGui::IsKeyPressed( ImGui::GetKeyIndex( ImGuiKey_LeftArrow ) ) )
    {
       _timeline.previousBookmark();
    }
-   else if( ImGui::IsKeyPressed( SDL_SCANCODE_RIGHT ) )
+   else if( ImGui::IsKeyPressed( ImGui::GetKeyIndex( ImGuiKey_RightArrow ) ) )
    {
       _timeline.nextBookmark();
    }
-   else if( ImGui::IsKeyDown( SDLK_DELETE ) && _tracks.size() > 0 )
+   else if( ImGui::IsKeyDown( ImGui::GetKeyIndex( ImGuiKey_Delete ) ) && _tracks.size() > 0 )
    {
       if( ImGui::IsWindowFocused( ImGuiFocusedFlags_RootAndChildWindows ) && !hop::modalWindowShowing() )
          hop::displayModalWindow( "Delete all traces?", hop::MODAL_TYPE_YES_NO, [&](){ clear(); } );
+   }
+   else if( ImGui::IsKeyPressed( ImGui::GetKeyIndex( ImGuiKey_Escape ) ) && !modalWindowOpened )
+   {
+      hop::displayModalWindow( "Exit ?", hop::MODAL_TYPE_YES_NO, [&]() { g_run = false; } );
    }
 }
 
