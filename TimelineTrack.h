@@ -19,13 +19,13 @@ struct TimelineTrack
    static float TRACE_VERTICAL_PADDING;
    static float PADDED_TRACE_SIZE;
 
-   void setTrackName( TStrPtr_t name ) noexcept;
-   TStrPtr_t trackName() const noexcept;
+   void setTrackName( StrPtr_t name ) noexcept;
+   StrPtr_t trackName() const noexcept;
    void addTraces( const TraceData& traces );
    void addLockWaits( const LockWaitData& lockWaits );
    void addUnlockEvents(const std::vector<UnlockEvent>& unlockEvents);
    void addCoreEvents( const std::vector<CoreEvent>& coreEvents );
-   TDepth_t maxDepth() const noexcept;
+   Depth_t maxDepth() const noexcept;
    bool hidden() const noexcept;
    float height() const noexcept;
    float heightWithThreadLabel() const noexcept;
@@ -49,7 +49,7 @@ struct TimelineTrack
 
 private:
    float _trackHeight{9999.0f};
-   TStrPtr_t _trackName{0};
+   StrPtr_t _trackName{0};
 
    friend size_t serializedSize( const TimelineTrack& ti );
    friend size_t serialize( const TimelineTrack& ti, char* );

@@ -280,7 +280,7 @@ void Profiler::addCoreEvents( const std::vector<CoreEvent>& coreEvents, uint32_t
    }
 }
 
-void Profiler::addThreadName( TStrPtr_t name, uint32_t threadIndex )
+void Profiler::addThreadName( StrPtr_t name, uint32_t threadIndex )
 {
    // Check if new thread
    if ( threadIndex >= _tracks.size() )

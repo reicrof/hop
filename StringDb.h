@@ -17,7 +17,7 @@ public:
    void clear();
    void addStringData( const std::vector<char>& inData );
    void addStringData( const char* inData, size_t count );
-   size_t getStringIndex( hop::TStrPtr_t strId ) const;
+   size_t getStringIndex( hop::StrPtr_t strId ) const;
    size_t sizeInBytes() const noexcept;
    inline const char* getString( size_t index ) const
    {
@@ -30,7 +30,7 @@ public:
    friend size_t deserialize( const char* data, StringDb& strDb );
 
 private:
-   std::unordered_map< hop::TStrPtr_t, size_t > _stringIndices;
+   std::unordered_map< hop::StrPtr_t, size_t > _stringIndices;
    std::vector< char > _strData;
 };
 

@@ -46,7 +46,7 @@ struct TraceDetailDrawResult
 
 struct TraceStats
 {
-   TStrPtr_t fctNameId;
+   StrPtr_t fctNameId;
    size_t count;
    TimeDuration min, max, median;
    std::vector< float > displayableDurations;

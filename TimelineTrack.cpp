@@ -38,7 +38,7 @@ namespace
 static DrawData createDrawDataForTrace(
     hop::TimeStamp traceEnd,
     hop::TimeDuration traceDelta,
-    hop::TDepth_t traceDepth,
+    hop::Depth_t traceDepth,
     size_t traceIdx,
     const float posX,
     const float posY,
@@ -186,12 +186,12 @@ float TimelineTrack::TRACE_HEIGHT = 20.0f;
 float TimelineTrack::TRACE_VERTICAL_PADDING = 2.0f;
 float TimelineTrack::PADDED_TRACE_SIZE = TRACE_HEIGHT + TRACE_VERTICAL_PADDING;
 
-void TimelineTrack::setTrackName( TStrPtr_t name ) noexcept
+void TimelineTrack::setTrackName( StrPtr_t name ) noexcept
 {
    _trackName = name;
 }
 
-TStrPtr_t TimelineTrack::trackName() const noexcept
+StrPtr_t TimelineTrack::trackName() const noexcept
 {
    return _trackName;
 }
@@ -273,7 +273,7 @@ void TimelineTrack::addCoreEvents( const std::vector<CoreEvent>& coreEvents )
    assert_is_sorted( _coreEvents.data.begin(), _coreEvents.data.end() );
 }
 
-TDepth_t TimelineTrack::maxDepth() const noexcept
+Depth_t TimelineTrack::maxDepth() const noexcept
 {
    return _traces.entries.maxDepth;
 }
@@ -310,19 +310,19 @@ size_t serializedSize( const TimelineTrack& ti )
    const size_t serializedSize =
        // Traces
        sizeof( size_t ) +                            // Traces count
-       sizeof( hop::TDepth_t ) +                     // Max depth
+       sizeof( hop::Depth_t ) +                     // Max depth
        sizeof( hop::TimeStamp ) * tracesCount +      // ends
        sizeof( hop::TimeDuration ) * tracesCount +   // deltas
-       sizeof( hop::TStrPtr_t ) * tracesCount * 2 +  // fileNameId and fctNameIds
-       sizeof( hop::TLineNb_t ) * tracesCount +      // lineNbs
-       sizeof( hop::TZoneId_t ) * tracesCount +      // zones
-       sizeof( hop::TDepth_t ) * tracesCount +       // depths
+       sizeof( hop::StrPtr_t ) * tracesCount * 2 +  // fileNameId and fctNameIds
+       sizeof( hop::LineNb_t ) * tracesCount +      // lineNbs
+       sizeof( hop::ZoneId_t ) * tracesCount +      // zones
+       sizeof( hop::Depth_t ) * tracesCount +       // depths
 
        // Lock Waits
        sizeof( size_t ) +                            // LockWaits count
        sizeof( hop::TimeStamp ) * lockwaitsCount +   // ends
        sizeof( hop::TimeDuration ) * lockwaitsCount +// deltas
-       sizeof( hop::TDepth_t ) * lockwaitsCount +    // depths
+       sizeof( hop::Depth_t ) * lockwaitsCount +    // depths
        sizeof( void* ) * lockwaitsCount +            // mutexAddrs
        sizeof( hop::TimeStamp ) * lockwaitsCount;    // lockReleases
 
@@ -343,8 +343,8 @@ size_t serialize( const TimelineTrack& ti, char* data )
     i += sizeof( size_t );
 
     // Max depth
-    memcpy( &data[i], &ti._traces.entries.maxDepth, sizeof( hop::TDepth_t ) );
-    i += sizeof( hop::TDepth_t );
+    memcpy( &data[i], &ti._traces.entries.maxDepth, sizeof( hop::Depth_t ) );
+    i += sizeof( hop::Depth_t );
 
     //ends
     std::copy( ti._traces.entries.ends.begin(), ti._traces.entries.ends.end(), (hop::TimeStamp*)&data[i] );
@@ -355,24 +355,24 @@ size_t serialize( const TimelineTrack& ti, char* data )
     i += sizeof( hop::TimeDuration ) * tracesCount;
 
     // fileNameIds
-    std::copy( ti._traces.fileNameIds.begin(), ti._traces.fileNameIds.end(), (hop::TStrPtr_t*)&data[i]);
-    i += sizeof( hop::TStrPtr_t ) * tracesCount;
+    std::copy( ti._traces.fileNameIds.begin(), ti._traces.fileNameIds.end(), (hop::StrPtr_t*)&data[i]);
+    i += sizeof( hop::StrPtr_t ) * tracesCount;
 
     // fctNameIds
-    std::copy( ti._traces.fctNameIds.begin(), ti._traces.fctNameIds.end(), (hop::TStrPtr_t*)&data[i]);
-    i += sizeof( hop::TStrPtr_t ) * tracesCount;
+    std::copy( ti._traces.fctNameIds.begin(), ti._traces.fctNameIds.end(), (hop::StrPtr_t*)&data[i]);
+    i += sizeof( hop::StrPtr_t ) * tracesCount;
 
     // lineNbs
-    std::copy( ti._traces.lineNbs.begin(), ti._traces.lineNbs.end(), (hop::TLineNb_t*) &data[i] );
-    i += sizeof( hop::TLineNb_t ) * tracesCount;
+    std::copy( ti._traces.lineNbs.begin(), ti._traces.lineNbs.end(), (hop::LineNb_t*) &data[i] );
+    i += sizeof( hop::LineNb_t ) * tracesCount;
 
     // zones
-    std::copy( ti._traces.zones.begin(), ti._traces.zones.end(), (hop::TZoneId_t*) &data[i] );
-    i += sizeof( hop::TZoneId_t ) * tracesCount;
+    std::copy( ti._traces.zones.begin(), ti._traces.zones.end(), (hop::ZoneId_t*) &data[i] );
+    i += sizeof( hop::ZoneId_t ) * tracesCount;
 
     // depths
-    std::copy( ti._traces.entries.depths.begin(), ti._traces.entries.depths.end(), (hop::TDepth_t*)&data[i] );
-    i += sizeof( hop::TDepth_t ) * tracesCount;
+    std::copy( ti._traces.entries.depths.begin(), ti._traces.entries.depths.end(), (hop::Depth_t*)&data[i] );
+    i += sizeof( hop::Depth_t ) * tracesCount;
     }
 
     // Serialize LockWaits
@@ -391,8 +391,8 @@ size_t serialize( const TimelineTrack& ti, char* data )
     i += sizeof( hop::TimeDuration ) * lockwaitsCount;
 
     // depths
-    std::copy( ti._lockWaits.entries.depths.begin(), ti._lockWaits.entries.depths.end(), (hop::TDepth_t*)&data[i] );
-    i += sizeof( hop::TDepth_t ) * lockwaitsCount;
+    std::copy( ti._lockWaits.entries.depths.begin(), ti._lockWaits.entries.depths.end(), (hop::Depth_t*)&data[i] );
+    i += sizeof( hop::Depth_t ) * lockwaitsCount;
 
     // mutexAddrs
     std::copy( ti._lockWaits.mutexAddrs.begin(), ti._lockWaits.mutexAddrs.end(), (void**)&data[i] );
@@ -416,8 +416,8 @@ size_t deserialize( const char* data, TimelineTrack& ti )
     {
     const size_t tracesCount = *(size_t*)&data[i];
     i += sizeof( size_t );
-    ti._traces.entries.maxDepth = *(hop::TDepth_t*)&data[i];
-    i += sizeof( hop::TDepth_t );
+    ti._traces.entries.maxDepth = *(hop::Depth_t*)&data[i];
+    i += sizeof( hop::Depth_t );
 
     // ends
     std::copy((hop::TimeStamp*)&data[i], ((hop::TimeStamp*) &data[i]) + tracesCount, std::back_inserter(ti._traces.entries.ends));
@@ -428,24 +428,24 @@ size_t deserialize( const char* data, TimelineTrack& ti )
     i += sizeof( hop::TimeDuration ) * tracesCount;
 
     // fileNameIds
-    std::copy((hop::TStrPtr_t*)&data[i], ((hop::TStrPtr_t*)&data[i]) + tracesCount, std::back_inserter(ti._traces.fileNameIds));
-    i += sizeof( hop::TStrPtr_t ) * tracesCount;
+    std::copy((hop::StrPtr_t*)&data[i], ((hop::StrPtr_t*)&data[i]) + tracesCount, std::back_inserter(ti._traces.fileNameIds));
+    i += sizeof( hop::StrPtr_t ) * tracesCount;
 
     // fctNameIds
-    std::copy((hop::TStrPtr_t*) &data[i], ((hop::TStrPtr_t*)&data[i]) + tracesCount, std::back_inserter(ti._traces.fctNameIds));
-    i += sizeof( hop::TStrPtr_t ) * tracesCount;
+    std::copy((hop::StrPtr_t*) &data[i], ((hop::StrPtr_t*)&data[i]) + tracesCount, std::back_inserter(ti._traces.fctNameIds));
+    i += sizeof( hop::StrPtr_t ) * tracesCount;
 
     // lineNbs
-    std::copy((hop::TLineNb_t*)&data[i], ((hop::TLineNb_t*)&data[i]) + tracesCount, std::back_inserter(ti._traces.lineNbs));
-    i += sizeof( hop::TLineNb_t ) * tracesCount;
+    std::copy((hop::LineNb_t*)&data[i], ((hop::LineNb_t*)&data[i]) + tracesCount, std::back_inserter(ti._traces.lineNbs));
+    i += sizeof( hop::LineNb_t ) * tracesCount;
 
     // zones
-    std::copy((hop::TZoneId_t*)&data[i], ((hop::TZoneId_t*)&data[i]) + tracesCount, std::back_inserter(ti._traces.zones));
-    i += sizeof( hop::TZoneId_t ) * tracesCount;
+    std::copy((hop::ZoneId_t*)&data[i], ((hop::ZoneId_t*)&data[i]) + tracesCount, std::back_inserter(ti._traces.zones));
+    i += sizeof( hop::ZoneId_t ) * tracesCount;
 
     // depths
-    std::copy((hop::TDepth_t*)&data[i], ((hop::TDepth_t*) &data[i]) + tracesCount, std::back_inserter(ti._traces.entries.depths));
-    i += sizeof( hop::TDepth_t ) * tracesCount;
+    std::copy((hop::Depth_t*)&data[i], ((hop::Depth_t*) &data[i]) + tracesCount, std::back_inserter(ti._traces.entries.depths));
+    i += sizeof( hop::Depth_t ) * tracesCount;
     }
 
     // Deserializing LockWaits
@@ -461,8 +461,8 @@ size_t deserialize( const char* data, TimelineTrack& ti )
     i += sizeof( hop::TimeDuration ) * lockWaitsCount;
 
     // depths
-    std::copy((hop::TDepth_t*)&data[i], ((hop::TDepth_t*) &data[i]) + lockWaitsCount, std::back_inserter(ti._lockWaits.entries.depths));
-    i += sizeof( hop::TDepth_t ) * lockWaitsCount;
+    std::copy((hop::Depth_t*)&data[i], ((hop::Depth_t*) &data[i]) + lockWaitsCount, std::back_inserter(ti._lockWaits.entries.depths));
+    i += sizeof( hop::Depth_t ) * lockWaitsCount;
 
     // mutexAddrs
     std::copy((void**)&data[i], ((void**) &data[i]) + lockWaitsCount, std::back_inserter(ti._lockWaits.mutexAddrs));
@@ -665,7 +665,7 @@ float TimelineTracks::totalHeight() const
 }
 
 // Returns the index of the first set bit
-static uint32_t setBitIndex( TZoneId_t zone )
+static uint32_t setBitIndex( ZoneId_t zone )
 {
    uint32_t count = 0;
    while ( zone )
@@ -1113,7 +1113,7 @@ void TimelineTracks::drawSearchWindow(
       const auto& timelinetrack = _tracks[selection.selectedThreadIdx];
       const TimeStamp absEndTime = timelinetrack._traces.entries.ends[selection.selectedTraceIdx];
       const TimeStamp delta = timelinetrack._traces.entries.deltas[selection.selectedTraceIdx];
-      const TDepth_t depth = timelinetrack._traces.entries.depths[selection.selectedTraceIdx];
+      const Depth_t depth = timelinetrack._traces.entries.depths[selection.selectedTraceIdx];
 
       // If the thread was hidden, display it so we can see the selected trace
       _tracks[selection.selectedThreadIdx].setTrackHeight( 9999.0f );
@@ -1147,7 +1147,7 @@ void TimelineTracks::drawTraceDetailsWindow( const DrawInfo& info, std::vector< 
 
    if( traceDetailRes.clicked )
    {
-      TDepth_t minDepth = std::numeric_limits< TDepth_t >::max();
+      Depth_t minDepth = std::numeric_limits< Depth_t >::max();
       TimeStamp minTime = std::numeric_limits< TimeStamp >::max();
       TimeStamp maxTime = std::numeric_limits< TimeStamp >::min();
       const auto& timelinetrack = _tracks[traceDetailRes.hoveredThreadIdx];

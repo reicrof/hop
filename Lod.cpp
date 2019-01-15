@@ -48,7 +48,7 @@ LodsArray computeLods( const Entries& entries, size_t idOffset )
    int lodLvl = 0;
    for ( size_t i = 0; i < entries.ends.size(); ++i )
    {
-      const TDepth_t curDepth = entries.depths[i];
+      const Depth_t curDepth = entries.depths[i];
       if ( lods[curDepth].empty() )
       {
          lods[curDepth].push_back( LodInfo{entries.ends[i], entries.deltas[i], idOffset + i, curDepth, false} );
@@ -88,7 +88,7 @@ LodsArray computeLods( const Entries& entries, size_t idOffset )
    {
       for ( const auto& l : *lastComputedLod )
       {
-         const TDepth_t curDepth = l.depth;
+         const Depth_t curDepth = l.depth;
          if ( lods[curDepth].empty() )
          {
             lods[curDepth].emplace_back( l );

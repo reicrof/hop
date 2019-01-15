@@ -157,7 +157,7 @@ void Server::getPendingData(PendingData & data)
     _pendingData.clear();
 }
 
-bool Server::addUniqueThreadName( uint32_t threadIndex, TStrPtr_t name )
+bool Server::addUniqueThreadName( uint32_t threadIndex, StrPtr_t name )
 {
    bool newInsert = false;
    if( _threadNamesReceived.size() <= threadIndex )
@@ -222,7 +222,7 @@ size_t Server::handleNewMessage( uint8_t* data, size_t maxSize, TimeStamp minTim
           const size_t traceCount = msgInfo->traces.count;
 
           TraceData traceData;
-          TDepth_t maxDepth = 0;
+          Depth_t maxDepth = 0;
           for ( size_t i = 0; i < traceCount; ++i )
           {
              const auto& t = traces[i];
@@ -261,7 +261,7 @@ size_t Server::handleNewMessage( uint8_t* data, size_t maxSize, TimeStamp minTim
          const uint32_t lwCount = msgInfo->lockwaits.count;
 
          LockWaitData lockwaitData;
-         TDepth_t maxDepth = 0;
+         Depth_t maxDepth = 0;
          for( uint32_t i = 0; i < lwCount; ++i )
          {
             lockwaitData.entries.ends.push_back( lws[i].end );

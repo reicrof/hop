@@ -242,10 +242,10 @@ inline int HOP_GET_CPU()
 #endif // defined( _MSC_VER )
 
 // Custom trace types
-using TStrPtr_t = uint64_t;
-using TLineNb_t = uint32_t;
-using TZoneId_t = uint16_t;
-using TDepth_t = uint16_t;
+using StrPtr_t = uint64_t;
+using LineNb_t = uint32_t;
+using ZoneId_t = uint16_t;
+using Depth_t = uint16_t;
 
 enum class MsgType : uint32_t
 {
@@ -291,7 +291,7 @@ struct MsgInfo
    uint32_t threadIndex;
    uint64_t threadId;
    TimeStamp timeStamp;
-   TStrPtr_t threadName;
+   StrPtr_t threadName;
    // Specific message data
    union {
       TracesMsgInfo traces;
@@ -307,11 +307,11 @@ HOP_CONSTEXPR uint32_t EXPECTED_TRACE_SIZE = 40;
 struct Trace
 {
    TimeStamp start, end;   // Timestamp for start/end of this trace
-   TStrPtr_t fileNameId;   // Index into string array for the file name
-   TStrPtr_t fctNameId;    // Index into string array for the function name
-   TLineNb_t lineNumber;   // Line at which the trace was inserted
-   TZoneId_t zone;         // Zone to which this trace belongs
-   TDepth_t depth;         // The depth in the callstack of this trace
+   StrPtr_t fileNameId;   // Index into string array for the file name
+   StrPtr_t fctNameId;    // Index into string array for the function name
+   LineNb_t lineNumber;   // Line at which the trace was inserted
+   ZoneId_t zone;         // Zone to which this trace belongs
+   Depth_t depth;         // The depth in the callstack of this trace
 };
 HOP_STATIC_ASSERT( sizeof(Trace) == EXPECTED_TRACE_SIZE, "Trace layout has changed unexpectedly" );
 
@@ -320,7 +320,7 @@ struct LockWait
 {
    void* mutexAddress;
    TimeStamp start, end;
-   TDepth_t depth;
+   Depth_t depth;
    uint16_t padding;
 };
 HOP_STATIC_ASSERT( sizeof(LockWait) == EXPECTED_LOCK_WAIT_SIZE, "Lock wait layout has changed unexpectedly" );
@@ -345,15 +345,15 @@ class ClientManager
 {
   public:
    static Client* Get();
-   static TZoneId_t StartProfile();
-   static TStrPtr_t StartProfileDynString( const char*, TZoneId_t* );
+   static ZoneId_t StartProfile();
+   static StrPtr_t StartProfileDynString( const char*, ZoneId_t* );
    static void EndProfile(
-       TStrPtr_t fileName,
-       TStrPtr_t fctName,
+       StrPtr_t fileName,
+       StrPtr_t fctName,
        TimeStamp start,
        TimeStamp end,
-       TLineNb_t lineNb,
-       TZoneId_t zone,
+       LineNb_t lineNb,
+       ZoneId_t zone,
        int core );
    static void EndLockWait(
       void* mutexAddr,
@@ -361,7 +361,7 @@ class ClientManager
       TimeStamp end );
    static void UnlockEvent( void* mutexAddr, TimeStamp time );
    static void SetThreadName( const char* name ) HOP_NOEXCEPT;
-   static TZoneId_t PushNewZone( TZoneId_t newZone );
+   static ZoneId_t PushNewZone( ZoneId_t newZone );
    static bool HasConnectedConsumer() HOP_NOEXCEPT;
    static bool HasListeningConsumer() HOP_NOEXCEPT;
 
@@ -371,7 +371,7 @@ class ClientManager
 class ProfGuard
 {
   public:
-    ProfGuard( const char* fileName, TLineNb_t lineNb, const char* fctName ) HOP_NOEXCEPT
+    ProfGuard( const char* fileName, LineNb_t lineNb, const char* fctName ) HOP_NOEXCEPT
     {
       open( fileName, lineNb, fctName );
     }
@@ -379,7 +379,7 @@ class ProfGuard
     {
       close();
     }
-    inline void reset( const char* fileName, TLineNb_t lineNb, const char* fctName )
+    inline void reset( const char* fileName, LineNb_t lineNb, const char* fctName )
     {
       // Please uncomment the following line if close() is made public!
       // if ( _fctName )
@@ -388,11 +388,11 @@ class ProfGuard
     }
 
   private:
-    inline void open( const char* fileName, TLineNb_t lineNb, const char* fctName )
+    inline void open( const char* fileName, LineNb_t lineNb, const char* fctName )
     {
       _start = getTimeStamp();
-      _fileName = (TStrPtr_t)fileName;
-      _fctName = (TStrPtr_t)fctName;
+      _fileName = (StrPtr_t)fileName;
+      _fctName = (StrPtr_t)fctName;
       _lineNb = lineNb;
       _zone = ClientManager::StartProfile();
     }
@@ -405,10 +405,10 @@ class ProfGuard
     }
 
     TimeStamp _start;
-    TStrPtr_t _fileName, _fctName;
-    TLineNb_t _lineNb;
+    StrPtr_t _fileName, _fctName;
+    LineNb_t _lineNb;
     int _core;
-    TZoneId_t _zone;
+    ZoneId_t _zone;
 };
 
 class LockWaitGuard
@@ -431,9 +431,9 @@ class LockWaitGuard
 class ProfGuardDynamicString
 {
   public:
-   ProfGuardDynamicString( const char* fileName, TLineNb_t lineNb, const char* fctName ) HOP_NOEXCEPT
+   ProfGuardDynamicString( const char* fileName, LineNb_t lineNb, const char* fctName ) HOP_NOEXCEPT
        : _start( getTimeStamp() | 1 ), // Set the first bit to 1 to flag the use of dynamic strings
-         _fileName( (TStrPtr_t) fileName ),
+         _fileName( (StrPtr_t) fileName ),
          _lineNb( lineNb )
    {
       _fctName = ClientManager::StartProfileDynString( fctName, &_zone );
@@ -445,16 +445,16 @@ class ProfGuardDynamicString
 
   private:
    TimeStamp _start;
-   TStrPtr_t _fileName;
-   TStrPtr_t _fctName;
-   TLineNb_t _lineNb;
-   TZoneId_t _zone;
+   StrPtr_t _fileName;
+   StrPtr_t _fctName;
+   LineNb_t _lineNb;
+   ZoneId_t _zone;
 };
 
 class ZoneGuard
 {
  public:
-   ZoneGuard( TZoneId_t newZone ) HOP_NOEXCEPT
+   ZoneGuard( ZoneId_t newZone ) HOP_NOEXCEPT
    {
       _prevZoneId = ClientManager::PushNewZone( newZone );
    }
@@ -464,7 +464,7 @@ class ZoneGuard
    }
 
   private:
-   TZoneId_t _prevZoneId;
+   ZoneId_t _prevZoneId;
 };
 
 #define __HOP_PROF_GUARD_VAR( LINE, ARGS ) \
@@ -1116,10 +1116,10 @@ SharedMemory::~SharedMemory()
 // C-style string hash inspired by Stackoverflow question
 // based on the Java string hash fct. If its good enough
 // for java, it should be good enough for me...
-static TStrPtr_t cStringHash( const char* str, size_t strLen )
+static StrPtr_t cStringHash( const char* str, size_t strLen )
 {
-   TStrPtr_t result = 0;
-   HOP_CONSTEXPR TStrPtr_t prime = 31;
+   StrPtr_t result = 0;
+   HOP_CONSTEXPR StrPtr_t prime = 31;
    for ( size_t i = 0; i < strLen; ++i )
    {
       result = str[i] + ( result * prime );
@@ -1130,10 +1130,10 @@ static TStrPtr_t cStringHash( const char* str, size_t strLen )
 // The call stack depth of the current measured trace. One variable per thread
 thread_local int tl_traceLevel = 0;
 thread_local uint32_t tl_threadIndex = 0;
-thread_local TZoneId_t tl_zoneId = HOP_ZONE_ALL;
+thread_local ZoneId_t tl_zoneId = HOP_ZONE_ALL;
 thread_local uint64_t tl_threadId = 0;
 thread_local const char* tl_threadNameBuffer = 0;
-thread_local TStrPtr_t tl_threadName = 0;
+thread_local StrPtr_t tl_threadName = 0;
 
 class Client
 {
@@ -1147,21 +1147,21 @@ class Client
       _stringPtr.reserve( 256 );
       _stringData.reserve( 256 * 32 );
       _stringPtr.insert(0);
-      for (size_t i = 0; i < sizeof(TStrPtr_t); ++i)
+      for (size_t i = 0; i < sizeof(StrPtr_t); ++i)
          _stringData.push_back('\0');
 
       resetStringData();
    }
 
    void addProfilingTrace(
-       TStrPtr_t fileName,
-       TStrPtr_t fctName,
+       StrPtr_t fileName,
+       StrPtr_t fctName,
        TimeStamp start,
        TimeStamp end,
-       TLineNb_t lineNb,
-       TZoneId_t zone )
+       LineNb_t lineNb,
+       ZoneId_t zone )
    {
-      _traces.push_back( Trace{ start, end, fileName, fctName, lineNb, zone, (TDepth_t)tl_traceLevel } );
+      _traces.push_back( Trace{ start, end, fileName, fctName, lineNb, zone, (Depth_t)tl_traceLevel } );
    }
 
    void addCoreEvent( int core, TimeStamp endTime )
@@ -1169,7 +1169,7 @@ class Client
       _cores.emplace_back( CoreEvent{ endTime, core } );
    }
 
-   void addWaitLockTrace( void* mutexAddr, TimeStamp start, TimeStamp end, TDepth_t depth )
+   void addWaitLockTrace( void* mutexAddr, TimeStamp start, TimeStamp end, Depth_t depth )
    {
       _lockWaits.push_back( LockWait{ mutexAddr, start, end, depth, 0 /*padding*/ } );
    }
@@ -1179,7 +1179,7 @@ class Client
       _unlockEvents.push_back( UnlockEvent{ mutexAddr, time } );
    }
 
-   void setThreadName( TStrPtr_t name )
+   void setThreadName( StrPtr_t name )
    {
       if( !tl_threadName )
       {
@@ -1190,14 +1190,14 @@ class Client
       }
    }
 
-   TStrPtr_t addDynamicStringToDb( const char* dynStr )
+   StrPtr_t addDynamicStringToDb( const char* dynStr )
    {
       // Should not have null as dyn string, but just in case...
       if ( dynStr == NULL ) return 0;
 
       const size_t strLen = strlen( dynStr );
 
-      const TStrPtr_t hash = cStringHash( dynStr, strLen );
+      const StrPtr_t hash = cStringHash( dynStr, strLen );
 
       auto res = _stringPtr.insert( hash );
       // If the string was inserted (meaning it was not already there),
@@ -1205,16 +1205,16 @@ class Client
       if ( res.second )
       {
          const size_t newEntryPos = _stringData.size();
-         _stringData.resize( newEntryPos + sizeof( TStrPtr_t ) + strLen + 1 );
-         TStrPtr_t* strIdPtr = (TStrPtr_t*)&_stringData[newEntryPos];
+         _stringData.resize( newEntryPos + sizeof( StrPtr_t ) + strLen + 1 );
+         StrPtr_t* strIdPtr = (StrPtr_t*)&_stringData[newEntryPos];
          *strIdPtr = hash;
-         HOP_STRNCPY( &_stringData[newEntryPos + sizeof( TStrPtr_t )], dynStr, strLen + 1 );
+         HOP_STRNCPY( &_stringData[newEntryPos + sizeof( StrPtr_t )], dynStr, strLen + 1 );
       }
 
       return hash;
    }
 
-   bool addStringToDb( TStrPtr_t strId )
+   bool addStringToDb( StrPtr_t strId )
    {
       // Early return on NULL. The db should always contains NULL as first
       // entry
@@ -1227,10 +1227,10 @@ class Client
       {
          const size_t newEntryPos = _stringData.size();
          const size_t strLen = strlen( (const char*)strId );
-         _stringData.resize( newEntryPos + sizeof( TStrPtr_t ) + strLen + 1 );
-         TStrPtr_t* strIdPtr = (TStrPtr_t*)&_stringData[newEntryPos];
+         _stringData.resize( newEntryPos + sizeof( StrPtr_t ) + strLen + 1 );
+         StrPtr_t* strIdPtr = (StrPtr_t*)&_stringData[newEntryPos];
          *strIdPtr = strId;
-         HOP_STRNCPY( &_stringData[newEntryPos + sizeof( TStrPtr_t ) ], (const char*)strId, strLen + 1 );
+         HOP_STRNCPY( &_stringData[newEntryPos + sizeof( StrPtr_t ) ], (const char*)strId, strLen + 1 );
       }
 
       return res.second;
@@ -1246,7 +1246,7 @@ class Client
 
          // Push back first name as empty string
          _stringPtr.insert( 0 );
-         for( size_t i = 0; i < sizeof( TStrPtr_t ); ++i )
+         for( size_t i = 0; i < sizeof( StrPtr_t ); ++i )
             _stringData.push_back('\0');
          // Push back thread name
          const auto hash = addDynamicStringToDb( tl_threadNameBuffer );
@@ -1572,7 +1572,7 @@ class Client
    std::vector< CoreEvent > _cores;
    std::vector< LockWait > _lockWaits;
    std::vector< UnlockEvent > _unlockEvents;
-   std::unordered_set< TStrPtr_t > _stringPtr;
+   std::unordered_set< StrPtr_t > _stringPtr;
    std::vector< char > _stringData;
    TimeStamp _clientResetTimeStamp{0};
    ringbuf_worker_t* _worker{NULL};
@@ -1627,13 +1627,13 @@ Client* ClientManager::Get()
    return threadClient.get();
 }
 
-TZoneId_t ClientManager::StartProfile()
+ZoneId_t ClientManager::StartProfile()
 {
    ++tl_traceLevel;
    return tl_zoneId;
 }
 
-TStrPtr_t ClientManager::StartProfileDynString( const char* str, TZoneId_t* zone )
+StrPtr_t ClientManager::StartProfileDynString( const char* str, ZoneId_t* zone )
 {
    ++tl_traceLevel;
    Client* client = ClientManager::Get();
@@ -1645,12 +1645,12 @@ TStrPtr_t ClientManager::StartProfileDynString( const char* str, TZoneId_t* zone
 }
 
 void ClientManager::EndProfile(
-    TStrPtr_t fileName,
-    TStrPtr_t fctName,
+    StrPtr_t fileName,
+    StrPtr_t fctName,
     TimeStamp start,
     TimeStamp end,
-    TLineNb_t lineNb,
-    TZoneId_t zone,
+    LineNb_t lineNb,
+    ZoneId_t zone,
     int core )
 {
    const int remainingPushedTraces = --tl_traceLevel;
@@ -1698,12 +1698,12 @@ void ClientManager::SetThreadName( const char* name ) HOP_NOEXCEPT
    auto client = ClientManager::Get();
    if( unlikely( !client ) ) return;
 
-   client->setThreadName( (TStrPtr_t) name );
+   client->setThreadName( (StrPtr_t) name );
 }
 
-TZoneId_t ClientManager::PushNewZone( TZoneId_t newZone )
+ZoneId_t ClientManager::PushNewZone( ZoneId_t newZone )
 {
-   TZoneId_t prevZone = tl_zoneId;
+   ZoneId_t prevZone = tl_zoneId;
    tl_zoneId = newZone;
    return prevZone;
 }
