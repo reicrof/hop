@@ -127,6 +127,7 @@ static void drawHighlightedTraces(
 static void drawCoresLabels(
     const ImVec2& drawPos,
     const hop::CoreEventData& coreData,
+    const hop::Entries& traceEntries,
     const hop::TimelineTracks::DrawInfo& di )
 {
    if( coreData.data.empty() ) return;
@@ -154,12 +155,31 @@ static void drawCoresLabels(
    std::vector<DrawData> drawData;
    drawData.reserve( std::distance( it1, it2 ) );
    auto curIdx = firstIdx;
-   TimeStamp prevTime = it1 == coreData.data.begin() ? absoluteStart : (it1-1)->time;
+   CoreEvent prevEvent = {it1 == coreData.data.begin() ? absoluteStart : ( it1 - 1 )->time,
+                          0xFFFFFFFF};
    for( ; it1 != it2; ++it1, ++curIdx )
    {
+      // If we have 2 consecutive traces with the same core, it means they are far enough to be
+      // drawn separately. We need to figure out where it should start by looking at the trace info
+      if( prevEvent.core == it1->core )
+      {
+         const auto startIt =
+             std::upper_bound( traceEntries.ends.begin(), traceEntries.ends.end(), prevEvent.time );
+         int64_t startIdx = std::distance( traceEntries.ends.begin(), startIt );
+         const int64_t traceCount = traceEntries.ends.size();
+         if( startIdx != traceCount )
+         {
+            while( startIdx != traceCount && traceEntries.depths[ startIdx ] != 0 )
+            {
+               ++startIdx;
+            }
+   
+            prevEvent.time = traceEntries.ends[ startIdx ] - traceEntries.deltas[ startIdx ];
+         }
+      }
       drawData.push_back(createDrawDataForTrace(
-              it1->time, it1->time - prevTime, 0, 0, drawPos.x, drawPos.y, di, windowWidthPxl ) );
-      prevTime = it1->time;
+              it1->time, it1->time - prevEvent.time, 0, curIdx , drawPos.x, drawPos.y, di, windowWidthPxl ) );
+      prevEvent = *it1;
    }
 
    char curName[32] = "Core ";
@@ -167,11 +187,10 @@ static void drawCoresLabels(
 
    ImGui::PushStyleColor(ImGuiCol_Button, 0xFF666666 );
 
-   curIdx = firstIdx;
    for ( const auto& t : drawData )
    {
-      ImGui::PushID(curIdx);
-      snprintf( curName + prefixSize, sizeof(curName)-prefixSize, "%u", coreData.data[curIdx++].core );
+      ImGui::PushID(t.traceIndex);
+      snprintf( curName + prefixSize, sizeof(curName)-prefixSize, "%u", coreData.data[t.traceIndex].core );
       ImGui::SetCursorScreenPos( t.posPxl );
       ImGui::Button( curName, ImVec2( t.lengthPxl, TimelineTrack::TRACE_HEIGHT - 5 ) );
       ImGui::PopID();
@@ -260,8 +279,10 @@ void TimelineTrack::addCoreEvents( const std::vector<CoreEvent>& coreEvents )
    {
       auto& lastCoreEv = _coreEvents.data.back();
 
-      // If we are still on the same core, merge the last with the first new event
-      if( lastCoreEv.core == firstNewCoreEv->core )
+      // If we are still on the same core, merge the last with the first new event if their time
+      // difference is less than 100ms
+      if( lastCoreEv.core == firstNewCoreEv->core &&
+          ( firstNewCoreEv->time - lastCoreEv.time ) < 100000000 )
       {
          lastCoreEv.time = firstNewCoreEv->time;
          ++firstNewCoreEv;
@@ -578,7 +599,8 @@ std::vector< TimelineMessage > TimelineTracks::draw( const DrawInfo& info )
          threadLabelCol = DISABLED_COLOR;
 
       // Draw the core labels
-      drawCoresLabels( ImGui::GetCursorScreenPos(), _tracks[i]._coreEvents, info );
+      drawCoresLabels(
+          ImGui::GetCursorScreenPos(), _tracks[i]._coreEvents, _tracks[i]._traces.entries, info );
 
       // Draw thread label
       ImGui::PushID(i);

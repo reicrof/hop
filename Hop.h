@@ -206,8 +206,6 @@ inline decltype( std::chrono::duration_cast<Precision>( Clock::now().time_since_
    // start time. See hop::StartProfileDynString
    return std::chrono::duration_cast<Precision>( Clock::now().time_since_epoch() ).count() & ~1;
 }
-using TimeStamp = decltype( getTimeStamp() );
-using TimeDuration = int64_t;
 
 #if defined( _MSC_VER )
 
@@ -242,10 +240,13 @@ inline int HOP_GET_CPU()
 #endif // defined( _MSC_VER )
 
 // Custom trace types
-using StrPtr_t = uint64_t;
-using LineNb_t = uint32_t;
-using ZoneId_t = uint16_t;
-using Depth_t = uint16_t;
+using TimeStamp    = decltype( getTimeStamp() );
+using TimeDuration = int64_t;
+using StrPtr_t     = uint64_t;
+using LineNb_t     = uint32_t;
+using Core_t       = uint32_t;
+using ZoneId_t     = uint16_t;
+using Depth_t      = uint16_t;
 
 enum class MsgType : uint32_t
 {
@@ -336,7 +337,7 @@ HOP_STATIC_ASSERT( sizeof(UnlockEvent) == EXPECTED_UNLOCK_EVENT_SIZE, "Unlock Ev
 struct CoreEvent
 {
    TimeStamp time;
-   int core;
+   Core_t core;
 };
 
 class Client;
@@ -354,7 +355,7 @@ class ClientManager
        TimeStamp end,
        LineNb_t lineNb,
        ZoneId_t zone,
-       int core );
+       Core_t core );
    static void EndLockWait(
       void* mutexAddr,
       TimeStamp start,
@@ -407,7 +408,7 @@ class ProfGuard
     TimeStamp _start;
     StrPtr_t _fileName, _fctName;
     LineNb_t _lineNb;
-    int _core;
+    Core_t _core;
     ZoneId_t _zone;
 };
 
@@ -1164,7 +1165,7 @@ class Client
       _traces.push_back( Trace{ start, end, fileName, fctName, lineNb, zone, (Depth_t)tl_traceLevel } );
    }
 
-   void addCoreEvent( int core, TimeStamp endTime )
+   void addCoreEvent( Core_t core, TimeStamp endTime )
    {
       _cores.emplace_back( CoreEvent{ endTime, core } );
    }
@@ -1651,7 +1652,7 @@ void ClientManager::EndProfile(
     TimeStamp end,
     LineNb_t lineNb,
     ZoneId_t zone,
-    int core )
+    Core_t core )
 {
    const int remainingPushedTraces = --tl_traceLevel;
    Client* client = ClientManager::Get();
