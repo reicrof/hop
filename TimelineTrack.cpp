@@ -1121,7 +1121,7 @@ void TimelineTracks::drawContextMenu( const DrawInfo& info )
 
       // Get the index of the previous valid track
       int64_t prevValidTrack = i - 1;
-      while( i >= 0 && _tracks[ prevValidTrack ].empty() )
+      while( prevValidTrack > 0 && _tracks[ prevValidTrack ].empty() )
          --prevValidTrack;
 
       assert( prevValidTrack >= 0 );
@@ -1164,9 +1164,21 @@ void TimelineTracks::drawContextMenu( const DrawInfo& info )
                 } );
                 t.detach();
             }
-            else if ( ImGui::Selectable( "Resize Tracks to Fit" ) )
+            else if ( ImGui::BeginMenu("Tracks") )
             {
-               resizeAllTracksToFit();
+               if( ImGui::Selectable( "Resize to Fit" ) )
+               {
+                  resizeAllTracksToFit();
+               }
+               else if( ImGui::Selectable( "Collapse" ) )
+               {
+                  setAllTracksCollapsed( true );
+               }
+               else if( ImGui::Selectable( "Expand" ) )
+               {
+                  setAllTracksCollapsed( false );
+               }
+               ImGui::EndMenu();
             }
          }
          ImGui::EndPopup();
@@ -1204,7 +1216,7 @@ void TimelineTracks::resizeAllTracksToFit()
    for( auto& t : _tracks )
       if( !t.empty() ) ++visibleTrackCount;
 
-   float timelineCanvasHeight = ImGui::GetIO().DisplaySize.y;// - TIMELINE_TOTAL_HEIGHT;
+   float timelineCanvasHeight = ImGui::GetIO().DisplaySize.y;
 
    const float totalTraceHeight = timelineCanvasHeight - visibleTrackCount * THREAD_LABEL_HEIGHT;
    const float heightPerTrack = totalTraceHeight / visibleTrackCount;
@@ -1215,6 +1227,14 @@ void TimelineTracks::resizeAllTracksToFit()
       _tracks[i].setTrackHeight( heightPerTrack );
 
    _tracks[lastThread].setTrackHeight( 9999.0f );
+}
+
+void TimelineTracks::setAllTracksCollapsed( bool collapsed )
+{
+   const size_t trackCount = _tracks.size();
+   const float heightVal = collapsed ? -9999.0f : 9999.0f;
+   for( size_t i = 0; i < trackCount; ++i )
+      _tracks[i].setTrackHeight( heightVal );
 }
 
 const TimelineTrack& TimelineTracks::operator[]( size_t index ) const
