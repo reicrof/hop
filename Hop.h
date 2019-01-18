@@ -54,9 +54,8 @@ For more information, please refer to <http://unlicense.org/>
 // include the meta-data size
 #define HOP_SHARED_MEM_SIZE 32000000
 
-// Minimum time in nanosecond for a lock to be considered in the
-// profiled data
-#define HOP_MIN_LOCK_TIME_NS 1000
+// Minimum cycles for a lock to be considered in the profiled data
+#define HOP_MIN_LOCK_CYCLES 1000
 
 // These are the zone that can be used. You can change the name
 // but you must not change the values.
@@ -147,11 +146,9 @@ enum HopZone
                        | __ | (_) |  _/
                        |_||_|\___/|_|
 */
-#include <atomic>
-#include <memory>
-#include <mutex>
-#include <chrono>
 #include <stdint.h>
+
+#include <cassert> // TO REMOVE
 
 // Useful macros
 #define HOP_VERSION 0.5f
@@ -197,56 +194,37 @@ typedef struct ringbuf_worker ringbuf_worker_t;
 namespace hop
 {
 
-using Clock = std::chrono::steady_clock;
-using Precision = std::chrono::nanoseconds;
-inline decltype( std::chrono::duration_cast<Precision>( Clock::now().time_since_epoch() ).count() ) getTimeStamp()
-{
-   // We return the timestamp with the first bit set to 0. We do not require this last nanosecond
-   // of precision. It will instead be used to flag if a trace uses dynamic strings or not in its
-   // start time. See hop::StartProfileDynString
-   return std::chrono::duration_cast<Precision>( Clock::now().time_since_epoch() ).count() & ~1;
-}
-
-#if defined( _MSC_VER )
-
-inline int HOP_GET_CPU()
-{
-   return GetCurrentProcessorNumber();
-}
-
-#else // defined( _MSC_VER )
-#ifdef __APPLE__
-
-#include <cpuid.h>
-inline uint32_t HOP_GET_CPU()
-{
-#define CPUID(INFO, LEAF, SUBLEAF) __cpuid_count(LEAF, SUBLEAF, INFO[0], INFO[1], INFO[2], INFO[3])
-   int CPUInfo[4];
-   CPUID( CPUInfo, 1, 0 );
-   // CPUInfo[1] is EBX, bits 24-31 are APIC ID
-   if ((CPUInfo[3] & (1 << 9)) == 0) return -1;  // no APIC on chip
-   return (unsigned)CPUInfo[1] >> 24;
-}
-
-#else // !__APPLE__
-
-inline int HOP_GET_CPU()
-{
-   return sched_getcpu();
-}
-
-#endif // __APPLE__
-
-#endif // defined( _MSC_VER )
-
 // Custom trace types
-using TimeStamp    = decltype( getTimeStamp() );
+using TimeStamp    = uint64_t;
 using TimeDuration = int64_t;
 using StrPtr_t     = uint64_t;
 using LineNb_t     = uint32_t;
 using Core_t       = uint32_t;
 using ZoneId_t     = uint16_t;
 using Depth_t      = uint16_t;
+
+inline TimeStamp rdtscp( uint32_t& aux )
+{
+   uint64_t rax, rdx;
+   asm volatile( "rdtscp\n" : "=a"( rax ), "=d"( rdx ), "=c"( aux ) : : );
+   return ( rdx << 32 ) + rax;
+}
+
+inline TimeStamp getTimeStamp( Core_t& core )
+{
+   // We return the tsc with the first bit set to 0. We do not require this last cycle
+   // of precision. It will instead be used to flag if a trace uses dynamic strings or not in its
+   // start time. See hop::StartProfileDynString
+   uint64_t val = rdtscp( core ) & ~1ull;
+   assert( sched_getcpu() == core );
+   return val;
+}
+
+inline TimeStamp getTimeStamp()
+{
+   uint32_t dummtyCore;
+   return getTimeStamp( dummtyCore );
+}
 
 enum class MsgType : uint32_t
 {
@@ -399,8 +377,9 @@ class ProfGuard
     }
     inline void close()
     {
-      _core = HOP_GET_CPU();
-      ClientManager::EndProfile( _fileName, _fctName, _start, getTimeStamp(), _lineNb, _zone, _core );
+      uint32_t core;
+      const auto end = getTimeStamp( core );
+      ClientManager::EndProfile( _fileName, _fctName, _start, end, _lineNb, _zone, core );
       // Please uncomment the following line if close() is made public!
       // _fctName = nullptr;
     }
@@ -408,7 +387,6 @@ class ProfGuard
     TimeStamp _start;
     StrPtr_t _fileName, _fctName;
     LineNb_t _lineNb;
-    Core_t _core;
     ZoneId_t _zone;
 };
 
@@ -534,6 +512,9 @@ void ringbuf_release( ringbuf_t*, size_t );
    ==================================================================== */
 
 #if defined(HOP_VIEWER)
+#include <atomic>
+#include <mutex>
+
 // On MacOs the max name length seems to be 30...
 #define HOP_SHARED_MEM_MAX_NAME_SIZE 30
 namespace hop
@@ -611,9 +592,9 @@ class SharedMemory
 // standard includes
 #include <algorithm>
 #include <cassert>
+#include <memory>
 #include <unordered_set>
 #include <vector>
-#include <mutex>
 
 #define HOP_MIN(a,b) (((a)<(b))?(a):(b))
 #define HOP_MAX(a,b) (((a)>(b))?(a):(b))
@@ -855,7 +836,6 @@ namespace
       if ( shm_unlink( name ) != 0 ) perror( " HOP - Could not unlink shared memory" );
 #endif
    }
-
 }
 
 namespace hop
@@ -1674,7 +1654,7 @@ void ClientManager::EndLockWait( void* mutexAddr, TimeStamp start, TimeStamp end
 {
    // Only add lock wait event if the lock is coming from within
    // measured code
-   if( tl_traceLevel > 0 && end - start >= HOP_MIN_LOCK_TIME_NS )
+   if( tl_traceLevel > 0 && end - start >= HOP_MIN_LOCK_CYCLES )
    {
       auto client = ClientManager::Get();
       if( unlikely( !client ) ) return;

@@ -47,13 +47,13 @@ static DrawData createDrawDataForTrace(
 {
    using namespace hop;
    const TimeStamp traceEndTime = ( traceEnd - drawInfo.timeline.globalStartTime );
-   const auto traceEndPxl = nanosToPxl<float>(
+   const auto traceEndPxl = cyclesToPxl<float>(
        windowWidthPxl,
        drawInfo.timeline.duration,
        traceEndTime - drawInfo.timeline.relativeStartTime );
    const float traceLengthPxl = std::max(
        MIN_TRACE_LENGTH_PXL,
-       nanosToPxl<float>( windowWidthPxl, drawInfo.timeline.duration, traceDelta ) );
+       cyclesToPxl<float>( windowWidthPxl, drawInfo.timeline.duration, traceDelta ) );
 
    const auto tracePos = ImVec2(
        posX + traceEndPxl - traceLengthPxl, posY + traceDepth * TimelineTrack::PADDED_TRACE_SIZE );
@@ -789,7 +789,7 @@ void TimelineTracks::drawTraces(
             if ( leftMouseDblClicked )
             {
                const TimeStamp traceEndTime =
-                   pxlToNanos( windowWidthPxl, timelineRange, t.posPxl.x - posX + t.lengthPxl );
+                   pxlToCycles( windowWidthPxl, timelineRange, t.posPxl.x - posX + t.lengthPxl );
 
                TimelineMessage msg;
                msg.type = TimelineMessageType::FRAME_TO_TIME;

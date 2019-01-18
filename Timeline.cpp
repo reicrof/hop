@@ -16,8 +16,8 @@
 
 #include <cstdlib> // fix for std::abs for older libc++ impl
 
-static constexpr hop::TimeDuration MIN_NANOS_TO_DISPLAY = 500;
-static constexpr hop::TimeDuration MAX_NANOS_TO_DISPLAY = 900000000000;
+static constexpr hop::TimeDuration MIN_CYCLES_TO_DISPLAY = 1000;
+static constexpr hop::TimeDuration MAX_CYCLES_TO_DISPLAY = 1800000000000;
 static constexpr float TIMELINE_TOTAL_HEIGHT = 50.0f;
 
 static void drawHoveringTimelineLine(float posInScreenX, float timelineStartPosY, const char* text )
@@ -119,7 +119,7 @@ void Timeline::draw( float timelineHeight )
    _timelineDrawPosition[0] = startDrawPos.x;
    _timelineDrawPosition[1] = startDrawPos.y;
 
-   drawTimeline(startDrawPos.x, startDrawPos.y + 5);
+   drawTimelineCycles(startDrawPos.x, startDrawPos.y + 5);
 
    // Save the canvas draw position for later
    const auto& curDrawPos = ImGui::GetCursorScreenPos();
@@ -140,7 +140,7 @@ void Timeline::draw( float timelineHeight )
    if (_timelineHoverPos > 0.0f)
    {
       static char text[32] = {};
-      const int64_t hoveredNano = _timelineStart + pxlToNanos(ImGui::GetWindowWidth(), _duration, _timelineHoverPos - startDrawPos.x);
+      const int64_t hoveredNano = _timelineStart + pxlToCycles(ImGui::GetWindowWidth(), _duration, _timelineHoverPos - startDrawPos.x);
       hop::formatNanosTimepointToDisplay(hoveredNano, _duration, text, sizeof(text));
       drawHoveringTimelineLine(_timelineHoverPos, startDrawPos.y, text);
    }
@@ -154,7 +154,7 @@ void Timeline::draw( float timelineHeight )
       ImGui::PushStyleColor( ImGuiCol_ButtonActive, ImVec4( 0.0f, 0.0f, 1.0f, 1.0f ));
       for( auto t : _bookmarks.times )
       {
-         float posXPxl = nanosToPxl( windowSize.x, _duration, t - _timelineStart );
+         float posXPxl = cyclesToPxl( windowSize.x, _duration, t - _timelineStart );
          drawBookmarks( posXPxl + startDrawPos.x, startDrawPos.y );
       }
       ImGui::PopClipRect();
@@ -179,7 +179,11 @@ TimelineInfo Timeline::constructTimelineInfo() const noexcept
                        _rightClickStartPosInCanvas[0] != 0.0f};
 }
 
-void Timeline::drawTimeline( const float posX, const float posY )
+template <typename T> int sgn(T val) {
+    return (T(0) < val) - (val < T(0));
+}
+
+void Timeline::drawTimelineCycles( const float posX, const float posY )
 {
    HOP_PROF_FUNC();
 
@@ -192,19 +196,19 @@ void Timeline::drawTimeline( const float posX, const float posY )
    ImGui::BeginChild("Timeline", ImVec2( windowWidthPxl, TIMELINE_TOTAL_HEIGHT) );
 
    const uint64_t stepsCount = [=]() {
-      uint64_t stepsCount = _duration / _stepSizeInNanos;
+      uint64_t stepsCount = _duration / _stepSize;
       while ( stepsCount > maxStepCount ||
-              ( stepsCount < minStepCount && _stepSizeInNanos > minStepSize ) )
+              ( stepsCount < minStepCount && _stepSize > minStepSize ) )
       {
          if ( stepsCount > maxStepCount )
          {
-            _stepSizeInNanos *= 5;
+            _stepSize *= 5;
          }
          else if ( stepsCount < minStepCount )
          {
-            _stepSizeInNanos = std::max( _stepSizeInNanos / 5, minStepSize );
+            _stepSize = std::max( _stepSize / 5, minStepSize );
          }
-         stepsCount = _duration / _stepSizeInNanos;
+         stepsCount = _duration / _stepSize;
       }
       return stepsCount;
    }();
@@ -222,15 +226,16 @@ void Timeline::drawTimeline( const float posX, const float posY )
    constexpr float deltaBigLineLength = 12.0f;  // The diff between the small line and big one
    constexpr float deltaMidLineLength = 7.0f;   // The diff between the small line and mid one
 
-   const float stepSizePxl = nanosToPxl<float>( windowWidthPxl, _duration, _stepSizeInNanos );
-   const int64_t stepsDone = _timelineStart / _stepSizeInNanos;
-   const int64_t remainder = _timelineStart % _stepSizeInNanos;
+   const float stepSizePxl = cyclesToPxl<float>( windowWidthPxl, _duration, _stepSize );
+   const double stepsDone = _timelineStart / (double)_stepSize;
+   const int64_t remainder = (1.0 - std::abs(stepsDone - (int)stepsDone)) * _stepSize;
    int remainderPxl = 0;
-   if ( remainder != 0 ) remainderPxl = nanosToPxl( windowWidthPxl, _duration, remainder );
+   if ( remainder != 0 ) remainderPxl = cyclesToPxl<int64_t>( windowWidthPxl, _duration, remainder );
 
    // Start drawing one step before the start position to account for partial steps
    ImVec2 top( posX, posY );
-   top.x -= ( stepSizePxl + remainderPxl ) - stepSizePxl;
+   //top.x -= ( stepSizePxl + remainderPxl ) - stepSizePxl;
+   top.x += sgn(stepsDone) * remainderPxl;
    ImVec2 bottom = top;
    bottom.y += smallLineLength;
 
@@ -246,7 +251,7 @@ void Timeline::drawTimeline( const float posX, const float posY )
          startEndLine.y += deltaBigLineLength;
          DrawList->AddLine( top, startEndLine, ImGui::GetColorU32( ImGuiCol_TextDisabled ), 3.0f );
          textPos.emplace_back(
-             ImVec2( startEndLine.x, startEndLine.y + 5.0f ), count * _stepSizeInNanos );
+             ImVec2( startEndLine.x, startEndLine.y + 5.0f ), count * _stepSize );
       }
       // Draw midline
       else if ( count % 5 == 0 )
@@ -270,42 +275,10 @@ void Timeline::drawTimeline( const float posX, const float posY )
        ImVec2( posX + windowWidthPxl, posY ),
        ImGui::GetColorU32( ImGuiCol_Border ) );
 
-   const int64_t total = stepsCount * _stepSizeInNanos;
-   if ( total < 1000 )
+   for( const auto& pos : textPos )
    {
-      // print as nanoseconds
-      for ( const auto& pos : textPos )
-      {
-         ImGui::SetCursorScreenPos( pos.first );
-         ImGui::Text( "%" PRId64 " ns", pos.second );
-      }
-   }
-   else if ( total < 1000000 )
-   {
-      // print as microsecs
-      for ( const auto& pos : textPos )
-      {
-         ImGui::SetCursorScreenPos( pos.first );
-         ImGui::Text( "%.3f us", (double)( pos.second ) / 1000.0f );
-      }
-   }
-   else if ( total < 1000000000 )
-   {
-      // print as milliseconds
-      for ( const auto& pos : textPos )
-      {
-         ImGui::SetCursorScreenPos( pos.first );
-         ImGui::Text( "%.3f ms", (double)( pos.second ) / 1000000.0f );
-      }
-   }
-   else if ( total < 1000000000000 )
-   {
-      // print as seconds
-      for ( const auto& pos : textPos )
-      {
-         ImGui::SetCursorScreenPos( pos.first );
-         ImGui::Text( "%.3f s", (double)( pos.second ) / 1000000000.0f );
-      }
+      ImGui::SetCursorScreenPos( pos.first );
+      ImGui::Text( "%" PRId64 " cycles", pos.second );
    }
 
    ImGui::EndChild();
@@ -316,7 +289,7 @@ void Timeline::drawTimeline( const float posX, const float posY )
       _timelineHoverPos = curMousePosInScreen.x;
       if( ImGui::IsMouseClicked( 1 ) )
       {
-         _bookmarks.times.push_back( _timelineStart + pxlToNanos(ImGui::GetWindowWidth(), _duration, _timelineHoverPos - posX) );
+         _bookmarks.times.push_back( _timelineStart + pxlToCycles(ImGui::GetWindowWidth(), _duration, _timelineHoverPos - posX) );
          std::sort( _bookmarks.times.begin(), _bookmarks.times.end() );
       }
    }
@@ -379,11 +352,11 @@ void Timeline::handleMouseWheel( float mousePosX, float mouseWheel )
    {
       if( mouseWheel > 0)
       {
-         zoomOn( pxlToNanos( windowWidthPxl, _duration, mousePosX ) + _timelineStart, ImGui::IsKeyDown(SDL_SCANCODE_LCTRL) ? 0.5 : 0.9f );
+         zoomOn( pxlToCycles( windowWidthPxl, _duration, mousePosX ) + _timelineStart, ImGui::IsKeyDown(SDL_SCANCODE_LCTRL) ? 0.5 : 0.9f );
       }
       else if( mouseWheel < 0 )
       {
-         zoomOn( pxlToNanos( windowWidthPxl, _duration, mousePosX ) + _timelineStart, ImGui::IsKeyDown(SDL_SCANCODE_LCTRL) ? 1.5 : 1.1f );
+         zoomOn( pxlToCycles( windowWidthPxl, _duration, mousePosX ) + _timelineStart, ImGui::IsKeyDown(SDL_SCANCODE_LCTRL) ? 1.5 : 1.1f );
       }
    }
 }
@@ -398,7 +371,7 @@ void Timeline::handleMouseDrag( float mouseInCanvasX, float mouseInCanvasY )
 
       // Set horizontal position
       const int64_t deltaXInNanos =
-          pxlToNanos<int64_t>( windowWidthPxl, _duration, delta.x );
+          pxlToCycles<int64_t>( windowWidthPxl, _duration, delta.x );
       setStartTime( _timelineStart - deltaXInNanos, ANIMATION_TYPE_NONE );
    
       const float maxScrollY = maxVerticalPosPxl();
@@ -458,9 +431,9 @@ void Timeline::handleMouseDrag( float mouseInCanvasX, float mouseInCanvasY )
       const float maxX = std::max( _rightClickStartPosInCanvas[0], mouseInCanvasX );
       const float windowWidthPxl = ImGui::GetWindowWidth();
       const int64_t minXinNanos =
-        pxlToNanos<int64_t>( windowWidthPxl, _duration, minX - 2 );
+        pxlToCycles<int64_t>( windowWidthPxl, _duration, minX - 2 );
       setStartTime( _timelineStart + minXinNanos );
-      setZoom( pxlToNanos<TimeDuration>( windowWidthPxl, _duration, maxX - minX) );
+      setZoom( pxlToCycles<TimeDuration>( windowWidthPxl, _duration, maxX - minX) );
 
       // Reset position
       _rightClickStartPosInCanvas[0] = _rightClickStartPosInCanvas[1] = 0.0f;
@@ -622,7 +595,7 @@ void Timeline::frameToAbsoluteTime( TimeStamp time, TimeDuration duration, bool 
 
 void Timeline::setZoom( TimeDuration timelineDuration, AnimationType animType )
 {
-   _animationState.targetTimelineRange = hop::clamp( timelineDuration, MIN_NANOS_TO_DISPLAY, MAX_NANOS_TO_DISPLAY );
+   _animationState.targetTimelineRange = hop::clamp( timelineDuration, MIN_CYCLES_TO_DISPLAY, MAX_CYCLES_TO_DISPLAY );
    _animationState.type = animType;
    if( animType == ANIMATION_TYPE_NONE )
    {
@@ -632,21 +605,21 @@ void Timeline::setZoom( TimeDuration timelineDuration, AnimationType animType )
    }
 }
 
-void Timeline::zoomOn( int64_t nanoToZoomOn, float zoomFactor )
+void Timeline::zoomOn( int64_t cycleToZoomOn, float zoomFactor )
 {
    const float windowWidthPxl = ImGui::GetWindowWidth();
-   const int64_t nanoToZoom = nanoToZoomOn - _timelineStart;
+   const int64_t cycleToZoom = cycleToZoomOn - _timelineStart;
 
    const auto prevTimelineRange = _duration;
    setZoom( _duration * zoomFactor, ANIMATION_TYPE_NONE );
 
-   const int64_t prevPxlPos = nanosToPxl( windowWidthPxl, prevTimelineRange, nanoToZoom );
-   const int64_t newPxlPos = nanosToPxl( windowWidthPxl, _duration, nanoToZoom );
+   const int64_t prevPxlPos = cyclesToPxl( windowWidthPxl, prevTimelineRange, cycleToZoom );
+   const int64_t newPxlPos = cyclesToPxl( windowWidthPxl, _duration, cycleToZoom );
 
    const int64_t pxlDiff = newPxlPos - prevPxlPos;
    if ( pxlDiff != 0 )
    {
-      const int64_t timeDiff = pxlToNanos( windowWidthPxl, _duration, pxlDiff );
+      const int64_t timeDiff = pxlToCycles( windowWidthPxl, _duration, pxlDiff );
       setStartTime( _timelineStart + timeDiff, ANIMATION_TYPE_NONE );
    }
 }

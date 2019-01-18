@@ -112,10 +112,10 @@ class Timeline
       std::vector< TimeStamp > times;
    } _bookmarks;
 
-   void drawTimeline( const float posX, const float posY );
+   void drawTimelineCycles( const float posX, const float posY );
    void handleMouseDrag( float mousePosX, float mousePosY );
    void handleMouseWheel( float mousePosX, float mouseWheel );
-   void zoomOn( int64_t microToZoomOn, float zoomFactor );
+   void zoomOn( int64_t cycleToZoomOn, float zoomFactor );
    void setStartTime( int64_t timeInMicro, AnimationType animType = ANIMATION_TYPE_NORMAL ) noexcept;
    void setZoom( TimeDuration microsToDisplay, AnimationType animType = ANIMATION_TYPE_NORMAL );
 
@@ -125,9 +125,9 @@ class Timeline
 
    // Current timeline start and range
    int64_t _timelineStart{0};
-   TimeDuration _duration{5000000000};
+   uint64_t _duration{5000000000};
 
-   uint64_t _stepSizeInNanos{1000000};
+   uint64_t _stepSize{1000000};
    bool _realtime{true};
 
    // Drawing Data

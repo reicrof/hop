@@ -29,8 +29,8 @@ void setupLODResolution( uint32_t sreenResolutionX )
 {
    for( uint32_t i = 0; i < LOD_COUNT; ++i )
    {
-      LOD_MIN_TRACE_LENGTH_PXL[i] = pxlToNanos( sreenResolutionX, LOD_NANOS[i], MIN_TRACE_LENGTH_PXL );
-      LOD_MIN_GAP_PXL[i] = pxlToNanos( sreenResolutionX, LOD_NANOS[i], MIN_GAP_PXL );
+      LOD_MIN_TRACE_LENGTH_PXL[i] = pxlToCycles( sreenResolutionX, LOD_NANOS[i], MIN_TRACE_LENGTH_PXL );
+      LOD_MIN_GAP_PXL[i] = pxlToCycles( sreenResolutionX, LOD_NANOS[i], MIN_GAP_PXL );
    }
 }
 
