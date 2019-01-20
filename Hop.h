@@ -163,6 +163,7 @@ enum HopZone
 #endif
 #include <windows.h>
 #include <tchar.h>
+#include <intrin.h> // __rdtscp
 typedef HANDLE sem_handle;
 typedef HANDLE shm_handle;
 typedef TCHAR HOP_CHAR;
@@ -205,9 +206,13 @@ using Depth_t      = uint16_t;
 
 inline TimeStamp rdtscp( uint32_t& aux )
 {
+#if defined(_MSC_VER)
+   return __rdtscp( &aux );
+#else
    uint64_t rax, rdx;
    asm volatile( "rdtscp\n" : "=a"( rax ), "=d"( rdx ), "=c"( aux ) : : );
    return ( rdx << 32 ) + rax;
+#endif
 }
 
 inline TimeStamp getTimeStamp( Core_t& core )
@@ -216,7 +221,10 @@ inline TimeStamp getTimeStamp( Core_t& core )
    // of precision. It will instead be used to flag if a trace uses dynamic strings or not in its
    // start time. See hop::StartProfileDynString
    uint64_t val = rdtscp( core ) & ~1ull;
+#if defined(_MSC_VER)
+#else
    assert( sched_getcpu() == core );
+#endif
    return val;
 }
 

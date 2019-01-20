@@ -67,43 +67,35 @@ void Timeline::update( float deltaTimeMs ) noexcept
       {
          int64_t speedFactor = _animationState.type == ANIMATION_TYPE_NORMAL ? 100 / deltaTimeMs : 90 / deltaTimeMs;
          speedFactor = std::max( speedFactor, (int64_t)1 );
-         if ( std::abs( _timelineStart - _animationState.targetTimelineStart ) > 0.00001 )
+
+         const int64_t timelineStartDelta = _animationState.targetTimelineStart - _timelineStart;
+         if ( std::abs( timelineStartDelta ) < 10 )
          {
-            int64_t delta = _animationState.targetTimelineStart - _timelineStart;
-            if ( std::abs( delta ) < 10 )
-            {
-               _timelineStart = _animationState.targetTimelineStart;
-            }
-            else
-            {
-               _timelineStart += delta / speedFactor;
-            }
+            _timelineStart = _animationState.targetTimelineStart;
+         }
+         else
+         {
+            _timelineStart += timelineStartDelta / speedFactor;
          }
 
-         if ( std::abs( _duration - _animationState.targetTimelineRange ) > 0.00001 )
+         const int64_t timelineDurationDelta = _animationState.targetTimelineRange - _duration;
+         if ( std::abs( timelineDurationDelta ) < 10 )
          {
-            int64_t delta = _animationState.targetTimelineRange - _duration;
-            if ( std::abs( delta ) < 10 )
-            {
-               _duration = _animationState.targetTimelineRange;
-            }
-            else
-            {
-               _duration += delta / speedFactor;
-            }
+            _duration = _animationState.targetTimelineRange;
+         }
+         else
+         {
+            _duration += timelineDurationDelta / speedFactor;
          }
 
-         if (std::abs(_verticalPosPxl - _animationState.targetVerticalPosPxl) > 0.00001f)
+         const float verticalDelta = _animationState.targetVerticalPosPxl - _verticalPosPxl;
+         if ( std::abs( verticalDelta ) < 0.01f )
          {
-            float delta = _animationState.targetVerticalPosPxl - _verticalPosPxl;
-            if (std::abs(delta) < 0.01f)
-            {
-               _verticalPosPxl = _animationState.targetVerticalPosPxl;
-            }
-            else
-            {
-               _verticalPosPxl += delta * 0.1;
-            }
+            _verticalPosPxl = _animationState.targetVerticalPosPxl;
+         }
+         else
+         {
+            _verticalPosPxl += verticalDelta * 0.1;
          }
          break;
       }
