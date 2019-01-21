@@ -160,7 +160,7 @@ void Timeline::update( float deltaTimeMs ) noexcept
    }
 }
 
-void Timeline::draw( float timelineHeight, DisplayType drawType )
+void Timeline::draw( float timelineHeight )
 {
    HOP_PROF_FUNC();
 
@@ -169,7 +169,7 @@ void Timeline::draw( float timelineHeight, DisplayType drawType )
    _timelineDrawPosition[0] = startDrawPos.x;
    _timelineDrawPosition[1] = startDrawPos.y;
 
-   drawTimeline(startDrawPos.x, startDrawPos.y + 5, drawType );
+   drawTimeline(startDrawPos.x, startDrawPos.y + 5 );
 
    // Save the canvas draw position for later
    const auto& curDrawPos = ImGui::GetCursorScreenPos();
@@ -190,9 +190,12 @@ void Timeline::draw( float timelineHeight, DisplayType drawType )
    if (_timelineHoverPos > 0.0f)
    {
       static char text[32] = {};
-      const int64_t hoveredNano = _timelineStart + pxlToCycles(ImGui::GetWindowWidth(), _duration, _timelineHoverPos - startDrawPos.x);
-      hop::formatNanosTimepointToDisplay(hoveredNano, _duration, text, sizeof(text));
-      drawHoveringTimelineLine(_timelineHoverPos, startDrawPos.y, text);
+      const int64_t hoveredNano =
+          _timelineStart +
+          pxlToCycles( ImGui::GetWindowWidth(), _duration, _timelineHoverPos - startDrawPos.x );
+      hop::formatCyclesTimepointToDisplay(
+          hoveredNano, _duration, text, sizeof( text ), _displayType == DISPLAY_CYCLES );
+      drawHoveringTimelineLine( _timelineHoverPos, startDrawPos.y, text );
    }
 
    if( !_bookmarks.times.empty() )
@@ -226,10 +229,11 @@ TimelineInfo Timeline::constructTimelineInfo() const noexcept
                        globalStartTime(),
                        relativeStartTime(),
                        duration(),
-                       _rightClickStartPosInCanvas[0] != 0.0f};
+                       _rightClickStartPosInCanvas[0] != 0.0f,
+                       _displayType == DISPLAY_CYCLES};
 }
 
-void Timeline::drawTimeline( float posX, float posY, DisplayType drawType )
+void Timeline::drawTimeline( float posX, float posY )
 {
    HOP_PROF_FUNC();
 
@@ -321,7 +325,7 @@ void Timeline::drawTimeline( float posX, float posY, DisplayType drawType )
        ImGui::GetColorU32( ImGuiCol_Border ) );
 
    // Draw the labels
-   switch( drawType )
+   switch( _displayType )
    {
       case DISPLAY_CYCLES:
          drawTextPositionsCycles( textPos );
@@ -507,6 +511,11 @@ void Timeline::handleDeferredActions( const std::vector< TimelineMessage >& msgs
             break;
       }
    }
+}
+
+void Timeline::setDisplayType( DisplayType type )
+{
+   _displayType = type;
 }
 
 bool Timeline::realtime() const noexcept { return _realtime; }

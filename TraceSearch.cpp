@@ -104,9 +104,7 @@ void findTraces( const char* string, const StringDb& strDb, const TimelineTracks
 
 SearchSelection drawSearchResult(
     SearchResult& searchRes,
-    const TimeStamp globalTimelineStart,
-    const TimeDuration timelineDuration,
-    const StringDb& strDb,
+    const TimelineTracksDrawInfo& di,
     const TimelineTracks& tracks )
 {
    HOP_PROF_FUNC();
@@ -144,7 +142,7 @@ SearchSelection drawSearchResult(
          {
             const auto startSearch = std::chrono::system_clock::now();
 
-            findTraces( input, strDb, tracks, searchRes );
+            findTraces( input, di.strDb, tracks, searchRes );
 
             const auto endSearch = std::chrono::system_clock::now();
             hop::g_stats.searchTimeMs =
@@ -181,9 +179,9 @@ SearchSelection drawSearchResult(
             descending = !descending;
 
             if ( descending )
-               sortSearchResOnName( searchRes, tracks, strDb, std::greater<int>() );
+               sortSearchResOnName( searchRes, tracks, di.strDb, std::greater<int>() );
             else
-               sortSearchResOnName( searchRes, tracks, strDb, std::less<int>() );
+               sortSearchResOnName( searchRes, tracks, di.strDb, std::less<int>() );
          }
          ImGui::NextColumn();
          if ( ImGui::Button( "Duration" ) )
@@ -230,11 +228,12 @@ SearchSelection drawSearchResult(
             const size_t traceId = traceIdThreadId.first;
             const TimeStamp delta = ti._traces.entries.deltas[traceId];
 
-            hop::formatNanosTimepointToDisplay(
-                ti._traces.entries.ends[traceId] - delta - globalTimelineStart,
-                timelineDuration,
+            hop::formatCyclesTimepointToDisplay(
+                ti._traces.entries.ends[traceId] - delta - di.timeline.globalStartTime,
+                di.timeline.duration,
                 traceTime,
-                sizeof( traceTime ) );
+                sizeof( traceTime ),
+                di.timeline.useCycles );
             if ( ImGui::Selectable(
                      traceTime, selectedId == i, ImGuiSelectableFlags_SpanAllColumns ) )
             {
@@ -246,9 +245,10 @@ SearchSelection drawSearchResult(
                hoveredId = i;
             }
             ImGui::NextColumn();
-            ImGui::Text( "%s", strDb.getString( ti._traces.fctNameIds[traceId] ) );
+            ImGui::Text( "%s", di.strDb.getString( ti._traces.fctNameIds[traceId] ) );
             ImGui::NextColumn();
-            hop::formatNanosDurationToDisplay( delta, traceDuration, sizeof( traceDuration ) );
+            hop::formatCyclesDurationToDisplay(
+                delta, traceDuration, sizeof( traceDuration ), di.timeline.useCycles );
             ImGui::Text( "%s", traceDuration );
             ImGui::NextColumn();
             ImGui::PopID();

@@ -14,6 +14,7 @@ namespace hop
       TimeStamp relativeStartTime;
       TimeDuration duration;
       bool mouseDragging;
+      bool useCycles;
    };
 
    enum class TimelineMessageType

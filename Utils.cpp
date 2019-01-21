@@ -40,43 +40,65 @@ uint64_t getCpuFreqHz()
    return cpuFreq;
 }
 
-int formatNanosDurationToDisplay( uint64_t duration, char* str, size_t strSize )
+int formatCyclesDurationToDisplay( uint64_t duration, char* str, size_t strSize, bool asCycles )
 {
-   if ( duration < 1000 )
+   if( asCycles )
    {
-      return snprintf( str, strSize, "%" PRIu64 " ns", duration );
-   }
-   else if ( duration < 1000000 )
-   {
-      return snprintf( str, strSize, "%.3f us", duration * 0.001f );
-   }
-   else if ( duration < 1000000000 )
-   {
-      return snprintf( str, strSize, "%.3f ms", duration * 0.000001f );
+      return snprintf( str, strSize, "%" PRIu64 " cycles", duration );
    }
    else
    {
-      return snprintf( str, strSize, "%.3f s", duration * 0.000000001f );
+      const auto durationInNs = hop::cyclesToNanos( duration );
+      if( durationInNs < 1000 )
+      {
+         return snprintf( str, strSize, "%" PRIu64 " ns", durationInNs );
+      }
+      else if( durationInNs < 1000000 )
+      {
+         return snprintf( str, strSize, "%.3f us", durationInNs * 0.001f );
+      }
+      else if( durationInNs < 1000000000 )
+      {
+         return snprintf( str, strSize, "%.3f ms", durationInNs * 0.000001f );
+      }
+      else
+      {
+         return snprintf( str, strSize, "%.3f s", durationInNs * 0.000000001f );
+      }
    }
 }
 
-void formatNanosTimepointToDisplay(int64_t timepoint, uint64_t totalNanosInScreen, char* str, size_t strSize)
+int formatCyclesTimepointToDisplay(
+    int64_t timepoint,
+    uint64_t totalCyclesInScreen,
+    char* str,
+    size_t strSize,
+    bool asCycles )
 {
-   if (totalNanosInScreen < 1000)
+   if( asCycles )
    {
-      snprintf(str, strSize, "%" PRId64 " ns", timepoint);
-   }
-   else if (totalNanosInScreen < 1000000)
-   {
-      snprintf(str, strSize, "%.3f us", timepoint * 0.001f);
-   }
-   else if (totalNanosInScreen < 1000000000)
-   {
-      snprintf(str, strSize, "%.3f ms", timepoint * 0.000001f);
+      return snprintf( str, strSize, "%" PRId64 " cycles", timepoint );
    }
    else
    {
-      snprintf(str, strSize, "%.3f s", timepoint * 0.000000001f);
+      const auto timepointInNs = hop::cyclesToNanos( timepoint );
+      const auto nanosInScreen = hop::cyclesToNanos( totalCyclesInScreen );
+      if( nanosInScreen < 1000 )
+      {
+         return snprintf( str, strSize, "%" PRId64 " ns", timepointInNs );
+      }
+      else if( nanosInScreen < 1000000 )
+      {
+         return snprintf( str, strSize, "%.3f us", timepointInNs * 0.001f );
+      }
+      else if( nanosInScreen < 1000000000 )
+      {
+         return snprintf( str, strSize, "%.3f ms", timepointInNs * 0.000001f );
+      }
+      else
+      {
+         return snprintf( str, strSize, "%.3f s", timepointInNs * 0.000000001f );
+      }
    }
 }
 

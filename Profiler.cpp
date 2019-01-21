@@ -544,7 +544,7 @@ void hop::Profiler::draw( uint32_t /*windowWidth*/, uint32_t /*windowHeight*/ )
          _timeline.moveToPresentTime( Timeline::ANIMATION_TYPE_NONE );
       }
 
-      _timeline.draw( _tracks.totalHeight(), Timeline::DISPLAY_TIMES );
+      _timeline.draw( _tracks.totalHeight() );
 
       // Push clip rect for canvas and draw
       ImGui::PushClipRect(
@@ -552,7 +552,7 @@ void hop::Profiler::draw( uint32_t /*windowWidth*/, uint32_t /*windowHeight*/ )
       ImGui::BeginChild( "TimelineCanvas" );
 
       auto timelineActions =
-          _tracks.draw( TimelineTracks::DrawInfo{_timeline.constructTimelineInfo(), _strDb} );
+          _tracks.draw( TimelineTracksDrawInfo{_timeline.constructTimelineInfo(), _strDb} );
 
       ImGui::EndChild();
       ImGui::PopClipRect();

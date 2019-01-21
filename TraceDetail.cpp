@@ -398,7 +398,8 @@ TraceDetails createGlobalTraceDetails( const TraceData& traces, uint32_t threadI
 TraceDetailDrawResult drawTraceDetails(
     TraceDetails& details,
     const std::vector<TimelineTrack>& tracks,
-    const StringDb& strDb )
+    const StringDb& strDb,
+    bool drawAsCycles )
 {
    HOP_PROF_FUNC();
 
@@ -547,18 +548,20 @@ TraceDetailDrawResult drawTraceDetails(
             ImGui::NextColumn();
             ImGui::Text( "%3.2f", details.details[i].inclusivePct * 100.0f );
             ImGui::NextColumn();
-            formatNanosDurationToDisplay(
+            formatCyclesDurationToDisplay(
                 details.details[i].inclusiveTimeInNanos,
                 traceDuration,
-                sizeof( traceDuration ) );
+                sizeof( traceDuration ),
+                drawAsCycles );
             ImGui::Text( "%s", traceDuration );
             ImGui::NextColumn();
             ImGui::Text( "%3.2f", details.details[i].exclusivePct * 100.0f );
             ImGui::NextColumn();
-            formatNanosDurationToDisplay(
+            formatCyclesDurationToDisplay(
                 details.details[i].exclusiveTimeInNanos,
                 traceDuration,
-                sizeof( traceDuration ) );
+                sizeof( traceDuration ),
+                drawAsCycles );
             ImGui::Text( "%s", traceDuration );
             ImGui::NextColumn();
             ImGui::Text( "%zu", details.details[i].traceIds.size() );
@@ -580,7 +583,7 @@ TraceDetailDrawResult drawTraceDetails(
    return result;
 }
 
-void drawTraceStats(TraceStats& stats, const StringDb& strDb)
+void drawTraceStats( TraceStats& stats, const StringDb& strDb, bool drawAsCycles )
 {
    if ( stats.open > 0 )
    {
@@ -597,9 +600,9 @@ void drawTraceStats(TraceStats& stats, const StringDb& strDb)
          char minStr[32] = {};
          char maxStr[32] = {};
          char medianStr[32] = {};
-         formatNanosDurationToDisplay( stats.min, minStr, sizeof( minStr ) );
-         formatNanosDurationToDisplay( stats.max, maxStr, sizeof( maxStr ) );
-         formatNanosDurationToDisplay( stats.median, medianStr, sizeof( medianStr ) );
+         formatCyclesDurationToDisplay( stats.max, maxStr, sizeof( maxStr ), drawAsCycles );
+         formatCyclesDurationToDisplay( stats.min, minStr, sizeof( minStr ), drawAsCycles );
+         formatCyclesDurationToDisplay( stats.median, medianStr, sizeof( medianStr ), drawAsCycles );
          ImGui::Text("Function : %s\nCount    : %zu\nMin      : %s\nMax      : %s\nMedian   : %s", strDb.getString(stats.fctNameId), stats.count, minStr, maxStr, medianStr );
          ImGui::PlotLines( "", stats.displayableDurations.data(), stats.displayableDurations.size() );
       }

@@ -18,13 +18,14 @@ namespace hop
 
 uint64_t getCpuFreqHz();
 
-int formatNanosDurationToDisplay( uint64_t duration, char* str, size_t strSize );
+int formatCyclesDurationToDisplay( uint64_t duration, char* str, size_t strSize, bool asCycles );
 
-void formatNanosTimepointToDisplay(
+int formatCyclesTimepointToDisplay(
     int64_t timepoint,
-    uint64_t totalNanosInScreen,
+    uint64_t totalCyclesInScreen,
     char* str,
-    size_t strSize );
+    size_t strSize,
+    bool asCycles );
 
 void formatSizeInBytesToDisplay( size_t sizeInBytes, char* str, size_t strSize );
 

@@ -42,7 +42,7 @@ static DrawData createDrawDataForTrace(
     size_t traceIdx,
     const float posX,
     const float posY,
-    const hop::TimelineTracks::DrawInfo& drawInfo,
+    const hop::TimelineTracksDrawInfo& drawInfo,
     const float windowWidthPxl )
 {
    using namespace hop;
@@ -128,7 +128,7 @@ static void drawCoresLabels(
     const ImVec2& drawPos,
     const hop::CoreEventData& coreData,
     const hop::Entries& traceEntries,
-    const hop::TimelineTracks::DrawInfo& di )
+    const hop::TimelineTracksDrawInfo& di )
 {
    if( coreData.data.empty() ) return;
 
@@ -554,14 +554,14 @@ void TimelineTracks::update( float deltaTimeMs, TimeDuration timelineDuration )
    TimelineTrack::PADDED_TRACE_SIZE = TimelineTrack::TRACE_HEIGHT + TimelineTrack::TRACE_VERTICAL_PADDING;
 }
 
-std::vector< TimelineMessage > TimelineTracks::draw( const DrawInfo& info )
+std::vector< TimelineMessage > TimelineTracks::draw( const TimelineTracksDrawInfo& info )
 {
    std::vector< TimelineMessage > timelineActions;
    timelineActions.reserve( 4 );
 
    drawTraceDetailsWindow( info, timelineActions );
    drawSearchWindow( info, timelineActions );
-   drawTraceStats( _traceStats, info.strDb );
+   drawTraceStats( _traceStats, info.strDb, info.timeline.useCycles );
 
    ImGui::SetCursorScreenPos( ImVec2( info.timeline.canvasPosX, info.timeline.canvasPosY ) );
 
@@ -702,7 +702,7 @@ void TimelineTracks::drawTraces(
     uint32_t threadIndex,
     const float posX,
     const float posY,
-    const DrawInfo& drawInfo,
+    const TimelineTracksDrawInfo& drawInfo,
     std::vector< TimelineMessage >& timelineMsg )
 {
    const TimelineTrack& data = _tracks[ threadIndex ];
@@ -750,6 +750,7 @@ void TimelineTracks::drawTraces(
              t.end, t.delta, t.depth, t.traceIndex, posX, posY, drawInfo, windowWidthPxl ) );
    }
 
+   const bool drawAsCycles = drawInfo.timeline.useCycles;
    const bool rightMouseClicked = ImGui::IsMouseReleased( 1 );
    const bool leftMouseDblClicked = ImGui::IsMouseDoubleClicked( 0 );
 
@@ -778,7 +779,11 @@ void TimelineTracks::drawTraces(
             if ( t.lengthPxl > 3 )
             {
                ImGui::BeginTooltip();
-               formatNanosDurationToDisplay( t.duration, curName + hoveredNamePrefixSize, sizeof( curName ) - hoveredNamePrefixSize );
+               formatCyclesDurationToDisplay(
+                   t.duration,
+                   curName + hoveredNamePrefixSize,
+                   sizeof( curName ) - hoveredNamePrefixSize,
+                   drawAsCycles );
                ImGui::TextUnformatted( curName );
                ImGui::EndTooltip();
             }
@@ -836,7 +841,8 @@ void TimelineTracks::drawTraces(
                size_t lastChar = strlen( curName );
                curName[lastChar] = ' ';
                ImGui::BeginTooltip();
-               formatNanosDurationToDisplay( t.duration, formattedTime, sizeof( formattedTime ) );
+               formatCyclesDurationToDisplay(
+                   t.duration, formattedTime, sizeof( formattedTime ), drawAsCycles );
                snprintf(
                    curName + lastChar,
                    sizeof( curName ) - lastChar,
@@ -882,7 +888,7 @@ void TimelineTracks::drawTraces(
 std::vector< LockOwnerInfo > TimelineTracks::highlightLockOwner(
     uint32_t threadIndex,
     uint32_t hoveredLwIndex,
-    const DrawInfo& info )
+    const TimelineTracksDrawInfo& info )
 {
     HOP_PROF_FUNC();
     std::vector< LockOwnerInfo > lockInfos;
@@ -975,7 +981,7 @@ void TimelineTracks::drawLockWaits(
     const uint32_t threadIndex,
     const float posX,
     const float posY,
-    const DrawInfo& drawInfo,
+    const TimelineTracksDrawInfo& drawInfo,
     std::vector< TimelineMessage >& timelineMsg )
 {
    const LockWaitData& lockWaits =_tracks[ threadIndex ]._lockWaits;
@@ -1018,6 +1024,8 @@ void TimelineTracks::drawLockWaits(
    ImGui::PushStyleColor(ImGuiCol_ButtonHovered, zoneColors[HOP_MAX_ZONES] );
    ImGui::PushStyleVar(ImGuiStyleVar_Alpha, enabledZone[HOP_MAX_ZONES] ? 1.0f : disabledZoneOpacity );
 
+   const bool drawAsCycles = drawInfo.timeline.useCycles;
+
    HOP_PROF_SPLIT( "Drawing Lock Wait Lod" );
    for ( const auto& t : lodTracesToDraw )
    {
@@ -1030,10 +1038,11 @@ void TimelineTracks::drawLockWaits(
          {
             char lockTooltip[256] = "Waiting lock for ~";
             ImGui::BeginTooltip();
-            formatNanosDurationToDisplay(
+            formatCyclesDurationToDisplay(
                 t.duration,
                 lockTooltip + strlen( lockTooltip ),
-                sizeof( lockTooltip ) - strlen( lockTooltip ) );
+                sizeof( lockTooltip ) - strlen( lockTooltip ),
+                drawAsCycles );
 
             ImGui::TextUnformatted( lockTooltip );
             ImGui::EndTooltip();
@@ -1067,10 +1076,11 @@ void TimelineTracks::drawLockWaits(
          {
             char lockTooltip[256] = "Waiting lock for ";
             ImGui::BeginTooltip();
-            formatNanosDurationToDisplay(
+            formatCyclesDurationToDisplay(
                 t.duration,
                 lockTooltip + strlen( lockTooltip ),
-                sizeof( lockTooltip ) - strlen( lockTooltip ) );
+                sizeof( lockTooltip ) - strlen( lockTooltip ),
+                drawAsCycles );
 
             _tracks[threadIndex]._highlightsDrawData.emplace_back(
              TimelineTrack::HighlightDrawInfo{t.posPxl[0], t.posPxl[1], t.lengthPxl, 0xFFFFFF} );
@@ -1090,8 +1100,11 @@ void TimelineTracks::drawLockWaits(
                char formattedLockTime[64] = {};
                for ( const auto& i : lockInfo )
                {
-                  formatNanosDurationToDisplay(
-                      i.lockDuration, formattedLockTime, sizeof( formattedLockTime ) );
+                  formatCyclesDurationToDisplay(
+                      i.lockDuration,
+                      formattedLockTime,
+                      sizeof( formattedLockTime ),
+                      drawAsCycles );
                   snprintf(
                       lockTooltip + strlen( lockTooltip ),
                       sizeof( lockTooltip ) - strlen( lockTooltip ),
@@ -1122,13 +1135,12 @@ void TimelineTracks::drawLockWaits(
 }
 
 void TimelineTracks::drawSearchWindow(
-    const DrawInfo& di,
+    const TimelineTracksDrawInfo& di,
     std::vector<TimelineMessage>& timelineMsg )
 {
    HOP_PROF_FUNC();
 
-   const SearchSelection selection = drawSearchResult(
-       _searchRes, di.timeline.globalStartTime, di.timeline.duration, di.strDb, *this );
+   const SearchSelection selection = drawSearchResult( _searchRes, di, *this );
 
    if ( selection.selectedTraceIdx != (size_t)-1 && selection.selectedThreadIdx != (uint32_t)-1 )
    {
@@ -1163,9 +1175,10 @@ void TimelineTracks::drawSearchWindow(
    }
 }
 
-void TimelineTracks::drawTraceDetailsWindow( const DrawInfo& info, std::vector< TimelineMessage >& timelineMsg )
+void TimelineTracks::drawTraceDetailsWindow( const TimelineTracksDrawInfo& info, std::vector< TimelineMessage >& timelineMsg )
 {
-   const TraceDetailDrawResult traceDetailRes = drawTraceDetails( _traceDetails, _tracks, info.strDb );
+   const TraceDetailDrawResult traceDetailRes =
+       drawTraceDetails( _traceDetails, _tracks, info.strDb, info.timeline.useCycles );
 
    if( traceDetailRes.clicked )
    {
@@ -1203,7 +1216,7 @@ void TimelineTracks::drawTraceDetailsWindow( const DrawInfo& info, std::vector< 
    }
 }
 
-void TimelineTracks::drawContextMenu( const DrawInfo& info )
+void TimelineTracks::drawContextMenu( const TimelineTracksDrawInfo& info )
 {
    // No trace were right clicked. Check for right click in canvas
    if( ImGui::IsMouseReleased( 1 ) && !_contextMenuInfo.open && !info.timeline.mouseDragging )
@@ -1283,7 +1296,7 @@ void TimelineTracks::drawContextMenu( const DrawInfo& info )
    }
 }
 
-void TimelineTracks::addTraceToHighlight( size_t traceId, uint32_t threadIndex, const DrawInfo& drawInfo )
+void TimelineTracks::addTraceToHighlight( size_t traceId, uint32_t threadIndex, const TimelineTracksDrawInfo& drawInfo )
 {
    // Gather draw data for visible highlighted traces
    const TimelineTrack& data = _tracks[ threadIndex ];
