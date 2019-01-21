@@ -43,6 +43,12 @@ inline T clamp(const T& val, const T& lower, const T& upper)
    return std::max( lower, std::min( val, upper ) );
 }
 
+template <typename T>
+inline int sign( const T& val )
+{
+    return (T(0) < val) - (val < T(0));
+}
+
 // TODO template these 2 functions so they can be used with different time ratios
 template< typename T = uint64_t >
 static inline T cyclesToPxl( double windowWidth, uint64_t timelineRange, uint64_t cycles )

@@ -171,10 +171,6 @@ TimelineInfo Timeline::constructTimelineInfo() const noexcept
                        _rightClickStartPosInCanvas[0] != 0.0f};
 }
 
-template <typename T> int sgn(T val) {
-    return (T(0) < val) - (val < T(0));
-}
-
 void Timeline::drawTimelineCycles( const float posX, const float posY )
 {
    HOP_PROF_FUNC();
@@ -219,19 +215,18 @@ void Timeline::drawTimelineCycles( const float posX, const float posY )
    constexpr float deltaMidLineLength = 7.0f;   // The diff between the small line and mid one
 
    const float stepSizePxl = cyclesToPxl<float>( windowWidthPxl, _duration, _stepSize );
-   const double stepsDone = _timelineStart / (double)_stepSize;
-   const int64_t remainder = (1.0 - std::abs(stepsDone - (int)stepsDone)) * _stepSize;
-   int remainderPxl = 0;
-   if ( remainder != 0 ) remainderPxl = cyclesToPxl<int64_t>( windowWidthPxl, _duration, remainder );
+   const auto stepsDone = lldiv( _timelineStart, _stepSize );
+
+   const float remainderPxl =
+       cyclesToPxl<float>( windowWidthPxl, _duration, std::abs( stepsDone.rem ) );
 
    // Start drawing one step before the start position to account for partial steps
    ImVec2 top( posX, posY );
-   //top.x -= ( stepSizePxl + remainderPxl ) - stepSizePxl;
-   top.x += sgn(stepsDone) * remainderPxl;
+   top.x -= hop::sign( stepsDone.rem ) * remainderPxl;
    ImVec2 bottom = top;
    bottom.y += smallLineLength;
 
-   int64_t count = stepsDone;
+   int64_t count = stepsDone.quot;
    std::vector<std::pair<ImVec2, int64_t> > textPos;
    const auto maxPosX = posX + windowWidthPxl;
    for ( double i = top.x; i < maxPosX; i += stepSizePxl, ++count )
