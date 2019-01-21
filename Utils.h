@@ -64,7 +64,7 @@ static inline T pxlToCycles( double windowWidth, uint64_t timelineRange, double 
    return static_cast<T>( cyclesPerPxl * pxl );
 }
 
-static inline uint64_t cyclesToNanos( uint64_t cycles )
+static inline int64_t cyclesToNanos( int64_t cycles )
 {
    static const double cpuFreqGhz = getCpuFreqHz() / 1000000000.0;
    return (cycles / cpuFreqGhz) + 0.5;

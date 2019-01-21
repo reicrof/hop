@@ -20,8 +20,14 @@ class Timeline
       ANIMATION_TYPE_FAST
    };
 
+   enum DisplayType
+   {
+      DISPLAY_CYCLES,
+      DISPLAY_TIMES
+   };
+
    void update( float deltaTimeMs ) noexcept;
-   void draw( float timelineHeight );
+   void draw( float timelineHeight, DisplayType drawType );
    TimelineInfo constructTimelineInfo() const noexcept;
 
    bool handleMouse( float posX, float posY, bool lmClicked, bool rmClicked, float wheel );
@@ -112,7 +118,7 @@ class Timeline
       std::vector< TimeStamp > times;
    } _bookmarks;
 
-   void drawTimelineCycles( const float posX, const float posY );
+   void drawTimeline( float posX, float posY, DisplayType drawType );
    void handleMouseDrag( float mousePosX, float mousePosY );
    void handleMouseWheel( float mousePosX, float mouseWheel );
    void zoomOn( int64_t cycleToZoomOn, float zoomFactor );

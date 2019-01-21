@@ -16,9 +16,11 @@
 
 #include <cstdlib> // fix for std::abs for older libc++ impl
 
-static constexpr hop::TimeDuration MIN_CYCLES_TO_DISPLAY = 1000;
+static constexpr hop::TimeDuration MIN_CYCLES_TO_DISPLAY = 2000;
 static constexpr hop::TimeDuration MAX_CYCLES_TO_DISPLAY = 1800000000000;
 static constexpr float TIMELINE_TOTAL_HEIGHT = 50.0f;
+
+using TimelineTextPositions = std::vector<std::pair<ImVec2, int64_t> >;
 
 static void drawHoveringTimelineLine(float posInScreenX, float timelineStartPosY, const char* text )
 {
@@ -47,6 +49,62 @@ static void drawBookmarks( float posXPxl, float posYPxl )
    constexpr float LINE_PADDING = 5.0f;
    ImGui::SetCursorScreenPos( ImVec2( posXPxl - (BOOKMARK_WIDTH * 0.5f), posYPxl + LINE_PADDING ) );
    ImGui::Button("", ImVec2( BOOKMARK_WIDTH, BOOKMARK_HEIGHT ) );
+}
+
+static void drawTextPositionsCycles( const TimelineTextPositions& textPos )
+{
+   for( const auto& pos : textPos )
+   {
+      ImGui::SetCursorScreenPos( pos.first );
+      if( pos.second >= 1000000 )
+      {
+         ImGui::Text( "%" PRId64 "k cycles", pos.second / 1000 );
+      }
+      else
+      {
+         ImGui::Text( "%" PRId64 " cycles", pos.second );  
+      }
+   }
+}
+
+static void drawTextPositionsTime( const TimelineTextPositions& textPos, uint64_t tlDuration )
+{
+   if ( tlDuration < 1000 )
+   {
+      // print as nanoseconds
+      for ( const auto& pos : textPos )
+      {
+         ImGui::SetCursorScreenPos( pos.first );
+         ImGui::Text( "%" PRId64 " ns", hop::cyclesToNanos( pos.second ) );
+      }
+   }
+   else if ( tlDuration < 1000000 )
+   {
+      // print as microsecs
+      for ( const auto& pos : textPos )
+      {
+         ImGui::SetCursorScreenPos( pos.first );
+         ImGui::Text( "%.3f us", (double)(  hop::cyclesToNanos( pos.second ) ) / 1000.0f );
+      }
+   }
+   else if ( tlDuration < 1000000000 )
+   {
+      // print as milliseconds
+      for ( const auto& pos : textPos )
+      {
+         ImGui::SetCursorScreenPos( pos.first );
+         ImGui::Text( "%.3f ms", (double)(  hop::cyclesToNanos( pos.second ) ) / 1000000.0f );
+      }
+   }
+   else if ( tlDuration < 1000000000000 )
+   {
+      // print as seconds
+      for ( const auto& pos : textPos )
+      {
+         ImGui::SetCursorScreenPos( pos.first );
+         ImGui::Text( "%.3f s", (double)(  hop::cyclesToNanos( pos.second ) ) / 1000000000.0f );
+      }
+   }
 }
 
 namespace hop
@@ -102,7 +160,7 @@ void Timeline::update( float deltaTimeMs ) noexcept
    }
 }
 
-void Timeline::draw( float timelineHeight )
+void Timeline::draw( float timelineHeight, DisplayType drawType )
 {
    HOP_PROF_FUNC();
 
@@ -111,7 +169,7 @@ void Timeline::draw( float timelineHeight )
    _timelineDrawPosition[0] = startDrawPos.x;
    _timelineDrawPosition[1] = startDrawPos.y;
 
-   drawTimelineCycles(startDrawPos.x, startDrawPos.y + 5);
+   drawTimeline(startDrawPos.x, startDrawPos.y + 5, drawType );
 
    // Save the canvas draw position for later
    const auto& curDrawPos = ImGui::GetCursorScreenPos();
@@ -171,35 +229,35 @@ TimelineInfo Timeline::constructTimelineInfo() const noexcept
                        _rightClickStartPosInCanvas[0] != 0.0f};
 }
 
-void Timeline::drawTimelineCycles( const float posX, const float posY )
+void Timeline::drawTimeline( float posX, float posY, DisplayType drawType )
 {
    HOP_PROF_FUNC();
 
    constexpr uint64_t minStepSize = 10;
    constexpr uint64_t minStepCount = 20;
-   constexpr uint64_t maxStepCount = 140;
+   constexpr uint64_t maxStepCount = 200;
 
    const float windowWidthPxl = ImGui::GetWindowWidth();
 
    ImGui::BeginChild("Timeline", ImVec2( windowWidthPxl, TIMELINE_TOTAL_HEIGHT) );
 
-   const uint64_t stepsCount = [=]() {
-      uint64_t stepsCount = _duration / _stepSize;
-      while ( stepsCount > maxStepCount ||
-              ( stepsCount < minStepCount && _stepSize > minStepSize ) )
+   uint64_t stepsCount = _duration / _stepSize;
+   if( stepsCount > maxStepCount )
+   {
+      while( stepsCount > maxStepCount )
       {
-         if ( stepsCount > maxStepCount )
-         {
-            _stepSize *= 5;
-         }
-         else if ( stepsCount < minStepCount )
-         {
-            _stepSize = std::max( _stepSize / 5, minStepSize );
-         }
+         _stepSize *= 10;
          stepsCount = _duration / _stepSize;
       }
-      return stepsCount;
-   }();
+   }
+   else if( stepsCount < minStepCount )
+   {
+      while( stepsCount < minStepCount && _stepSize > minStepSize )
+      {
+         _stepSize = std::max( _stepSize / 10, minStepSize );
+         stepsCount = _duration / _stepSize;
+      }
+   }
 
    ImDrawList* DrawList = ImGui::GetWindowDrawList();
 
@@ -227,7 +285,7 @@ void Timeline::drawTimelineCycles( const float posX, const float posY )
    bottom.y += smallLineLength;
 
    int64_t count = stepsDone.quot;
-   std::vector<std::pair<ImVec2, int64_t> > textPos;
+   TimelineTextPositions textPos;
    const auto maxPosX = posX + windowWidthPxl;
    for ( double i = top.x; i < maxPosX; i += stepSizePxl, ++count )
    {
@@ -262,10 +320,15 @@ void Timeline::drawTimelineCycles( const float posX, const float posY )
        ImVec2( posX + windowWidthPxl, posY ),
        ImGui::GetColorU32( ImGuiCol_Border ) );
 
-   for( const auto& pos : textPos )
+   // Draw the labels
+   switch( drawType )
    {
-      ImGui::SetCursorScreenPos( pos.first );
-      ImGui::Text( "%" PRId64 " cycles", pos.second );
+      case DISPLAY_CYCLES:
+         drawTextPositionsCycles( textPos );
+         break;
+      case DISPLAY_TIMES:
+         drawTextPositionsTime( textPos, _duration );
+         break;
    }
 
    ImGui::EndChild();

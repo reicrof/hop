@@ -544,7 +544,7 @@ void hop::Profiler::draw( uint32_t /*windowWidth*/, uint32_t /*windowHeight*/ )
          _timeline.moveToPresentTime( Timeline::ANIMATION_TYPE_NONE );
       }
 
-      _timeline.draw( _tracks.totalHeight() );
+      _timeline.draw( _tracks.totalHeight(), Timeline::DISPLAY_TIMES );
 
       // Push clip rect for canvas and draw
       ImGui::PushClipRect(
