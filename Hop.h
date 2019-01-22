@@ -178,7 +178,6 @@ typedef TCHAR HOP_CHAR;
 #else /* Unix (Linux & MacOs) specific macros and defines */
 
 #include <semaphore.h>
-#include <sched.h> // sched_getcpu
 typedef sem_t* sem_handle;
 typedef int shm_handle;
 typedef char HOP_CHAR;
@@ -220,12 +219,7 @@ inline TimeStamp getTimeStamp( Core_t& core )
    // We return the tsc with the first bit set to 0. We do not require this last cycle
    // of precision. It will instead be used to flag if a trace uses dynamic strings or not in its
    // start time. See hop::StartProfileDynString
-   uint64_t val = rdtscp( core ) & ~1ull;
-#if defined(_MSC_VER)
-#else
-   assert( sched_getcpu() == core );
-#endif
-   return val;
+   return rdtscp( core ) & ~1ull;;
 }
 
 inline TimeStamp getTimeStamp()
@@ -322,7 +316,7 @@ HOP_STATIC_ASSERT( sizeof(UnlockEvent) == EXPECTED_UNLOCK_EVENT_SIZE, "Unlock Ev
 
 struct CoreEvent
 {
-   TimeStamp time;
+   TimeStamp start, end;
    Core_t core;
 };
 
@@ -1153,9 +1147,9 @@ class Client
       _traces.push_back( Trace{ start, end, fileName, fctName, lineNb, zone, (Depth_t)tl_traceLevel } );
    }
 
-   void addCoreEvent( Core_t core, TimeStamp endTime )
+   void addCoreEvent( Core_t core, TimeStamp startTime, TimeStamp endTime )
    {
-      _cores.emplace_back( CoreEvent{ endTime, core } );
+      _cores.emplace_back( CoreEvent{ startTime, endTime, core } );
    }
 
    void addWaitLockTrace( void* mutexAddr, TimeStamp start, TimeStamp end, Depth_t depth )
@@ -1652,7 +1646,7 @@ void ClientManager::EndProfile(
    if( end - start > 50 ) // Minimum trace time is 50 ns
    {
       client->addProfilingTrace( fileName, fctName, start, end, lineNb, zone );
-      client->addCoreEvent( core, end );
+      client->addCoreEvent( core, start, end );
    }
    if ( remainingPushedTraces <= 0 )
    {

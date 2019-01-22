@@ -143,7 +143,7 @@ static void drawCoresLabels(
 
    CoreEvent firstEv = { firstTraceAbsoluteTime, 0 };
    CoreEvent lastEv = { lastTraceAbsoluteTime, 0 };
-   auto cmp = []( const CoreEvent& lhs, const CoreEvent& rhs) { return lhs.time < rhs.time; };
+   auto cmp = []( const CoreEvent& lhs, const CoreEvent& rhs) { return lhs.end < rhs.end; };
    auto it1 = std::lower_bound( coreData.data.begin(), coreData.data.end(), firstEv, cmp );
    auto it2 = std::upper_bound( coreData.data.begin(), coreData.data.end(), lastEv, cmp );
 
@@ -155,7 +155,7 @@ static void drawCoresLabels(
    std::vector<DrawData> drawData;
    drawData.reserve( std::distance( it1, it2 ) );
    auto curIdx = firstIdx;
-   CoreEvent prevEvent = {it1 == coreData.data.begin() ? absoluteStart : ( it1 - 1 )->time,
+   CoreEvent prevEvent = {it1 == coreData.data.begin() ? absoluteStart : ( it1 - 1 )->end,
                           0xFFFFFFFF};
    for( ; it1 != it2; ++it1, ++curIdx )
    {
@@ -164,7 +164,7 @@ static void drawCoresLabels(
       if( prevEvent.core == it1->core )
       {
          const auto startIt =
-             std::upper_bound( traceEntries.ends.begin(), traceEntries.ends.end(), prevEvent.time );
+             std::upper_bound( traceEntries.ends.begin(), traceEntries.ends.end(), prevEvent.end );
          int64_t startIdx = std::distance( traceEntries.ends.begin(), startIt );
          const int64_t traceCount = traceEntries.ends.size();
          if( startIdx != traceCount )
@@ -174,11 +174,11 @@ static void drawCoresLabels(
                ++startIdx;
             }
    
-            prevEvent.time = traceEntries.ends[ startIdx ] - traceEntries.deltas[ startIdx ];
+            prevEvent.end = traceEntries.ends[ startIdx ] - traceEntries.deltas[ startIdx ];
          }
       }
       drawData.push_back(createDrawDataForTrace(
-              it1->time, it1->time - prevEvent.time, 0, curIdx , drawPos.x, drawPos.y, di, windowWidthPxl ) );
+              it1->end, it1->end - prevEvent.end, 0, curIdx , drawPos.x, drawPos.y, di, windowWidthPxl ) );
       prevEvent = *it1;
    }
 
@@ -282,9 +282,9 @@ void TimelineTrack::addCoreEvents( const std::vector<CoreEvent>& coreEvents )
       // If we are still on the same core, merge the last with the first new event if their time
       // difference is less than 100ms
       if( lastCoreEv.core == firstNewCoreEv->core &&
-          ( firstNewCoreEv->time - lastCoreEv.time ) < 100000000 )
+          ( firstNewCoreEv->end - lastCoreEv.end ) < (uint64_t)hop::cyclesToNanos( 100000000 ) )
       {
-         lastCoreEv.time = firstNewCoreEv->time;
+         lastCoreEv.end = firstNewCoreEv->end;
          ++firstNewCoreEv;
       }
    }
@@ -851,6 +851,9 @@ void TimelineTracks::drawTraces(
                    drawInfo.strDb.getString( data._traces.fileNameIds[traceIndex] ),
                    data._traces.lineNbs[traceIndex] );
                ImGui::TextUnformatted( curName );
+#ifdef HOP_DEBUG
+               ImGui::TextWrapped( "Trace Index = %zu", t.traceIndex );
+#endif
                ImGui::EndTooltip();
             }
 

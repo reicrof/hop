@@ -10,26 +10,38 @@
 #include <algorithm>
 #include <chrono>
 
-static void removeDuplicates( std::vector< hop::CoreEvent >& coreEvents )
+template <typename T, class BinaryPredicate, class MergeFct>
+static void merge_consecutive( T first, T last, BinaryPredicate pred, MergeFct merge )
 {
-   auto first = coreEvents.begin();
-   const auto last = coreEvents.end();
-   auto curEl = coreEvents.begin();
+   auto writePos = first;
    while( ++first != last )
    {
-      if( first->core != curEl->core )
+      if( !pred( *first, *writePos ) )
       {
-         std::swap( *( first - 1 ), *curEl );
-         curEl = first;
+         merge( *( first - 1 ), *writePos );
+         std::swap( *( first - 1 ), *writePos );
+         writePos = first;
       }
    }
-   std::swap( *( first - 1 ), *curEl );
+   merge( *( first - 1 ), *writePos );
+   std::swap( *( first - 1 ), *writePos );
+}
+
+static void removeDuplicates( std::vector< hop::CoreEvent >& coreEvents )
+{
+   auto cmpCores = []( const hop::CoreEvent& lhs, const hop::CoreEvent& rhs ) {
+      return lhs.core == rhs.core;
+   };
+
+   merge_consecutive(
+       coreEvents.begin(),
+       coreEvents.end(),
+       cmpCores,
+       []( hop::CoreEvent& lhs, const hop::CoreEvent& rhs ) { lhs.start = rhs.start; } );
    auto newEnd = std::unique(
        coreEvents.begin(),
        coreEvents.end(),
-       []( const hop::CoreEvent& lhs, const hop::CoreEvent& rhs ) {
-          return lhs.core == rhs.core;
-       } );
+       cmpCores );
    coreEvents.erase( newEnd, coreEvents.end() );
 }
 
