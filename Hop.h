@@ -519,7 +519,7 @@ void ringbuf_release( ringbuf_t*, size_t );
                     End of public declarations
    ==================================================================== */
 
-#if defined(HOP_VIEWER)
+#if defined(HOP_VIEWER) || defined(HOP_IMPLEMENTATION)
 #include <atomic>
 #include <mutex>
 
@@ -1418,6 +1418,8 @@ class Client
       const auto lastEntry = _cores.back();
       _cores.clear();
       _cores.emplace_back( lastEntry );
+
+      return true;
    }
 
    bool sendLockWaits()
