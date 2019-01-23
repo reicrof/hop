@@ -458,7 +458,7 @@ std::vector< TimelineMessage > TimelineTracks::draw( const DrawInfo& info )
       const bool separatorHovered = drawSeparator( i, highlightSeparator );
 
       const auto& zoneColors = g_options.zoneColors;
-      uint32_t threadLabelCol = zoneColors[ (i+1) % HOP_MAX_ZONES ];
+      uint32_t threadLabelCol = zoneColors[ (i+1) % HOP_MAX_ZONE_COLORS ];
       if( threadHidden )
          threadLabelCol = DISABLED_COLOR;
 
@@ -610,8 +610,8 @@ void TimelineTracks::drawTraces(
 
    const float windowWidthPxl = ImGui::GetWindowWidth();
 
-   static std::array< std::vector< DrawData >, HOP_MAX_ZONES > tracesToDraw;
-   static std::array< std::vector< DrawData >, HOP_MAX_ZONES > lodTracesToDraw;
+   static std::array< std::vector< DrawData >, HOP_MAX_ZONE_COLORS > tracesToDraw;
+   static std::array< std::vector< DrawData >, HOP_MAX_ZONE_COLORS > lodTracesToDraw;
    for( size_t i = 0; i < lodTracesToDraw.size(); ++i )
    {
       tracesToDraw[ i ].clear();
@@ -911,9 +911,9 @@ void TimelineTracks::drawLockWaits(
    const auto& zoneColors = g_options.zoneColors;
    const auto& enabledZone = g_options.zoneEnabled;
    const float disabledZoneOpacity = g_options.disabledZoneOpacity;
-   ImGui::PushStyleColor(ImGuiCol_Button, zoneColors[HOP_MAX_ZONES] );
-   ImGui::PushStyleColor(ImGuiCol_ButtonHovered, zoneColors[HOP_MAX_ZONES] );
-   ImGui::PushStyleVar(ImGuiStyleVar_Alpha, enabledZone[HOP_MAX_ZONES] ? 1.0f : disabledZoneOpacity );
+   ImGui::PushStyleColor(ImGuiCol_Button, zoneColors[HOP_MAX_ZONE_COLORS] );
+   ImGui::PushStyleColor(ImGuiCol_ButtonHovered, zoneColors[HOP_MAX_ZONE_COLORS] );
+   ImGui::PushStyleVar(ImGuiStyleVar_Alpha, enabledZone[HOP_MAX_ZONE_COLORS] ? 1.0f : disabledZoneOpacity );
 
    HOP_PROF_SPLIT( "Drawing Lock Wait Lod" );
    for ( const auto& t : lodTracesToDraw )
