@@ -141,8 +141,8 @@ static void drawCoresLabels(
    const TimeStamp firstTraceAbsoluteTime = absoluteStart + di.timeline.relativeStartTime;
    const TimeStamp lastTraceAbsoluteTime = firstTraceAbsoluteTime + di.timeline.duration;
 
-   CoreEvent firstEv = { firstTraceAbsoluteTime, 0 };
-   CoreEvent lastEv = { lastTraceAbsoluteTime, 0 };
+   CoreEvent firstEv = { firstTraceAbsoluteTime, firstTraceAbsoluteTime, 0 };
+   CoreEvent lastEv = { lastTraceAbsoluteTime, lastTraceAbsoluteTime, 0 };
    auto cmp = []( const CoreEvent& lhs, const CoreEvent& rhs) { return lhs.end < rhs.end; };
    auto it1 = std::lower_bound( coreData.data.begin(), coreData.data.end(), firstEv, cmp );
    auto it2 = std::upper_bound( coreData.data.begin(), coreData.data.end(), lastEv, cmp );
@@ -150,37 +150,27 @@ static void drawCoresLabels(
    if( it1 != coreData.data.begin() ) --it1;
    if( it2 != coreData.data.end() ) ++it2;
 
-   const auto firstIdx = std::distance( coreData.data.begin(), it1 );
-
    std::vector<DrawData> drawData;
    drawData.reserve( std::distance( it1, it2 ) );
-   auto curIdx = firstIdx;
-   CoreEvent prevEvent = {it1 == coreData.data.begin() ? absoluteStart : ( it1 - 1 )->end,
-                          0xFFFFFFFF};
-   for( ; it1 != it2; ++it1, ++curIdx )
+
+   const uint64_t minCycleTresh = hop::pxlToCycles( windowWidthPxl, di.timeline.duration, 10 );
+   CoreEvent prevEvent = *it1++;
+   for( ; it1 != it2; ++it1 )
    {
-      // If we have 2 consecutive traces with the same core, it means they are far enough to be
-      // drawn separately. We need to figure out where it should start by looking at the trace info
-      if( prevEvent.core == it1->core )
+      // If we have 2 consecutive traces with the same core and they are close enough, merge them
+      // for drawing
+      if( it1->core == prevEvent.core && ( it1->start < prevEvent.end || (it1->start - prevEvent.end) < minCycleTresh ) )
       {
-         const auto startIt =
-             std::upper_bound( traceEntries.ends.begin(), traceEntries.ends.end(), prevEvent.end );
-         int64_t startIdx = std::distance( traceEntries.ends.begin(), startIt );
-         const int64_t traceCount = traceEntries.ends.size();
-         if( startIdx != traceCount )
-         {
-            while( startIdx != traceCount && traceEntries.depths[ startIdx ] != 0 )
-            {
-               ++startIdx;
-            }
-   
-            prevEvent.end = traceEntries.ends[ startIdx ] - traceEntries.deltas[ startIdx ];
-         }
+         prevEvent.end = it1->end;
+         continue;
       }
+
       drawData.push_back(createDrawDataForTrace(
-              it1->end, it1->end - prevEvent.end, 0, curIdx , drawPos.x, drawPos.y, di, windowWidthPxl ) );
+              prevEvent.end, prevEvent.end - prevEvent.start, 0, prevEvent.core, drawPos.x, drawPos.y, di, windowWidthPxl ) );
       prevEvent = *it1;
    }
+   drawData.push_back(createDrawDataForTrace(
+              prevEvent.end, prevEvent.end - prevEvent.start, 0, prevEvent.core , drawPos.x, drawPos.y, di, windowWidthPxl ) );
 
    char curName[32] = "Core ";
    const int prefixSize = strlen( curName );
@@ -190,7 +180,7 @@ static void drawCoresLabels(
    for ( const auto& t : drawData )
    {
       ImGui::PushID(t.traceIndex);
-      snprintf( curName + prefixSize, sizeof(curName)-prefixSize, "%u", coreData.data[t.traceIndex].core );
+      snprintf( curName + prefixSize, sizeof(curName)-prefixSize, "%u", (uint32_t)t.traceIndex );
       ImGui::SetCursorScreenPos( t.posPxl );
       ImGui::Button( curName, ImVec2( t.lengthPxl, TimelineTrack::TRACE_HEIGHT - 5 ) );
       ImGui::PopID();
@@ -274,23 +264,7 @@ void TimelineTrack::addUnlockEvents(const std::vector<UnlockEvent>& unlockEvents
 
 void TimelineTrack::addCoreEvents( const std::vector<CoreEvent>& coreEvents )
 {
-   auto firstNewCoreEv = coreEvents.begin();
-   if( !_coreEvents.data.empty() )
-   {
-      auto& lastCoreEv = _coreEvents.data.back();
-
-      // If we are still on the same core, merge the last with the first new event if their time
-      // difference is less than 100ms
-      if( lastCoreEv.core == firstNewCoreEv->core &&
-          ( firstNewCoreEv->end - lastCoreEv.end ) < (uint64_t)hop::cyclesToNanos( 100000000 ) )
-      {
-         lastCoreEv.end = firstNewCoreEv->end;
-         ++firstNewCoreEv;
-      }
-   }
-
-   _coreEvents.data.insert( _coreEvents.data.end(), firstNewCoreEv, coreEvents.end() );
-
+   _coreEvents.data.insert( _coreEvents.data.end(), coreEvents.begin(), coreEvents.end() );
    assert_is_sorted( _coreEvents.data.begin(), _coreEvents.data.end() );
 }
 

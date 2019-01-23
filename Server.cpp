@@ -27,7 +27,7 @@ static void merge_consecutive( T first, T last, BinaryPredicate pred, MergeFct m
    std::swap( *( first - 1 ), *writePos );
 }
 
-static void removeDuplicates( std::vector< hop::CoreEvent >& coreEvents )
+static void mergeAndRemoveDuplicates( std::vector< hop::CoreEvent >& coreEvents )
 {
    auto cmpCores = []( const hop::CoreEvent& lhs, const hop::CoreEvent& rhs ) {
       return lhs.core == rhs.core;
@@ -329,7 +329,7 @@ size_t Server::handleNewMessage( uint8_t* data, size_t maxSize, TimeStamp minTim
          bufPtr += coreEvents.size() * sizeof(CoreEvent);
          assert( (size_t)(bufPtr - data) <= maxSize );
 
-         removeDuplicates( coreEvents );
+         mergeAndRemoveDuplicates( coreEvents );
 
          assert_is_sorted( coreEvents.begin(), coreEvents.end() );
 
