@@ -21,6 +21,8 @@ static constexpr float MIN_TRACE_LENGTH_PXL = 1.0f;
 static constexpr float MAX_TRACE_HEIGHT = 50.0f;
 static constexpr float MIN_TRACE_HEIGHT = 15.0f;
 static constexpr uint32_t DISABLED_COLOR = 0xFF505050;
+static constexpr uint32_t CORE_LABEL_COLOR = 0xFF444444;
+static constexpr uint32_t CORE_LABEL_BORDER_COLOR = 0xFFAAAAAA;
 
 static const char* CTXT_MENU_STR = "Context Menu";
 
@@ -160,6 +162,7 @@ static void drawCoresLabels(
       // for drawing
       if( it1->core == prevEvent.core && ( it1->start < prevEvent.end || (it1->start - prevEvent.end) < minCycleTresh ) )
       {
+         prevEvent.start = std::min( prevEvent.start, it1->start );
          prevEvent.end = it1->end;
          continue;
       }
@@ -174,17 +177,21 @@ static void drawCoresLabels(
    char curName[32] = "Core ";
    const int prefixSize = strlen( curName );
 
-   ImGui::PushStyleColor(ImGuiCol_Button, 0xFF666666 );
-
+   ImGui::PushStyleColor( ImGuiCol_Button, CORE_LABEL_COLOR );
+   ImGui::PushStyleColor( ImGuiCol_ButtonHovered, CORE_LABEL_COLOR );
+   ImGui::PushStyleColor( ImGuiCol_ButtonActive, CORE_LABEL_COLOR );
+   ImGui::PushStyleColor( ImGuiCol_Border, CORE_LABEL_BORDER_COLOR );
+   ImGui::PushStyleVar( ImGuiStyleVar_FrameBorderSize, 1.0f );
    for ( const auto& t : drawData )
    {
       ImGui::PushID(t.traceIndex);
       snprintf( curName + prefixSize, sizeof(curName)-prefixSize, "%u", (uint32_t)t.traceIndex );
       ImGui::SetCursorScreenPos( t.posPxl );
-      ImGui::Button( curName, ImVec2( t.lengthPxl, TimelineTrack::TRACE_HEIGHT - 5 ) );
+      ImGui::Button( curName, ImVec2( t.lengthPxl, TimelineTrack::TRACE_HEIGHT - 2 ) );
       ImGui::PopID();
    }
-   ImGui::PopStyleColor();
+   ImGui::PopStyleVar(1);
+   ImGui::PopStyleColor(4);
 }
 
 namespace hop
