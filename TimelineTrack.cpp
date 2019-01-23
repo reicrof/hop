@@ -206,7 +206,7 @@ static void drawLabels(
    ImGui::PushClipRect(
        ImVec2( drawPosition.x + threadLabelSize.x + 8, drawPosition.y ),
        ImVec2( 99999.0f, 999999.0f ),
-       false );
+       true );
 
    const bool threadHidden = tracks[trackIndex].hidden();
    const auto& zoneColors = hop::g_options.zoneColors;
