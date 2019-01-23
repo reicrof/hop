@@ -127,7 +127,6 @@ static void drawHighlightedTraces(
 static void drawCoresLabels(
     const ImVec2& drawPos,
     const hop::CoreEventData& coreData,
-    const hop::Entries& traceEntries,
     const hop::TimelineTracksDrawInfo& di )
 {
    if( coreData.data.empty() ) return;
@@ -573,8 +572,7 @@ std::vector< TimelineMessage > TimelineTracks::draw( const TimelineTracksDrawInf
          threadLabelCol = DISABLED_COLOR;
 
       // Draw the core labels
-      drawCoresLabels(
-          ImGui::GetCursorScreenPos(), _tracks[i]._coreEvents, _tracks[i]._traces.entries, info );
+      drawCoresLabels( ImGui::GetCursorScreenPos(), _tracks[i]._coreEvents, info );
 
       // Draw thread label
       ImGui::PushID(i);
