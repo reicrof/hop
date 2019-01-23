@@ -148,6 +148,9 @@ static void drawCoresLabels(
    auto it1 = std::lower_bound( coreData.data.begin(), coreData.data.end(), firstEv, cmp );
    auto it2 = std::upper_bound( coreData.data.begin(), coreData.data.end(), lastEv, cmp );
 
+   if( it1 == it2 ) return; // Nothing to draw here
+
+   // Also draw cores labels that might span outside of the screen
    if( it1 != coreData.data.begin() ) --it1;
    if( it2 != coreData.data.end() ) ++it2;
 
@@ -155,8 +158,8 @@ static void drawCoresLabels(
    drawData.reserve( std::distance( it1, it2 ) );
 
    const uint64_t minCycleTresh = hop::pxlToCycles( windowWidthPxl, di.timeline.duration, 10 );
-   CoreEvent prevEvent = *it1++;
-   for( ; it1 != it2; ++it1 )
+   CoreEvent prevEvent = *it1;
+   for( ++it1 ; it1 != it2; ++it1 )
    {
       // If we have 2 consecutive traces with the same core and they are close enough, merge them
       // for drawing
@@ -184,14 +187,54 @@ static void drawCoresLabels(
    ImGui::PushStyleVar( ImGuiStyleVar_FrameBorderSize, 1.0f );
    for ( const auto& t : drawData )
    {
-      ImGui::PushID(t.traceIndex);
       snprintf( curName + prefixSize, sizeof(curName)-prefixSize, "%u", (uint32_t)t.traceIndex );
       ImGui::SetCursorScreenPos( t.posPxl );
-      ImGui::Button( curName, ImVec2( t.lengthPxl, TimelineTrack::TRACE_HEIGHT - 2 ) );
-      ImGui::PopID();
+      ImGui::Button( curName, ImVec2( t.lengthPxl, TimelineTrack::TRACE_HEIGHT - 1 ) );
    }
    ImGui::PopStyleVar(1);
    ImGui::PopStyleColor(4);
+}
+
+static void drawLabels(
+    const ImVec2& drawPosition,
+    const char* threadName,
+    std::vector<hop::TimelineTrack>& tracks,
+    uint32_t trackIndex,
+    const hop::TimelineTracksDrawInfo& info )
+{
+   const ImVec2 threadLabelSize = ImGui::CalcTextSize( threadName );
+   ImGui::PushClipRect(
+       ImVec2( drawPosition.x + threadLabelSize.x + 8, drawPosition.y ),
+       ImVec2( 99999.0f, 999999.0f ),
+       false );
+
+   const bool threadHidden = tracks[trackIndex].hidden();
+   const auto& zoneColors = hop::g_options.zoneColors;
+   uint32_t threadLabelCol = zoneColors[( trackIndex + 1 ) % HOP_MAX_ZONES];
+   if( threadHidden )
+   {
+      threadLabelCol = DISABLED_COLOR;
+   }
+   else
+   {
+      // Draw the core labels
+      drawCoresLabels(
+          ImVec2( drawPosition.x, drawPosition.y + 1.0f ), tracks[trackIndex]._coreEvents, info );
+      // Restore draw position for thread label
+      ImGui::SetCursorScreenPos( drawPosition );
+   }
+
+   ImGui::PopClipRect();
+
+   // Draw thread label
+   ImGui::PushID( trackIndex );
+   ImGui::PushStyleColor( ImGuiCol_Button, threadLabelCol );
+   if( ImGui::Button( threadName, ImVec2( 0, THREAD_LABEL_HEIGHT ) ) )
+   {
+      tracks[trackIndex].setTrackHeight( tracks[trackIndex].hidden() ? 99999.0f : -99999.0f );
+   }
+   ImGui::PopStyleColor();
+   ImGui::PopID();
 }
 
 namespace hop
@@ -573,23 +616,8 @@ std::vector< TimelineMessage > TimelineTracks::draw( const TimelineTracksDrawInf
       const bool highlightSeparator = ImGui::IsRootWindowOrAnyChildFocused();
       const bool separatorHovered = drawSeparator( i, highlightSeparator );
 
-      const auto& zoneColors = g_options.zoneColors;
-      uint32_t threadLabelCol = zoneColors[ (i+1) % HOP_MAX_ZONES ];
-      if( threadHidden )
-         threadLabelCol = DISABLED_COLOR;
-
-      // Draw the core labels
-      drawCoresLabels( ImGui::GetCursorScreenPos(), _tracks[i]._coreEvents, info );
-
-      // Draw thread label
-      ImGui::PushID(i);
-      ImGui::PushStyleColor( ImGuiCol_Button, threadLabelCol );
-      if ( ImGui::Button( threadName, ImVec2( 0, THREAD_LABEL_HEIGHT ) ) )
-      {
-         _tracks[i].setTrackHeight( _tracks[i].hidden() ? 99999.0f : -99999.0f );
-      }
-      ImGui::PopStyleColor();
-      ImGui::PopID();
+      const ImVec2 labelsDrawPosition = ImGui::GetCursorScreenPos();
+      drawLabels( labelsDrawPosition, threadName, _tracks, i, info );
 
       // Then draw the interesting stuff
       const auto absDrawPos = ImGui::GetCursorScreenPos();
