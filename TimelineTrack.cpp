@@ -21,8 +21,9 @@ static constexpr float MIN_TRACE_LENGTH_PXL = 1.0f;
 static constexpr float MAX_TRACE_HEIGHT = 50.0f;
 static constexpr float MIN_TRACE_HEIGHT = 15.0f;
 static constexpr uint32_t DISABLED_COLOR = 0xFF505050;
-static constexpr uint32_t CORE_LABEL_COLOR = 0xFF444444;
+static constexpr uint32_t CORE_LABEL_COLOR = 0xFF333333;
 static constexpr uint32_t CORE_LABEL_BORDER_COLOR = 0xFFAAAAAA;
+static constexpr uint32_t SEPARATOR_COLOR = 0xFF666666;
 
 static const char* CTXT_MENU_STR = "Context Menu";
 
@@ -75,7 +76,7 @@ static bool drawSeparator( uint32_t threadIndex, bool highlightSeparator )
 
    const bool hovered = std::abs( ImGui::GetMousePos().y - p1.y ) < 7.0f && threadIndex > 0;
 
-   uint32_t color = ImGui::GetColorU32(ImGuiCol_Separator);
+   uint32_t color = SEPARATOR_COLOR;
    if( hovered && highlightSeparator )
    {
       hop::setCursor( hop::CURSOR_SIZE_NS );
@@ -83,7 +84,7 @@ static bool drawSeparator( uint32_t threadIndex, bool highlightSeparator )
    }
 
    ImDrawList* drawList = ImGui::GetWindowDrawList();
-   drawList->AddLine( p1, p2, color, 2.0f );
+   drawList->AddLine( p1, p2, color, 3.0f );
 
    ImGui::SetCursorPosY( ImGui::GetCursorPosY() );
 
@@ -190,6 +191,15 @@ static void drawCoresLabels(
       snprintf( curName + prefixSize, sizeof(curName)-prefixSize, "%u", (uint32_t)t.traceIndex );
       ImGui::SetCursorScreenPos( t.posPxl );
       ImGui::Button( curName, ImVec2( t.lengthPxl, TimelineTrack::TRACE_HEIGHT - 1 ) );
+      if ( ImGui::IsItemHovered() )
+      {
+         if ( t.lengthPxl > 3 )
+         {
+            ImGui::BeginTooltip();
+            ImGui::TextUnformatted( curName );
+            ImGui::EndTooltip();
+         }
+      }
    }
    ImGui::PopStyleVar(1);
    ImGui::PopStyleColor(4);
@@ -215,7 +225,7 @@ static void drawLabels(
    {
       threadLabelCol = DISABLED_COLOR;
    }
-   else
+   else if( hop::g_options.showCoreInfo )
    {
       // Draw the core labels
       drawCoresLabels(
