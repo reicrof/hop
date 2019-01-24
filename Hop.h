@@ -1130,6 +1130,7 @@ class Client
       if( !tl_threadName )
       {
          HOP_STRNCPY( &tl_threadNameBuffer[0], (const char*)name, sizeof( tl_threadNameBuffer ) );
+         tl_threadNameBuffer[ sizeof(tl_threadNameBuffer) - 1 ] = '\0';
          tl_threadName = addDynamicStringToDb( tl_threadNameBuffer );
       }
    }
