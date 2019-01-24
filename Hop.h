@@ -1084,7 +1084,7 @@ thread_local int tl_traceLevel = 0;
 thread_local uint32_t tl_threadIndex = 0;
 thread_local TZoneId_t tl_zoneId = HOP_ZONE_COLOR_NONE;
 thread_local uint64_t tl_threadId = 0;
-thread_local const char* tl_threadNameBuffer = 0;
+thread_local char tl_threadNameBuffer[64];
 thread_local TStrPtr_t tl_threadName = 0;
 
 class Client
@@ -1129,9 +1129,7 @@ class Client
    {
       if( !tl_threadName )
       {
-         // This will "leak", but since it's a static string that will not
-         // be created more than once, it should not be an issue.
-         tl_threadNameBuffer = strdup( (const char*)name );
+         HOP_STRNCPY( &tl_threadNameBuffer[0], (const char*)name, sizeof( tl_threadNameBuffer ) );
          tl_threadName = addDynamicStringToDb( tl_threadNameBuffer );
       }
    }
