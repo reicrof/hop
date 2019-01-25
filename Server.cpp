@@ -16,7 +16,7 @@ static void merge_consecutive( T first, T last, BinaryPredicate pred, MergeFct m
    auto writePos = first;
    while( ++first != last )
    {
-      if( !pred( *first, *writePos ) )
+      if( !pred( *writePos, *first ) )
       {
          merge( *( first - 1 ), *writePos );
          std::swap( *( first - 1 ), *writePos );
@@ -29,8 +29,11 @@ static void merge_consecutive( T first, T last, BinaryPredicate pred, MergeFct m
 
 static void mergeAndRemoveDuplicates( std::vector< hop::CoreEvent >& coreEvents )
 {
-   auto cmpCores = []( const hop::CoreEvent& lhs, const hop::CoreEvent& rhs ) {
-      return lhs.core == rhs.core;
+   // Merge events that are less than 10 micro apart
+   const uint64_t minCycles = hop::nanosToCycles( 10000 );
+   auto cmpCores = [minCycles]( const hop::CoreEvent& lhs, const hop::CoreEvent& rhs ) {
+      return lhs.core == rhs.core &&
+             ( ( rhs.start < lhs.end || ( rhs.start - lhs.end ) < minCycles ) );
    };
 
    merge_consecutive(

@@ -98,6 +98,12 @@ void onNewFrame( int width, int height, int mouseX, int mouseY, bool lmbPressed,
    io.MouseDown[1] = rmbPressed;
    io.MouseWheel = mousewheel;
 
+   // Reset frame stats
+   hop::g_stats.drawingTimeMs = 0.0;
+   hop::g_stats.traceDrawingTimeMs = 0.0;
+   hop::g_stats.coreDrawingTimeMs = 0.0;
+   hop::g_stats.lockwaitsDrawingTimeMs = 0.0;
+
    // Start the frame
    ImGui::NewFrame();
 }

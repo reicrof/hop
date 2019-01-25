@@ -134,6 +134,8 @@ static void drawCoresLabels(
 {
    if( coreData.data.empty() ) return;
 
+   const auto drawStart = std::chrono::system_clock::now();
+
    using namespace hop;
 
    const auto absoluteStart = di.timeline.globalStartTime;
@@ -158,25 +160,49 @@ static void drawCoresLabels(
    std::vector<DrawData> drawData;
    drawData.reserve( std::distance( it1, it2 ) );
 
-   const uint64_t minCycleTresh = hop::pxlToCycles( windowWidthPxl, di.timeline.duration, 10 );
+   const uint64_t minCycleToMerge = hop::pxlToCycles( windowWidthPxl, di.timeline.duration, 10 );
+   const uint64_t minCycleToSkip = hop::pxlToCycles( windowWidthPxl, di.timeline.duration, 0.5f );
    CoreEvent prevEvent = *it1;
    for( ++it1 ; it1 != it2; ++it1 )
    {
       // If we have 2 consecutive traces with the same core and they are close enough, merge them
       // for drawing
-      if( it1->core == prevEvent.core && ( it1->start < prevEvent.end || (it1->start - prevEvent.end) < minCycleTresh ) )
+      if( it1->core == prevEvent.core &&
+          ( it1->start < prevEvent.end || ( it1->start - prevEvent.end ) < minCycleToMerge ) )
       {
          prevEvent.start = std::min( prevEvent.start, it1->start );
          prevEvent.end = it1->end;
          continue;
       }
 
-      drawData.push_back(createDrawDataForTrace(
-              prevEvent.end, prevEvent.end - prevEvent.start, 0, prevEvent.core, drawPos.x, drawPos.y, di, windowWidthPxl ) );
+      // Skip drawing the label if it is too small
+      const auto labelDuration = prevEvent.end - prevEvent.start;
+      if( labelDuration > minCycleToSkip )
+      {
+         drawData.push_back( createDrawDataForTrace(
+             prevEvent.end,
+             labelDuration,
+             0,
+             prevEvent.core,
+             drawPos.x,
+             drawPos.y,
+             di,
+             windowWidthPxl ) );
+      }
+
       prevEvent = *it1;
    }
-   drawData.push_back(createDrawDataForTrace(
-              prevEvent.end, prevEvent.end - prevEvent.start, 0, prevEvent.core , drawPos.x, drawPos.y, di, windowWidthPxl ) );
+
+   // Add the last entry to draw
+   drawData.push_back( createDrawDataForTrace(
+       prevEvent.end,
+       prevEvent.end - prevEvent.start,
+       0,
+       prevEvent.core,
+       drawPos.x,
+       drawPos.y,
+       di,
+       windowWidthPxl ) );
 
    char curName[32] = "Core ";
    const int prefixSize = strlen( curName );
@@ -186,23 +212,25 @@ static void drawCoresLabels(
    ImGui::PushStyleColor( ImGuiCol_ButtonActive, CORE_LABEL_COLOR );
    ImGui::PushStyleColor( ImGuiCol_Border, CORE_LABEL_BORDER_COLOR );
    ImGui::PushStyleVar( ImGuiStyleVar_FrameBorderSize, 1.0f );
-   for ( const auto& t : drawData )
+   for( const auto& t : drawData )
    {
-      snprintf( curName + prefixSize, sizeof(curName)-prefixSize, "%u", (uint32_t)t.traceIndex );
+      snprintf(
+          curName + prefixSize, sizeof( curName ) - prefixSize, "%u", (uint32_t)t.traceIndex );
       ImGui::SetCursorScreenPos( t.posPxl );
       ImGui::Button( curName, ImVec2( t.lengthPxl, TimelineTrack::TRACE_HEIGHT - 1 ) );
-      if ( ImGui::IsItemHovered() )
+      if( ImGui::IsItemHovered() )
       {
-         if ( t.lengthPxl > 3 )
-         {
-            ImGui::BeginTooltip();
-            ImGui::TextUnformatted( curName );
-            ImGui::EndTooltip();
-         }
+         ImGui::BeginTooltip();
+         ImGui::TextUnformatted( curName );
+         ImGui::EndTooltip();
       }
    }
    ImGui::PopStyleVar(1);
    ImGui::PopStyleColor(4);
+
+   const auto drawEnd = std::chrono::system_clock::now();
+   hop::g_stats.coreDrawingTimeMs +=
+       std::chrono::duration<double, std::milli>( ( drawEnd - drawStart ) ).count();
 }
 
 static void drawLabels(
@@ -727,6 +755,7 @@ void TimelineTracks::drawTraces(
    if ( data._traces.entries.ends.empty() ) return;
 
    HOP_PROF_FUNC();
+   const auto drawStart = std::chrono::system_clock::now();
 
    const float windowWidthPxl = ImGui::GetWindowWidth();
 
@@ -903,6 +932,10 @@ void TimelineTracks::drawTraces(
       ImGui::PopStyleColor(2);
       ImGui::PopStyleVar();
    }
+
+   const auto drawEnd = std::chrono::system_clock::now();
+   hop::g_stats.traceDrawingTimeMs +=
+       std::chrono::duration<double, std::milli>( ( drawEnd - drawStart ) ).count();
 }
 
 std::vector< LockOwnerInfo > TimelineTracks::highlightLockOwner(
@@ -1008,6 +1041,7 @@ void TimelineTracks::drawLockWaits(
    if ( lockWaits.entries.ends.empty() ) return;
 
    HOP_PROF_FUNC();
+   const auto drawStart = std::chrono::system_clock::now();
 
    const auto absoluteStart = drawInfo.timeline.globalStartTime;
    const float windowWidthPxl = ImGui::GetWindowWidth();
@@ -1152,6 +1186,10 @@ void TimelineTracks::drawLockWaits(
 
    ImGui::PopStyleColor(2);
    ImGui::PopStyleVar();
+
+   const auto drawEnd = std::chrono::system_clock::now();
+   hop::g_stats.lockwaitsDrawingTimeMs +=
+       std::chrono::duration<double, std::milli>( ( drawEnd - drawStart ) ).count();
 }
 
 void TimelineTracks::drawSearchWindow(
