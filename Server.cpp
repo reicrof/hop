@@ -29,6 +29,7 @@ static void merge_consecutive( T first, T last, BinaryPredicate pred, MergeFct m
 
 static void mergeAndRemoveDuplicates( std::vector< hop::CoreEvent >& coreEvents )
 {
+   HOP_PROF_FUNC();
    // Merge events that are less than 10 micro apart
    const uint64_t minCycles = hop::nanosToCycles( 10000 );
    auto cmpCores = [minCycles]( const hop::CoreEvent& lhs, const hop::CoreEvent& rhs ) {

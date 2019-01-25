@@ -248,7 +248,7 @@ static void drawLabels(
 
    const bool threadHidden = tracks[trackIndex].hidden();
    const auto& zoneColors = hop::g_options.zoneColors;
-   uint32_t threadLabelCol = zoneColors[( trackIndex + 1 ) % HOP_MAX_ZONES];
+   uint32_t threadLabelCol = zoneColors[( trackIndex + 1 ) % HOP_MAX_ZONE_COLORS];
    if( threadHidden )
    {
       threadLabelCol = DISABLED_COLOR;

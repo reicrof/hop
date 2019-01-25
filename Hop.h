@@ -1112,8 +1112,9 @@ static StrPtr_t cStringHash( const char* str, size_t strLen )
 
 // The call stack depth of the current measured trace. One variable per thread
 thread_local int tl_traceLevel = 0;
-thread_local uint32_t tl_threadIndex = 0;
-thread_local TZoneId_t tl_zoneId = HOP_ZONE_COLOR_NONE;
+thread_local uint32_t tl_threadIndex = 0; // Index of the tread as they are coming in
+thread_local uint64_t tl_threadId = 0;    // ID of the thread as seen by the OS
+thread_local ZoneId_t tl_zoneId = HOP_ZONE_COLOR_NONE;
 thread_local char tl_threadNameBuffer[64];
 thread_local StrPtr_t tl_threadName = 0;
 
