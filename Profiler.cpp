@@ -98,6 +98,12 @@ void onNewFrame( int width, int height, int mouseX, int mouseY, bool lmbPressed,
    io.MouseDown[1] = rmbPressed;
    io.MouseWheel = mousewheel;
 
+   // Reset frame stats
+   hop::g_stats.drawingTimeMs = 0.0;
+   hop::g_stats.traceDrawingTimeMs = 0.0;
+   hop::g_stats.coreDrawingTimeMs = 0.0;
+   hop::g_stats.lockwaitsDrawingTimeMs = 0.0;
+
    // Start the frame
    ImGui::NewFrame();
 }
@@ -210,6 +216,11 @@ void Profiler::fetchClientData()
       {
          addUnlockEvents(_serverPendingData.unlockEvents[i], _serverPendingData.unlockEventsThreadIndex[i]);
       }
+      HOP_PROF_SPLIT( "Fetching CoreEvents" );
+      for (size_t i = 0; i < _serverPendingData.coreEvents.size(); ++i)
+      {
+         addCoreEvents( _serverPendingData.coreEvents[i], _serverPendingData.coreEventsThreadIndex[i] );
+      }
    }
 
    // We need to get the thread name even when not recording as they are only sent once
@@ -260,7 +271,22 @@ void Profiler::addUnlockEvents( const std::vector<UnlockEvent>& unlockEvents, ui
    }
 }
 
-void Profiler::addThreadName( TStrPtr_t name, uint32_t threadIndex )
+void Profiler::addCoreEvents( const std::vector<CoreEvent>& coreEvents, uint32_t threadIndex )
+{
+   HOP_PROF_FUNC();
+   // Check if new thread
+   if (threadIndex >= _tracks.size())
+   {
+      _tracks.resize( threadIndex + 1 );
+   }
+
+   if ( !coreEvents.empty() )
+   {
+      _tracks[threadIndex].addCoreEvents( coreEvents );
+   }
+}
+
+void Profiler::addThreadName( StrPtr_t name, uint32_t threadIndex )
 {
    // Check if new thread
    if ( threadIndex >= _tracks.size() )
@@ -484,8 +510,14 @@ void hop::Profiler::draw( uint32_t /*windowWidth*/, uint32_t /*windowHeight*/ )
    ImGui::PushStyleVar( ImGuiStyleVar_WindowRounding, 5.0f );
 
    drawMenuBar();
+
    // Render modal window, if any
-   renderModalWindow();
+   const bool modalOpen = modalWindowShowing();
+   if( modalOpen )
+   {
+      renderModalWindow();
+   }
+
    drawOptionsWindow( g_options );
 
    const auto toolbarDrawPos = ImGui::GetCursorScreenPos();
@@ -526,7 +558,7 @@ void hop::Profiler::draw( uint32_t /*windowWidth*/, uint32_t /*windowHeight*/ )
       ImGui::BeginChild( "TimelineCanvas" );
 
       auto timelineActions =
-          _tracks.draw( TimelineTracks::DrawInfo{_timeline.constructTimelineInfo(), _strDb} );
+          _tracks.draw( TimelineTracksDrawInfo{_timeline.constructTimelineInfo(), _strDb} );
 
       ImGui::EndChild();
       ImGui::PopClipRect();
@@ -534,7 +566,7 @@ void hop::Profiler::draw( uint32_t /*windowWidth*/, uint32_t /*windowHeight*/ )
       _timeline.handleDeferredActions( timelineActions );
    }
 
-   handleHotkey();
+   handleHotkey( modalOpen );
    handleMouse();
 
    ImGui::PopStyleVar(2);
@@ -658,17 +690,17 @@ void hop::Profiler::drawMenuBar()
    }
 }
 
-void hop::Profiler::handleHotkey()
+void hop::Profiler::handleHotkey( bool modalWindowOpened )
 {
    // Let the tracks handle the hotkeys first.
    if( _tracks.handleHotkey() )
       return;
 
-   if( ImGui::IsKeyReleased( SDL_SCANCODE_HOME ) )
+   if( ImGui::IsKeyReleased( ImGui::GetKeyIndex( ImGuiKey_Home ) ) )
    {
       _timeline.moveToStart();
    }
-   else if( ImGui::IsKeyReleased( SDL_SCANCODE_END ) )
+   else if( ImGui::IsKeyReleased( ImGui::GetKeyIndex( ImGuiKey_End ) ) )
    {
       _timeline.moveToPresentTime();
       _timeline.setRealtime ( true );
@@ -685,18 +717,22 @@ void hop::Profiler::handleHotkey()
    {
       _timeline.redoNavigation();
    }
-   else if( ImGui::IsKeyPressed( SDL_SCANCODE_LEFT ) )
+   else if( ImGui::IsKeyPressed( ImGui::GetKeyIndex( ImGuiKey_LeftArrow ) ) )
    {
       _timeline.previousBookmark();
    }
-   else if( ImGui::IsKeyPressed( SDL_SCANCODE_RIGHT ) )
+   else if( ImGui::IsKeyPressed( ImGui::GetKeyIndex( ImGuiKey_RightArrow ) ) )
    {
       _timeline.nextBookmark();
    }
-   else if( ImGui::IsKeyDown( SDLK_DELETE ) && _tracks.size() > 0 )
+   else if( ImGui::IsKeyDown( ImGui::GetKeyIndex( ImGuiKey_Delete ) ) && _tracks.size() > 0 )
    {
       if( ImGui::IsWindowFocused( ImGuiFocusedFlags_RootAndChildWindows ) && !hop::modalWindowShowing() )
          hop::displayModalWindow( "Delete all traces?", hop::MODAL_TYPE_YES_NO, [&](){ clear(); } );
+   }
+   else if( ImGui::IsKeyPressed( ImGui::GetKeyIndex( ImGuiKey_Escape ) ) && !modalWindowOpened )
+   {
+      hop::displayModalWindow( "Exit ?", hop::MODAL_TYPE_YES_NO, [&]() { g_run = false; } );
    }
 }
 

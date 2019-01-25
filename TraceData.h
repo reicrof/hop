@@ -16,13 +16,13 @@ struct Entries
 {
    std::deque< TimeStamp > ends; // in ns
    std::deque< TimeDuration > deltas; // in ns
-   std::deque< TDepth_t > depths;
+   std::deque< Depth_t > depths;
 
    void clear();
    void append( const Entries& newEntries );
    Entries copy() const;
 
-   TDepth_t maxDepth{ 0 };
+   Depth_t maxDepth{ 0 };
 };
 
 struct TraceData
@@ -41,11 +41,11 @@ struct TraceData
    Entries entries;
 
    //Indexes of the name in the string database
-   std::deque< TStrPtr_t > fileNameIds;
-   std::deque< TStrPtr_t > fctNameIds;
+   std::deque< StrPtr_t > fileNameIds;
+   std::deque< StrPtr_t > fctNameIds;
 
-   std::deque< TLineNb_t > lineNbs;
-   std::deque< TZoneId_t > zones;
+   std::deque< LineNb_t > lineNbs;
+   std::deque< ZoneId_t > zones;
 
    LodsArray lods;
 };
@@ -65,6 +65,11 @@ struct LockWaitData
    std::deque< TimeStamp > lockReleases;
 
    LodsArray lods;
+};
+
+struct CoreEventData
+{
+   std::deque<CoreEvent> data;
 };
 
 std::pair<size_t, size_t>

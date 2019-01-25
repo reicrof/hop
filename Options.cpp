@@ -10,6 +10,7 @@ static const char* startFullScreenStr = "start_full_screen";
 static const char* traceHeights = "trace_height";
 static const char* zoneColors = "zone_colors";
 static const char* debugWindow = "show_debug_window";
+static const char* showCoreInfo = "show_core_info";
 static const char* vsyncOn = "vsync_on";
 
 static const uint32_t DEFAULT_COLORS[] = {
@@ -32,6 +33,9 @@ bool saveOptions()
 
       // Display debug window
       outOptions << debugWindow << " " << (g_options.debugWindow ? 1 : 0) << '\n';
+
+      // Display core information
+      outOptions << showCoreInfo << " " << (g_options.showCoreInfo ? 1 : 0) << '\n';
 
       // Vsync state
       outOptions << vsyncOn << " " << (g_options.vsyncOn ? 1 : 0) << '\n';
@@ -78,6 +82,10 @@ bool loadOptions()
          {
             inOptions >> g_options.debugWindow;
          }
+         else if( strcmp( token.c_str(), showCoreInfo ) == 0 )
+         {
+            inOptions >> g_options.showCoreInfo;
+         }
          else if( strcmp( token.c_str(), traceHeights ) == 0 )
          {
             inOptions >> g_options.traceHeight;
@@ -109,6 +117,7 @@ void drawOptionsWindow( Options& opt )
    {
       ImGui::Checkbox( "Start in Fullscreen", &opt.startFullScreen );
       ImGui::Checkbox("Show Debug Window", &opt.debugWindow );
+      ImGui::Checkbox("Show Core Information", &opt.showCoreInfo );
       ImGui::Checkbox("Vsync Enabled", &opt.vsyncOn );
       ImGui::SliderFloat( "Trace Height", &opt.traceHeight, 15.0f, 50.0f );
 

@@ -9,6 +9,9 @@ namespace hop
    {
       double frameTimeMs;
       double drawingTimeMs;
+      double traceDrawingTimeMs;
+      double lockwaitsDrawingTimeMs;
+      double coreDrawingTimeMs;
       double fetchTimeMs;
       double searchTimeMs;
       int currentLOD;

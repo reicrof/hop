@@ -19,12 +19,13 @@ struct TimelineTrack
    static float TRACE_VERTICAL_PADDING;
    static float PADDED_TRACE_SIZE;
 
-   void setTrackName( TStrPtr_t name ) noexcept;
-   TStrPtr_t trackName() const noexcept;
+   void setTrackName( StrPtr_t name ) noexcept;
+   StrPtr_t trackName() const noexcept;
    void addTraces( const TraceData& traces );
    void addLockWaits( const LockWaitData& lockWaits );
    void addUnlockEvents(const std::vector<UnlockEvent>& unlockEvents);
-   TDepth_t maxDepth() const noexcept;
+   void addCoreEvents( const std::vector<CoreEvent>& coreEvents );
+   Depth_t maxDepth() const noexcept;
    bool hidden() const noexcept;
    float height() const noexcept;
    float heightWithThreadLabel() const noexcept;
@@ -32,6 +33,7 @@ struct TimelineTrack
    bool empty() const;
    TraceData _traces;
    LockWaitData _lockWaits;
+   CoreEventData _coreEvents;
 
    struct HighlightDrawInfo
    {
@@ -47,7 +49,7 @@ struct TimelineTrack
 
 private:
    float _trackHeight{9999.0f};
-   TStrPtr_t _trackName{0};
+   StrPtr_t _trackName{0};
 
    friend size_t serializedSize( const TimelineTrack& ti );
    friend size_t serialize( const TimelineTrack& ti, char* );
@@ -63,19 +65,19 @@ struct LockOwnerInfo
    uint32_t threadIndex{0};
 };
 
+struct TimelineTracksDrawInfo
+{
+   const TimelineInfo& timeline;
+   const StringDb& strDb;
+};
+
 class TimelineTracks
 {
   public:
-   struct DrawInfo
-   {
-      const TimelineInfo& timeline;
-      const StringDb& strDb;
-   };
-
    bool handleMouse( float posX, float posY, bool lmClicked, bool rmClicked, float wheel );
    bool handleHotkey();
    void update( float deltaTimeMs, TimeDuration timelineDuration );
-   std::vector< TimelineMessage > draw( const DrawInfo& info );
+   std::vector< TimelineMessage > draw( const TimelineTracksDrawInfo& info );
    void clear();
    float totalHeight() const;
    void resizeAllTracksToFit();
@@ -93,22 +95,22 @@ class TimelineTracks
        const uint32_t threadIndex,
        const float posX,
        const float posY,
-       const DrawInfo& drawInfo,
+       const TimelineTracksDrawInfo& drawInfo,
        std::vector< TimelineMessage >& timelineMsg );
    void drawLockWaits(
        const uint32_t threadIndex,
        const float posX,
        const float posY,
-       const DrawInfo& drawInfo,
+       const TimelineTracksDrawInfo& drawInfo,
        std::vector<TimelineMessage>& timelineMsg );
-   void drawSearchWindow( const DrawInfo& di, std::vector< TimelineMessage >& timelineMsg );
-   void drawTraceDetailsWindow( const DrawInfo& di, std::vector< TimelineMessage >& timelineMsg );
-   void drawContextMenu( const DrawInfo& info );
+   void drawSearchWindow( const TimelineTracksDrawInfo& di, std::vector< TimelineMessage >& timelineMsg );
+   void drawTraceDetailsWindow( const TimelineTracksDrawInfo& di, std::vector< TimelineMessage >& timelineMsg );
+   void drawContextMenu( const TimelineTracksDrawInfo& info );
    std::vector<LockOwnerInfo> highlightLockOwner(
        const uint32_t threadIndex,
        const uint32_t hoveredLwIndex,
-       const DrawInfo& info );
-   void addTraceToHighlight( size_t traceId, uint32_t threadIndex, const DrawInfo& drawInfo );
+       const TimelineTracksDrawInfo& info );
+   void addTraceToHighlight( size_t traceId, uint32_t threadIndex, const TimelineTracksDrawInfo& drawInfo );
 
    std::vector<TimelineTrack> _tracks;
    int _lodLevel;

@@ -12,8 +12,9 @@ namespace hop
       float scrollAmount;
       TimeStamp globalStartTime;
       TimeStamp relativeStartTime;
-      TimeStamp duration;
+      TimeDuration duration;
       bool mouseDragging;
+      bool useCycles;
    };
 
    enum class TimelineMessageType

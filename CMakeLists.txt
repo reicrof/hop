@@ -53,6 +53,8 @@ file(GLOB hop_server_src
 )
 add_executable(hop ${hop_server_src})
 
+set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -DHOP_DEBUG")
+
 target_include_directories( hop SYSTEM PRIVATE ${ROOT_DIR} ${OPENGL_INCLUDE_DIRS} ${SDL2_INCLUDE_DIR} )
 target_link_libraries( hop PUBLIC -lpthread ${HOP_LIBRT_FLAG} ${HOP_WINDOWS_LIB} ${OPENGL_LIBRARIES} ${SDL2_LIBRARY} -ldl )
 

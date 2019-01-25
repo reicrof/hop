@@ -153,12 +153,6 @@ static void handleInput()
          case SDL_KEYDOWN:
          case SDL_KEYUP:
          {
-            if ( event.key.keysym.sym == SDLK_ESCAPE )
-            {
-               if( !hop::modalWindowShowing() )
-                  hop::displayModalWindow( "Exit ?", hop::MODAL_TYPE_YES_NO, [&](){ ::g_run = false; } );
-               break;
-            }
             int key = event.key.keysym.sym & ~SDLK_SCANCODE_MASK;
             io.KeysDown[key] = ( event.type == SDL_KEYDOWN );
             io.KeyShift = ( ( SDL_GetModState() & KMOD_SHIFT ) != 0 );

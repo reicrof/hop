@@ -46,7 +46,7 @@ struct TraceDetailDrawResult
 
 struct TraceStats
 {
-   TStrPtr_t fctNameId;
+   StrPtr_t fctNameId;
    size_t count;
    TimeDuration min, max, median;
    std::vector< float > displayableDurations;
@@ -60,11 +60,12 @@ TraceDetails createGlobalTraceDetails( const TraceData& traces, uint32_t threadI
 TraceDetailDrawResult drawTraceDetails(
     TraceDetails& details,
     const std::vector<TimelineTrack>& tracks,
-    const StringDb& strDb );
+    const StringDb& strDb,
+    bool drawAsCycles );
 
 
 TraceStats createTraceStats( const TraceData& traces, uint32_t threadIndex, size_t traceId );
-void drawTraceStats( TraceStats& stats, const StringDb& strDb);
+void drawTraceStats( TraceStats& stats, const StringDb& strDb, bool drawAsCycles );
 void clearTraceDetails( TraceDetails& details );
 void clearTraceStats( TraceStats& stats );
 }

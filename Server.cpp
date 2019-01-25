@@ -10,6 +10,45 @@
 #include <algorithm>
 #include <chrono>
 
+template <typename T, class BinaryPredicate, class MergeFct>
+static void merge_consecutive( T first, T last, BinaryPredicate pred, MergeFct merge )
+{
+   auto writePos = first;
+   while( ++first != last )
+   {
+      if( !pred( *writePos, *first ) )
+      {
+         merge( *( first - 1 ), *writePos );
+         std::swap( *( first - 1 ), *writePos );
+         writePos = first;
+      }
+   }
+   merge( *( first - 1 ), *writePos );
+   std::swap( *( first - 1 ), *writePos );
+}
+
+static void mergeAndRemoveDuplicates( std::vector< hop::CoreEvent >& coreEvents )
+{
+   HOP_PROF_FUNC();
+   // Merge events that are less than 10 micro apart
+   const uint64_t minCycles = hop::nanosToCycles( 10000 );
+   auto cmpCores = [minCycles]( const hop::CoreEvent& lhs, const hop::CoreEvent& rhs ) {
+      return lhs.core == rhs.core &&
+             ( ( rhs.start < lhs.end || ( rhs.start - lhs.end ) < minCycles ) );
+   };
+
+   merge_consecutive(
+       coreEvents.begin(),
+       coreEvents.end(),
+       cmpCores,
+       []( hop::CoreEvent& lhs, const hop::CoreEvent& rhs ) { lhs.start = rhs.start; } );
+   auto newEnd = std::unique(
+       coreEvents.begin(),
+       coreEvents.end(),
+       cmpCores );
+   coreEvents.erase( newEnd, coreEvents.end() );
+}
+
 namespace hop
 {
 bool Server::start( const char* name )
@@ -134,7 +173,7 @@ void Server::getPendingData(PendingData & data)
     _pendingData.clear();
 }
 
-bool Server::addUniqueThreadName( uint32_t threadIndex, TStrPtr_t name )
+bool Server::addUniqueThreadName( uint32_t threadIndex, StrPtr_t name )
 {
    bool newInsert = false;
    if( _threadNamesReceived.size() <= threadIndex )
@@ -199,7 +238,7 @@ size_t Server::handleNewMessage( uint8_t* data, size_t maxSize, TimeStamp minTim
           const size_t traceCount = msgInfo->traces.count;
 
           TraceData traceData;
-          TDepth_t maxDepth = 0;
+          Depth_t maxDepth = 0;
           for ( size_t i = 0; i < traceCount; ++i )
           {
              const auto& t = traces[i];
@@ -238,7 +277,7 @@ size_t Server::handleNewMessage( uint8_t* data, size_t maxSize, TimeStamp minTim
          const uint32_t lwCount = msgInfo->lockwaits.count;
 
          LockWaitData lockwaitData;
-         TDepth_t maxDepth = 0;
+         Depth_t maxDepth = 0;
          for( uint32_t i = 0; i < lwCount; ++i )
          {
             lockwaitData.entries.ends.push_back( lws[i].end );
@@ -283,6 +322,26 @@ size_t Server::handleNewMessage( uint8_t* data, size_t maxSize, TimeStamp minTim
       case MsgType::PROFILER_HEARTBEAT:
       {
          return (size_t)(bufPtr - data);
+      }
+      case MsgType::PROFILER_CORE_EVENT:
+      {
+         std::vector< CoreEvent > coreEvents( msgInfo->coreEvents.count );
+
+         memcpy( coreEvents.data(), bufPtr, coreEvents.size() * sizeof(CoreEvent) );
+
+         // Must be done before removing duplicates
+         bufPtr += coreEvents.size() * sizeof(CoreEvent);
+         assert( (size_t)(bufPtr - data) <= maxSize );
+
+         mergeAndRemoveDuplicates( coreEvents );
+
+         assert_is_sorted( coreEvents.begin(), coreEvents.end() );
+
+         // TODO: Could lock later when we received all the messages
+         std::lock_guard<std::mutex> guard(_pendingData.mutex);
+         _pendingData.coreEvents.emplace_back( std::move( coreEvents ) );
+         _pendingData.coreEventsThreadIndex.push_back( threadIndex );
+        return (size_t)(bufPtr - data);
       }
       default:
          assert( false );
@@ -336,6 +395,8 @@ void Server::PendingData::clear()
     lockWaitThreadIndex.clear();
     unlockEvents.clear();
     unlockEventsThreadIndex.clear();
+    coreEvents.clear();
+    coreEventsThreadIndex.clear();
     threadNames.clear();
 }
 
@@ -350,6 +411,8 @@ void Server::PendingData::swap(PendingData & rhs)
     swap(lockWaitThreadIndex, rhs.lockWaitThreadIndex);
     swap(unlockEvents, rhs.unlockEvents);
     swap(unlockEventsThreadIndex, rhs.unlockEventsThreadIndex);
+    swap(coreEvents, rhs.coreEvents);
+    swap(coreEventsThreadIndex, rhs.coreEventsThreadIndex );
     swap(threadNames, rhs.threadNames);
 }
 

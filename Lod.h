@@ -20,7 +20,7 @@ struct LodInfo
    TimeStamp end;
    TimeDuration delta;
    size_t traceIndex;
-   TDepth_t depth;
+   Depth_t depth;
    bool isLoded;
    bool operator<( const LodInfo& rhs ) const noexcept { return end < rhs.end; }
 };

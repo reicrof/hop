@@ -17,7 +17,7 @@ namespace
 {
 struct TraceVecSetItem
 {
-   TraceVecSetItem( hop::TStrPtr_t fName, hop::TLineNb_t lineNb, hop::TStrPtr_t tName, size_t index )
+   TraceVecSetItem( hop::StrPtr_t fName, hop::LineNb_t lineNb, hop::StrPtr_t tName, size_t index )
        : fileName( fName ), traceName( tName ), indexInVec( index ), line( lineNb )
    {
    }
@@ -25,10 +25,10 @@ struct TraceVecSetItem
    {
       return lhs.fileName == rhs.fileName && lhs.traceName == rhs.traceName && lhs.line == rhs.line;
    }
-   hop::TStrPtr_t fileName;
-   hop::TStrPtr_t traceName;
+   hop::StrPtr_t fileName;
+   hop::StrPtr_t traceName;
    size_t indexInVec;
-   hop::TLineNb_t line;
+   hop::LineNb_t line;
 };
 
 template <typename CMP>
@@ -118,7 +118,7 @@ namespace std
    {
       size_t operator()( const TraceVecSetItem& t ) const
       {
-         return std::hash<hop::TLineNb_t>()( t.line ) ^ std::hash<hop::TStrPtr_t>()( t.traceName ) ^ std::hash<hop::TStrPtr_t>()( t.fileName );
+         return std::hash<hop::LineNb_t>()( t.line ) ^ std::hash<hop::StrPtr_t>()( t.traceName ) ^ std::hash<hop::StrPtr_t>()( t.fileName );
       }
    };
 }
@@ -251,15 +251,15 @@ gatherTraceDetails( const hop::TraceData& traces, size_t traceId )
 
    traceDetails.reserve( traceId - firstTraceId );
 
-   const TDepth_t maxDepth = *std::max_element(
+   const Depth_t maxDepth = *std::max_element(
        traces.entries.depths.begin() + firstTraceId, traces.entries.depths.begin() + traceId + 1 );
    std::vector<TimeStamp> accumulatedTimePerDepth( maxDepth + 1, 0 );
 
-   TDepth_t lastDepth = traces.entries.depths[firstTraceId];
+   Depth_t lastDepth = traces.entries.depths[firstTraceId];
    for ( size_t i = firstTraceId; i <= traceId; ++i )
    {
       TimeStamp excTime = traces.entries.deltas[i];
-      const TDepth_t curDepth = traces.entries.depths[i];
+      const Depth_t curDepth = traces.entries.depths[i];
 
       if ( curDepth == lastDepth )
       {
@@ -331,9 +331,9 @@ createTraceDetails( const TraceData& traces, uint32_t threadIndex, size_t traceI
 
 TraceStats createTraceStats(const TraceData& traces, uint32_t, size_t traceId)
 {
-   const TStrPtr_t fileName = traces.fileNameIds[ traceId ];
-   const TStrPtr_t fctName = traces.fctNameIds[ traceId ];
-   const TLineNb_t lineNb = traces.lineNbs[ traceId ];
+   const StrPtr_t fileName = traces.fileNameIds[ traceId ];
+   const StrPtr_t fctName = traces.fctNameIds[ traceId ];
+   const LineNb_t lineNb = traces.lineNbs[ traceId ];
 
    std::vector<float> displayableDurations;
    std::vector<float> medianValues;
@@ -398,7 +398,8 @@ TraceDetails createGlobalTraceDetails( const TraceData& traces, uint32_t threadI
 TraceDetailDrawResult drawTraceDetails(
     TraceDetails& details,
     const std::vector<TimelineTrack>& tracks,
-    const StringDb& strDb )
+    const StringDb& strDb,
+    bool drawAsCycles )
 {
    HOP_PROF_FUNC();
 
@@ -520,7 +521,7 @@ TraceDetailDrawResult drawTraceDetails(
          for ( size_t i = 0; i < details.details.size(); ++i )
          {
             const size_t traceId = details.details[i].traceIds[0];
-            const TStrPtr_t fctIdx = track._traces.fctNameIds[traceId];
+            const StrPtr_t fctIdx = track._traces.fctNameIds[traceId];
             snprintf( traceName, sizeof( traceName ), "%s", strDb.getString( fctIdx ) );
             if ( ImGui::Selectable(
                      traceName, selected == i, ImGuiSelectableFlags_SpanAllColumns ) )
@@ -547,18 +548,20 @@ TraceDetailDrawResult drawTraceDetails(
             ImGui::NextColumn();
             ImGui::Text( "%3.2f", details.details[i].inclusivePct * 100.0f );
             ImGui::NextColumn();
-            formatNanosDurationToDisplay(
+            formatCyclesDurationToDisplay(
                 details.details[i].inclusiveTimeInNanos,
                 traceDuration,
-                sizeof( traceDuration ) );
+                sizeof( traceDuration ),
+                drawAsCycles );
             ImGui::Text( "%s", traceDuration );
             ImGui::NextColumn();
             ImGui::Text( "%3.2f", details.details[i].exclusivePct * 100.0f );
             ImGui::NextColumn();
-            formatNanosDurationToDisplay(
+            formatCyclesDurationToDisplay(
                 details.details[i].exclusiveTimeInNanos,
                 traceDuration,
-                sizeof( traceDuration ) );
+                sizeof( traceDuration ),
+                drawAsCycles );
             ImGui::Text( "%s", traceDuration );
             ImGui::NextColumn();
             ImGui::Text( "%zu", details.details[i].traceIds.size() );
@@ -580,7 +583,7 @@ TraceDetailDrawResult drawTraceDetails(
    return result;
 }
 
-void drawTraceStats(TraceStats& stats, const StringDb& strDb)
+void drawTraceStats( TraceStats& stats, const StringDb& strDb, bool drawAsCycles )
 {
    if ( stats.open > 0 )
    {
@@ -597,9 +600,9 @@ void drawTraceStats(TraceStats& stats, const StringDb& strDb)
          char minStr[32] = {};
          char maxStr[32] = {};
          char medianStr[32] = {};
-         formatNanosDurationToDisplay( stats.min, minStr, sizeof( minStr ) );
-         formatNanosDurationToDisplay( stats.max, maxStr, sizeof( maxStr ) );
-         formatNanosDurationToDisplay( stats.median, medianStr, sizeof( medianStr ) );
+         formatCyclesDurationToDisplay( stats.max, maxStr, sizeof( maxStr ), drawAsCycles );
+         formatCyclesDurationToDisplay( stats.min, minStr, sizeof( minStr ), drawAsCycles );
+         formatCyclesDurationToDisplay( stats.median, medianStr, sizeof( medianStr ), drawAsCycles );
          ImGui::Text("Function : %s\nCount    : %zu\nMin      : %s\nMax      : %s\nMedian   : %s", strDb.getString(stats.fctNameId), stats.count, minStr, maxStr, medianStr );
          ImGui::PlotLines( "", stats.displayableDurations.data(), stats.displayableDurations.size() );
       }

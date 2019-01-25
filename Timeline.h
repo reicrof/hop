@@ -20,6 +20,12 @@ class Timeline
       ANIMATION_TYPE_FAST
    };
 
+   enum DisplayType
+   {
+      DISPLAY_CYCLES,
+      DISPLAY_TIMES
+   };
+
    void update( float deltaTimeMs ) noexcept;
    void draw( float timelineHeight );
    TimelineInfo constructTimelineInfo() const noexcept;
@@ -83,6 +89,8 @@ class Timeline
    void setRealtime( bool isRealtime ) noexcept;
    bool realtime() const noexcept;
 
+   void setDisplayType( DisplayType type );
+
    void clearHighlightedTraces();
 
    void nextBookmark() noexcept;
@@ -112,10 +120,10 @@ class Timeline
       std::vector< TimeStamp > times;
    } _bookmarks;
 
-   void drawTimeline( const float posX, const float posY );
+   void drawTimeline( float posX, float posY );
    void handleMouseDrag( float mousePosX, float mousePosY );
    void handleMouseWheel( float mousePosX, float mouseWheel );
-   void zoomOn( int64_t microToZoomOn, float zoomFactor );
+   void zoomOn( int64_t cycleToZoomOn, float zoomFactor );
    void setStartTime( int64_t timeInMicro, AnimationType animType = ANIMATION_TYPE_NORMAL ) noexcept;
    void setZoom( TimeDuration microsToDisplay, AnimationType animType = ANIMATION_TYPE_NORMAL );
 
@@ -125,9 +133,9 @@ class Timeline
 
    // Current timeline start and range
    int64_t _timelineStart{0};
-   TimeDuration _duration{5000000000};
+   uint64_t _duration{5000000000};
 
-   uint64_t _stepSizeInNanos{1000000};
+   uint64_t _stepSize{1000000};
    bool _realtime{true};
 
    // Drawing Data
@@ -137,6 +145,7 @@ class Timeline
    float _timelineHoverPos{-1.0f};
    float _timelineDrawPosition[2] = {};
    float _canvasDrawPosition[2] = {};
+   DisplayType _displayType{DISPLAY_TIMES};
 
    std::vector< AnimationState > _undoPositionStates, _redoPositionStates;
 

@@ -29,8 +29,8 @@ void setupLODResolution( uint32_t sreenResolutionX )
 {
    for( uint32_t i = 0; i < LOD_COUNT; ++i )
    {
-      LOD_MIN_TRACE_LENGTH_PXL[i] = pxlToNanos( sreenResolutionX, LOD_NANOS[i], MIN_TRACE_LENGTH_PXL );
-      LOD_MIN_GAP_PXL[i] = pxlToNanos( sreenResolutionX, LOD_NANOS[i], MIN_GAP_PXL );
+      LOD_MIN_TRACE_LENGTH_PXL[i] = pxlToCycles( sreenResolutionX, LOD_NANOS[i], MIN_TRACE_LENGTH_PXL );
+      LOD_MIN_GAP_PXL[i] = pxlToCycles( sreenResolutionX, LOD_NANOS[i], MIN_GAP_PXL );
    }
 }
 
@@ -48,7 +48,7 @@ LodsArray computeLods( const Entries& entries, size_t idOffset )
    int lodLvl = 0;
    for ( size_t i = 0; i < entries.ends.size(); ++i )
    {
-      const TDepth_t curDepth = entries.depths[i];
+      const Depth_t curDepth = entries.depths[i];
       if ( lods[curDepth].empty() )
       {
          lods[curDepth].push_back( LodInfo{entries.ends[i], entries.deltas[i], idOffset + i, curDepth, false} );
@@ -88,7 +88,7 @@ LodsArray computeLods( const Entries& entries, size_t idOffset )
    {
       for ( const auto& l : *lastComputedLod )
       {
-         const TDepth_t curDepth = l.depth;
+         const Depth_t curDepth = l.depth;
          if ( lods[curDepth].empty() )
          {
             lods[curDepth].emplace_back( l );

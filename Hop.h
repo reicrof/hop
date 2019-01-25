@@ -54,9 +54,8 @@ For more information, please refer to <http://unlicense.org/>
 // include the meta-data size
 #define HOP_SHARED_MEM_SIZE 32000000
 
-// Minimum time in nanosecond for a lock to be considered in the
-// profiled data
-#define HOP_MIN_LOCK_TIME_NS 1000
+// Minimum cycles for a lock to be considered in the profiled data
+#define HOP_MIN_LOCK_CYCLES 1000
 
 // These are the zone that can be used. You can change the name
 // but you must not change the values.
@@ -147,11 +146,9 @@ enum HopZoneColor
                        | __ | (_) |  _/
                        |_||_|\___/|_|
 */
-#include <atomic>
-#include <memory>
-#include <mutex>
-#include <chrono>
 #include <stdint.h>
+
+#include <cassert> // TO REMOVE
 
 // Useful macros
 #define HOP_VERSION 0.5f
@@ -166,6 +163,7 @@ enum HopZoneColor
 #endif
 #include <windows.h>
 #include <tchar.h>
+#include <intrin.h> // __rdtscp
 typedef HANDLE sem_handle;
 typedef HANDLE shm_handle;
 typedef TCHAR HOP_CHAR;
@@ -183,6 +181,7 @@ typedef TCHAR HOP_CHAR;
 typedef sem_t* sem_handle;
 typedef int shm_handle;
 typedef char HOP_CHAR;
+
 #endif
 
 // -----------------------------
@@ -195,25 +194,39 @@ typedef struct ringbuf_worker ringbuf_worker_t;
 namespace hop
 {
 
-using Clock = std::chrono::steady_clock;
-using Precision = std::chrono::nanoseconds;
-inline decltype( std::chrono::duration_cast<Precision>( Clock::now().time_since_epoch() ).count() ) getTimeStamp()
+// Custom trace types
+using TimeStamp    = uint64_t;
+using TimeDuration = int64_t;
+using StrPtr_t     = uint64_t;
+using LineNb_t     = uint32_t;
+using Core_t       = uint32_t;
+using ZoneId_t     = uint16_t;
+using Depth_t      = uint16_t;
+
+inline TimeStamp rdtscp( uint32_t& aux )
 {
-   // We return the timestamp with the first bit set to 0. We do not require this last nanosecond
+#if defined(_MSC_VER)
+   return __rdtscp( &aux );
+#else
+   uint64_t rax, rdx;
+   asm volatile( "rdtscp\n" : "=a"( rax ), "=d"( rdx ), "=c"( aux ) : : );
+   return ( rdx << 32 ) + rax;
+#endif
+}
+
+inline TimeStamp getTimeStamp( Core_t& core )
+{
+   // We return the tsc with the first bit set to 0. We do not require this last cycle
    // of precision. It will instead be used to flag if a trace uses dynamic strings or not in its
    // start time. See hop::StartProfileDynString
-   return std::chrono::duration_cast<Precision>( Clock::now().time_since_epoch() ).count() & ~1;
+   return rdtscp( core ) & ~1ull;;
 }
-using TimeStamp = decltype( getTimeStamp() );
-using TimeDuration = int64_t;
 
-HOP_STATIC_ASSERT( HOP_SHARED_MEM_SIZE >= 64000, "Shared memory size must be bigger than 64kb" );
-
-// Custom trace types
-using TStrPtr_t = uint64_t;
-using TLineNb_t = uint32_t;
-using TZoneId_t = uint16_t;
-using TDepth_t = uint16_t;
+inline TimeStamp getTimeStamp()
+{
+   uint32_t dummtyCore;
+   return getTimeStamp( dummtyCore );
+}
 
 enum class MsgType : uint32_t
 {
@@ -222,6 +235,7 @@ enum class MsgType : uint32_t
    PROFILER_WAIT_LOCK,
    PROFILER_UNLOCK_EVENT,
    PROFILER_HEARTBEAT,
+   PROFILER_CORE_EVENT,
    INVALID_MESSAGE,
 };
 
@@ -245,6 +259,11 @@ struct UnlockEventsMsgInfo
    uint32_t count;
 };
 
+struct CoreEventMsgInfo
+{
+   uint32_t count;
+};
+
 HOP_CONSTEXPR uint32_t EXPECTED_MSG_INFO_SIZE = 40;
 struct MsgInfo
 {
@@ -253,13 +272,14 @@ struct MsgInfo
    uint32_t threadIndex;
    uint64_t threadId;
    TimeStamp timeStamp;
-   TStrPtr_t threadName;
+   StrPtr_t threadName;
    // Specific message data
    union {
       TracesMsgInfo traces;
       StringDataMsgInfo stringData;
       LockWaitsMsgInfo lockwaits;
       UnlockEventsMsgInfo unlockEvents;
+      CoreEventMsgInfo coreEvents;
    };
 };
 HOP_STATIC_ASSERT( sizeof(MsgInfo) == EXPECTED_MSG_INFO_SIZE, "MsgInfo layout has changed unexpectedly" );
@@ -268,11 +288,11 @@ HOP_CONSTEXPR uint32_t EXPECTED_TRACE_SIZE = 40;
 struct Trace
 {
    TimeStamp start, end;   // Timestamp for start/end of this trace
-   TStrPtr_t fileNameId;   // Index into string array for the file name
-   TStrPtr_t fctNameId;    // Index into string array for the function name
-   TLineNb_t lineNumber;   // Line at which the trace was inserted
-   TZoneId_t zone;         // Zone to which this trace belongs
-   TDepth_t depth;         // The depth in the callstack of this trace
+   StrPtr_t fileNameId;   // Index into string array for the file name
+   StrPtr_t fctNameId;    // Index into string array for the function name
+   LineNb_t lineNumber;   // Line at which the trace was inserted
+   ZoneId_t zone;         // Zone to which this trace belongs
+   Depth_t depth;         // The depth in the callstack of this trace
 };
 HOP_STATIC_ASSERT( sizeof(Trace) == EXPECTED_TRACE_SIZE, "Trace layout has changed unexpectedly" );
 
@@ -281,7 +301,7 @@ struct LockWait
 {
    void* mutexAddress;
    TimeStamp start, end;
-   TDepth_t depth;
+   Depth_t depth;
    uint16_t padding;
 };
 HOP_STATIC_ASSERT( sizeof(LockWait) == EXPECTED_LOCK_WAIT_SIZE, "Lock wait layout has changed unexpectedly" );
@@ -294,28 +314,35 @@ struct UnlockEvent
 };
 HOP_STATIC_ASSERT( sizeof(UnlockEvent) == EXPECTED_UNLOCK_EVENT_SIZE, "Unlock Event layout has changed unexpectedly" );
 
+struct CoreEvent
+{
+   TimeStamp start, end;
+   Core_t core;
+};
+
 class Client;
 class SharedMemory;
 class ClientManager
 {
   public:
    static Client* Get();
-   static TZoneId_t StartProfile();
-   static TStrPtr_t StartProfileDynString( const char*, TZoneId_t* );
+   static ZoneId_t StartProfile();
+   static StrPtr_t StartProfileDynString( const char*, ZoneId_t* );
    static void EndProfile(
-       TStrPtr_t fileName,
-       TStrPtr_t fctName,
+       StrPtr_t fileName,
+       StrPtr_t fctName,
        TimeStamp start,
        TimeStamp end,
-       TLineNb_t lineNb,
-       TZoneId_t zone );
+       LineNb_t lineNb,
+       ZoneId_t zone,
+       Core_t core );
    static void EndLockWait(
       void* mutexAddr,
       TimeStamp start,
       TimeStamp end );
    static void UnlockEvent( void* mutexAddr, TimeStamp time );
    static void SetThreadName( const char* name ) HOP_NOEXCEPT;
-   static TZoneId_t PushNewZone( TZoneId_t newZone );
+   static ZoneId_t PushNewZone( ZoneId_t newZone );
    static bool HasConnectedConsumer() HOP_NOEXCEPT;
    static bool HasListeningConsumer() HOP_NOEXCEPT;
 
@@ -325,7 +352,7 @@ class ClientManager
 class ProfGuard
 {
   public:
-    ProfGuard( const char* fileName, TLineNb_t lineNb, const char* fctName ) HOP_NOEXCEPT
+    ProfGuard( const char* fileName, LineNb_t lineNb, const char* fctName ) HOP_NOEXCEPT
     {
       open( fileName, lineNb, fctName );
     }
@@ -333,7 +360,7 @@ class ProfGuard
     {
       close();
     }
-    inline void reset( const char* fileName, TLineNb_t lineNb, const char* fctName )
+    inline void reset( const char* fileName, LineNb_t lineNb, const char* fctName )
     {
       // Please uncomment the following line if close() is made public!
       // if ( _fctName )
@@ -342,25 +369,27 @@ class ProfGuard
     }
 
   private:
-    inline void open( const char* fileName, TLineNb_t lineNb, const char* fctName )
+    inline void open( const char* fileName, LineNb_t lineNb, const char* fctName )
     {
       _start = getTimeStamp();
-      _fileName = (TStrPtr_t)fileName;
-      _fctName = (TStrPtr_t)fctName;
+      _fileName = (StrPtr_t)fileName;
+      _fctName = (StrPtr_t)fctName;
       _lineNb = lineNb;
       _zone = ClientManager::StartProfile();
     }
     inline void close()
     {
-      ClientManager::EndProfile( _fileName, _fctName, _start, getTimeStamp(), _lineNb, _zone );
+      uint32_t core;
+      const auto end = getTimeStamp( core );
+      ClientManager::EndProfile( _fileName, _fctName, _start, end, _lineNb, _zone, core );
       // Please uncomment the following line if close() is made public!
       // _fctName = nullptr;
     }
 
     TimeStamp _start;
-    TStrPtr_t _fileName, _fctName;
-    TLineNb_t _lineNb;
-    TZoneId_t _zone;
+    StrPtr_t _fileName, _fctName;
+    LineNb_t _lineNb;
+    ZoneId_t _zone;
 };
 
 class LockWaitGuard
@@ -383,30 +412,30 @@ class LockWaitGuard
 class ProfGuardDynamicString
 {
   public:
-   ProfGuardDynamicString( const char* fileName, TLineNb_t lineNb, const char* fctName ) HOP_NOEXCEPT
+   ProfGuardDynamicString( const char* fileName, LineNb_t lineNb, const char* fctName ) HOP_NOEXCEPT
        : _start( getTimeStamp() | 1 ), // Set the first bit to 1 to flag the use of dynamic strings
-         _fileName( (TStrPtr_t) fileName ),
+         _fileName( (StrPtr_t) fileName ),
          _lineNb( lineNb )
    {
       _fctName = ClientManager::StartProfileDynString( fctName, &_zone );
    }
    ~ProfGuardDynamicString()
    {
-      ClientManager::EndProfile( _fileName, _fctName, _start, getTimeStamp(), _lineNb, _zone );
+      ClientManager::EndProfile( _fileName, _fctName, _start, getTimeStamp(), _lineNb, _zone, 0 );
    }
 
   private:
    TimeStamp _start;
-   TStrPtr_t _fileName;
-   TStrPtr_t _fctName;
-   TLineNb_t _lineNb;
-   TZoneId_t _zone;
+   StrPtr_t _fileName;
+   StrPtr_t _fctName;
+   LineNb_t _lineNb;
+   ZoneId_t _zone;
 };
 
 class ZoneGuard
 {
  public:
-   ZoneGuard( TZoneId_t newZone ) HOP_NOEXCEPT
+   ZoneGuard( ZoneId_t newZone ) HOP_NOEXCEPT
    {
       _prevZoneId = ClientManager::PushNewZone( newZone );
    }
@@ -416,7 +445,7 @@ class ZoneGuard
    }
 
   private:
-   TZoneId_t _prevZoneId;
+   ZoneId_t _prevZoneId;
 };
 
 #define __HOP_PROF_GUARD_VAR( LINE, ARGS ) \
@@ -484,7 +513,10 @@ void ringbuf_release( ringbuf_t*, size_t );
                     End of public declarations
    ==================================================================== */
 
-#if defined(HOP_VIEWER)
+#if defined(HOP_VIEWER) || defined(HOP_IMPLEMENTATION)
+#include <atomic>
+#include <mutex>
+
 // On MacOs the max name length seems to be 30...
 #define HOP_SHARED_MEM_MAX_NAME_SIZE 30
 namespace hop
@@ -562,9 +594,9 @@ class SharedMemory
 // standard includes
 #include <algorithm>
 #include <cassert>
+#include <memory>
 #include <unordered_set>
 #include <vector>
-#include <mutex>
 
 #define HOP_MIN(a,b) (((a)<(b))?(a):(b))
 #define HOP_MAX(a,b) (((a)>(b))?(a):(b))
@@ -806,7 +838,6 @@ namespace
       if ( shm_unlink( name ) != 0 ) perror( " HOP - Could not unlink shared memory" );
 #endif
    }
-
 }
 
 namespace hop
@@ -1068,10 +1099,10 @@ SharedMemory::~SharedMemory()
 // C-style string hash inspired by Stackoverflow question
 // based on the Java string hash fct. If its good enough
 // for java, it should be good enough for me...
-static TStrPtr_t cStringHash( const char* str, size_t strLen )
+static StrPtr_t cStringHash( const char* str, size_t strLen )
 {
-   TStrPtr_t result = 0;
-   HOP_CONSTEXPR TStrPtr_t prime = 31;
+   StrPtr_t result = 0;
+   HOP_CONSTEXPR StrPtr_t prime = 31;
    for ( size_t i = 0; i < strLen; ++i )
    {
       result = str[i] + ( result * prime );
@@ -1081,11 +1112,11 @@ static TStrPtr_t cStringHash( const char* str, size_t strLen )
 
 // The call stack depth of the current measured trace. One variable per thread
 thread_local int tl_traceLevel = 0;
-thread_local uint32_t tl_threadIndex = 0;
-thread_local TZoneId_t tl_zoneId = HOP_ZONE_COLOR_NONE;
-thread_local uint64_t tl_threadId = 0;
+thread_local uint32_t tl_threadIndex = 0; // Index of the tread as they are coming in
+thread_local uint64_t tl_threadId = 0;    // ID of the thread as seen by the OS
+thread_local ZoneId_t tl_zoneId = HOP_ZONE_COLOR_NONE;
 thread_local char tl_threadNameBuffer[64];
-thread_local TStrPtr_t tl_threadName = 0;
+thread_local StrPtr_t tl_threadName = 0;
 
 class Client
 {
@@ -1093,29 +1124,35 @@ class Client
    Client()
    {
       _traces.reserve( 256 );
+      _cores.reserve( 64 );
       _lockWaits.reserve( 64 );
       _unlockEvents.reserve( 64 );
       _stringPtr.reserve( 256 );
       _stringData.reserve( 256 * 32 );
       _stringPtr.insert(0);
-      for (size_t i = 0; i < sizeof(TStrPtr_t); ++i)
+      for (size_t i = 0; i < sizeof(StrPtr_t); ++i)
          _stringData.push_back('\0');
 
       resetStringData();
    }
 
    void addProfilingTrace(
-       TStrPtr_t fileName,
-       TStrPtr_t fctName,
+       StrPtr_t fileName,
+       StrPtr_t fctName,
        TimeStamp start,
        TimeStamp end,
-       TLineNb_t lineNb,
-       TZoneId_t zone )
+       LineNb_t lineNb,
+       ZoneId_t zone )
    {
-      _traces.push_back( Trace{ start, end, fileName, fctName, lineNb, zone, (TDepth_t)tl_traceLevel } );
+      _traces.push_back( Trace{ start, end, fileName, fctName, lineNb, zone, (Depth_t)tl_traceLevel } );
    }
 
-   void addWaitLockTrace( void* mutexAddr, TimeStamp start, TimeStamp end, TDepth_t depth )
+   void addCoreEvent( Core_t core, TimeStamp startTime, TimeStamp endTime )
+   {
+      _cores.emplace_back( CoreEvent{ startTime, endTime, core } );
+   }
+
+   void addWaitLockTrace( void* mutexAddr, TimeStamp start, TimeStamp end, Depth_t depth )
    {
       _lockWaits.push_back( LockWait{ mutexAddr, start, end, depth, 0 /*padding*/ } );
    }
@@ -1125,7 +1162,7 @@ class Client
       _unlockEvents.push_back( UnlockEvent{ mutexAddr, time } );
    }
 
-   void setThreadName( TStrPtr_t name )
+   void setThreadName( StrPtr_t name )
    {
       if( !tl_threadName )
       {
@@ -1135,14 +1172,14 @@ class Client
       }
    }
 
-   TStrPtr_t addDynamicStringToDb( const char* dynStr )
+   StrPtr_t addDynamicStringToDb( const char* dynStr )
    {
       // Should not have null as dyn string, but just in case...
       if ( dynStr == NULL ) return 0;
 
       const size_t strLen = strlen( dynStr );
 
-      const TStrPtr_t hash = cStringHash( dynStr, strLen );
+      const StrPtr_t hash = cStringHash( dynStr, strLen );
 
       auto res = _stringPtr.insert( hash );
       // If the string was inserted (meaning it was not already there),
@@ -1150,16 +1187,16 @@ class Client
       if ( res.second )
       {
          const size_t newEntryPos = _stringData.size();
-         _stringData.resize( newEntryPos + sizeof( TStrPtr_t ) + strLen + 1 );
-         TStrPtr_t* strIdPtr = (TStrPtr_t*)&_stringData[newEntryPos];
+         _stringData.resize( newEntryPos + sizeof( StrPtr_t ) + strLen + 1 );
+         StrPtr_t* strIdPtr = (StrPtr_t*)&_stringData[newEntryPos];
          *strIdPtr = hash;
-         HOP_STRNCPY( &_stringData[newEntryPos + sizeof( TStrPtr_t )], dynStr, strLen + 1 );
+         HOP_STRNCPY( &_stringData[newEntryPos + sizeof( StrPtr_t )], dynStr, strLen + 1 );
       }
 
       return hash;
    }
 
-   bool addStringToDb( TStrPtr_t strId )
+   bool addStringToDb( StrPtr_t strId )
    {
       // Early return on NULL. The db should always contains NULL as first
       // entry
@@ -1172,10 +1209,10 @@ class Client
       {
          const size_t newEntryPos = _stringData.size();
          const size_t strLen = strlen( (const char*)strId );
-         _stringData.resize( newEntryPos + sizeof( TStrPtr_t ) + strLen + 1 );
-         TStrPtr_t* strIdPtr = (TStrPtr_t*)&_stringData[newEntryPos];
+         _stringData.resize( newEntryPos + sizeof( StrPtr_t ) + strLen + 1 );
+         StrPtr_t* strIdPtr = (StrPtr_t*)&_stringData[newEntryPos];
          *strIdPtr = strId;
-         HOP_STRNCPY( &_stringData[newEntryPos + sizeof( TStrPtr_t ) ], (const char*)strId, strLen + 1 );
+         HOP_STRNCPY( &_stringData[newEntryPos + sizeof( StrPtr_t ) ], (const char*)strId, strLen + 1 );
       }
 
       return res.second;
@@ -1191,7 +1228,7 @@ class Client
 
          // Push back first name as empty string
          _stringPtr.insert( 0 );
-         for( size_t i = 0; i < sizeof( TStrPtr_t ); ++i )
+         for( size_t i = 0; i < sizeof( StrPtr_t ); ++i )
             _stringData.push_back('\0');
          // Push back thread name
          const auto hash = addDynamicStringToDb( tl_threadNameBuffer );
@@ -1203,6 +1240,7 @@ class Client
    void resetPendingTraces()
    {
       _traces.clear();
+      _cores.clear();
       _lockWaits.clear();
       _unlockEvents.clear();
    }
@@ -1217,6 +1255,22 @@ class Client
       {
          return _traces.back().start;
       }
+   }
+
+   uint8_t* acquireSharedChunk( ringbuf_t* ringbuf, size_t size )
+   {
+      uint8_t* data = NULL;
+      const bool msgWayToBig = size > HOP_SHARED_MEM_SIZE;
+      if( !msgWayToBig )
+      {
+         const ssize_t offset = ringbuf_acquire( ringbuf, _worker, size );
+         if( offset != -1 )
+         {
+            data = &ClientManager::sharedMemory().data()[offset];
+         }
+      }
+
+      return data;
    }
 
    bool sendStringData()
@@ -1239,23 +1293,15 @@ class Client
       const uint32_t stringToSendSize = stringDataSize - _sentStringDataSize;
       const size_t msgSize = sizeof( MsgInfo ) + stringToSendSize;
 
-      // Allocate big enough buffer from the shared memory
       ringbuf_t* ringbuf = ClientManager::sharedMemory().ringbuffer();
-      const bool msgWayToBig = msgSize > HOP_SHARED_MEM_SIZE;
-      ssize_t offset = -1;
-      if( !msgWayToBig )
-      {
-         offset = ringbuf_acquire( ringbuf, _worker, msgSize );
-      }
+      uint8_t* bufferPtr = acquireSharedChunk( ringbuf, msgSize );
 
-      if ( offset == -1 )
+      if ( !bufferPtr )
       {
          printf("HOP - String to send are bigger than shared memory size. Consider"
                 " increasing shared memory size \n");
          return false;
       }
-
-      uint8_t* bufferPtr = &ClientManager::sharedMemory().data()[offset];
 
       // Fill the buffer with the string data
       {
@@ -1292,24 +1338,15 @@ class Client
       // Get size of profiling traces message
       const size_t profilerMsgSize = sizeof( MsgInfo ) + sizeof( Trace ) * _traces.size();
 
-      // Allocate big enough buffer from the shared memory
       ringbuf_t* ringbuf = ClientManager::sharedMemory().ringbuffer();
-      const bool msgWayToBig = profilerMsgSize > HOP_SHARED_MEM_SIZE;
-      ssize_t offset = -1;
-      if( !msgWayToBig )
+      uint8_t* bufferPtr = acquireSharedChunk( ringbuf, profilerMsgSize );
+      if ( !bufferPtr )
       {
-         offset = ringbuf_acquire( ringbuf, _worker, profilerMsgSize );
+         printf("HOP - Failed to acquire enough shared memory. Consider increasing"
+              "shared memory size if you see this message more than once\n");
+         _traces.clear();
+         return false;
       }
-
-       if ( offset == -1 )
-       {
-          printf("HOP - Failed to acquire enough shared memory. Consider increasing"
-                 "shared memory size if you see this message more than once\n");
-          _traces.clear();
-          return false;
-       }
-
-      uint8_t* bufferPtr = &ClientManager::sharedMemory().data()[offset];
 
       // Fill the buffer with the profiling trace message
       {
@@ -1340,23 +1377,58 @@ class Client
       return true;
    }
 
+   bool sendCores()
+   {
+      if( _cores.empty() ) return false;
+
+      const size_t coreMsgSize = sizeof( MsgInfo ) + _cores.size() * sizeof( CoreEvent );
+
+      ringbuf_t* ringbuf = ClientManager::sharedMemory().ringbuffer();
+      uint8_t* bufferPtr = acquireSharedChunk( ringbuf, coreMsgSize );
+      if ( !bufferPtr )
+      {
+         printf("HOP - Failed to acquire enough shared memory. Consider increasing shared memory size\n");
+         _cores.clear();
+         return false;
+      }
+
+      // Fill the buffer with the core event message
+      {
+         MsgInfo* coreInfo = (MsgInfo*)bufferPtr;
+         coreInfo->type = MsgType::PROFILER_CORE_EVENT;
+         coreInfo->threadId = tl_threadId;
+         coreInfo->threadName = tl_threadName;
+         coreInfo->threadIndex = tl_threadIndex;
+         coreInfo->timeStamp = getMsgTimeStamp();
+         coreInfo->coreEvents.count = (uint32_t)_cores.size();
+         bufferPtr += sizeof( MsgInfo );
+         memcpy( bufferPtr, _cores.data(), _cores.size() * sizeof( CoreEvent ) );
+      }
+
+      ringbuf_produce( ringbuf, _worker );
+      ClientManager::sharedMemory().signalSemaphore();
+
+      const auto lastEntry = _cores.back();
+      _cores.clear();
+      _cores.emplace_back( lastEntry );
+
+      return true;
+   }
+
    bool sendLockWaits()
    {
       if( _lockWaits.empty() ) return false;
 
       const size_t lockMsgSize = sizeof( MsgInfo ) + _lockWaits.size() * sizeof( LockWait );
 
-      // Allocate big enough buffer from the shared memory
       ringbuf_t* ringbuf = ClientManager::sharedMemory().ringbuffer();
-      const auto offset = ringbuf_acquire( ringbuf, _worker, lockMsgSize );
-      if ( offset == -1 )
+      uint8_t* bufferPtr = acquireSharedChunk( ringbuf, lockMsgSize );
+      if ( !bufferPtr )
       {
          printf("HOP - Failed to acquire enough shared memory. Consider increasing shared memory size\n");
          _lockWaits.clear();
          return false;
       }
-
-      uint8_t* bufferPtr = &ClientManager::sharedMemory().data()[offset];
 
       // Fill the buffer with the lock message
       {
@@ -1385,17 +1457,14 @@ class Client
 
       const size_t unlocksMsgSize = sizeof( MsgInfo ) + _unlockEvents.size() * sizeof( UnlockEvent );
 
-      // Allocate big enough buffer from the shared memory
       ringbuf_t* ringbuf = ClientManager::sharedMemory().ringbuffer();
-      const auto offset = ringbuf_acquire( ringbuf, _worker, unlocksMsgSize );
-      if ( offset == -1 )
+      uint8_t* bufferPtr = acquireSharedChunk( ringbuf, unlocksMsgSize );
+      if ( !bufferPtr )
       {
          printf("HOP - Failed to acquire enough shared memory. Consider increasing shared memory size\n");
          _unlockEvents.clear();
          return false;
       }
-
-      uint8_t* bufferPtr = &ClientManager::sharedMemory().data()[offset];
 
       // Fill the buffer with the lock message
       {
@@ -1422,16 +1491,13 @@ class Client
    {
       const size_t heartbeatSize = sizeof( MsgInfo );
 
-      // Allocate big enough buffer from the shared memory
       ringbuf_t* ringbuf = ClientManager::sharedMemory().ringbuffer();
-      const auto offset = ringbuf_acquire( ringbuf, _worker, heartbeatSize );
-      if ( offset == -1 )
+      uint8_t* bufferPtr = acquireSharedChunk( ringbuf, heartbeatSize );
+      if ( !bufferPtr )
       {
          printf("HOP - Failed to acquire enough shared memory. Consider increasing shared memory size\n");
          return false;
       }
-
-      uint8_t* bufferPtr = &ClientManager::sharedMemory().data()[offset];
 
       // Fill the buffer with the lock message
       {
@@ -1483,12 +1549,14 @@ class Client
       sendTraces();
       sendLockWaits();
       sendUnlockEvents();
+      sendCores();
    }
 
    std::vector< Trace > _traces;
+   std::vector< CoreEvent > _cores;
    std::vector< LockWait > _lockWaits;
    std::vector< UnlockEvent > _unlockEvents;
-   std::unordered_set< TStrPtr_t > _stringPtr;
+   std::unordered_set< StrPtr_t > _stringPtr;
    std::vector< char > _stringData;
    TimeStamp _clientResetTimeStamp{0};
    ringbuf_worker_t* _worker{NULL};
@@ -1543,13 +1611,13 @@ Client* ClientManager::Get()
    return threadClient.get();
 }
 
-TZoneId_t ClientManager::StartProfile()
+ZoneId_t ClientManager::StartProfile()
 {
    ++tl_traceLevel;
    return tl_zoneId;
 }
 
-TStrPtr_t ClientManager::StartProfileDynString( const char* str, TZoneId_t* zone )
+StrPtr_t ClientManager::StartProfileDynString( const char* str, ZoneId_t* zone )
 {
    ++tl_traceLevel;
    Client* client = ClientManager::Get();
@@ -1561,12 +1629,13 @@ TStrPtr_t ClientManager::StartProfileDynString( const char* str, TZoneId_t* zone
 }
 
 void ClientManager::EndProfile(
-    TStrPtr_t fileName,
-    TStrPtr_t fctName,
+    StrPtr_t fileName,
+    StrPtr_t fctName,
     TimeStamp start,
     TimeStamp end,
-    TLineNb_t lineNb,
-    TZoneId_t zone )
+    LineNb_t lineNb,
+    ZoneId_t zone,
+    Core_t core )
 {
    const int remainingPushedTraces = --tl_traceLevel;
    Client* client = ClientManager::Get();
@@ -1576,6 +1645,7 @@ void ClientManager::EndProfile(
    if( end - start > 50 ) // Minimum trace time is 50 ns
    {
       client->addProfilingTrace( fileName, fctName, start, end, lineNb, zone );
+      client->addCoreEvent( core, start, end );
    }
    if ( remainingPushedTraces <= 0 )
    {
@@ -1587,7 +1657,7 @@ void ClientManager::EndLockWait( void* mutexAddr, TimeStamp start, TimeStamp end
 {
    // Only add lock wait event if the lock is coming from within
    // measured code
-   if( tl_traceLevel > 0 && end - start >= HOP_MIN_LOCK_TIME_NS )
+   if( tl_traceLevel > 0 && end - start >= HOP_MIN_LOCK_CYCLES )
    {
       auto client = ClientManager::Get();
       if( unlikely( !client ) ) return;
@@ -1612,12 +1682,12 @@ void ClientManager::SetThreadName( const char* name ) HOP_NOEXCEPT
    auto client = ClientManager::Get();
    if( unlikely( !client ) ) return;
 
-   client->setThreadName( (TStrPtr_t) name );
+   client->setThreadName( (StrPtr_t) name );
 }
 
-TZoneId_t ClientManager::PushNewZone( TZoneId_t newZone )
+ZoneId_t ClientManager::PushNewZone( ZoneId_t newZone )
 {
-   TZoneId_t prevZone = tl_zoneId;
+   ZoneId_t prevZone = tl_zoneId;
    tl_zoneId = newZone;
    return prevZone;
 }

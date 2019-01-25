@@ -28,7 +28,8 @@ namespace hop
 
       if ( isOpen )
       {
-         const bool enterPressed = ImGui::IsKeyPressed( ImGuiKey_Enter );
+         const bool enterPressed = ImGui::IsKeyPressed( ImGui::GetKeyIndex(ImGuiKey_Enter), false );
+         const bool escPressed = ImGui::IsKeyPressed( ImGui::GetKeyIndex(ImGuiKey_Escape), false );
          switch ( type )
          {
             case MODAL_TYPE_NO_CLOSE:
@@ -91,7 +92,8 @@ namespace hop
                         closing = true;
                         execCallback = true;
                      }
-                     else if( ImGui::SameLine(), ImGui::Button( "No", ImVec2( 120, 0 ) ) )
+                     else if(
+                         ImGui::SameLine(), ImGui::Button( "No", ImVec2( 120, 0 ) ) || escPressed )
                      {
                         closing = true;
                      }
