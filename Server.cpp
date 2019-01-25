@@ -168,9 +168,9 @@ void Server::setRecording( bool recording )
 void Server::getPendingData(PendingData & data)
 {
     HOP_PROF_FUNC();
-    std::lock_guard<std::mutex> guard(_pendingData.mutex);
-    _pendingData.swap(data);
-    _pendingData.clear();
+    std::lock_guard<hop::Mutex> guard(_sharedPendingDataMutex);
+    _sharedPendingData.swap(data);
+    _sharedPendingData.clear();
 }
 
 bool Server::addUniqueThreadName( uint32_t threadIndex, StrPtr_t name )
@@ -208,8 +208,8 @@ size_t Server::handleNewMessage( uint8_t* data, size_t maxSize, TimeStamp minTim
     // If the thread has an assigned name
     if( msgInfo->threadName != 0 && addUniqueThreadName( threadIndex, msgInfo->threadName ) )
     {
-      std::lock_guard<std::mutex> guard( _pendingData.mutex );
-      _pendingData.threadNames.emplace_back( threadIndex, msgInfo->threadName );
+      std::lock_guard<hop::Mutex> guard( _sharedPendingDataMutex );
+      _sharedPendingData.threadNames.emplace_back( threadIndex, msgInfo->threadName );
     }
 
     switch ( msgType )
@@ -227,8 +227,8 @@ size_t Server::handleNewMessage( uint8_t* data, size_t maxSize, TimeStamp minTim
              assert( ( size_t )( bufPtr - data ) <= maxSize );
 
              // TODO: Could lock later when we received all the messages
-             std::lock_guard<std::mutex> guard( _pendingData.mutex );
-             _pendingData.stringData.emplace_back( std::move( stringData ) );
+             std::lock_guard<hop::Mutex> guard( _sharedPendingDataMutex );
+             _sharedPendingData.stringData.emplace_back( std::move( stringData ) );
           }
           return ( size_t )( bufPtr - data );
        }
@@ -265,9 +265,9 @@ size_t Server::handleNewMessage( uint8_t* data, size_t maxSize, TimeStamp minTim
           if ( traceCount > 0 )
           {
              // TODO: Could lock later when we received all the messages
-             std::lock_guard<std::mutex> guard( _pendingData.mutex );
-             _pendingData.traces.emplace_back( std::move( traceData ) );
-             _pendingData.tracesThreadIndex.push_back( threadIndex );
+             std::lock_guard<hop::Mutex> guard( _sharedPendingDataMutex );
+             _sharedPendingData.traces.emplace_back( std::move( traceData ) );
+             _sharedPendingData.tracesThreadIndex.push_back( threadIndex );
           }
           return ( size_t )( bufPtr - data );
       }
@@ -294,9 +294,9 @@ size_t Server::handleNewMessage( uint8_t* data, size_t maxSize, TimeStamp minTim
          assert_is_sorted( lockwaitData.entries.ends.begin(), lockwaitData.entries.ends.end() );
 
          // TODO: Could lock later when we received all the messages
-         std::lock_guard<std::mutex> guard( _pendingData.mutex );
-         _pendingData.lockWaits.emplace_back( std::move( lockwaitData ) );
-         _pendingData.lockWaitThreadIndex.push_back( threadIndex );
+         std::lock_guard<hop::Mutex> guard( _sharedPendingDataMutex );
+         _sharedPendingData.lockWaits.emplace_back( std::move( lockwaitData ) );
+         _sharedPendingData.lockWaitThreadIndex.push_back( threadIndex );
 
          return (size_t)(bufPtr - data);
       }
@@ -314,9 +314,9 @@ size_t Server::handleNewMessage( uint8_t* data, size_t maxSize, TimeStamp minTim
              } );
 
          // TODO: Could lock later when we received all the messages
-         std::lock_guard<std::mutex> guard(_pendingData.mutex);
-         _pendingData.unlockEvents.emplace_back( std::move( unlockEvents ) );
-         _pendingData.unlockEventsThreadIndex.push_back(threadIndex);
+         std::lock_guard<hop::Mutex> guard(_sharedPendingDataMutex);
+         _sharedPendingData.unlockEvents.emplace_back( std::move( unlockEvents ) );
+         _sharedPendingData.unlockEventsThreadIndex.push_back(threadIndex);
          return (size_t)(bufPtr - data);
       }
       case MsgType::PROFILER_HEARTBEAT:
@@ -338,9 +338,9 @@ size_t Server::handleNewMessage( uint8_t* data, size_t maxSize, TimeStamp minTim
          assert_is_sorted( coreEvents.begin(), coreEvents.end() );
 
          // TODO: Could lock later when we received all the messages
-         std::lock_guard<std::mutex> guard(_pendingData.mutex);
-         _pendingData.coreEvents.emplace_back( std::move( coreEvents ) );
-         _pendingData.coreEventsThreadIndex.push_back( threadIndex );
+         std::lock_guard<hop::Mutex> guard(_sharedPendingDataMutex);
+         _sharedPendingData.coreEvents.emplace_back( std::move( coreEvents ) );
+         _sharedPendingData.coreEventsThreadIndex.push_back( threadIndex );
         return (size_t)(bufPtr - data);
       }
       default:
