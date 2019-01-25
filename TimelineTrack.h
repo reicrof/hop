@@ -81,6 +81,7 @@ class TimelineTracks
    void clear();
    float totalHeight() const;
    void resizeAllTracksToFit();
+   void setAllTracksCollapsed( bool collapsed );
    
 
    // Vector overloads

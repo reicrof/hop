@@ -759,8 +759,8 @@ void TimelineTracks::drawTraces(
 
    const float windowWidthPxl = ImGui::GetWindowWidth();
 
-   static std::array< std::vector< DrawData >, HOP_MAX_ZONES > tracesToDraw;
-   static std::array< std::vector< DrawData >, HOP_MAX_ZONES > lodTracesToDraw;
+   static std::array< std::vector< DrawData >, HOP_MAX_ZONE_COLORS > tracesToDraw;
+   static std::array< std::vector< DrawData >, HOP_MAX_ZONE_COLORS > lodTracesToDraw;
    for( size_t i = 0; i < lodTracesToDraw.size(); ++i )
    {
       tracesToDraw[ i ].clear();
@@ -1074,9 +1074,9 @@ void TimelineTracks::drawLockWaits(
    const auto& zoneColors = g_options.zoneColors;
    const auto& enabledZone = g_options.zoneEnabled;
    const float disabledZoneOpacity = g_options.disabledZoneOpacity;
-   ImGui::PushStyleColor(ImGuiCol_Button, zoneColors[HOP_MAX_ZONES] );
-   ImGui::PushStyleColor(ImGuiCol_ButtonHovered, zoneColors[HOP_MAX_ZONES] );
-   ImGui::PushStyleVar(ImGuiStyleVar_Alpha, enabledZone[HOP_MAX_ZONES] ? 1.0f : disabledZoneOpacity );
+   ImGui::PushStyleColor(ImGuiCol_Button, zoneColors[HOP_MAX_ZONE_COLORS] );
+   ImGui::PushStyleColor(ImGuiCol_ButtonHovered, zoneColors[HOP_MAX_ZONE_COLORS] );
+   ImGui::PushStyleVar(ImGuiStyleVar_Alpha, enabledZone[HOP_MAX_ZONE_COLORS] ? 1.0f : disabledZoneOpacity );
 
    const bool drawAsCycles = drawInfo.timeline.useCycles;
 
@@ -1295,7 +1295,7 @@ void TimelineTracks::drawContextMenu( const TimelineTracksDrawInfo& info )
 
       // Get the index of the previous valid track
       int64_t prevValidTrack = i - 1;
-      while( i >= 0 && _tracks[ prevValidTrack ].empty() )
+      while( prevValidTrack > 0 && _tracks[ prevValidTrack ].empty() )
          --prevValidTrack;
 
       assert( prevValidTrack >= 0 );
@@ -1338,9 +1338,21 @@ void TimelineTracks::drawContextMenu( const TimelineTracksDrawInfo& info )
                 } );
                 t.detach();
             }
-            else if ( ImGui::Selectable( "Resize Tracks to Fit" ) )
+            else if ( ImGui::BeginMenu("Tracks") )
             {
-               resizeAllTracksToFit();
+               if( ImGui::Selectable( "Resize to Fit" ) )
+               {
+                  resizeAllTracksToFit();
+               }
+               else if( ImGui::Selectable( "Collapse" ) )
+               {
+                  setAllTracksCollapsed( true );
+               }
+               else if( ImGui::Selectable( "Expand" ) )
+               {
+                  setAllTracksCollapsed( false );
+               }
+               ImGui::EndMenu();
             }
          }
          ImGui::EndPopup();
@@ -1378,7 +1390,7 @@ void TimelineTracks::resizeAllTracksToFit()
    for( auto& t : _tracks )
       if( !t.empty() ) ++visibleTrackCount;
 
-   float timelineCanvasHeight = ImGui::GetIO().DisplaySize.y;// - TIMELINE_TOTAL_HEIGHT;
+   float timelineCanvasHeight = ImGui::GetIO().DisplaySize.y;
 
    const float totalTraceHeight = timelineCanvasHeight - visibleTrackCount * THREAD_LABEL_HEIGHT;
    const float heightPerTrack = totalTraceHeight / visibleTrackCount;
@@ -1389,6 +1401,14 @@ void TimelineTracks::resizeAllTracksToFit()
       _tracks[i].setTrackHeight( heightPerTrack );
 
    _tracks[lastThread].setTrackHeight( 9999.0f );
+}
+
+void TimelineTracks::setAllTracksCollapsed( bool collapsed )
+{
+   const size_t trackCount = _tracks.size();
+   const float heightVal = collapsed ? -9999.0f : 9999.0f;
+   for( size_t i = 0; i < trackCount; ++i )
+      _tracks[i].setTrackHeight( heightVal );
 }
 
 const TimelineTrack& TimelineTracks::operator[]( size_t index ) const

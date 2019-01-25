@@ -59,26 +59,26 @@ For more information, please refer to <http://unlicense.org/>
 
 // These are the zone that can be used. You can change the name
 // but you must not change the values.
-enum { HOP_MAX_ZONES = 16 };
-enum HopZone
+enum { HOP_MAX_ZONE_COLORS = 16 };
+enum HopZoneColor
 {
-   HOP_ZONE_ALL = 0xFFFF,
-   HOP_ZONE_1   = 1 << 0,
-   HOP_ZONE_2   = 1 << 1,
-   HOP_ZONE_3   = 1 << 2,
-   HOP_ZONE_4   = 1 << 3,
-   HOP_ZONE_5   = 1 << 4,
-   HOP_ZONE_6   = 1 << 5,
-   HOP_ZONE_7   = 1 << 6,
-   HOP_ZONE_8   = 1 << 7,
-   HOP_ZONE_9   = 1 << 8,
-   HOP_ZONE_10   = 1 << 9,
-   HOP_ZONE_11   = 1 << 10,
-   HOP_ZONE_12   = 1 << 11,
-   HOP_ZONE_13   = 1 << 12,
-   HOP_ZONE_14   = 1 << 13,
-   HOP_ZONE_15   = 1 << 14,
-   HOP_ZONE_16   = 1 << 15,
+   HOP_ZONE_COLOR_NONE = 0xFFFF,
+   HOP_ZONE_COLOR_1   = 1 << 0,
+   HOP_ZONE_COLOR_2   = 1 << 1,
+   HOP_ZONE_COLOR_3   = 1 << 2,
+   HOP_ZONE_COLOR_4   = 1 << 3,
+   HOP_ZONE_COLOR_5   = 1 << 4,
+   HOP_ZONE_COLOR_6   = 1 << 5,
+   HOP_ZONE_COLOR_7   = 1 << 6,
+   HOP_ZONE_COLOR_8   = 1 << 7,
+   HOP_ZONE_COLOR_9   = 1 << 8,
+   HOP_ZONE_COLOR_10   = 1 << 9,
+   HOP_ZONE_COLOR_11   = 1 << 10,
+   HOP_ZONE_COLOR_12   = 1 << 11,
+   HOP_ZONE_COLOR_13   = 1 << 12,
+   HOP_ZONE_COLOR_14   = 1 << 13,
+   HOP_ZONE_COLOR_15   = 1 << 14,
+   HOP_ZONE_COLOR_16   = 1 << 15,
 };
 
 ///////////////////////////////////////////////////////////////
@@ -106,7 +106,7 @@ enum HopZone
 // is being unlocked.
 #define HOP_PROF_MUTEX_UNLOCK( x ) __HOP_MUTEX_UNLOCK_EVENT( x )
 
-#define HOP_ZONE( x ) __HOP_ZONE_GUARD( __LINE__, ( x ) )
+#define HOP_ZONE_COLOR( x ) __HOP_ZONE_COLOR_GUARD( __LINE__, ( x ) )
 
 // Set the name of the current thread in the profiler. Only the first call will
 // be considered for each thread.
@@ -460,7 +460,7 @@ class ZoneGuard
    hop::LockWaitGuard __HOP_COMBINE( hopMutexLock, LINE ) ARGS
 #define __HOP_MUTEX_UNLOCK_EVENT( x ) \
    hop::ClientManager::UnlockEvent( x, hop::getTimeStamp() );
-#define __HOP_ZONE_GUARD( LINE, ARGS ) \
+#define __HOP_ZONE_COLOR_GUARD( LINE, ARGS ) \
    hop::ZoneGuard __HOP_COMBINE( hopZoneGuard, LINE ) ARGS
 
 #define __HOP_COMBINE( X, Y ) X##Y
@@ -1113,9 +1113,8 @@ static StrPtr_t cStringHash( const char* str, size_t strLen )
 // The call stack depth of the current measured trace. One variable per thread
 thread_local int tl_traceLevel = 0;
 thread_local uint32_t tl_threadIndex = 0;
-thread_local ZoneId_t tl_zoneId = HOP_ZONE_ALL;
-thread_local uint64_t tl_threadId = 0;
-thread_local const char* tl_threadNameBuffer = 0;
+thread_local TZoneId_t tl_zoneId = HOP_ZONE_COLOR_NONE;
+thread_local char tl_threadNameBuffer[64];
 thread_local StrPtr_t tl_threadName = 0;
 
 class Client
@@ -1166,9 +1165,8 @@ class Client
    {
       if( !tl_threadName )
       {
-         // This will "leak", but since it's a static string that will not
-         // be created more than once, it should not be an issue.
-         tl_threadNameBuffer = strdup( (const char*)name );
+         HOP_STRNCPY( &tl_threadNameBuffer[0], (const char*)name, sizeof( tl_threadNameBuffer ) );
+         tl_threadNameBuffer[ sizeof(tl_threadNameBuffer) - 1 ] = '\0';
          tl_threadName = addDynamicStringToDb( tl_threadNameBuffer );
       }
    }

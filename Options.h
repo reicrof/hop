@@ -16,8 +16,8 @@ struct Options
    bool vsyncOn{true};
    bool debugWindow{false};
    bool showCoreInfo{true};
-   std::array< uint32_t, HOP_MAX_ZONES + 1 > zoneColors;
-   std::array< bool, HOP_MAX_ZONES + 1 > zoneEnabled;
+   std::array< uint32_t, HOP_MAX_ZONE_COLORS + 1 > zoneColors;
+   std::array< bool, HOP_MAX_ZONE_COLORS + 1 > zoneEnabled;
    float disabledZoneOpacity{0.2f};
 
    bool optionWindowOpened{false};

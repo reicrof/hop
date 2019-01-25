@@ -127,7 +127,7 @@ void drawOptionsWindow( Options& opt )
       {
          ImGui::SliderFloat( "Disabled Zones Opacity", &opt.disabledZoneOpacity, 0.0f, 1.0f, "%.2f" );
 
-         size_t i = HOP_MAX_ZONES - 1;
+         size_t i = HOP_MAX_ZONE_COLORS - 1;
          ImColor color = opt.zoneColors[i];
          ImGui::PushID( i );
          ImGui::Checkbox( "", &opt.zoneEnabled[i] );
@@ -151,7 +151,7 @@ void drawOptionsWindow( Options& opt )
             opt.zoneColors[i] = color;
          }
 
-         i = HOP_MAX_ZONES; // Locks uses index 16 for color infos
+         i = HOP_MAX_ZONE_COLORS; // Locks uses index 16 for color infos
          color = opt.zoneColors[i];
          ImGui::PushID( i );
          ImGui::Checkbox( "", &opt.zoneEnabled[i] );
