@@ -2,12 +2,12 @@
 #define HOP_SERVER_H_
 
 #include <Hop.h>
+#include "Mutex.h"
 #include "StringDb.h"
 #include "TraceData.h"
 
 #include <vector>
 #include <thread>
-#include <mutex>
 #include <atomic>
 
 namespace hop
@@ -23,7 +23,6 @@ class Server
 
    struct PendingData
    {
-       std::mutex mutex;
        std::vector< TraceData > traces;
        std::vector<std::vector<char> > stringData;
        std::vector<uint32_t> tracesThreadIndex;
@@ -60,7 +59,9 @@ class Server
 
    std::atomic< bool > _clearingRequested{false};
    StringDb _stringDb;
-   PendingData _pendingData;
+
+   hop::Mutex _sharedPendingDataMutex;
+   PendingData _sharedPendingData;
    std::vector< StrPtr_t > _threadNamesReceived;
 };
 
