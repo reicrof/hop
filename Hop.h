@@ -106,7 +106,7 @@ enum HopZoneColor
 // is being unlocked.
 #define HOP_PROF_MUTEX_UNLOCK( x ) __HOP_MUTEX_UNLOCK_EVENT( x )
 
-#define HOP_ZONE_COLOR( x ) __HOP_ZONE_COLOR_GUARD( __LINE__, ( x ) )
+#define HOP_ZONE( x ) __HOP_ZONE_GUARD( __LINE__, ( x ) )
 
 // Set the name of the current thread in the profiler. Only the first call will
 // be considered for each thread.
@@ -147,8 +147,6 @@ enum HopZoneColor
                        |_||_|\___/|_|
 */
 #include <stdint.h>
-
-#include <cassert> // TO REMOVE
 
 // Useful macros
 #define HOP_VERSION 0.5f
@@ -460,7 +458,7 @@ class ZoneGuard
    hop::LockWaitGuard __HOP_COMBINE( hopMutexLock, LINE ) ARGS
 #define __HOP_MUTEX_UNLOCK_EVENT( x ) \
    hop::ClientManager::UnlockEvent( x, hop::getTimeStamp() );
-#define __HOP_ZONE_COLOR_GUARD( LINE, ARGS ) \
+#define __HOP_ZONE_GUARD( LINE, ARGS ) \
    hop::ZoneGuard __HOP_COMBINE( hopZoneGuard, LINE ) ARGS
 
 #define __HOP_COMBINE( X, Y ) X##Y
@@ -854,14 +852,14 @@ SharedMemory::ConnectionState SharedMemory::create( const HOP_CHAR* exeName, siz
       _isConsumer = isConsumer;
 
       // Create shared mem name
-	  HOP_STRNCPYW( _sharedMemPath, HOP_SHARED_MEM_PREFIX, HOP_STRLEN( HOP_SHARED_MEM_PREFIX ) + 1 );
-	  HOP_STRNCATW(
+     HOP_STRNCPYW( _sharedMemPath, HOP_SHARED_MEM_PREFIX, HOP_STRLEN( HOP_SHARED_MEM_PREFIX ) + 1 );
+     HOP_STRNCATW(
           _sharedMemPath,
           exeName,
           HOP_SHARED_MEM_MAX_NAME_SIZE - HOP_STRLEN( HOP_SHARED_MEM_PREFIX ) - 1 );
 
-	  HOP_STRNCPYW( _sharedSemPath, _sharedMemPath, HOP_SHARED_MEM_MAX_NAME_SIZE );
-	  HOP_STRNCATW( _sharedSemPath, HOP_SHARED_SEM_SUFFIX, HOP_SHARED_MEM_MAX_NAME_SIZE - HOP_STRLEN( _sharedSemPath ) -1 );
+     HOP_STRNCPYW( _sharedSemPath, _sharedMemPath, HOP_SHARED_MEM_MAX_NAME_SIZE );
+     HOP_STRNCATW( _sharedSemPath, HOP_SHARED_SEM_SUFFIX, HOP_SHARED_MEM_MAX_NAME_SIZE - HOP_STRLEN( _sharedSemPath ) -1 );
 
       // Open semaphore
       _semaphore = openSemaphore( _sharedSemPath, &state );

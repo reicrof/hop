@@ -9,6 +9,7 @@
 
 #include <tuple>
 #include <vector>
+#include <unordered_map>
 
 namespace hop
 {
@@ -34,6 +35,8 @@ struct TimelineTrack
    TraceData _traces;
    LockWaitData _lockWaits;
    CoreEventData _coreEvents;
+
+   std::unordered_map< void*, size_t > _lockWaitsPerMutex;
 
    struct HighlightDrawInfo
    {

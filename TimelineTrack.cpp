@@ -313,7 +313,13 @@ void TimelineTrack::addTraces( const TraceData& newTraces )
 void TimelineTrack::addLockWaits( const LockWaitData& lockWaits )
 {
    HOP_PROF_FUNC();
+   const size_t prevSize = _lockWaits.mutexAddrs.size();
    _lockWaits.append( lockWaits );
+
+   for( size_t i = 0; i < lockWaits.mutexAddrs.size(); ++i )
+   {
+      _lockWaitsPerMutex[ lockWaits.mutexAddrs[i] ] = prevSize + i;
+   }
 }
 
 void TimelineTrack::addUnlockEvents(const std::vector<UnlockEvent>& unlockEvents)
@@ -324,27 +330,22 @@ void TimelineTrack::addUnlockEvents(const std::vector<UnlockEvent>& unlockEvents
    HOP_PROF_FUNC();
    for( const auto& ue : unlockEvents )
    {
-      const auto first = std::lower_bound( _lockWaits.entries.ends.begin(), _lockWaits.entries.ends.end(), ue.time );
-      int64_t firstIdx = std::distance( _lockWaits.entries.ends.begin(), first );
-      if( firstIdx != 0 ) --firstIdx;
-
-      // Try to find the associated lockwait with a maximum lock time of 10 seconds. This is to
-      // ensure we do not traverse the whole lockwaits array in the case where we would have skipped
-      // logging a lock 
-      for( int64_t i = firstIdx; i >= 0 && (ue.time - _lockWaits.entries.ends[ i ] < 10000000000); --i )
+      const auto it = _lockWaitsPerMutex.find( ue.mutexAddress );
+      if( it != _lockWaitsPerMutex.end() )
       {
-         if( _lockWaits.mutexAddrs[ i ] == ue.mutexAddress &&
-             _lockWaits.entries.ends[ i ] < ue.time  )
-         {
+         const size_t lockwaitIdx = it->second;
+         assert( _lockWaits.mutexAddrs[ lockwaitIdx ] == ue.mutexAddress );
+         // if( _lockWaits.entries.ends[ lockwaitIdx ] < ue.time )
+         // {
             // In some cases, we can receive an orphan unlock events. In those case we must not
             // overwrite the previous value as they are unrelated. This can happen if we start
             // recording after the lock has been acquired or if we missed a lock message because
             // of insufficient memory
-            if( _lockWaits.lockReleases[ i ] == 0 )
-               _lockWaits.lockReleases[ i ] = ue.time;
+            //if( _lockWaits.lockReleases[ lockwaitIdx ] == 0 )
+               _lockWaits.lockReleases[ lockwaitIdx ] = ue.time;
 
             break;
-         }
+         //}
       }
    }
 }
