@@ -29,13 +29,17 @@ MyMutex g_mutex;
 
 bool g_run = true;
 
+static const int RECURSION_COUNT = 20;
+thread_local std::vector< MyMutex > mxs( RECURSION_COUNT + 1 );
+
 void rec( int& i )
 {
    HOP_PROF_FUNC();
    while( i > 0 )
    {
-      //std::lock_guard<MyMutex> g{g_mutex};
-      std::this_thread::sleep_for(std::chrono::microseconds(1));
+      std::lock_guard<MyMutex> g{mxs[i]};
+      if( i%5 == 0 )
+         std::this_thread::sleep_for(std::chrono::microseconds(1));
       rec(--i);
    }
 }
@@ -43,7 +47,7 @@ void rec( int& i )
 void startRec()
 {
    HOP_PROF_FUNC();
-   int recCount = 50;
+   int recCount = RECURSION_COUNT;
    rec( recCount );
 }
 
