@@ -36,7 +36,7 @@ struct TimelineTrack
    LockWaitData _lockWaits;
    CoreEventData _coreEvents;
 
-   std::unordered_map< void*, size_t > _lockWaitsPerMutex;
+   std::unordered_map< void*, std::vector< TimeStamp > > _lockWaitsPerMutex;
 
    struct HighlightDrawInfo
    {

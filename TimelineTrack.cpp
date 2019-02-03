@@ -318,7 +318,7 @@ void TimelineTrack::addLockWaits( const LockWaitData& lockWaits )
 
    for( size_t i = 0; i < lockWaits.mutexAddrs.size(); ++i )
    {
-      _lockWaitsPerMutex[ lockWaits.mutexAddrs[i] ] = prevSize + i;
+      _lockWaitsPerMutex[ lockWaits.mutexAddrs[i] ].push_back( prevSize + i );
    }
 }
 
@@ -330,22 +330,26 @@ void TimelineTrack::addUnlockEvents(const std::vector<UnlockEvent>& unlockEvents
    HOP_PROF_FUNC();
    for( const auto& ue : unlockEvents )
    {
-      const auto it = _lockWaitsPerMutex.find( ue.mutexAddress );
-      if( it != _lockWaitsPerMutex.end() )
+      // Find the list of lockwaits that have not yet been associated with
+      // an unlock events for a specific mutex
+      const auto lockWaitsIdx = _lockWaitsPerMutex.find( ue.mutexAddress );
+      if(lockWaitsIdx != _lockWaitsPerMutex.end() )
       {
-         const size_t lockwaitIdx = it->second;
-         assert( _lockWaits.mutexAddrs[ lockwaitIdx ] == ue.mutexAddress );
-         // if( _lockWaits.entries.ends[ lockwaitIdx ] < ue.time )
-         // {
-            // In some cases, we can receive an orphan unlock events. In those case we must not
-            // overwrite the previous value as they are unrelated. This can happen if we start
-            // recording after the lock has been acquired or if we missed a lock message because
-            // of insufficient memory
-            //if( _lockWaits.lockReleases[ lockwaitIdx ] == 0 )
-               _lockWaits.lockReleases[ lockwaitIdx ] = ue.time;
-
-            break;
-         //}
+         std::vector< size_t >& lockwaitIdx = lockWaitsIdx->second;
+         size_t i = 0;
+         for (; i < lockwaitIdx.size(); ++i)
+         {
+            if( _lockWaits.entries.ends[lockwaitIdx[i]] < ue.time )
+            {
+               _lockWaits.lockReleases[lockwaitIdx[i]] = ue.time;
+               break;
+            }
+         }
+         // If we found a lockwait that is associted with a specific unlock events,
+         // all prior lockwaits can be dismiss and are either already associated or
+         // their unlock event was dropped
+         if( i++ != lockwaitIdx.size() )
+            lockwaitIdx.erase( lockwaitIdx.begin(), lockwaitIdx.begin() + i );
       }
    }
 }
@@ -983,7 +987,7 @@ std::vector< LockOwnerInfo > TimelineTracks::highlightLockOwner(
                const TimeStamp unlockTime = lockWaits.lockReleases[lockDataIdx];
 
                // We've gone to far, so early break
-               if( unlockTime != 0 && unlockTime < highlightedLWStartTime )
+               if( unlockTime != 0 && unlockTime < highlightedLWStartTime - 10000 )
                   break;
 
                const TimeDuration lockHoldDuration = unlockTime - lockWaitEndTime;
