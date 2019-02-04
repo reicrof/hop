@@ -335,7 +335,7 @@ void TimelineTrack::addUnlockEvents(const std::vector<UnlockEvent>& unlockEvents
       const auto lockWaitsIdx = _lockWaitsPerMutex.find( ue.mutexAddress );
       if(lockWaitsIdx != _lockWaitsPerMutex.end() )
       {
-         std::vector< size_t >& lockwaitIdx = lockWaitsIdx->second;
+         std::vector< TimeStamp >& lockwaitIdx = lockWaitsIdx->second;
          size_t i = 0;
          for (; i < lockwaitIdx.size(); ++i)
          {
