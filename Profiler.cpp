@@ -49,6 +49,7 @@ namespace
           "Right mouse click to get traces details\n"
           "Double click on a trace to focus it\n"
           "Right mouse drag to zoom on a region\n"
+          "Left mouse drag to measure time in region\n"
           "Right click on the timeline to create a bookmark\n"
           "Use arrow keys <-/-> to navigate bookmarks\n"
           "Use CTRL+F to search traces\n"
