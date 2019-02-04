@@ -33,7 +33,7 @@ class Timeline
    void drawOverlay();
    TimelineInfo constructTimelineInfo() const noexcept;
 
-   bool handleMouse( float posX, float posY, bool lmClicked, bool rmClicked, float wheel );
+   bool handleMouse( float posX, float posY, bool lmPressed, bool rmPressed, float wheel );
    bool handleHotkey();
    void handleDeferredActions( const std::vector< TimelineMessage >& msg );
 

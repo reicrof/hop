@@ -114,7 +114,11 @@ static void drawRangeSelection( float fromPxl, float toPxl, float heightPos, con
        ImVec2( toPxl, 9999 ),
        ImColor( 255, 159, 0, 96 ) );
 
-   const ImVec2 textPos( toPxl - textSize.x - TEXT_X_PADDING, heightPos + textSize.y );
+   // Clamp the label pos inside the selected range
+   float labelEnd = std::min( toPxl, ImGui::GetWindowWidth() );
+   labelEnd = std::max( fromPxl + textSize.x + TEXT_X_PADDING + TEXT_BG_PADDING, labelEnd );
+
+   const ImVec2 textPos( labelEnd - textSize.x - TEXT_X_PADDING, heightPos + textSize.y );
    drawList->AddRectFilled( ImVec2(textPos.x - TEXT_BG_PADDING, textPos.y - TEXT_BG_PADDING), ImVec2(textPos.x + textSize.x + TEXT_BG_PADDING, textPos.y + textSize.y + TEXT_BG_PADDING), 0X7F000000, 0.2f );
    drawList->AddText( textPos, ImColor(255,255,255), durationText );
 }
@@ -219,8 +223,8 @@ void Timeline::endDrawCanvas()
 void Timeline::drawOverlay()
 {
    char durationText[32] = {};
-
-   const auto startDrawPos = ImGui::GetCursorScreenPos();
+ 
+   const ImVec2 startDrawPos( _timelineDrawPosition[0], _timelineDrawPosition[1] );
 
    // Draw timeline mouse indicator
    if (_timelineHoverPos > 0.0f)
@@ -239,9 +243,8 @@ void Timeline::drawOverlay()
    if( !_bookmarks.times.empty() )
    {
       ImGui::PushClipRect(
-          ImVec2( _timelineDrawPosition[0], _timelineDrawPosition[1] ),
-          ImVec2(
-              _timelineDrawPosition[0] + windowSize.x, _timelineDrawPosition[1] + windowSize.y ),
+          startDrawPos,
+          ImVec2( startDrawPos.x + windowSize.x, startDrawPos.y + windowSize.y ),
           false );
       ImGui::PushStyleColor( ImGuiCol_Button, ImVec4( 0.0f, 0.0f, 0.8f, 1.0f ) );
       ImGui::PushStyleColor( ImGuiCol_ButtonHovered, ImVec4( 0.0f, 0.0f, 0.9f, 1.0f ));
@@ -259,7 +262,9 @@ void Timeline::drawOverlay()
    if( _rangeSelectTimeStamp[0] != _rangeSelectTimeStamp[1] )
    {
       const auto minmaxX = std::minmax( _rangeSelectTimeStamp[0], _rangeSelectTimeStamp[1] );
-      const float fromPxl = cyclesToPxl( windowSize.x, _duration, minmaxX.first - _timelineStart ) + _timelineDrawPosition[0];
+      const float endPxl =
+          cyclesToPxl<int64_t>( windowSize.x, _duration, minmaxX.second - _timelineStart ) +
+          _timelineDrawPosition[0];
       const TimeDuration deltaCycles = minmaxX.second - minmaxX.first;
       const float durationPxl = cyclesToPxl( windowSize.x, _duration, deltaCycles );
 
@@ -268,7 +273,7 @@ void Timeline::drawOverlay()
           durationText,
           sizeof( durationText ),
           _displayType == DISPLAY_CYCLES );
-      drawRangeSelection( fromPxl, fromPxl + durationPxl, _canvasDrawPosition[1], durationText );
+      drawRangeSelection( endPxl - durationPxl, endPxl, _canvasDrawPosition[1], durationText );
    }
 }
 
@@ -280,7 +285,7 @@ TimelineInfo Timeline::constructTimelineInfo() const noexcept
                        globalStartTime(),
                        relativeStartTime(),
                        duration(),
-                       _rangeSelectTimeStamp[0] != 0.0f,
+                       _rangeZoomStartPosInCanvas != 0.0f,
                        _displayType == DISPLAY_CYCLES};
 }
 
@@ -406,7 +411,7 @@ void Timeline::drawTimeline( float posX, float posY )
    ImGui::SetCursorScreenPos( ImVec2{posX, posY + TIMELINE_TOTAL_HEIGHT } );
 }
 
-bool Timeline::handleMouse( float posX, float posY, bool /*lmClicked*/, bool /*rmClicked*/, float wheel )
+bool Timeline::handleMouse( float posX, float posY, bool /*lmPressed*/, bool /*rmPressed*/, float wheel )
 {
    bool handled = false;
    if ( ImGui::IsItemHoveredRect() )
@@ -425,6 +430,7 @@ bool Timeline::handleMouse( float posX, float posY, bool /*lmClicked*/, bool /*r
          handleMouseDrag( mousePosInCanvas.x, mousePosInCanvas.y );
          handled = true;
 
+         // Handle left mouse click to reset range selection
          if( ImGui::GetIO().KeyCtrl && ImGui::IsMouseClicked( 0 ) )
             _rangeSelectTimeStamp[0] = _rangeSelectTimeStamp[1] = 0;
       }
