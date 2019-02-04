@@ -31,20 +31,24 @@ public:
 };
 
 bool g_run = true;
-MyMutex g_mutex;
+MyMutex g_mutex0;
+MyMutex g_mutex1;
 
 static std::atomic<int> workerId{0};
-void testMutex()
+void testMutex( MyMutex& m, int mtxId, std::chrono::microseconds sleepTime )
 {
    char name[256];
    snprintf( name, 256, "MUTEX WORKER %d", workerId.fetch_add(1) );
    HOP_SET_THREAD_NAME( name );
-   HOP_PROF_FUNC();
+   
+   char profGuardName[64];
+   snprintf( profGuardName, sizeof( profGuardName ), "LockGuard for Mutex %d", mtxId );
+   HOP_PROF_DYN_NAME( &profGuardName[13] );
 
    {
-   std::lock_guard<MyMutex> g(g_mutex);
-   HOP_PROF( "lockgaurd" );
-   std::this_thread::sleep_for(std::chrono::microseconds(10000));
+   std::lock_guard<MyMutex> g(m);
+   HOP_PROF_DYN_NAME( profGuardName );
+   std::this_thread::sleep_for( sleepTime );
    }
 }
 
@@ -64,18 +68,26 @@ int main( int argc, const char** argv )
    signal(SIGTERM, terminateCallback);
 #endif
 
+   using namespace std::chrono;
+
    int threadNum = 2;
    if( argc > 1 )
       threadNum = atoi( argv[1] );
 
    std::vector< std::thread > threads;
-   for( int i = 0; i < threadNum; ++i )
-      threads.emplace_back( [](){ while(g_run) { testMutex(); } } );
+   for (int i = 0; i < threadNum; ++i)
+   {
+      threads.emplace_back( []() { while (g_run) {
+         testMutex( g_mutex1, 1, microseconds( 10000 ) );
+         testMutex( g_mutex0, 0, microseconds( 100 ) );
+      } } );
+   }
 
     HOP_SET_THREAD_NAME( "MAIN THREAD" );
-    std::this_thread::sleep_for(std::chrono::microseconds(25000));
+    std::this_thread::sleep_for( microseconds( 2500 ) );
     while(g_run)
     {
-      testMutex();
+       testMutex( g_mutex0, 0, microseconds( 10000 ) );
+       testMutex( g_mutex1, 1, microseconds( 100 ) );
     }
 }
