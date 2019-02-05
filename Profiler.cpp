@@ -49,6 +49,7 @@ namespace
           "Right mouse click to get traces details\n"
           "Double click on a trace to focus it\n"
           "Right mouse drag to zoom on a region\n"
+          "Left mouse drag to measure time in region\n"
           "Right click on the timeline to create a bookmark\n"
           "Use arrow keys <-/-> to navigate bookmarks\n"
           "Use CTRL+F to search traces\n"
@@ -538,6 +539,7 @@ void hop::Profiler::draw( uint32_t /*windowWidth*/, uint32_t /*windowHeight*/ )
    statusPos.y += 5.0f;
    drawStatusIcon( statusPos, _server.connectionState() );
 
+   ImGui::BeginChild( "Timeline" );
    if( _tracks.size() == 0 && !_recording )
    {
       displayBackgroundHelpMsg();
@@ -550,18 +552,20 @@ void hop::Profiler::draw( uint32_t /*windowWidth*/, uint32_t /*windowHeight*/ )
          _timeline.moveToPresentTime( Timeline::ANIMATION_TYPE_NONE );
       }
 
-      _timeline.draw( _tracks.totalHeight() );
+      // Draw the timeline ruler
+      _timeline.draw();
 
-      // Push clip rect for canvas and draw
-      ImGui::PushClipRect(
-          ImVec2( _timeline.canvasPosX(), _timeline.canvasPosY() ), ImVec2( 99999, 99999 ), true );
-      ImGui::BeginChild( "TimelineCanvas" );
+      // Start the canvas drawing
+      _timeline.beginDrawCanvas( _tracks.totalHeight() );
 
+      // Draw the tracks inside the canvaws
       auto timelineActions =
           _tracks.draw( TimelineTracksDrawInfo{_timeline.constructTimelineInfo(), _strDb} );
 
-      ImGui::EndChild();
-      ImGui::PopClipRect();
+      _timeline.drawOverlay();
+
+      _timeline.endDrawCanvas();
+
       // Handle deferred timeline actions created by the module
       _timeline.handleDeferredActions( timelineActions );
    }
@@ -569,9 +573,11 @@ void hop::Profiler::draw( uint32_t /*windowWidth*/, uint32_t /*windowHeight*/ )
    handleHotkey( modalOpen );
    handleMouse();
 
+   ImGui::EndChild(); //"Timeline"
    ImGui::PopStyleVar(2);
-   ImGui::End();
-   ImGui::PopStyleVar();
+
+   ImGui::End(); // Window
+   ImGui::PopStyleVar(1);
 }
 
 void hop::Profiler::drawMenuBar()

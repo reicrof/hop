@@ -24,8 +24,6 @@ using TimelineTextPositions = std::vector<std::pair<ImVec2, int64_t> >;
 
 static void drawHoveringTimelineLine(float posInScreenX, float timelineStartPosY, const char* text )
 {
-   HOP_PROF_FUNC();
-
    constexpr float LINE_PADDING = 5.0f;
    constexpr float TEXT_PADDING = 10.0f;
    
@@ -42,8 +40,6 @@ static void drawHoveringTimelineLine(float posInScreenX, float timelineStartPosY
 
 static void drawBookmarks( float posXPxl, float posYPxl )
 {
-   HOP_PROF_FUNC();
-
    constexpr float BOOKMARK_WIDTH = 8.0f;
    constexpr float BOOKMARK_HEIGHT = 20.0f;
    constexpr float LINE_PADDING = 5.0f;
@@ -107,6 +103,26 @@ static void drawTextPositionsTime( const TimelineTextPositions& textPos, uint64_
    }
 }
 
+static void drawRangeSelection( float fromPxl, float toPxl, float heightPos, const char* durationText )
+{
+   static const float TEXT_X_PADDING = 10.0f;
+   static const float TEXT_BG_PADDING = 2.0f;
+   const ImVec2 textSize = ImGui::CalcTextSize( durationText );
+   ImDrawList* drawList = ImGui::GetWindowDrawList();
+   drawList->AddRectFilled(
+       ImVec2( fromPxl, 0 ),
+       ImVec2( toPxl, 9999 ),
+       ImColor( 255, 159, 0, 96 ) );
+
+   // Clamp the label pos inside the selected range
+   float labelEnd = std::min( toPxl, ImGui::GetWindowWidth() );
+   labelEnd = std::max( fromPxl + textSize.x + TEXT_X_PADDING + TEXT_BG_PADDING, labelEnd );
+
+   const ImVec2 textPos( labelEnd - textSize.x - TEXT_X_PADDING, heightPos + textSize.y );
+   drawList->AddRectFilled( ImVec2(textPos.x - TEXT_BG_PADDING, textPos.y - TEXT_BG_PADDING), ImVec2(textPos.x + textSize.x + TEXT_BG_PADDING, textPos.y + textSize.y + TEXT_BG_PADDING), 0X7F000000, 0.2f );
+   drawList->AddText( textPos, ImColor(255,255,255), durationText );
+}
+
 namespace hop
 {
 
@@ -160,32 +176,56 @@ void Timeline::update( float deltaTimeMs ) noexcept
    }
 }
 
-void Timeline::draw( float timelineHeight )
+void Timeline::draw()
 {
    HOP_PROF_FUNC();
 
-   //ImGui::BeginChild("TimelineAndCanvas");
    const auto startDrawPos = ImGui::GetCursorScreenPos();
    _timelineDrawPosition[0] = startDrawPos.x;
    _timelineDrawPosition[1] = startDrawPos.y;
 
-   drawTimeline(startDrawPos.x, startDrawPos.y + 5 );
+   // Draw the time ruler at the top of the window
+   drawTimeline(startDrawPos.x, startDrawPos.y + 5);
 
-   // Save the canvas draw position for later
+   // Save the position once the ruler is drawn. This will be the start of the
+   // canvas draw position
    const auto& curDrawPos = ImGui::GetCursorScreenPos();
    _canvasDrawPosition[0] = curDrawPos.x;
    _canvasDrawPosition[1] = curDrawPos.y;
+}
 
+void Timeline::beginDrawCanvas( float canvasHeightPxl )
+{
    ImGui::BeginChild(
-      "TimelineCanvas",
-      ImVec2(0,0),
-      false,
-      ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse | ImGuiWindowFlags_NoMove );
+       "TimelineCanvas",
+       ImVec2( 0, 0 ),
+       false,
+       ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse |
+           ImGuiWindowFlags_NoMove );
 
    // Set the scroll and get it back from ImGui to have the clamped value
-   ImGui::SetScrollY(_verticalPosPxl);
+   ImGui::SetScrollY( verticalPosPxl() );
 
-   // Draw the overlay stuff after having drawn the traces
+   // Draw an invislbe button to extend the child region to allow scrolling
+   ImGui::SetCursorScreenPos( ImVec2( 0.0f, canvasHeightPxl ) );
+   ImGui::InvisibleButton( "ExtendRegion", ImVec2( 0.0f, 0.0f ) );
+
+   // Push clip rect for canvas and draw
+   ImGui::PushClipRect( ImVec2( canvasPosX(), canvasPosY() ), ImVec2( 99999, 99999 ), true );
+}
+
+void Timeline::endDrawCanvas()
+{
+   ImGui::PopClipRect();
+   ImGui::EndChild();
+}
+
+void Timeline::drawOverlay()
+{
+   char durationText[32] = {};
+ 
+   const ImVec2 startDrawPos( _timelineDrawPosition[0], _timelineDrawPosition[1] );
+
    // Draw timeline mouse indicator
    if (_timelineHoverPos > 0.0f)
    {
@@ -198,10 +238,14 @@ void Timeline::draw( float timelineHeight )
       drawHoveringTimelineLine( _timelineHoverPos, startDrawPos.y, text );
    }
 
+   // Draw bookmarks
+   const ImVec2 windowSize = ImGui::GetWindowSize();
    if( !_bookmarks.times.empty() )
    {
-      const auto& windowSize = ImGui::GetWindowSize();
-      ImGui::PushClipRect( ImVec2( startDrawPos.x, startDrawPos.y ), ImVec2( startDrawPos.x + windowSize.x, startDrawPos.y + windowSize.y ), false );
+      ImGui::PushClipRect(
+          startDrawPos,
+          ImVec2( startDrawPos.x + windowSize.x, startDrawPos.y + windowSize.y ),
+          false );
       ImGui::PushStyleColor( ImGuiCol_Button, ImVec4( 0.0f, 0.0f, 0.8f, 1.0f ) );
       ImGui::PushStyleColor( ImGuiCol_ButtonHovered, ImVec4( 0.0f, 0.0f, 0.9f, 1.0f ));
       ImGui::PushStyleColor( ImGuiCol_ButtonActive, ImVec4( 0.0f, 0.0f, 1.0f, 1.0f ));
@@ -214,11 +258,23 @@ void Timeline::draw( float timelineHeight )
       ImGui::PopStyleColor(3);
    }
 
-   // Draw an invislbe button to extend the child region to allow scrolling
-   ImGui::SetCursorScreenPos( ImVec2( 0.0f, timelineHeight ) );
-   ImGui::InvisibleButton( "ExtendRegion", ImVec2( 0.0f, 0.0f ) );
+   // Draw selection region
+   if( _rangeSelectTimeStamp[0] != _rangeSelectTimeStamp[1] )
+   {
+      const auto minmaxX = std::minmax( _rangeSelectTimeStamp[0], _rangeSelectTimeStamp[1] );
+      const float endPxl =
+          cyclesToPxl<int64_t>( windowSize.x, _duration, minmaxX.second - _timelineStart ) +
+          _timelineDrawPosition[0];
+      const TimeDuration deltaCycles = minmaxX.second - minmaxX.first;
+      const float durationPxl = cyclesToPxl( windowSize.x, _duration, deltaCycles );
 
-   ImGui::EndChild(); // TimelineCanvas
+      hop::formatCyclesDurationToDisplay(
+          deltaCycles,
+          durationText,
+          sizeof( durationText ),
+          _displayType == DISPLAY_CYCLES );
+      drawRangeSelection( endPxl - durationPxl, endPxl, _canvasDrawPosition[1], durationText );
+   }
 }
 
 TimelineInfo Timeline::constructTimelineInfo() const noexcept
@@ -229,7 +285,7 @@ TimelineInfo Timeline::constructTimelineInfo() const noexcept
                        globalStartTime(),
                        relativeStartTime(),
                        duration(),
-                       _rightClickStartPosInCanvas[0] != 0.0f,
+                       _rangeZoomStartPosInCanvas != 0.0f,
                        _displayType == DISPLAY_CYCLES};
 }
 
@@ -355,7 +411,7 @@ void Timeline::drawTimeline( float posX, float posY )
    ImGui::SetCursorScreenPos( ImVec2{posX, posY + TIMELINE_TOTAL_HEIGHT } );
 }
 
-bool Timeline::handleMouse( float posX, float posY, bool /*lmClicked*/, bool /*rmClicked*/, float wheel )
+bool Timeline::handleMouse( float posX, float posY, bool /*lmPressed*/, bool /*rmPressed*/, float wheel )
 {
    bool handled = false;
    if ( ImGui::IsItemHoveredRect() )
@@ -373,6 +429,10 @@ bool Timeline::handleMouse( float posX, float posY, bool /*lmClicked*/, bool /*r
       {
          handleMouseDrag( mousePosInCanvas.x, mousePosInCanvas.y );
          handled = true;
+
+         // Handle left mouse click to reset range selection
+         if( ImGui::GetIO().KeyCtrl && ImGui::IsMouseClicked( 0 ) )
+            _rangeSelectTimeStamp[0] = _rangeSelectTimeStamp[1] = 0;
       }
    }
 
@@ -415,18 +475,34 @@ void Timeline::handleMouseWheel( float mousePosX, float mouseWheel )
    }
 }
 
-void Timeline::handleMouseDrag( float mouseInCanvasX, float mouseInCanvasY )
-{
-   // Left mouse button dragging
-   if ( ImGui::IsMouseDragging( 0 ) )
+void Timeline::handleMouseDrag( float mouseInCanvasX, float /*mouseInCanvasY*/ )
+{   
+   const float windowWidthPxl = ImGui::GetWindowWidth();
+
+   // Ctrl + left mouse dragging ( Range Selection )
+   if( ImGui::GetIO().KeyCtrl && ImGui::IsMouseDragging( 0 ) )
    {
-      const float windowWidthPxl = ImGui::GetWindowWidth();
+      const TimeStamp mousePosAsCycles =
+          _timelineStart + pxlToCycles<int64_t>( windowWidthPxl, _duration, mouseInCanvasX );
+
+      // If it is the first time we enter, setup the start position
+      if ( _rangeSelectTimeStamp[0] == 0 )
+      {
+         _rangeSelectTimeStamp[0] = mousePosAsCycles;
+         setRealtime( false );
+      }
+      // Continuously update the range
+      _rangeSelectTimeStamp[1] = mousePosAsCycles;
+   }
+   // Left mouse button dragging ( Panning )
+   else if ( ImGui::IsMouseDragging( 0 ) )
+   {
       const auto delta = ImGui::GetMouseDragDelta();
 
       // Set horizontal position
-      const int64_t deltaXInNanos =
+      const int64_t deltaXInCycles =
           pxlToCycles<int64_t>( windowWidthPxl, _duration, delta.x );
-      setStartTime( _timelineStart - deltaXInNanos, ANIMATION_TYPE_NONE );
+      setStartTime( _timelineStart - deltaXInCycles, ANIMATION_TYPE_NONE );
    
       const float maxScrollY = maxVerticalPosPxl();
 
@@ -435,27 +511,7 @@ void Timeline::handleMouseDrag( float mouseInCanvasX, float mouseInCanvasY )
       ImGui::ResetMouseDragDelta();
       setRealtime( false );
    }
-   // Ctrl + right mouse dragging
-   else if( ImGui::GetIO().KeyCtrl && ImGui::IsMouseDragging( 1 ) )
-   {
-      ImDrawList* DrawList = ImGui::GetWindowDrawList();
-      const auto delta = ImGui::GetMouseDragDelta( 1 );
-
-      const auto curMousePosInScreen = ImGui::GetMousePos();
-      DrawList->AddRectFilled(
-          ImVec2( curMousePosInScreen.x, 0 ),
-          ImVec2( curMousePosInScreen.x - delta.x, 9999 ),
-          ImColor( 64, 64, 255, 64 ) );
-
-      // If it is the first time we enter
-      if ( _ctrlRightClickStartPosInCanvas[0] == 0.0f )
-      {
-         _ctrlRightClickStartPosInCanvas[0] = mouseInCanvasX;
-         _ctrlRightClickStartPosInCanvas[1] = mouseInCanvasY;
-         setRealtime( false );
-      }
-   }
-   // Right mouse button dragging
+   // Right mouse button dragging ( Range Zoom )
    else if ( ImGui::IsMouseDragging( 1 ) )
    {
       ImDrawList* DrawList = ImGui::GetWindowDrawList();
@@ -468,29 +524,27 @@ void Timeline::handleMouseDrag( float mouseInCanvasX, float mouseInCanvasY )
           ImColor( 255, 255, 255, 64 ) );
 
       // If it is the first time we enter
-      if ( _rightClickStartPosInCanvas[0] == 0.0f )
+      if ( _rangeZoomStartPosInCanvas == 0.0f )
       {
-         _rightClickStartPosInCanvas[0] = mouseInCanvasX;
-         _rightClickStartPosInCanvas[1] = mouseInCanvasY;
+         _rangeZoomStartPosInCanvas = mouseInCanvasX;
          setRealtime( false );
       }
    }
 
    // Handle right mouse click up. (Finished right click selection zoom)
-   if ( ImGui::IsMouseReleased( 1 ) && _rightClickStartPosInCanvas[0] != 0.0f )
+   if ( ImGui::IsMouseReleased( 1 ) && _rangeZoomStartPosInCanvas != 0.0f )
    {
       pushNavigationState();
 
-      const float minX = std::min( _rightClickStartPosInCanvas[0], mouseInCanvasX );
-      const float maxX = std::max( _rightClickStartPosInCanvas[0], mouseInCanvasX );
-      const float windowWidthPxl = ImGui::GetWindowWidth();
-      const int64_t minXinNanos =
+      const float minX = std::min( _rangeZoomStartPosInCanvas, mouseInCanvasX );
+      const float maxX = std::max( _rangeZoomStartPosInCanvas, mouseInCanvasX );
+      const int64_t minXinCycles =
         pxlToCycles<int64_t>( windowWidthPxl, _duration, minX - 2 );
-      setStartTime( _timelineStart + minXinNanos );
+      setStartTime( _timelineStart + minXinCycles );
       setZoom( pxlToCycles<TimeDuration>( windowWidthPxl, _duration, maxX - minX) );
 
       // Reset position
-      _rightClickStartPosInCanvas[0] = _rightClickStartPosInCanvas[1] = 0.0f;
+      _rangeZoomStartPosInCanvas = 0.0f;
    }
 }
 
