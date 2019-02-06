@@ -32,20 +32,21 @@ static void mergeAndRemoveDuplicates( std::vector< hop::CoreEvent >& coreEvents 
    HOP_PROF_FUNC();
    // Merge events that are less than 10 micro apart
    const uint64_t minCycles = hop::nanosToCycles( 10000 );
-   auto cmpCores = [minCycles]( const hop::CoreEvent& lhs, const hop::CoreEvent& rhs ) {
+   auto canMergeCore = [minCycles]( const hop::CoreEvent& lhs, const hop::CoreEvent& rhs ) {
       return lhs.core == rhs.core &&
              ( ( rhs.start < lhs.end || ( rhs.start - lhs.end ) < minCycles ) );
+   };
+
+   auto sameCore = []( const hop::CoreEvent& lhs, const hop::CoreEvent& rhs ) {
+      return lhs.core == rhs.core;
    };
 
    merge_consecutive(
        coreEvents.begin(),
        coreEvents.end(),
-       cmpCores,
+       canMergeCore,
        []( hop::CoreEvent& lhs, const hop::CoreEvent& rhs ) { lhs.start = rhs.start; } );
-   auto newEnd = std::unique(
-       coreEvents.begin(),
-       coreEvents.end(),
-       cmpCores );
+   auto newEnd = std::unique( coreEvents.begin(), coreEvents.end(), sameCore );
    coreEvents.erase( newEnd, coreEvents.end() );
 }
 
