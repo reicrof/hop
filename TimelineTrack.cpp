@@ -58,10 +58,20 @@ static DrawData createDrawDataForTrace(
        MIN_TRACE_LENGTH_PXL,
        cyclesToPxl<float>( windowWidthPxl, drawInfo.timeline.duration, traceDelta ) );
 
-   const auto tracePos = ImVec2(
-       posX + traceEndPxl - traceLengthPxl, posY + traceDepth * TimelineTrack::PADDED_TRACE_SIZE );
+   // Crop the trace that span outside the screen to make the text slides to be center
+   // with the trace
+   const float nonCroppedPosX = posX + traceEndPxl - traceLengthPxl;
+   const float croppedTracePosX = std::max( 0.0f, posX + traceEndPxl - traceLengthPxl );
 
-   return DrawData{tracePos, traceDelta, traceIdx, traceLengthPxl};
+   // Get the amount cropped on each side of the screen and remove it from the total trace length
+   const float leftCroppedAmnt = croppedTracePosX - nonCroppedPosX;
+   const float rightCroppedAmnt =
+       hop::clamp( ( nonCroppedPosX + traceLengthPxl ) - windowWidthPxl, 0.0f, traceLengthPxl );
+   const float croppedTraceLenghtPxl = traceLengthPxl - (leftCroppedAmnt + rightCroppedAmnt);
+
+   const ImVec2 tracePos( croppedTracePosX, posY + traceDepth * TimelineTrack::PADDED_TRACE_SIZE );
+
+   return DrawData{tracePos, traceDelta, traceIdx, croppedTraceLenghtPxl};
 }
 
 static bool drawSeparator( uint32_t threadIndex, bool highlightSeparator )
@@ -151,11 +161,9 @@ static void drawCoresLabels(
    auto it1 = std::lower_bound( coreData.data.begin(), coreData.data.end(), firstEv, cmp );
    auto it2 = std::upper_bound( coreData.data.begin(), coreData.data.end(), lastEv, cmp );
 
-   if( it1 == it2 ) return; // Nothing to draw here
-
-   // Also draw cores labels that might span outside of the screen
-   if( it1 != coreData.data.begin() ) --it1;
    if( it2 != coreData.data.end() ) ++it2;
+
+   if( it1 == it2 ) return; // Nothing to draw here
 
    std::vector<DrawData> drawData;
    drawData.reserve( std::distance( it1, it2 ) );
