@@ -86,27 +86,27 @@ enum HopZoneColor
 ///////////////////////////////////////////////////////////////
 
 // Create a new profiling trace with specified name. Name must be static
-#define HOP_PROF( x ) __HOP_PROF_GUARD_VAR( __LINE__, ( __FILE__, __LINE__, (x) ) )
+#define HOP_PROF( x ) HOP_PROF_GUARD_VAR( __LINE__, ( __FILE__, __LINE__, (x) ) )
 
 // Create a new profiling trace with the compiler provided name
-#define HOP_PROF_FUNC() __HOP_PROF_ID_GUARD( hop__, ( __FILE__, __LINE__, __HOP_FCT_NAME ) )
+#define HOP_PROF_FUNC() HOP_PROF_ID_GUARD( hop__, ( __FILE__, __LINE__, HOP_FCT_NAME ) )
 
 // Split a profiling trace with a new provided name. Name must be static.
-#define HOP_PROF_SPLIT( x ) __HOP_PROF_ID_SPLIT( hop__, ( __FILE__, __LINE__, (x) ) )
+#define HOP_PROF_SPLIT( x ) HOP_PROF_ID_SPLIT( hop__, ( __FILE__, __LINE__, (x) ) )
 
 // Create a new profiling trace for dynamic strings. Please use sparingly as they will incur more slowdown
-#define HOP_PROF_DYN_NAME( x ) __HOP_PROF_DYN_STRING_GUARD_VAR( __LINE__, ( __FILE__, __LINE__, (x) ) )
+#define HOP_PROF_DYN_NAME( x ) HOP_PROF_DYN_STRING_GUARD_VAR( __LINE__, ( __FILE__, __LINE__, (x) ) )
 
 // Create a trace that represent the time waiting for a mutex. You need to provide
 // a pointer to the mutex that is being locked
-#define HOP_PROF_MUTEX_LOCK( x ) __HOP_MUTEX_LOCK_GUARD_VAR( __LINE__,( x ) )
+#define HOP_PROF_MUTEX_LOCK( x ) HOP_MUTEX_LOCK_GUARD_VAR( __LINE__,( x ) )
 
 // Create an event that correspond to the unlock of the specified mutex. This is
 // used to provide stall region. You should provide a pointer to the mutex that
 // is being unlocked.
-#define HOP_PROF_MUTEX_UNLOCK( x ) __HOP_MUTEX_UNLOCK_EVENT( x )
+#define HOP_PROF_MUTEX_UNLOCK( x ) HOP_MUTEX_UNLOCK_EVENT( x )
 
-#define HOP_ZONE( x ) __HOP_ZONE_GUARD( __LINE__, ( x ) )
+#define HOP_ZONE( x ) HOP_ZONE_GUARD( __LINE__, ( x ) )
 
 // Set the name of the current thread in the profiler. Only the first call will
 // be considered for each thread.
@@ -149,7 +149,7 @@ enum HopZoneColor
 #include <stdint.h>
 
 // Useful macros
-#define HOP_VERSION 0.5f
+#define HOP_VERSION 0.6f
 #define HOP_CONSTEXPR constexpr
 #define HOP_NOEXCEPT noexcept
 #define HOP_STATIC_ASSERT static_assert
@@ -446,26 +446,26 @@ class ZoneGuard
    ZoneId_t _prevZoneId;
 };
 
-#define __HOP_PROF_GUARD_VAR( LINE, ARGS ) \
-   hop::ProfGuard __HOP_COMBINE( hopProfGuard, LINE ) ARGS
-#define __HOP_PROF_ID_GUARD( ID, ARGS ) \
+#define HOP_PROF_GUARD_VAR( LINE, ARGS ) \
+   hop::ProfGuard HOP_COMBINE( hopProfGuard, LINE ) ARGS
+#define HOP_PROF_ID_GUARD( ID, ARGS ) \
    hop::ProfGuard ID ARGS
-#define __HOP_PROF_ID_SPLIT( ID, ARGS ) \
+#define HOP_PROF_ID_SPLIT( ID, ARGS ) \
    ID.reset ARGS
-#define __HOP_PROF_DYN_STRING_GUARD_VAR( LINE, ARGS ) \
-   hop::ProfGuardDynamicString __HOP_COMBINE( hopProfGuard, LINE ) ARGS
-#define __HOP_MUTEX_LOCK_GUARD_VAR( LINE, ARGS ) \
-   hop::LockWaitGuard __HOP_COMBINE( hopMutexLock, LINE ) ARGS
-#define __HOP_MUTEX_UNLOCK_EVENT( x ) \
+#define HOP_PROF_DYN_STRING_GUARD_VAR( LINE, ARGS ) \
+   hop::ProfGuardDynamicString HOP_COMBINE( hopProfGuard, LINE ) ARGS
+#define HOP_MUTEX_LOCK_GUARD_VAR( LINE, ARGS ) \
+   hop::LockWaitGuard HOP_COMBINE( hopMutexLock, LINE ) ARGS
+#define HOP_MUTEX_UNLOCK_EVENT( x ) \
    hop::ClientManager::UnlockEvent( x, hop::getTimeStamp() );
-#define __HOP_ZONE_GUARD( LINE, ARGS ) \
-   hop::ZoneGuard __HOP_COMBINE( hopZoneGuard, LINE ) ARGS
+#define HOP_ZONE_GUARD( LINE, ARGS ) \
+   hop::ZoneGuard HOP_COMBINE( hopZoneGuard, LINE ) ARGS
 
-#define __HOP_COMBINE( X, Y ) X##Y
+#define HOP_COMBINE( X, Y ) X##Y
 #if defined(_MSC_VER)
-#define __HOP_FCT_NAME __FUNCTION__
+#define HOP_FCT_NAME __FUNCTION__
 #else
-#define __HOP_FCT_NAME __PRETTY_FUNCTION__
+#define HOP_FCT_NAME __PRETTY_FUNCTION__
 #endif
 
 }  // namespace hop
