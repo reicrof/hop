@@ -162,6 +162,7 @@ static void drawCoresLabels(
    auto it2 = std::upper_bound( coreData.data.begin(), coreData.data.end(), lastEv, cmp );
 
    if( it2 != coreData.data.end() ) ++it2;
+   if( it2 != coreData.data.end() ) ++it2;
 
    if( it1 == it2 ) return; // Nothing to draw here
 
@@ -738,9 +739,11 @@ std::vector< TimelineMessage > TimelineTracks::draw( const TimelineTracksDrawInf
 float TimelineTracks::totalHeight() const
 {
    float height = 0.0f;
-   for( const auto& t : _tracks )
-      height += t.heightWithThreadLabel();
-
+   const size_t trackCount = _tracks.size();
+   if( trackCount != 0 )
+   {
+      height = _tracks[trackCount-1]._absoluteDrawPos[1] + _tracks[trackCount-1].height();
+   }
    return height;
 }
 

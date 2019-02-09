@@ -28,6 +28,7 @@ class Timeline
 
    void update( float deltaTimeMs ) noexcept;
    void draw();
+   void clear();
    void beginDrawCanvas( float canvasHeightPxl );
    void endDrawCanvas();
    void drawOverlay();
@@ -74,8 +75,6 @@ class Timeline
    float canvasPosY() const noexcept;
    float canvasPosYWithScroll() const noexcept;
 
-   //void clearTraceStats();
-
    // Move to first trace
    void moveToStart( AnimationType animType = ANIMATION_TYPE_NORMAL ) noexcept;
    // Move to latest time
@@ -98,7 +97,6 @@ class Timeline
 
    void nextBookmark() noexcept;
    void previousBookmark() noexcept;
-   void clearBookmarks();
 
    void pushNavigationState() noexcept;
    void undoNavigation() noexcept;
@@ -147,6 +145,7 @@ class Timeline
    float _timelineHoverPos{-1.0f};
    float _timelineDrawPosition[2] = {};
    float _canvasDrawPosition[2] = {};
+   float _canvasHeight{0.0f};
    DisplayType _displayType{DISPLAY_TIMES};
 
    int64_t _rangeSelectTimeStamp[2] = {};

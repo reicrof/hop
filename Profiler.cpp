@@ -66,6 +66,16 @@ namespace
           ImGui::GetColorU32( ImGuiCol_TextDisabled ),
           helpTxt );
    }
+
+   float computeCanvasSize( const hop::TimelineTracks& tracks )
+   {
+      float tracksHeight = tracks.totalHeight();
+      if( tracksHeight > 0.0f )
+      {
+         tracksHeight -= (ImGui::GetWindowHeight() - tracks[0]._absoluteDrawPos[1]);
+      }
+      return tracksHeight;
+   }
 }
 
 } // end of anonymous namespace
@@ -556,7 +566,7 @@ void hop::Profiler::draw( uint32_t /*windowWidth*/, uint32_t /*windowHeight*/ )
       _timeline.draw();
 
       // Start the canvas drawing
-      _timeline.beginDrawCanvas( _tracks.totalHeight() );
+      _timeline.beginDrawCanvas( computeCanvasSize( _tracks ) );
 
       // Draw the tracks inside the canvaws
       auto timelineActions =
@@ -895,9 +905,7 @@ void hop::Profiler::clear()
    _server.clear();
    _strDb.clear();
    _tracks.clear();
-   _timeline.setGlobalStartTime( 0 );
-   _timeline.clearBookmarks();
-   _timeline.moveVerticalPositionPxl( 0.0f, Timeline::ANIMATION_TYPE_FAST );
+   _timeline.clear();
    _recording = false;
    g_stats.traceCount = 0;
 }
