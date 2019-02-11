@@ -222,8 +222,8 @@ inline TimeStamp getTimeStamp( Core_t& core )
 
 inline TimeStamp getTimeStamp()
 {
-   uint32_t dummtyCore;
-   return getTimeStamp( dummtyCore );
+   uint32_t dummyCore;
+   return getTimeStamp( dummyCore );
 }
 
 enum class MsgType : uint32_t
@@ -649,16 +649,11 @@ const HOP_CHAR HOP_SHARED_SEM_SUFFIX[] = _T("_sem");
 inline const HOP_CHAR* HOP_GET_PROG_NAME() HOP_NOEXCEPT
 {
    static HOP_CHAR fullname[MAX_PATH];
-   static HOP_CHAR* shortname;
-   static bool first = true;
-   if (first)
-   {
-      DWORD size = GetModuleFileName(NULL, fullname, MAX_PATH);
-      while (size > 0 && fullname[size] != '\\')
-         --size;
-      shortname = &fullname[size + 1];
-      first = false;
-   }
+   static HOP_CHAR* shortname = []() {
+      DWORD size = GetModuleFileName( NULL, fullname, MAX_PATH );
+      while ( size > 0 && fullname[size] != '\\' ) --size;
+      return &fullname[size + 1];
+   }();
    return shortname;
 }
 
