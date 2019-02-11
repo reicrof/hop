@@ -194,6 +194,14 @@ void Timeline::draw()
    _canvasDrawPosition[1] = curDrawPos.y;
 }
 
+void Timeline::clear()
+{
+   setGlobalStartTime( 0 );
+   moveVerticalPositionPxl( 0.0f, Timeline::ANIMATION_TYPE_FAST );
+   _bookmarks.times.clear();
+   _rangeSelectTimeStamp[0] = _rangeSelectTimeStamp[1] = 0;
+}
+
 void Timeline::beginDrawCanvas( float canvasHeightPxl )
 {
    ImGui::BeginChild(
@@ -203,12 +211,9 @@ void Timeline::beginDrawCanvas( float canvasHeightPxl )
        ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse |
            ImGuiWindowFlags_NoMove );
 
-   // Set the scroll and get it back from ImGui to have the clamped value
-   ImGui::SetScrollY( verticalPosPxl() );
+   _canvasHeight = canvasHeightPxl;
 
-   // Draw an invislbe button to extend the child region to allow scrolling
-   ImGui::SetCursorScreenPos( ImVec2( 0.0f, canvasHeightPxl ) );
-   ImGui::InvisibleButton( "ExtendRegion", ImVec2( 0.0f, 0.0f ) );
+   ImGui::SetScrollY( verticalPosPxl() );
 
    // Push clip rect for canvas and draw
    ImGui::PushClipRect( ImVec2( canvasPosX(), canvasPosY() ), ImVec2( 99999, 99999 ), true );
@@ -627,12 +632,7 @@ float Timeline::verticalPosPxl() const noexcept
 
 float Timeline::maxVerticalPosPxl() const noexcept
 {
-   // Set vertical position
-   // Switch to the traces context to get scroll info
-   ImGui::BeginChild( "TimelineCanvas" );
-   const float maxScrollY = ImGui::GetScrollMaxY() - ImGui::GetWindowHeight();
-   ImGui::EndChild();
-   return maxScrollY;
+   return _canvasHeight + canvasPosY();
 }
 
 float Timeline::canvasPosX() const noexcept
@@ -767,11 +767,6 @@ void Timeline::previousBookmark() noexcept
       }
       ++it;
    }
-}
-
-void Timeline::clearBookmarks()
-{
-   _bookmarks.times.clear();
 }
 
 void Timeline::pushNavigationState() noexcept
