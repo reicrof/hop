@@ -914,7 +914,14 @@ void TimelineTracks::drawTraces(
                    data._traces.lineNbs[traceIndex] );
                ImGui::TextUnformatted( curName );
 #ifdef HOP_DEBUG
-               ImGui::TextWrapped( "Trace Index = %zu", t.traceIndex );
+               auto end = data._traces.entries.ends[t.traceIndex];
+               auto delta = data._traces.entries.deltas[t.traceIndex];
+               ImGui::TextWrapped( "======== Debug Info ========\n"
+                                   "Trace Index = %zu\n"
+                                   "Trace Start = %zu\n"
+                                   "Trace End   = %zu\n"
+                                   "Trace Delta = %zu",
+                                   t.traceIndex, end-delta, end, delta );
 #endif
                ImGui::EndTooltip();
             }
