@@ -1113,6 +1113,11 @@ static StrPtr_t cStringHash( const char* str, size_t strLen )
    return result;
 }
 
+static uint32_t alignOn( uint32_t val, uint32_t alignment )
+{
+   return (( val + alignment-1) & ~(alignment-1));
+}
+
 class Client
 {
   public:
@@ -1182,10 +1187,14 @@ class Client
       if ( res.second )
       {
          const size_t newEntryPos = _stringData.size();
-         _stringData.resize( newEntryPos + sizeof( StrPtr_t ) + strLen + 1 );
+         assert( (newEntryPos & 7) == 0 ); // Make sure we are 8 byte aligned
+         
+         const size_t alignedStrLen = alignOn( strLen + 1, 8 );
+
+         _stringData.resize( newEntryPos + sizeof( StrPtr_t ) + alignedStrLen );
          StrPtr_t* strIdPtr = (StrPtr_t*)&_stringData[newEntryPos];
          *strIdPtr = hash;
-         HOP_STRNCPY( &_stringData[newEntryPos + sizeof( StrPtr_t )], dynStr, strLen + 1 );
+         HOP_STRNCPY( &_stringData[newEntryPos + sizeof( StrPtr_t )], dynStr, alignedStrLen );
       }
 
       return hash;
@@ -1203,11 +1212,14 @@ class Client
       if( res.second )
       {
          const size_t newEntryPos = _stringData.size();
-         const size_t strLen = strlen( (const char*)strId );
-         _stringData.resize( newEntryPos + sizeof( StrPtr_t ) + strLen + 1 );
+         assert( (newEntryPos & 7) == 0 ); // Make sure we are 8 byte aligned
+
+         const size_t alignedStrLen = alignOn( strlen( (const char*)strId ) + 1, 8 );
+
+         _stringData.resize( newEntryPos + sizeof( StrPtr_t ) + alignedStrLen );
          StrPtr_t* strIdPtr = (StrPtr_t*)&_stringData[newEntryPos];
          *strIdPtr = strId;
-         HOP_STRNCPY( &_stringData[newEntryPos + sizeof( StrPtr_t ) ], (const char*)strId, strLen + 1 );
+         HOP_STRNCPY( &_stringData[newEntryPos + sizeof( StrPtr_t ) ], (const char*)strId, alignedStrLen );
       }
 
       return res.second;
@@ -1258,7 +1270,8 @@ class Client
       const bool msgWayToBig = size > HOP_SHARED_MEM_SIZE;
       if( !msgWayToBig )
       {
-         const ssize_t offset = ringbuf_acquire( ringbuf, _worker, size );
+         const size_t paddedSize = (size + 7)& ~7;
+         const ssize_t offset = ringbuf_acquire( ringbuf, _worker, paddedSize );
          if( offset != -1 )
          {
             data = &ClientManager::sharedMemory().data()[offset];

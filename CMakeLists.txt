@@ -33,10 +33,10 @@ set( CMAKE_VERBOSE_MAKEFILE on )
 #####################
 ### Asan
 #####################
-SET(ASAN OFF CACHE BOOL "Enable Address Sanitizer")
-if(ASAN)
-   set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fno-omit-frame-pointer -fsanitize=address")
-   set (CMAKE_LINKER_FLAGS "${CMAKE_STATIC_LINKER_FLAGS} -fno-omit-frame-pointer -fsanitize=address")
+SET(SAN CACHE STRING "Enable Specified Sanitizer")
+if(SAN)
+   set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fno-omit-frame-pointer -fsanitize=${SAN}")
+   set (CMAKE_LINKER_FLAGS "${CMAKE_STATIC_LINKER_FLAGS} -fno-omit-frame-pointer -fsanitize=${SAN}")
 endif()
 
 #####################

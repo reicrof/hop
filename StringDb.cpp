@@ -11,14 +11,19 @@
 #define HOP_STRCASESTR strcasestr
 #endif
 
+static uint32_t alignOn( uint32_t val, uint32_t alignment )
+{
+   return (( val + alignment-1) & ~(alignment-1));
+}
+
 namespace hop
 {
 
 StringDb::StringDb()
 {
    _strData.reserve( 512 );
-   _strData.push_back( '\0' );  // First character should always be NULL
    _stringIndices.reserve( 256 );
+   clear();
 }
 
 bool StringDb::empty() const
@@ -31,6 +36,8 @@ void StringDb::clear()
    _strData.clear();
    _stringIndices.clear();
    g_stats.stringDbSize = 0;
+   // First character should always be 8 NULL
+   _strData.insert( _strData.begin(), sizeof(StrPtr_t), '\0' );
 }
 
 void StringDb::addStringData( const char* inData, size_t count )
@@ -51,16 +58,16 @@ void StringDb::addStringData( const char* inData, size_t count )
       i += sizeof( StrPtr_t );
 
       auto& strIndex = _stringIndices[strPtr];
-      const size_t stringLen = strlen( &inData[i] );
+      const size_t stringLen = alignOn( strlen( &inData[i] ) + 1, 8 );
       // If not already in the db, add it
       if ( strIndex == 0 )
       {
          strIndex = _strData.size();
-         _strData.resize( _strData.size() + stringLen + 1 );
+         _strData.resize( _strData.size() + stringLen );
          strcpy( &_strData[strIndex], &inData[i] );
       }
 
-      i += stringLen + 1;
+      i += stringLen;
    }
 
    g_stats.stringDbSize = _strData.size();
@@ -88,12 +95,12 @@ std::vector< size_t > StringDb::findStringIndexMatching( const char* substrToFin
    size_t i = 1;
    while( i < _strData.size() )
    {
-      const auto length = strlen( &_strData[i] );
+      const auto length = alignOn( strlen( &_strData[i] ) + 1, 8 );
       if(HOP_STRCASESTR( &_strData[i], substrToFind ) )
       {
          indices.push_back( i );
       }
-      i += length + 1;
+      i += length;
    }
    return indices;
 }
