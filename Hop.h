@@ -149,7 +149,7 @@ enum HopZoneColor
 #include <stdint.h>
 
 // Useful macros
-#define HOP_VERSION 0.6f
+#define HOP_VERSION 0.61f
 #define HOP_CONSTEXPR constexpr
 #define HOP_NOEXCEPT noexcept
 #define HOP_STATIC_ASSERT static_assert
@@ -1188,7 +1188,7 @@ class Client
       {
          const size_t newEntryPos = _stringData.size();
          assert( (newEntryPos & 7) == 0 ); // Make sure we are 8 byte aligned
-         
+
          const size_t alignedStrLen = alignOn( strLen + 1, 8 );
 
          _stringData.resize( newEntryPos + sizeof( StrPtr_t ) + alignedStrLen );
