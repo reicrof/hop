@@ -697,8 +697,12 @@ void hop::Profiler::drawMenuBar()
 
    if( ImGui::BeginPopupModal( menuHelp, NULL, ImGuiWindowFlags_AlwaysAutoResize ) )
    {
-      ImGui::Text("Hop version %.1f\n\nThis is a help menu\nPretty useful isnt it?\n\n", HOP_VERSION);
-      if ( ImGui::Button( "Yes indeed", ImVec2( 120, 0 ) ) )
+      ImGui::Text("Hop version %.1f\n",HOP_VERSION);
+      static bool rdtscpSupported = hop::supportsRDTSCP();
+      static bool constantTscSupported = hop::supportsConstantTSC();
+      ImGui::Text( "RDTSCP Supported : %s\nConstant TSC Supported : %s\n",
+                   rdtscpSupported ? "yes" : "no", constantTscSupported ? "yes" : "no" );
+      if ( ImGui::Button( "Close", ImVec2( 120, 0 ) ) )
       {
          ImGui::CloseCurrentPopup();
       }

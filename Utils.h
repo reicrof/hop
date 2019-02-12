@@ -15,6 +15,9 @@
 
 namespace hop
 {
+bool supportsRDTSCP();
+
+bool supportsConstantTSC();
 
 uint64_t getCpuFreqHz();
 
