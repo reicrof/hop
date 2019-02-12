@@ -1270,7 +1270,7 @@ class Client
       const bool msgWayToBig = size > HOP_SHARED_MEM_SIZE;
       if( !msgWayToBig )
       {
-         const size_t paddedSize = (size + 7)& ~7;
+         const size_t paddedSize = alignOn( size, 8 );
          const ssize_t offset = ringbuf_acquire( ringbuf, _worker, paddedSize );
          if( offset != -1 )
          {

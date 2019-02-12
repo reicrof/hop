@@ -92,7 +92,7 @@ std::vector< size_t > StringDb::findStringIndexMatching( const char* substrToFin
 {
    std::vector< size_t > indices;
    indices.reserve( 64 );
-   size_t i = 1;
+   size_t i = 8;
    while( i < _strData.size() )
    {
       const auto length = alignOn( strlen( &_strData[i] ) + 1, 8 );
