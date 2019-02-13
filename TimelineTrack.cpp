@@ -401,28 +401,7 @@ bool TimelineTrack::empty() const
 
 size_t serializedSize( const TimelineTrack& ti )
 {
-   const size_t tracesCount = ti._traces.entries.ends.size();
-   const size_t lockwaitsCount = ti._lockWaits.entries.ends.size();
-   const size_t serializedSize =
-       // Traces
-       sizeof( size_t ) +                            // Traces count
-       sizeof( hop::Depth_t ) +                     // Max depth
-       sizeof( hop::TimeStamp ) * tracesCount +      // ends
-       sizeof( hop::TimeDuration ) * tracesCount +   // deltas
-       sizeof( hop::StrPtr_t ) * tracesCount * 2 +  // fileNameId and fctNameIds
-       sizeof( hop::LineNb_t ) * tracesCount +      // lineNbs
-       sizeof( hop::ZoneId_t ) * tracesCount +      // zones
-       sizeof( hop::Depth_t ) * tracesCount +       // depths
-
-       // Lock Waits
-       sizeof( size_t ) +                            // LockWaits count
-       sizeof( hop::TimeStamp ) * lockwaitsCount +   // ends
-       sizeof( hop::TimeDuration ) * lockwaitsCount +// deltas
-       sizeof( hop::Depth_t ) * lockwaitsCount +    // depths
-       sizeof( void* ) * lockwaitsCount +            // mutexAddrs
-       sizeof( hop::TimeStamp ) * lockwaitsCount;    // lockReleases
-
-   return serializedSize;
+   return serializedSize( ti._traces ) + serializedSize( ti._lockWaits );
 }
 
 size_t serialize( const TimelineTrack& ti, char* data )
@@ -431,74 +410,9 @@ size_t serialize( const TimelineTrack& ti, char* data )
     (void)serialSize; // Removed unused warning
     size_t i = 0;
 
-    // Serialize Traces
-    {
-    // Traces count
-    const size_t tracesCount = ti._traces.entries.ends.size();
-    memcpy( &data[i], &tracesCount, sizeof( size_t ) );
-    i += sizeof( size_t );
-
-    // Max depth
-    memcpy( &data[i], &ti._traces.entries.maxDepth, sizeof( hop::Depth_t ) );
-    i += sizeof( hop::Depth_t );
-
-    //ends
-    std::copy( ti._traces.entries.ends.begin(), ti._traces.entries.ends.end(), (hop::TimeStamp*)&data[i] );
-    i += sizeof( hop::TimeStamp ) * tracesCount;
-
-    // deltas
-    std::copy( ti._traces.entries.deltas.begin(), ti._traces.entries.deltas.end(), (hop::TimeDuration*)&data[i] );
-    i += sizeof( hop::TimeDuration ) * tracesCount;
-
-    // fileNameIds
-    std::copy( ti._traces.fileNameIds.begin(), ti._traces.fileNameIds.end(), (hop::StrPtr_t*)&data[i]);
-    i += sizeof( hop::StrPtr_t ) * tracesCount;
-
-    // fctNameIds
-    std::copy( ti._traces.fctNameIds.begin(), ti._traces.fctNameIds.end(), (hop::StrPtr_t*)&data[i]);
-    i += sizeof( hop::StrPtr_t ) * tracesCount;
-
-    // lineNbs
-    std::copy( ti._traces.lineNbs.begin(), ti._traces.lineNbs.end(), (hop::LineNb_t*) &data[i] );
-    i += sizeof( hop::LineNb_t ) * tracesCount;
-
-    // zones
-    std::copy( ti._traces.zones.begin(), ti._traces.zones.end(), (hop::ZoneId_t*) &data[i] );
-    i += sizeof( hop::ZoneId_t ) * tracesCount;
-
-    // depths
-    std::copy( ti._traces.entries.depths.begin(), ti._traces.entries.depths.end(), (hop::Depth_t*)&data[i] );
-    i += sizeof( hop::Depth_t ) * tracesCount;
-    }
-
-    // Serialize LockWaits
-    {
-    // LockWaits count
-    const size_t lockwaitsCount = ti._lockWaits.entries.ends.size();
-    memcpy( &data[i], &lockwaitsCount, sizeof( size_t ) );
-    i += sizeof( size_t );
-
-    // ends
-    std::copy( ti._lockWaits.entries.ends.begin(), ti._lockWaits.entries.ends.end(), (hop::TimeStamp*)&data[i] );
-    i += sizeof( hop::TimeStamp ) * lockwaitsCount;
-
-    // deltas
-    std::copy( ti._lockWaits.entries.deltas.begin(), ti._lockWaits.entries.deltas.end(), (hop::TimeDuration*)&data[i] );
-    i += sizeof( hop::TimeDuration ) * lockwaitsCount;
-
-    // depths
-    std::copy( ti._lockWaits.entries.depths.begin(), ti._lockWaits.entries.depths.end(), (hop::Depth_t*)&data[i] );
-    i += sizeof( hop::Depth_t ) * lockwaitsCount;
-
-    // mutexAddrs
-    std::copy( ti._lockWaits.mutexAddrs.begin(), ti._lockWaits.mutexAddrs.end(), (void**)&data[i] );
-    i += sizeof( void* ) * lockwaitsCount;
-
-    // lockReleases
-    std::copy( ti._lockWaits.lockReleases.begin(), ti._lockWaits.lockReleases.end(), (hop::TimeStamp*)&data[i] );
-    i += sizeof( hop::TimeStamp ) * lockwaitsCount;
-    }
-
+    i += serialize( ti._traces, &data[i] );
+    i += serialize( ti._lockWaits, &data[i] );
+   
     assert( i == serialSize );
 
     return i;
@@ -508,66 +422,8 @@ size_t deserialize( const char* data, TimelineTrack& ti )
 {
     size_t i = 0;
 
-    // Deserializing Traces
-    {
-    const size_t tracesCount = *(size_t*)&data[i];
-    i += sizeof( size_t );
-    ti._traces.entries.maxDepth = *(hop::Depth_t*)&data[i];
-    i += sizeof( hop::Depth_t );
-
-    // ends
-    std::copy((hop::TimeStamp*)&data[i], ((hop::TimeStamp*) &data[i]) + tracesCount, std::back_inserter(ti._traces.entries.ends));
-    i += sizeof( hop::TimeStamp ) * tracesCount;
-
-    // deltas
-    std::copy((hop::TimeDuration*)&data[i], ((hop::TimeDuration*)&data[i]) + tracesCount, std::back_inserter(ti._traces.entries.deltas));
-    i += sizeof( hop::TimeDuration ) * tracesCount;
-
-    // fileNameIds
-    std::copy((hop::StrPtr_t*)&data[i], ((hop::StrPtr_t*)&data[i]) + tracesCount, std::back_inserter(ti._traces.fileNameIds));
-    i += sizeof( hop::StrPtr_t ) * tracesCount;
-
-    // fctNameIds
-    std::copy((hop::StrPtr_t*) &data[i], ((hop::StrPtr_t*)&data[i]) + tracesCount, std::back_inserter(ti._traces.fctNameIds));
-    i += sizeof( hop::StrPtr_t ) * tracesCount;
-
-    // lineNbs
-    std::copy((hop::LineNb_t*)&data[i], ((hop::LineNb_t*)&data[i]) + tracesCount, std::back_inserter(ti._traces.lineNbs));
-    i += sizeof( hop::LineNb_t ) * tracesCount;
-
-    // zones
-    std::copy((hop::ZoneId_t*)&data[i], ((hop::ZoneId_t*)&data[i]) + tracesCount, std::back_inserter(ti._traces.zones));
-    i += sizeof( hop::ZoneId_t ) * tracesCount;
-
-    // depths
-    std::copy((hop::Depth_t*)&data[i], ((hop::Depth_t*) &data[i]) + tracesCount, std::back_inserter(ti._traces.entries.depths));
-    i += sizeof( hop::Depth_t ) * tracesCount;
-    }
-
-    // Deserializing LockWaits
-    {
-    const size_t lockWaitsCount = *(size_t*)&data[i];
-    i += sizeof( size_t );
-    // ends
-    std::copy((hop::TimeStamp*)&data[i], ((hop::TimeStamp*) &data[i]) + lockWaitsCount, std::back_inserter(ti._lockWaits.entries.ends));
-    i += sizeof( hop::TimeStamp ) * lockWaitsCount;
-
-    // deltas
-    std::copy((hop::TimeDuration*)&data[i], ((hop::TimeDuration*)&data[i]) + lockWaitsCount, std::back_inserter(ti._lockWaits.entries.deltas));
-    i += sizeof( hop::TimeDuration ) * lockWaitsCount;
-
-    // depths
-    std::copy((hop::Depth_t*)&data[i], ((hop::Depth_t*) &data[i]) + lockWaitsCount, std::back_inserter(ti._lockWaits.entries.depths));
-    i += sizeof( hop::Depth_t ) * lockWaitsCount;
-
-    // mutexAddrs
-    std::copy((void**)&data[i], ((void**) &data[i]) + lockWaitsCount, std::back_inserter(ti._lockWaits.mutexAddrs));
-    i += sizeof( void* ) * lockWaitsCount;
-
-    // lockReleases
-    std::copy((hop::TimeStamp*)&data[i], ((hop::TimeStamp*) &data[i]) + lockWaitsCount, std::back_inserter(ti._lockWaits.lockReleases));
-    i += sizeof( hop::TimeStamp ) * lockWaitsCount;
-    }
+    i += deserialize( &data[i], ti._traces );
+    i += deserialize( &data[i], ti._lockWaits );
 
     return i;
 }

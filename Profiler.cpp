@@ -827,7 +827,7 @@ bool hop::Profiler::saveToFile( const char* path )
                                (uint32_t)dbSerializedSize,
                                (uint32_t)_tracks.size()};
       of.write( (const char*)&header, sizeof( header ) );
-      of.write( &compressedData[0], totalSerializedSize );
+      of.write( &compressedData[0], compressedSize );
 
       closeModalWindow();
       return true;

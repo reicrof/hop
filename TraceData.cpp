@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cassert>
+#include <cstring> //memcpy
 
 namespace hop
 {
@@ -138,6 +139,213 @@ std::pair<size_t, size_t> visibleIndexSpan(
    span.first = std::distance( lods.begin(), it1 );
    span.second = std::distance( lods.begin(), it2 );
    return span;
+}
+
+static size_t serializedSize( const hop::Entries& entries )
+{
+   const size_t entriesCount = entries.ends.size();
+   const size_t size = sizeof( hop::Depth_t ) +                        // Max depth
+                       sizeof( hop::TimeStamp ) * entriesCount +       // ends
+                       sizeof( hop::TimeDuration ) * entriesCount +    // deltas
+                       sizeof( hop::Depth_t ) * entriesCount;          // depths
+   return size;
+}
+
+static size_t serialize( const hop::Entries& entries, char* dst )
+{
+   size_t i = 0;
+
+   const size_t tracesCount = entries.ends.size();
+   (void)tracesCount;
+
+   // Max depth
+   memcpy( &dst[i], &entries.maxDepth, sizeof( hop::Depth_t ) );
+   i += sizeof( hop::Depth_t );
+
+   // ends
+   {
+      std::copy( entries.ends.begin(), entries.ends.end(), (hop::TimeStamp*)&dst[i] );
+      i += sizeof( hop::TimeStamp ) * tracesCount;
+   }
+
+   // deltas
+   {
+      std::copy( entries.deltas.begin(), entries.deltas.end(), (hop::TimeDuration*)&dst[i] );
+      i += sizeof( hop::TimeDuration ) * tracesCount;
+   }
+
+   // depths
+   {
+      std::copy( entries.depths.begin(), entries.depths.end(), (hop::Depth_t*)&dst[i] );
+      i += sizeof( hop::Depth_t ) * tracesCount;
+   }
+
+   return i;
+}
+
+static size_t deserialize( const char* src, size_t count, hop::Entries& entries )
+{
+   size_t i = 0;
+
+   entries.maxDepth = *(hop::Depth_t*)&src[i];
+   i += sizeof( hop::Depth_t );
+
+   {  // ends
+      std::copy((hop::TimeStamp*)&src[i], ((hop::TimeStamp*) &src[i]) + count, std::back_inserter(entries.ends));
+      i += sizeof( hop::TimeStamp ) * count;
+   }
+
+   {  // deltas
+      std::copy((hop::TimeDuration*)&src[i], ((hop::TimeDuration*)&src[i]) + count, std::back_inserter(entries.deltas));
+      i += sizeof( hop::TimeDuration ) * count;
+   }
+
+   {  // depths
+      std::copy((hop::Depth_t*)&src[i], ((hop::Depth_t*) &src[i]) + count, std::back_inserter(entries.depths));
+      i += sizeof( hop::Depth_t ) * count;
+   }
+
+   return i;
+}
+
+size_t serializedSize( const TraceData& td )
+{
+   const size_t tracesCount = td.entries.ends.size();
+   const size_t size =
+       sizeof( size_t ) +                           // Traces count
+       serializedSize( td.entries ) +               // Entries size
+       sizeof( hop::StrPtr_t ) * tracesCount * 2 +  // fileNameId and fctNameIds
+       sizeof( hop::LineNb_t ) * tracesCount +      // lineNbs
+       sizeof( hop::ZoneId_t ) * tracesCount;       // zones
+
+   return size;
+}
+
+size_t serialize( const TraceData& td, char* dst )
+{
+   size_t i = 0;
+
+   // Traces count
+   const size_t tracesCount = td.entries.ends.size();
+   memcpy( &dst[i], &tracesCount, sizeof( size_t ) );
+   i += sizeof( size_t );
+
+   // Entries
+   i += serialize( td.entries, &dst[i] );
+
+   // fileNameIds
+   {
+      std::copy( td.fileNameIds.begin(), td.fileNameIds.end(), (hop::StrPtr_t*)&dst[i] );
+      i += sizeof( hop::StrPtr_t ) * tracesCount;
+   }
+
+   // fctNameIds
+   {
+      std::copy( td.fctNameIds.begin(), td.fctNameIds.end(), (hop::StrPtr_t*)&dst[i] );
+      i += sizeof( hop::StrPtr_t ) * tracesCount;
+   }
+
+   // lineNbs
+   {
+      std::copy( td.lineNbs.begin(), td.lineNbs.end(), (hop::LineNb_t*)&dst[i] );
+      i += sizeof( hop::LineNb_t ) * tracesCount;
+   }
+
+   // zones
+   {
+      std::copy( td.zones.begin(), td.zones.end(), (hop::ZoneId_t*)&dst[i] );
+      i += sizeof( hop::ZoneId_t ) * tracesCount;
+   }
+
+   return i;
+}
+
+size_t deserialize( const char* src, TraceData& td )
+{
+   size_t i = 0;
+
+   // Traces count
+   const size_t tracesCount = *(size_t*)&src[i];
+   i += sizeof( size_t );
+
+   // Entries
+   i += deserialize( &src[i], tracesCount, td.entries );
+
+   {  // fileNames
+      std::copy((hop::StrPtr_t*)&src[i], ((hop::StrPtr_t*)&src[i]) + tracesCount, std::back_inserter(td.fileNameIds));
+      i += sizeof( hop::StrPtr_t ) * tracesCount;
+   }
+
+   {  // fctnames
+      std::copy((hop::StrPtr_t*) &src[i], ((hop::StrPtr_t*)&src[i]) + tracesCount, std::back_inserter(td.fctNameIds));
+      i += sizeof( hop::StrPtr_t ) * tracesCount;
+   }
+
+   {  // lineNbs
+      std::copy((hop::LineNb_t*)&src[i], ((hop::LineNb_t*)&src[i]) + tracesCount, std::back_inserter(td.lineNbs));
+      i += sizeof( hop::LineNb_t ) * tracesCount;
+   }
+
+   {  // zones
+      std::copy((hop::ZoneId_t*)&src[i], ((hop::ZoneId_t*)&src[i]) + tracesCount, std::back_inserter(td.zones));
+      i += sizeof( hop::ZoneId_t ) * tracesCount;
+   }
+
+   return i;
+}
+
+size_t serializedSize( const LockWaitData& lw )
+{
+   const size_t lockwaitsCount = lw.entries.ends.size();
+   const size_t size = sizeof( size_t ) +                              // LockWaits count
+                       serializedSize( lw.entries ) +                  // Entries size
+                       sizeof( void* ) * lockwaitsCount +              // mutexAddrs
+                       sizeof( hop::TimeStamp ) * lockwaitsCount;      // lockReleases
+   return size;
+}
+
+size_t serialize( const LockWaitData& lw, char* dst )
+{
+   const size_t lockwaitsCount = lw.entries.ends.size();
+
+   size_t i = 0;
+
+   memcpy( &dst[i], &lockwaitsCount, sizeof( size_t ) );
+   i += sizeof( size_t );
+
+   // Entries
+   i += serialize( lw.entries, &dst[i] );
+
+   // mutexAddrs
+   std::copy( lw.mutexAddrs.begin(), lw.mutexAddrs.end(), (void**)&dst[i] );
+   i += sizeof( void* ) * lockwaitsCount;
+
+   // lockReleases
+   std::copy( lw.lockReleases.begin(), lw.lockReleases.end(), (hop::TimeStamp*)&dst[i] );
+   i += sizeof( hop::TimeStamp ) * lockwaitsCount;
+
+   return i;
+}
+
+size_t deserialize( const char* src, LockWaitData& lw )
+{
+   size_t i = 0;
+
+   const size_t lwCounts = *(size_t*)&src[i];
+   i += sizeof( size_t );
+
+   // Entries
+   i += deserialize( &src[i], lwCounts, lw.entries );
+
+   // mutexAddrs
+   std::copy((void**)&src[i], ((void**) &src[i]) + lwCounts, std::back_inserter(lw.mutexAddrs));
+   i += sizeof( void* ) * lwCounts;
+
+   // lockReleases
+   std::copy((hop::TimeStamp*)&src[i], ((hop::TimeStamp*) &src[i]) + lwCounts, std::back_inserter(lw.lockReleases));
+   i += sizeof( hop::TimeStamp ) * lwCounts;
+
+   return i;
 }
 
 } // namespace hop
