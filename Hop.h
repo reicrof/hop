@@ -370,8 +370,8 @@ class ProfGuard
     inline void open( const char* fileName, LineNb_t lineNb, const char* fctName )
     {
       _start = getTimeStamp();
-      _fileName = (StrPtr_t)fileName;
-      _fctName = (StrPtr_t)fctName;
+      _fileName = reinterpret_cast<StrPtr_t>(fileName);
+      _fctName = reinterpret_cast<StrPtr_t>(fctName);
       _lineNb = lineNb;
       _zone = ClientManager::StartProfile();
     }
@@ -412,7 +412,7 @@ class ProfGuardDynamicString
   public:
    ProfGuardDynamicString( const char* fileName, LineNb_t lineNb, const char* fctName ) HOP_NOEXCEPT
        : _start( getTimeStamp() | 1 ), // Set the first bit to 1 to flag the use of dynamic strings
-         _fileName( (StrPtr_t) fileName ),
+         _fileName( reinterpret_cast<StrPtr_t>(fileName) ),
          _lineNb( lineNb )
    {
       _fctName = ClientManager::StartProfileDynString( fctName, &_zone );
@@ -435,7 +435,7 @@ class ZoneGuard
  public:
    ZoneGuard( HopZoneColor newZone ) HOP_NOEXCEPT
    {
-      _prevZoneId = ClientManager::PushNewZone( (ZoneId_t)newZone );
+      _prevZoneId = ClientManager::PushNewZone( static_cast<ZoneId_t>(newZone) );
    }
    ~ZoneGuard()
    {
@@ -621,7 +621,7 @@ const HOP_CHAR HOP_SHARED_SEM_SUFFIX[] = "_sem";
 #define likely(x)       __builtin_expect(!!(x), 1)
 #define unlikely(x)     __builtin_expect(!!(x), 0)
 
-#define HOP_GET_THREAD_ID() (size_t)pthread_self()
+#define HOP_GET_THREAD_ID() reinterpret_cast<size_t>(pthread_self())
 #define HOP_SLEEP_MS( x ) usleep( x * 1000 )
 
 extern HOP_CHAR* __progname;
@@ -753,7 +753,7 @@ namespace
            return NULL;
        }
 
-       sharedMem = (uint8_t*)mmap(NULL, size, PROT_READ | PROT_WRITE, MAP_SHARED, *handle, 0);
+       sharedMem = reinterpret_cast<uint8_t*>(mmap(NULL, size, PROT_READ | PROT_WRITE, MAP_SHARED, *handle, 0));
 #endif
        if( sharedMem ) *state = hop::SharedMemory::CONNECTED;
        return sharedMem;
@@ -814,7 +814,7 @@ namespace
 
       *totalSize = fileStat.st_size;
 
-      sharedMem = (uint8_t*) mmap( NULL, fileStat.st_size, PROT_READ | PROT_WRITE, MAP_SHARED, *handle, 0 );
+      sharedMem = reinterpret_cast<uint8_t*>(mmap( NULL, fileStat.st_size, PROT_READ | PROT_WRITE, MAP_SHARED, *handle, 0 ));
       *state = sharedMem ? hop::SharedMemory::CONNECTED : hop::SharedMemory::UNKNOWN_CONNECTION_ERROR;
 #endif
       return sharedMem;
@@ -836,12 +836,12 @@ namespace
 namespace hop
 {
 // The call stack depth of the current measured trace. One variable per thread
-thread_local int tl_traceLevel = 0;
-thread_local uint32_t tl_threadIndex = 0; // Index of the tread as they are coming in
-thread_local uint64_t tl_threadId = 0;    // ID of the thread as seen by the OS
-thread_local ZoneId_t tl_zoneId = HOP_ZONE_COLOR_NONE;
-thread_local char tl_threadNameBuffer[64];
-thread_local StrPtr_t tl_threadName = 0;
+static thread_local int tl_traceLevel = 0;
+static thread_local uint32_t tl_threadIndex = 0; // Index of the tread as they are coming in
+static thread_local uint64_t tl_threadId = 0;    // ID of the thread as seen by the OS
+static thread_local ZoneId_t tl_zoneId = HOP_ZONE_COLOR_NONE;
+static thread_local char tl_threadNameBuffer[64];
+static thread_local StrPtr_t tl_threadName = 0;
 
 static std::atomic<bool> g_done{false}; // Was the shared memory destroyed? (Are we done?)
 
@@ -875,7 +875,7 @@ SharedMemory::ConnectionState SharedMemory::create( const HOP_CHAR* exeName, siz
       // Try to open shared memory
       uint64_t totalSize = 0;
       uint8_t* sharedMem =
-          (uint8_t*)openSharedMemory( _sharedMemPath, &_sharedMemHandle, &totalSize, &state );
+          reinterpret_cast<uint8_t*>(openSharedMemory( _sharedMemPath, &_sharedMemHandle, &totalSize, &state ));
 
       // If we are the producer and we were not able to open the shared memory, we create it
       if ( !isConsumer && !sharedMem )
@@ -883,7 +883,7 @@ SharedMemory::ConnectionState SharedMemory::create( const HOP_CHAR* exeName, siz
          size_t ringBufSize;
          ringbuf_get_sizes( HOP_MAX_THREAD_NB, &ringBufSize, NULL );
          totalSize = ringBufSize + requestedSize + sizeof( SharedMetaInfo );
-         sharedMem = (uint8_t*)createSharedMemory( _sharedMemPath, totalSize, &_sharedMemHandle, &state );
+         sharedMem = reinterpret_cast<uint8_t*>(createSharedMemory( _sharedMemPath, totalSize, &_sharedMemHandle, &state ));
          if( sharedMem ) new(sharedMem) SharedMetaInfo; // Placement new for initializing values
       }
 
@@ -893,7 +893,7 @@ SharedMemory::ConnectionState SharedMemory::create( const HOP_CHAR* exeName, siz
          return state;
       }
 
-      SharedMetaInfo* metaInfo = (SharedMetaInfo*)sharedMem;
+      SharedMetaInfo* metaInfo = reinterpret_cast<SharedMetaInfo*>(sharedMem);
 
       // Only the first producer setups the shared memory
       if( !isConsumer )
@@ -906,7 +906,7 @@ SharedMemory::ConnectionState SharedMemory::create( const HOP_CHAR* exeName, siz
 
          // Take a local copy as we do not want to expose the ring buffer before it is
          // actually initialized
-         ringbuf_t* localRingBuf = (ringbuf_t*)( sharedMem + sizeof( SharedMetaInfo ) );
+         ringbuf_t* localRingBuf = reinterpret_cast<ringbuf_t*>( sharedMem + sizeof( SharedMetaInfo ) );
 
          // Then setup the ring buffer
          memset( localRingBuf, 0, totalSize - sizeof( SharedMetaInfo ) );
@@ -924,8 +924,8 @@ SharedMemory::ConnectionState SharedMemory::create( const HOP_CHAR* exeName, siz
          {
             printf(
                 "HOP - Client's version (%f) does not match HOP viewer version (%f)\n",
-                metaInfo->clientVersion,
-                HOP_VERSION );
+                static_cast<double>(metaInfo->clientVersion),
+                static_cast<double>(HOP_VERSION) );
             destroy();
             exit(0);
          }
@@ -936,8 +936,8 @@ SharedMemory::ConnectionState SharedMemory::create( const HOP_CHAR* exeName, siz
       ringbuf_get_sizes( metaInfo->maxThreadNb, &ringBufSize, NULL );
 
       // Get pointers inside the shared memory once it has been initialized
-      _sharedMetaData = (SharedMetaInfo*)sharedMem;
-      _ringbuf = (ringbuf_t*)( sharedMem + sizeof( SharedMetaInfo ) );
+      _sharedMetaData = reinterpret_cast<SharedMetaInfo*>(sharedMem);
+      _ringbuf = reinterpret_cast<ringbuf_t*>( sharedMem + sizeof( SharedMetaInfo ) );
       _data = sharedMem + sizeof( SharedMetaInfo ) + ringBufSize;
       _valid = true;
 
@@ -1139,7 +1139,7 @@ class Client
        LineNb_t lineNb,
        ZoneId_t zone )
    {
-      _traces.push_back( Trace{ start, end, fileName, fctName, lineNb, zone, (Depth_t)tl_traceLevel } );
+      _traces.push_back( Trace{ start, end, fileName, fctName, lineNb, zone, static_cast<Depth_t>(tl_traceLevel) } );
    }
 
    void addCoreEvent( Core_t core, TimeStamp startTime, TimeStamp endTime )
@@ -1161,7 +1161,7 @@ class Client
    {
       if( !tl_threadName )
       {
-         HOP_STRNCPY( &tl_threadNameBuffer[0], (const char*)name, sizeof( tl_threadNameBuffer ) );
+         HOP_STRNCPY( &tl_threadNameBuffer[0], reinterpret_cast<const char*>(name), sizeof( tl_threadNameBuffer ) );
          tl_threadNameBuffer[ sizeof(tl_threadNameBuffer) - 1 ] = '\0';
          tl_threadName = addDynamicStringToDb( tl_threadNameBuffer );
       }
@@ -1183,11 +1183,10 @@ class Client
       {
          const size_t newEntryPos = _stringData.size();
          assert( (newEntryPos & 7) == 0 ); // Make sure we are 8 byte aligned
-
-         const size_t alignedStrLen = alignOn( strLen + 1, 8 );
+         const size_t alignedStrLen = alignOn( static_cast<uint32_t>(strLen) + 1, 8 );
 
          _stringData.resize( newEntryPos + sizeof( StrPtr_t ) + alignedStrLen );
-         StrPtr_t* strIdPtr = (StrPtr_t*)&_stringData[newEntryPos];
+         StrPtr_t* strIdPtr = reinterpret_cast<StrPtr_t*>(&_stringData[newEntryPos]);
          *strIdPtr = hash;
          HOP_STRNCPY( &_stringData[newEntryPos + sizeof( StrPtr_t )], dynStr, alignedStrLen );
       }
@@ -1209,12 +1208,12 @@ class Client
          const size_t newEntryPos = _stringData.size();
          assert( (newEntryPos & 7) == 0 ); // Make sure we are 8 byte aligned
 
-         const size_t alignedStrLen = alignOn( strlen( (const char*)strId ) + 1, 8 );
+         const size_t alignedStrLen = alignOn( static_cast<uint32_t>(strlen( reinterpret_cast<const char*>(strId) )) + 1, 8 );
 
          _stringData.resize( newEntryPos + sizeof( StrPtr_t ) + alignedStrLen );
-         StrPtr_t* strIdPtr = (StrPtr_t*)&_stringData[newEntryPos];
+         StrPtr_t* strIdPtr = reinterpret_cast<StrPtr_t*>(&_stringData[newEntryPos]);
          *strIdPtr = strId;
-         HOP_STRNCPY( &_stringData[newEntryPos + sizeof( StrPtr_t ) ], (const char*)strId, alignedStrLen );
+         HOP_STRNCPY( &_stringData[newEntryPos + sizeof( StrPtr_t ) ], reinterpret_cast<const char*>(strId), alignedStrLen );
       }
 
       return res.second;
@@ -1262,7 +1261,7 @@ class Client
       const bool msgWayToBig = size > HOP_SHARED_MEM_SIZE;
       if( !msgWayToBig )
       {
-         const size_t paddedSize = alignOn( size, 8 );
+         const size_t paddedSize = alignOn( static_cast<uint32_t>(size), 8 );
          const ssize_t offset = ringbuf_acquire( ringbuf, _worker, paddedSize );
          if( offset != -1 )
          {
@@ -1288,7 +1287,7 @@ class Client
             addStringToDb( t.fctNameId );
       }
 
-      const uint32_t stringDataSize = (uint32_t)_stringData.size();
+      const uint32_t stringDataSize = static_cast<uint32_t>(_stringData.size());
       assert( stringDataSize >= _sentStringDataSize );
       const uint32_t stringToSendSize = stringDataSize - _sentStringDataSize;
       const size_t msgSize = sizeof( MsgInfo ) + stringToSendSize;
@@ -1309,8 +1308,8 @@ class Client
          // =========================================================
          // msgInfo     = Profiler specific infos  - Information about the message sent
          // stringData  = String Data              - Array with all strings referenced by the traces
-         MsgInfo* msgInfo = (MsgInfo*)bufferPtr;
-         char* stringData = (char*)( bufferPtr + sizeof( MsgInfo ) );
+         MsgInfo* msgInfo = reinterpret_cast<MsgInfo*>(bufferPtr);
+         char* stringData = reinterpret_cast<char*>( bufferPtr + sizeof( MsgInfo ) );
 
          msgInfo->type = MsgType::PROFILER_STRING_DATA;
          msgInfo->threadId = tl_threadId;
@@ -1354,15 +1353,15 @@ class Client
          // =========================================================
          // msgInfo     = Profiler specific infos  - Information about the message sent
          // traceToSend = Traces                   - Array containing all of the traces
-         MsgInfo* tracesInfo = (MsgInfo*)bufferPtr;
-         Trace* traceToSend = (Trace*)( bufferPtr + sizeof( MsgInfo ) );
+         MsgInfo* tracesInfo = reinterpret_cast<MsgInfo*>(bufferPtr);
+         Trace* traceToSend = reinterpret_cast<Trace*>( bufferPtr + sizeof( MsgInfo ) );
 
          tracesInfo->type = MsgType::PROFILER_TRACE;
          tracesInfo->threadId = tl_threadId;
          tracesInfo->threadName = tl_threadName;
          tracesInfo->threadIndex = tl_threadIndex;
          tracesInfo->timeStamp = getMsgTimeStamp();
-         tracesInfo->traces.count = (uint32_t)_traces.size();
+         tracesInfo->traces.count = static_cast<uint32_t>(_traces.size());
 
          // Copy trace information into buffer to send
          std::copy( _traces.begin(), _traces.end(), traceToSend );
@@ -1394,13 +1393,13 @@ class Client
 
       // Fill the buffer with the core event message
       {
-         MsgInfo* coreInfo = (MsgInfo*)bufferPtr;
+         MsgInfo* coreInfo = reinterpret_cast<MsgInfo*>(bufferPtr);
          coreInfo->type = MsgType::PROFILER_CORE_EVENT;
          coreInfo->threadId = tl_threadId;
          coreInfo->threadName = tl_threadName;
          coreInfo->threadIndex = tl_threadIndex;
          coreInfo->timeStamp = getMsgTimeStamp();
-         coreInfo->coreEvents.count = (uint32_t)_cores.size();
+         coreInfo->coreEvents.count = static_cast<uint32_t>(_cores.size());
          bufferPtr += sizeof( MsgInfo );
          memcpy( bufferPtr, _cores.data(), _cores.size() * sizeof( CoreEvent ) );
       }
@@ -1432,13 +1431,13 @@ class Client
 
       // Fill the buffer with the lock message
       {
-         MsgInfo* lwInfo = (MsgInfo*)bufferPtr;
+         MsgInfo* lwInfo = reinterpret_cast<MsgInfo*>(bufferPtr);
          lwInfo->type = MsgType::PROFILER_WAIT_LOCK;
          lwInfo->threadId = tl_threadId;
          lwInfo->threadName = tl_threadName;
          lwInfo->threadIndex = tl_threadIndex;
          lwInfo->timeStamp = _lockWaits.back().start;
-         lwInfo->lockwaits.count = (uint32_t)_lockWaits.size();
+         lwInfo->lockwaits.count = static_cast<uint32_t>(_lockWaits.size());
          bufferPtr += sizeof( MsgInfo );
          memcpy( bufferPtr, _lockWaits.data(), _lockWaits.size() * sizeof( LockWait ) );
       }
@@ -1468,13 +1467,13 @@ class Client
 
       // Fill the buffer with the lock message
       {
-         MsgInfo* uInfo = (MsgInfo*)bufferPtr;
+         MsgInfo* uInfo = reinterpret_cast<MsgInfo*>(bufferPtr);
          uInfo->type = MsgType::PROFILER_UNLOCK_EVENT;
          uInfo->threadId = tl_threadId;
          uInfo->threadName = tl_threadName;
          uInfo->threadIndex = tl_threadIndex;
          uInfo->timeStamp = _unlockEvents.back().time;
-         uInfo->unlockEvents.count = (uint32_t)_unlockEvents.size();
+         uInfo->unlockEvents.count = static_cast<uint32_t>(_unlockEvents.size());
          bufferPtr += sizeof( MsgInfo );
          memcpy( bufferPtr, _unlockEvents.data(), _unlockEvents.size() * sizeof( UnlockEvent ) );
       }
@@ -1501,7 +1500,7 @@ class Client
 
       // Fill the buffer with the lock message
       {
-         MsgInfo* hbInfo = (MsgInfo*)bufferPtr;
+         MsgInfo* hbInfo = reinterpret_cast<MsgInfo*>(bufferPtr);
          hbInfo->type = MsgType::PROFILER_HEARTBEAT;
          hbInfo->threadId = tl_threadId;
          hbInfo->threadName = tl_threadName;
@@ -1662,7 +1661,7 @@ void ClientManager::EndLockWait( void* mutexAddr, TimeStamp start, TimeStamp end
       auto client = ClientManager::Get();
       if( unlikely( !client ) ) return;
 
-      client->addWaitLockTrace( mutexAddr, start, end, tl_traceLevel );
+      client->addWaitLockTrace( mutexAddr, start, end, static_cast<unsigned short>(tl_traceLevel) );
    }
 }
 
@@ -1682,7 +1681,7 @@ void ClientManager::SetThreadName( const char* name ) HOP_NOEXCEPT
    auto client = ClientManager::Get();
    if( unlikely( !client ) ) return;
 
-   client->setThreadName( (StrPtr_t) name );
+   client->setThreadName( reinterpret_cast<StrPtr_t>( name ) );
 }
 
 ZoneId_t ClientManager::PushNewZone( ZoneId_t newZone )
@@ -1942,7 +1941,7 @@ ssize_t ringbuf_acquire( ringbuf_t* rbuf, ringbuf_worker_t* w, size_t len )
       rbuf->next = ( target & ~WRAP_LOCK_BIT );
    }
    assert( ( target & RBUF_OFF_MASK ) <= rbuf->space );
-   return (ssize_t)next;
+   return static_cast<ssize_t>(next);
 }
 
 /*
@@ -2026,7 +2025,7 @@ retry:
     */
    if ( next < written )
    {
-      const ringbuf_off_t end = HOP_MIN( (ringbuf_off_t) rbuf->space, rbuf->end );
+      const ringbuf_off_t end = HOP_MIN( static_cast<ringbuf_off_t>(rbuf->space), rbuf->end );
 
       /*
        * Wrap-around case.  Check for the cut off first.
