@@ -433,9 +433,9 @@ class ProfGuardDynamicString
 class ZoneGuard
 {
  public:
-   ZoneGuard( ZoneId_t newZone ) HOP_NOEXCEPT
+   ZoneGuard( HopZoneColor newZone ) HOP_NOEXCEPT
    {
-      _prevZoneId = ClientManager::PushNewZone( newZone );
+      _prevZoneId = ClientManager::PushNewZone( (ZoneId_t)newZone );
    }
    ~ZoneGuard()
    {
@@ -543,9 +543,9 @@ class SharedMemory
          LISTENING_CONSUMER = 1 << 2,
       };
       std::atomic< uint32_t > flags{0};
-      const float clientVersion{0.0f};
-      const uint32_t maxThreadNb{0};
-      const size_t requestedSize{0};
+      float clientVersion{0.0f};
+      uint32_t maxThreadNb{0};
+      size_t requestedSize{0};
       std::atomic< TimeStamp > lastResetTimeStamp{0};
    };
 
@@ -899,12 +899,10 @@ SharedMemory::ConnectionState SharedMemory::create( const HOP_CHAR* exeName, siz
       if( !isConsumer )
       {
          // Set client's info in the shared memory for the viewer to access
-         float* clientVer = const_cast< float* >( &metaInfo->clientVersion );
-         *clientVer = HOP_VERSION;
-         uint32_t* maxThreadNumber = const_cast<uint32_t*>( &metaInfo->maxThreadNb );
-         *maxThreadNumber = HOP_MAX_THREAD_NB;
-         size_t* shmReqSize = const_cast<size_t*>( &metaInfo->requestedSize );
-         *shmReqSize = HOP_SHARED_MEM_SIZE;
+         metaInfo->clientVersion = HOP_VERSION;
+         metaInfo->maxThreadNb = HOP_MAX_THREAD_NB;
+         metaInfo->requestedSize = HOP_SHARED_MEM_SIZE;
+         metaInfo->lastResetTimeStamp = getTimeStamp();
 
          // Take a local copy as we do not want to expose the ring buffer before it is
          // actually initialized
@@ -1129,9 +1127,6 @@ class Client
       _unlockEvents.reserve( 64 );
       _stringPtr.reserve( 256 );
       _stringData.reserve( 256 * 32 );
-      _stringPtr.insert(0);
-      for (size_t i = 0; i < sizeof(StrPtr_t); ++i)
-         _stringData.push_back('\0');
 
       resetStringData();
    }
@@ -1227,21 +1222,18 @@ class Client
 
    void resetStringData()
    {
-      if( _stringPtr.size() > 1 )
-      {
-         _stringPtr.clear();
-         _stringData.clear();
-         _sentStringDataSize = 0;
+      _stringPtr.clear();
+      _stringData.clear();
+      _sentStringDataSize = 0;
+      _clientResetTimeStamp = ClientManager::sharedMemory().lastResetTimestamp();
 
-         // Push back first name as empty string
-         _stringPtr.insert( 0 );
-         for( size_t i = 0; i < sizeof( StrPtr_t ); ++i )
-            _stringData.push_back('\0');
-         // Push back thread name
-         const auto hash = addDynamicStringToDb( tl_threadNameBuffer );
-         HOP_UNUSED(hash);
-         assert( hash == tl_threadName );
-      }
+      // Push back first name as empty string
+      _stringPtr.insert( 0 );
+      _stringData.insert( _stringData.begin(), sizeof(StrPtr_t), '\0' );
+      // Push back thread name
+      const auto hash = addDynamicStringToDb( tl_threadNameBuffer );
+      HOP_UNUSED(hash);
+      assert( hash == tl_threadName );
    }
 
    void resetPendingTraces()
@@ -1549,7 +1541,6 @@ class Client
       {
          resetStringData();
          resetPendingTraces();
-         _clientResetTimeStamp = resetTimeStamp;
          return;
       }
 
