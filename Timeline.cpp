@@ -65,7 +65,8 @@ static void drawTextPositionsCycles( const TimelineTextPositions& textPos )
 
 static void drawTextPositionsTime( const TimelineTextPositions& textPos, uint64_t tlDuration )
 {
-   if ( tlDuration < 1000 )
+   const uint64_t tlDurationNs = hop::cyclesToNanos( tlDuration );
+   if ( tlDurationNs < 1000 )
    {
       // print as nanoseconds
       for ( const auto& pos : textPos )
@@ -74,7 +75,7 @@ static void drawTextPositionsTime( const TimelineTextPositions& textPos, uint64_
          ImGui::Text( "%" PRId64 " ns", hop::cyclesToNanos( pos.second ) );
       }
    }
-   else if ( tlDuration < 1000000 )
+   else if ( tlDurationNs < 1000000 )
    {
       // print as microsecs
       for ( const auto& pos : textPos )
@@ -83,7 +84,7 @@ static void drawTextPositionsTime( const TimelineTextPositions& textPos, uint64_
          ImGui::Text( "%.3f us", (double)(  hop::cyclesToNanos( pos.second ) ) / 1000.0f );
       }
    }
-   else if ( tlDuration < 1000000000 )
+   else if ( tlDurationNs < 1000000000 )
    {
       // print as milliseconds
       for ( const auto& pos : textPos )
@@ -92,7 +93,7 @@ static void drawTextPositionsTime( const TimelineTextPositions& textPos, uint64_
          ImGui::Text( "%.3f ms", (double)(  hop::cyclesToNanos( pos.second ) ) / 1000000.0f );
       }
    }
-   else if ( tlDuration < 1000000000000 )
+   else if ( tlDurationNs < 1000000000000 )
    {
       // print as seconds
       for ( const auto& pos : textPos )
