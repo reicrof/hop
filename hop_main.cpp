@@ -282,7 +282,7 @@ int main( int argc, char* argv[] )
 
    if( version->count > 0 )
    {
-      printf("hop version %.1f \n", HOP_VERSION );
+      printf("hop version %.2f \n", HOP_VERSION );
       return 0;
    }
 

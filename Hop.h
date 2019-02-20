@@ -159,11 +159,17 @@ enum HopZoneColor
 #ifndef NOMINMAX
 #define NOMINMAX
 #endif
-#include <windows.h>
+
+#if defined(HOP_IMPLEMENTATION)
+#define HOP_API __declspec(dllexport)
+#else
+#define HOP_API
+#endif
+
 #include <tchar.h>
 #include <intrin.h> // __rdtscp
-typedef HANDLE sem_handle;
-typedef HANDLE shm_handle;
+typedef void* sem_handle; // HANDLE is a void*
+typedef void* shm_handle; // HANDLE is a void*
 typedef TCHAR HOP_CHAR;
 
 // Type defined in unistd.h
@@ -179,6 +185,8 @@ typedef TCHAR HOP_CHAR;
 typedef sem_t* sem_handle;
 typedef int shm_handle;
 typedef char HOP_CHAR;
+
+#define HOP_API
 
 #endif
 
@@ -320,7 +328,8 @@ struct CoreEvent
 
 class Client;
 class SharedMemory;
-class ClientManager
+
+class HOP_API ClientManager
 {
   public:
    static Client* Get();
@@ -631,6 +640,9 @@ inline const HOP_CHAR* HOP_GET_PROG_NAME() HOP_NOEXCEPT
 }
 
 #else // !defined( _MSC_VER )
+
+#define WIN32_LEAN_AND_MEAN
+#include <windows.h>
 
 const HOP_CHAR HOP_SHARED_MEM_PREFIX[] = _T("/hop_");
 const HOP_CHAR HOP_SHARED_SEM_SUFFIX[] = _T("_sem");
@@ -1754,6 +1766,10 @@ struct ringbuf_worker
    int registered;
 };
 
+#if defined(_MSC_VER)
+#pragma warning( push )
+#pragma warning( disable : 4200) // Warning C4200 nonstandard extension used: zero-sized array in struct/union
+#endif
 struct ringbuf
 {
    /* Ring buffer space. */
@@ -1772,6 +1788,9 @@ struct ringbuf
    unsigned nworkers;
    ringbuf_worker_t workers[];
 };
+#if defined(_MSC_VER)
+#pragma warning( pop )
+#endif
 
 /*
  * ringbuf_setup: initialise a new ring buffer of a given length.
