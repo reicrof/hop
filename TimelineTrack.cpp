@@ -170,34 +170,38 @@ static void drawCoresLabels(
    drawData.reserve( std::distance( it1, it2 ) );
 
    const uint64_t minCycleToMerge = hop::pxlToCycles( windowWidthPxl, di.timeline.duration, 10 );
-   const uint64_t minCycleToSkip = hop::pxlToCycles( windowWidthPxl, di.timeline.duration, 0.5f );
+   const uint64_t minCycleToSkip = hop::pxlToCycles( windowWidthPxl, di.timeline.duration, 3.0f );
    CoreEvent prevEvent = *it1;
+
+   uint64_t skippedCycles = 0;
    for( ++it1 ; it1 != it2; ++it1 )
    {
-      // If we have 2 consecutive traces with the same core and they are close enough, merge them
-      // for drawing
-      if( it1->core == prevEvent.core &&
-          ( it1->start < prevEvent.end || ( it1->start - prevEvent.end ) < minCycleToMerge ) )
+      // If we have 2 consecutive traces that are close enough, merge them if they have the same
+      // core. Otherwise, skip it if we have not skipped more than a certain treshold
+      if( it1->start < prevEvent.end || ( it1->start - prevEvent.end ) < minCycleToMerge )
       {
-         prevEvent.start = std::min( prevEvent.start, it1->start );
-         prevEvent.end = it1->end;
-         continue;
+         if( it1->core == prevEvent.core )
+         {
+            prevEvent.start = std::min( prevEvent.start, it1->start );
+            prevEvent.end = it1->end;
+            continue;
+         }
+
+         skippedCycles += it1->end - it1->start;
+         if( skippedCycles < minCycleToSkip )
+            continue;
       }
 
-      // Skip drawing the label if it is too small
-      const auto labelDuration = prevEvent.end - prevEvent.start;
-      if( labelDuration > minCycleToSkip )
-      {
-         drawData.push_back( createDrawDataForTrace(
-             prevEvent.end,
-             labelDuration,
-             0,
-             prevEvent.core,
-             drawPos.x,
-             drawPos.y,
-             di,
-             windowWidthPxl ) );
-      }
+      skippedCycles = 0;
+      drawData.push_back( createDrawDataForTrace(
+          prevEvent.end,
+          prevEvent.end - prevEvent.start,
+          0,
+          prevEvent.core,
+          drawPos.x,
+          drawPos.y,
+          di,
+          windowWidthPxl ) );
 
       prevEvent = *it1;
    }
