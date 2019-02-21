@@ -332,7 +332,7 @@ class SharedMemory;
 class HOP_API ClientManager
 {
   public:
-   static Client* Get();
+   static Client* Get( bool create );
    static ZoneId_t StartProfile();
    static StrPtr_t StartProfileDynString( const char*, ZoneId_t* );
    static void EndProfile(
@@ -1169,16 +1169,6 @@ class Client
       _unlockEvents.push_back( UnlockEvent{ mutexAddr, time } );
    }
 
-   void setThreadName( StrPtr_t name )
-   {
-      if( !tl_threadName )
-      {
-         HOP_STRNCPY( &tl_threadNameBuffer[0], reinterpret_cast<const char*>(name), sizeof( tl_threadNameBuffer ) );
-         tl_threadNameBuffer[ sizeof(tl_threadNameBuffer) - 1 ] = '\0';
-         tl_threadName = addDynamicStringToDb( tl_threadNameBuffer );
-      }
-   }
-
    StrPtr_t addDynamicStringToDb( const char* dynStr )
    {
       // Should not have null as dyn string, but just in case...
@@ -1244,7 +1234,7 @@ class Client
       // Push back thread name
       const auto hash = addDynamicStringToDb( tl_threadNameBuffer );
       HOP_UNUSED(hash);
-      assert( hash == tl_threadName );
+      assert( hash == tl_threadName || tl_threadName == 0 );
    }
 
    void resetPendingTraces()
@@ -1573,12 +1563,12 @@ class Client
    uint32_t _sentStringDataSize{0}; // The size of the string array on viewer side
 };
 
-Client* ClientManager::Get()
+Client* ClientManager::Get( bool create )
 {
    thread_local std::unique_ptr< Client > threadClient;
 
    if( unlikely( g_done.load() ) ) return nullptr;
-   if( likely( threadClient.get() ) ) return threadClient.get();
+   if( likely( threadClient.get() ) || !create ) return threadClient.get();
 
    // If we have not yet created our shared memory segment, do it here
    if( !ClientManager::sharedMemory().valid() )
@@ -1631,7 +1621,7 @@ ZoneId_t ClientManager::StartProfile()
 StrPtr_t ClientManager::StartProfileDynString( const char* str, ZoneId_t* zone )
 {
    ++tl_traceLevel;
-   Client* client = ClientManager::Get();
+   Client* client = ClientManager::Get( true );
 
    if( unlikely( !client ) ) return 0;
 
@@ -1649,7 +1639,7 @@ void ClientManager::EndProfile(
     Core_t core )
 {
    const int remainingPushedTraces = --tl_traceLevel;
-   Client* client = ClientManager::Get();
+   Client* client = ClientManager::Get( true );
 
    if( unlikely( !client ) ) return;
 
@@ -1670,7 +1660,7 @@ void ClientManager::EndLockWait( void* mutexAddr, TimeStamp start, TimeStamp end
    // measured code
    if( tl_traceLevel > 0 && end - start >= HOP_MIN_LOCK_CYCLES )
    {
-      auto client = ClientManager::Get();
+      auto client = ClientManager::Get( true );
       if( unlikely( !client ) ) return;
 
       client->addWaitLockTrace( mutexAddr, start, end, static_cast<unsigned short>(tl_traceLevel) );
@@ -1681,7 +1671,7 @@ void ClientManager::UnlockEvent( void* mutexAddr, TimeStamp time )
 {
    if( tl_traceLevel > 0 )
    {
-      auto client = ClientManager::Get();
+      auto client = ClientManager::Get( true );
       if( unlikely( !client ) ) return;
 
       client->addUnlockEvent( mutexAddr, time );
@@ -1690,10 +1680,19 @@ void ClientManager::UnlockEvent( void* mutexAddr, TimeStamp time )
 
 void ClientManager::SetThreadName( const char* name ) HOP_NOEXCEPT
 {
-   auto client = ClientManager::Get();
-   if( unlikely( !client ) ) return;
+   // We should save the thread name in the thread_local variable and only
+   // send the data if there is an actual client.
+   if( tl_threadNameBuffer[0] == '\0' )
+   {
+      HOP_STRNCPY( &tl_threadNameBuffer[0], reinterpret_cast<const char*>(name), sizeof( tl_threadNameBuffer ) );
+      tl_threadNameBuffer[ sizeof(tl_threadNameBuffer) - 1 ] = '\0';
+   }
 
-   client->setThreadName( reinterpret_cast<StrPtr_t>( name ) );
+   // Only add the data to the string table if we have other data than the thread name
+   if( auto client = ClientManager::Get( false ) )
+   {
+      tl_threadName = client->addDynamicStringToDb( tl_threadNameBuffer );
+   }
 }
 
 ZoneId_t ClientManager::PushNewZone( ZoneId_t newZone )

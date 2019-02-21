@@ -46,6 +46,7 @@ void rec( int& i )
 
 void startRec()
 {
+   HOP_SET_THREAD_NAME( "Test thread" );
    HOP_PROF_FUNC();
    int recCount = RECURSION_COUNT;
    rec( recCount );
