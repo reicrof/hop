@@ -48,7 +48,9 @@ For more information, please refer to <http://unlicense.org/>
 ///////////////////////////////////////////////////////////////
 
 // Total maximum of thread being traced
+#if !defined( HOP_MAX_THREAD_NB )
 #define HOP_MAX_THREAD_NB 64
+#endif
 
 // Total size of the shared memory ring buffer. This does not
 // include the meta-data size
