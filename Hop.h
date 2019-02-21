@@ -1233,8 +1233,9 @@ class Client
       _stringData.insert( _stringData.begin(), sizeof(StrPtr_t), '\0' );
       // Push back thread name
       const auto hash = addDynamicStringToDb( tl_threadNameBuffer );
-      HOP_UNUSED(hash);
-      assert( hash == tl_threadName || tl_threadName == 0 );
+      if( tl_threadName == 0 )
+         tl_threadName = hash;
+      assert( hash == tl_threadName );
    }
 
    void resetPendingTraces()

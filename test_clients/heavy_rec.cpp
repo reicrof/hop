@@ -46,7 +46,6 @@ void rec( int& i )
 
 void startRec()
 {
-   HOP_SET_THREAD_NAME( "Test thread" );
    HOP_PROF_FUNC();
    int recCount = RECURSION_COUNT;
    rec( recCount );
@@ -74,7 +73,15 @@ int main( int argc, const char** argv )
 
    std::vector< std::thread > threads;
    for( int i = 0; i < threadNum; ++i )
-      threads.emplace_back( [](){ while(g_run) { startRec(); } } );
+   {
+      threads.emplace_back( []() {
+         HOP_SET_THREAD_NAME( "Test thread" );
+         while( g_run )
+         {
+            startRec();
+         }
+      } );
+   }
 
    while( g_run )
    {
