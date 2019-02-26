@@ -31,14 +31,23 @@ namespace
 {
    struct DrawData
    {
-      ImVec2 posPxl;
-      hop::TimeDuration duration;
-      size_t traceIndex;
-      float lengthPxl;
+      struct Entry
+      {
+         ImVec2 posPxl;
+         hop::TimeDuration duration;
+         size_t traceIndex;
+         float lengthPxl;
+      };
+      std::vector< Entry > entries;
+      union
+      {
+         hop::TraceData*    tData;
+         hop::LockWaitData* lwData;
+      } entryData;
    };
 }  // namespace
 
-static DrawData createDrawDataForTrace(
+static DrawData::Entry createDrawDataForEntry(
     hop::TimeStamp traceEnd,
     hop::TimeDuration traceDelta,
     hop::Depth_t traceDepth,
@@ -71,7 +80,7 @@ static DrawData createDrawDataForTrace(
 
    const ImVec2 tracePos( croppedTracePosX, posY + traceDepth * TimelineTrack::PADDED_TRACE_SIZE );
 
-   return DrawData{tracePos, traceDelta, traceIdx, croppedTraceLenghtPxl};
+   return DrawData::Entry{tracePos, traceDelta, traceIdx, croppedTraceLenghtPxl};
 }
 
 static bool drawSeparator( uint32_t threadIndex, bool highlightSeparator )
@@ -166,7 +175,7 @@ static void drawCoresLabels(
 
    if( it1 == it2 ) return; // Nothing to draw here
 
-   std::vector<DrawData> drawData;
+   std::vector<DrawData::Entry> drawData;
    drawData.reserve( std::distance( it1, it2 ) );
 
    const uint64_t minCycleToMerge = hop::pxlToCycles( windowWidthPxl, di.timeline.duration, 10 );
@@ -188,7 +197,7 @@ static void drawCoresLabels(
       const auto labelDuration = prevEvent.end - prevEvent.start;
       if( labelDuration > minCycleToSkip )
       {
-         drawData.push_back( createDrawDataForTrace(
+         drawData.push_back( createDrawDataForEntry(
              prevEvent.end,
              labelDuration,
              0,
@@ -203,7 +212,7 @@ static void drawCoresLabels(
    }
 
    // Add the last entry to draw
-   drawData.push_back( createDrawDataForTrace(
+   drawData.push_back( createDrawDataForEntry(
        prevEvent.end,
        prevEvent.end - prevEvent.start,
        0,
@@ -282,6 +291,87 @@ static void drawLabels(
    }
    ImGui::PopStyleColor();
    ImGui::PopID();
+}
+
+static const char*
+nonLodEntryName( const DrawData& dd, size_t entryIndex, const hop::StringDb& strDb )
+{
+   return strDb.getString( dd.entryData.tData->fctNameIds[entryIndex] );
+}
+
+static void drawNonLodEntries( const DrawData& dd )
+{
+   for( const auto& t : drawData )
+   {
+      const size_t traceIndex = t.traceIndex;
+      snprintf(
+          curName,
+          sizeof( curName ),
+          "%s",
+          drawInfo.strDb.getString( data._traces.fctNameIds[traceIndex] ) );
+
+      ImGui::SetCursorScreenPos( t.posPxl );
+      ImGui::Button( curName, ImVec2( t.lengthPxl, TimelineTrack::TRACE_HEIGHT ) );
+      if( ImGui::IsItemHovered() )
+      {
+         if( t.lengthPxl > 3 )
+         {
+            size_t lastChar = strlen( curName );
+            curName[lastChar] = ' ';
+            ImGui::BeginTooltip();
+            formatCyclesDurationToDisplay(
+                t.duration, formattedTime, sizeof( formattedTime ), drawAsCycles );
+            snprintf(
+                curName + lastChar,
+                sizeof( curName ) - lastChar,
+                " (%s)\n   %s:%d ",
+                formattedTime,
+                drawInfo.strDb.getString( data._traces.fileNameIds[traceIndex] ),
+                data._traces.lineNbs[traceIndex] );
+            ImGui::TextUnformatted( curName );
+#ifdef HOP_DEBUG
+            auto end = data._traces.entries.ends[t.traceIndex];
+            auto delta = data._traces.entries.deltas[t.traceIndex];
+            ImGui::TextWrapped(
+                "======== Debug Info ========\n"
+                "Trace Index = %zu\n"
+                "Trace Start = %zu\n"
+                "Trace End   = %zu\n"
+                "Trace Delta = %zu",
+                t.traceIndex,
+                end - delta,
+                end,
+                delta );
+#endif
+            ImGui::EndTooltip();
+         }
+
+         // Highlight hovered trace
+         _tracks[threadIndex]._highlightsDrawData.emplace_back(
+             TimelineTrack::HighlightDrawInfo{t.posPxl[0], t.posPxl[1], t.lengthPxl, 0xFFFFFF} );
+
+         if( leftMouseDblClicked )
+         {
+            const TimeStamp startTime = data._traces.entries.ends[traceIndex] -
+                                        data._traces.entries.deltas[traceIndex] - globalStartTime;
+            TimelineMessage msg;
+            msg.type = TimelineMessageType::FRAME_TO_TIME;
+            msg.frameToTime.time = startTime;
+            msg.frameToTime.duration = t.duration;
+            msg.frameToTime.pushNavState = true;
+
+            timelineMsg.push_back( msg );
+         }
+         else if( rightMouseClicked && !drawInfo.timeline.mouseDragging )
+         {
+            ImGui::OpenPopup( CTXT_MENU_STR );
+            _contextMenuInfo.open = true;
+            _contextMenuInfo.traceClick = true;
+            _contextMenuInfo.threadIndex = threadIndex;
+            _contextMenuInfo.traceId = t.traceIndex;
+         }
+      }
+   }
 }
 
 namespace hop
@@ -631,12 +721,12 @@ void TimelineTracks::drawTraces(
 
    const float windowWidthPxl = ImGui::GetWindowWidth();
 
-   static std::array< std::vector< DrawData >, HOP_MAX_ZONE_COLORS > tracesToDraw;
-   static std::array< std::vector< DrawData >, HOP_MAX_ZONE_COLORS > lodTracesToDraw;
+   static std::array< DrawData, HOP_MAX_ZONE_COLORS > tracesToDraw;
+   static std::array< DrawData, HOP_MAX_ZONE_COLORS > lodTracesToDraw;
    for( size_t i = 0; i < lodTracesToDraw.size(); ++i )
    {
-      tracesToDraw[ i ].clear();
-      lodTracesToDraw[ i ].clear();
+      tracesToDraw[ i ].entries.clear();
+      lodTracesToDraw[ i ].entries.clear();
    }
 
    // Find the best lodLevel for our current zoom
@@ -664,7 +754,7 @@ void TimelineTracks::drawTraces(
       const auto& t = data._traces.lods[lodLevel][i];
       const uint32_t zoneIndex = setBitIndex( data._traces.zones[t.traceIndex] );
       auto& lodToDraw = t.isLoded ? lodTracesToDraw : tracesToDraw;
-      lodToDraw[zoneIndex].push_back( createDrawDataForTrace(
+      lodToDraw[zoneIndex].entries.push_back( createDrawDataForEntry(
              t.end, t.delta, t.depth, t.traceIndex, posX, posY, drawInfo, windowWidthPxl ) );
    }
 
@@ -686,7 +776,7 @@ void TimelineTracks::drawTraces(
       ImGui::PushStyleColor(ImGuiCol_ButtonHovered, zoneColors[zoneId] );
       ImGui::PushStyleVar(ImGuiStyleVar_Alpha, enabledZone[zoneId] ? 1.0f : disabledZoneOpacity );
       const auto& traces = lodTracesToDraw[ zoneId ];
-      for( const auto& t : traces )
+      for( const auto& t : traces.entries )
       {
          ImGui::SetCursorScreenPos( t.posPxl );
 
@@ -745,7 +835,7 @@ void TimelineTracks::drawTraces(
       ImGui::PushStyleColor(ImGuiCol_ButtonHovered, zoneColors[zoneId] );
       ImGui::PushStyleVar(ImGuiStyleVar_Alpha, enabledZone[zoneId] ? 1.0f : disabledZoneOpacity );
       const auto& traces = tracesToDraw[ zoneId ];
-      for( const auto& t : traces )
+      for( const auto& t : traces.entries )
       {
          const size_t traceIndex = t.traceIndex;
          snprintf( curName, sizeof(curName), "%s", drawInfo.strDb.getString( data._traces.fctNameIds[traceIndex] ) );
@@ -882,7 +972,7 @@ std::vector< LockOwnerInfo > TimelineTracks::highlightLockOwner(
 
                const float tracesHeight = _tracks[i].heightWithThreadLabel();
 
-               auto drawData = createDrawDataForTrace(
+               auto drawData = createDrawDataForEntry(
                   lockWaitEndTime,
                   lockHoldDuration,
                   0,
@@ -936,9 +1026,9 @@ void TimelineTracks::drawLockWaits(
 
    if ( spanLodIndex.first == hop::INVALID_IDX ) return;
 
-   static std::vector<DrawData> tracesToDraw, lodTracesToDraw;
-   tracesToDraw.clear();
-   lodTracesToDraw.clear();
+   static DrawData tracesToDraw, lodTracesToDraw;
+   tracesToDraw.entries.clear();
+   lodTracesToDraw.entries.clear();
 
    HOP_PROF_SPLIT( "Gathering lock waits drawing info" );
 
@@ -946,7 +1036,7 @@ void TimelineTracks::drawLockWaits(
    {
       const auto& t = lockWaits.lods[lodLevel][i];
       auto& lodToDraw = t.isLoded ? lodTracesToDraw : tracesToDraw;
-      lodToDraw.push_back( createDrawDataForTrace(
+      lodToDraw.entries.push_back( createDrawDataForEntry(
              t.end, t.delta, t.depth, t.traceIndex, posX, posY, drawInfo, windowWidthPxl ) );
    }
 
@@ -960,7 +1050,7 @@ void TimelineTracks::drawLockWaits(
    const bool drawAsCycles = drawInfo.timeline.useCycles;
 
    HOP_PROF_SPLIT( "Drawing Lock Wait Lod" );
-   for ( const auto& t : lodTracesToDraw )
+   for ( const auto& t : lodTracesToDraw.entries )
    {
       ImGui::SetCursorScreenPos( t.posPxl );
       ImGui::Button( "", ImVec2( t.lengthPxl, TimelineTrack::TRACE_HEIGHT ) );
@@ -998,7 +1088,7 @@ void TimelineTracks::drawLockWaits(
    }
 
    HOP_PROF_SPLIT( "drawing non-lod" );
-   for ( const auto& t : tracesToDraw )
+   for ( const auto& t : tracesToDraw.entries )
    {
       ImGui::SetCursorScreenPos( t.posPxl );
       ImGui::Button( "Waiting lock...", ImVec2( t.lengthPxl, TimelineTrack::TRACE_HEIGHT ) );
@@ -1249,7 +1339,7 @@ void TimelineTracks::addTraceToHighlight( size_t traceId, uint32_t threadIndex, 
 {
    // Gather draw data for visible highlighted traces
    const TimelineTrack& data = _tracks[ threadIndex ];
-   const DrawData dd = createDrawDataForTrace(
+   const DrawData::Entry dd = createDrawDataForEntry(
        data._traces.entries.ends[traceId],
        data._traces.entries.deltas[traceId],
        data._traces.entries.depths[traceId],
