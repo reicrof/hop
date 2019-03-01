@@ -305,61 +305,15 @@ getTraceLabel( const DrawData& dd, size_t entryIndex, const hop::StringDb& strDb
 }
 
 static const char*
-getEmptyLabel( const DrawData&, size_t, const hop::StringDb& )
-{
-   return "";
-}
-
-static const char*
 getLockWaitLabel( const DrawData&, size_t, const hop::StringDb& )
 {
    return "Waiting lock...";
 }
 
-typedef void (*HoveredStringFct)(const DrawData& dd,
-    size_t ddEntryIndex,
-    const hop::StringDb& strDb,
-    char* buffer,
-    uint32_t bufferSize);
-
-static void getHoveredTraceString(
-    const DrawData& dd,
-    size_t ddEntryIndex,
-    const hop::StringDb& strDb,
-    char* buffer,
-    uint32_t bufferSize )
+static const char*
+getEmptyLabel( const DrawData&, size_t, const hop::StringDb& )
 {
-   const DrawData::Entry& ddEntry = dd.entries[ddEntryIndex];
-   size_t entryIndex = ddEntry.traceIndex;
-   char fmtTime[32];
-   hop::formatCyclesDurationToDisplay(
-       ddEntry.duration, fmtTime, sizeof( fmtTime ), /*drawAsCycles*/ false );
-
-   int writeSize = snprintf(
-       buffer,
-       bufferSize,
-       " (%s)\n   %s:%d ",
-       fmtTime,
-       strDb.getString( dd.entryData.tData->fileNameIds[entryIndex] ),
-       dd.entryData.tData->lineNbs[entryIndex] );
-
-   (void)(writeSize);
-#ifdef HOP_DEBUG
-   const auto end = dd.entryData.tData->entries.ends[entryIndex];
-   const auto delta = dd.entryData.tData->entries.deltas[entryIndex];
-   snprintf(
-       buffer,
-       bufferSize - writeSize,
-       "\n======== Debug Info ========\n"
-       "Trace Index = %zu\n"
-       "Trace Start = %zu\n"
-       "Trace End   = %zu\n"
-       "Trace Delta = %zu",
-       entryIndex,
-       end - delta,
-       end,
-       delta );
-#endif
+   return "";
 }
 
 // Returns the index of the hovered trace, otherwise returns INVALID_IDX
@@ -383,51 +337,88 @@ drawEntries( const DrawData& dd, const hop::StringDb& strDb, EntryNameFct getEnt
    return hoveredIdx;
 }
 
+// Draw the hovered popup text
 static void drawHoveredEntryPopup(
     const DrawData& dd,
     const hop::StringDb& strDb,
-    size_t entryIdx,
+    size_t ddEntryIdx,
     EntryNameFct getEntryName,
-    HoveredStringFct getHoveredString )
+    bool drawAsCycles )
 {
-   char strBuffer[256] = "";
-   const char* entryName = getEntryName( dd, entryIdx, strDb );
-   int nameLen = snprintf( strBuffer, sizeof( strBuffer ), "%s ", entryName );
-   getHoveredString( dd, entryIdx, strDb, strBuffer + nameLen, sizeof( strBuffer ) - nameLen );
+   char strBuffer[256];
+   char fmtTime[32];
+   const char* entryName = getEntryName( dd, ddEntryIdx, strDb );
+   int charWritten = snprintf( strBuffer, sizeof( strBuffer ), "%s ", entryName );
+
+   const DrawData::Entry& ddEntry = dd.entries[ddEntryIdx];
+   size_t entryIndex = ddEntry.traceIndex;
+   hop::formatCyclesDurationToDisplay(
+       ddEntry.duration, fmtTime, sizeof( fmtTime ), drawAsCycles );
+
+   charWritten += snprintf(
+       strBuffer + charWritten,
+       sizeof( strBuffer ) - charWritten,
+       " (%s)\n   %s:%d ",
+       fmtTime,
+       strDb.getString( dd.entryData.tData->fileNameIds[entryIndex] ),
+       dd.entryData.tData->lineNbs[entryIndex] );
+
+#ifdef HOP_DEBUG
+   const auto end = dd.entryData.tData->entries.ends[entryIndex];
+   const auto delta = dd.entryData.tData->entries.deltas[entryIndex];
+   snprintf(
+       strBuffer + charWritten,
+       sizeof( strBuffer ) - charWritten,
+       "\n======== Debug Info ========\n"
+       "Trace Index = %zu\n"
+       "Trace Start = %zu\n"
+       "Trace End   = %zu\n"
+       "Trace Delta = %zu",
+       entryIndex,
+       end - delta,
+       end,
+       delta );
+#endif
+
    ImGui::TextUnformatted( strBuffer );
 }
 
-static void drawHoveredLockWaitPopup( const std::vector<hop::LockOwnerInfo>& locksInfo )
+static void drawHoveredLockWaitPopup(
+    hop::TimeDuration duration,
+    const std::vector<hop::LockOwnerInfo>& locksInfo,
+    bool drawAsCycles )
 {
-   if( locksInfo.empty() )
-   {
-      // Set a message to warn the user than the thread owning the lock is not part of
-      // any profiled code
-      ImGui::TextUnformatted( "\n  Threads owning the lock were not profiled" );
-   }
-   else
+   char buffer[512] = "Waiting lock for ";
+   int charWritten = strlen( buffer );
+   charWritten += hop::formatCyclesDurationToDisplay(
+       duration, buffer + charWritten, sizeof( buffer ) - charWritten, drawAsCycles );
+
+   if( !locksInfo.empty() )
    {
       // Print infos about which threads own the lock
-      char buffer[512];
       char formattedLockTime[64] = {};
-      int charWritten = 0;
       for( const auto& i : locksInfo )
       {
          hop::formatCyclesDurationToDisplay(
-             i.lockDuration,
-             formattedLockTime,
-             sizeof( formattedLockTime ),
-             /*drawAsCycles*/ false );
+             i.lockDuration, formattedLockTime, sizeof( formattedLockTime ), drawAsCycles );
          charWritten += snprintf(
              buffer + charWritten,
-             sizeof(buffer) - charWritten,
+             sizeof( buffer ) - charWritten,
              "\n  Thread #%u (%s)",
              i.threadIndex,
              formattedLockTime );
       }
-
-      ImGui::TextUnformatted( buffer );
    }
+   else
+   {
+      // Set a message to warn the user than the thread owning the lock is not part of
+      // any profiled code
+      snprintf(
+          buffer + charWritten,
+          sizeof( buffer ) - charWritten,
+          "\n  Threads owning the lock were not profiled" );
+   }
+   ImGui::TextUnformatted( buffer );
 }
 
 static void addEntryToHighlight( hop::TimelineTrack& track, const DrawData& dd, size_t entryIdx )
@@ -838,7 +829,6 @@ void TimelineTracks::drawTraces(
              t.end, t.delta, t.depth, t.traceIndex, posX, posY, drawInfo, windowWidthPxl ) );
    }
 
-   //const bool drawAsCycles = drawInfo.timeline.useCycles;
    const bool rightMouseClicked = ImGui::IsMouseReleased( 1 );
    const bool leftMouseDblClicked = ImGui::IsMouseDoubleClicked( 0 );
 
@@ -871,10 +861,11 @@ void TimelineTracks::drawTraces(
 
    if( hoveredIdx != hop::INVALID_IDX )
    {
+      const bool drawAsCycles = drawInfo.timeline.useCycles;
       // Draw the tooltip for the hovered entry
       ImGui::BeginTooltip();
       drawHoveredEntryPopup(
-          *hoveredDrawData, drawInfo.strDb, hoveredIdx, getTraceLabel, getHoveredTraceString );
+          *hoveredDrawData, drawInfo.strDb, hoveredIdx, getTraceLabel, drawAsCycles );
       ImGui::EndTooltip();
 
       // Add the hovered trace to the highlighted traces
@@ -1043,8 +1034,6 @@ void TimelineTracks::drawLockWaits(
    ImGui::PushStyleColor(ImGuiCol_ButtonHovered, zoneColors[HOP_MAX_ZONE_COLORS] );
    ImGui::PushStyleVar(ImGuiStyleVar_Alpha, enabledZone[HOP_MAX_ZONE_COLORS] ? 1.0f : disabledZoneOpacity );
 
-   const bool drawAsCycles = drawInfo.timeline.useCycles;
-
    // Draw the lod lock waits
    drawEntries( lodTracesToDraw, drawInfo.strDb, getEmptyLabel );
 
@@ -1058,10 +1047,9 @@ void TimelineTracks::drawLockWaits(
       const auto lockInfo = highlightLockOwner( threadIndex, ddEntry.traceIndex, drawInfo );     
 
       // Draw the tooltip for the hovered entry
+      const bool drawAsCycles = drawInfo.timeline.useCycles;
       ImGui::BeginTooltip();
-      drawHoveredEntryPopup(
-          *hoveredDrawData, drawInfo.strDb, hoveredIdx, getLockWaitLabel, getHoveredTraceString );
-      drawHoveredLockWaitPopup( lockInfo );
+      drawHoveredLockWaitPopup( ddEntry.duration, lockInfo, drawAsCycles );
       ImGui::EndTooltip();
 
       // Add the hovered trace to the highlighted traces
