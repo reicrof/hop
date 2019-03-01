@@ -843,6 +843,7 @@ void TimelineTracks::drawTraces(
    {
       ImGui::PushStyleColor(ImGuiCol_Button, zoneColors[zoneId] );
       ImGui::PushStyleColor(ImGuiCol_ButtonHovered, zoneColors[zoneId] );
+      ImGui::PushStyleColor(ImGuiCol_ButtonActive, zoneColors[zoneId] );
       ImGui::PushStyleVar(ImGuiStyleVar_Alpha, enabledZone[zoneId] ? 1.0f : disabledZoneOpacity );
 
       // Draw the lod traces
@@ -855,7 +856,7 @@ void TimelineTracks::drawTraces(
          hoveredDrawData = &tracesToDraw[ zoneId ];
       }
 
-      ImGui::PopStyleColor(2);
+      ImGui::PopStyleColor(3);
       ImGui::PopStyleVar();
    }
 
@@ -1032,6 +1033,7 @@ void TimelineTracks::drawLockWaits(
    const float disabledZoneOpacity = g_options.disabledZoneOpacity;
    ImGui::PushStyleColor(ImGuiCol_Button, zoneColors[HOP_MAX_ZONE_COLORS] );
    ImGui::PushStyleColor(ImGuiCol_ButtonHovered, zoneColors[HOP_MAX_ZONE_COLORS] );
+   ImGui::PushStyleColor(ImGuiCol_ButtonActive, zoneColors[HOP_MAX_ZONE_COLORS] );
    ImGui::PushStyleVar(ImGuiStyleVar_Alpha, enabledZone[HOP_MAX_ZONE_COLORS] ? 1.0f : disabledZoneOpacity );
 
    // Draw the lod lock waits
@@ -1073,7 +1075,7 @@ void TimelineTracks::drawLockWaits(
       }
    }
 
-   ImGui::PopStyleColor(2);
+   ImGui::PopStyleColor(3);
    ImGui::PopStyleVar();
 
    const auto drawEnd = std::chrono::system_clock::now();
