@@ -24,6 +24,7 @@ static constexpr uint32_t DISABLED_COLOR = 0xFF505050;
 static constexpr uint32_t CORE_LABEL_COLOR = 0xFF333333;
 static constexpr uint32_t CORE_LABEL_BORDER_COLOR = 0xFFAAAAAA;
 static constexpr uint32_t SEPARATOR_COLOR = 0xFF666666;
+static constexpr uint32_t SEPARATOR_HANDLE_COLOR = 0xFFAAAAAA;
 
 static const char* CTXT_MENU_STR = "Context Menu";
 
@@ -76,29 +77,35 @@ static DrawData createDrawDataForTrace(
 
 static bool drawSeparator( uint32_t threadIndex, bool highlightSeparator )
 {
-   const float drawPosY = ImGui::GetCursorScreenPos().y - ImGui::GetWindowPos().y;
+   const float Y_PADDING = 5.0f;
+   const float windowWidth = ImGui::GetWindowWidth();
+   const float handleWidth = 0.05f * windowWidth;
+   const float drawPosY = ImGui::GetCursorScreenPos().y - ImGui::GetWindowPos().y - Y_PADDING;
    ImVec2 p1 = ImGui::GetWindowPos();
    p1.y += drawPosY;
 
-   ImVec2 p2 = p1;
-   p2.x += ImGui::GetWindowSize().x;
-   p2.y += + 1;
+   ImVec2 p2( p1.x + windowWidth, p1.y + 1 );
+   ImVec2 handleP2( p2.x - handleWidth, p2.y );
 
-   const bool hovered = std::abs( ImGui::GetMousePos().y - p1.y ) < 7.0f && threadIndex > 0;
+   const ImVec2 mousePos = ImGui::GetMousePos();
+   const bool handledHovered =
+       std::abs( mousePos.y - p1.y ) < 10.0f && mousePos.x > handleP2.x && threadIndex > 0;
 
    uint32_t color = SEPARATOR_COLOR;
-   if( hovered && highlightSeparator )
+   uint32_t handleColor = SEPARATOR_HANDLE_COLOR;
+   if( handledHovered && highlightSeparator )
    {
       hop::setCursor( hop::CURSOR_SIZE_NS );
-      color = 0xFFFFFFFF;
+      color = handleColor = 0xFFFFFFFF;
    }
 
    ImDrawList* drawList = ImGui::GetWindowDrawList();
    drawList->AddLine( p1, p2, color, 3.0f );
+   drawList->AddLine( p2, handleP2, handleColor, 6.0f );
 
    ImGui::SetCursorPosY( ImGui::GetCursorPosY() );
 
-   return hovered && highlightSeparator ;
+   return handledHovered && highlightSeparator;
 }
 
 static void drawTrackHighlight( float trackX, float trackY, float trackHeight )
