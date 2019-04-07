@@ -3,7 +3,6 @@
 #include "Profiler.h"
 #include "Stats.h"
 #include "imgui/imgui.h"
-#include "argtable3.h"
 #include "Options.h"
 #include "ModalWindow.h"
 #include "RendererGL.h"
@@ -231,79 +230,57 @@ static void terminateProcess( processId_t id )
 #endif
 }
 
-struct ArgTableCleanerGuard
+static void printUsage()
 {
-   ArgTableCleanerGuard( void** table, int count ) : _table(table), _count(count) {}
-   ~ArgTableCleanerGuard()
-   {
-      arg_freetable( _table, _count );
-   }
-   void** _table;
-   int _count;
+   printf( "Usage : hop [OPTION] <process name>\n\n OPTIONS:\n\t-e Launch specified executable and start recording\n\t-v Display version info and exit\n\t-h Show usage\n" );
+   exit( 0 );
+}
+
+struct LaunchOptions
+{
+   const char* processName;
+   bool startExec;
 };
 
-struct arg_lit *help, *version;
-struct arg_file *exec, *input;
-struct arg_end *end;
+static LaunchOptions parseArgs( int argc, char* argv[] )
+{
+   if (argc > 1)
+   {
+      if (argv[1][0] == '-')
+      {
+         switch (argv[1][1])
+         {
+         case 'v':
+            printf( "hop version %.2f \n", HOP_VERSION );
+            exit( 0 );
+            break;
+         case 'h':
+            break;
+         case 'e':
+            if (argc > 2)
+            {
+               return LaunchOptions{ argv[2], true };
+            }
+            // Fallthrough
+         default:
+            fprintf( stderr, "Invalid arguments\n" );
+            break;
+         }
+      }
+      else
+      {
+         return LaunchOptions{ argv[1], false };
+      }
+   }
+
+   printUsage();
+   exit( 0 );
+}
 
 int main( int argc, char* argv[] )
 {
-   char progname[] = "hop";
-   void* argtable[] = {
-       input    = arg_filen(nullptr, nullptr, "<process name>", 0, 1, "Starts listening for specified process"),
-       exec      = arg_filen("eE", "execute", "executable", 0, 1, "Launch specified executable and start recording"),
-       help      = arg_litn( "h", "help", 0, 1, "Display this help and exit" ),
-       version   = arg_litn( "v", "version", 0, 1, "Display version info and exit" ),
-       end       = arg_end( 10 ),
-   };
-   ArgTableCleanerGuard cleaner( argtable, sizeof( argtable ) / sizeof( argtable[0] ) );
-
-   int nerrors = arg_parse( argc, argv, argtable );
-
-   /* special case: '--help' takes precedence over error reporting */
-   if ( help->count > 0 )
-   {
-      printf( "Usage: %s", progname );
-      arg_print_syntax( stdout, argtable, "\n" );
-      printf( "Available hop arguments : \n\n" );
-      arg_print_glossary( stdout, argtable, "  %-25s %s\n" );
-      
-      return 0;
-   }
-
-   /* If the parser returned any errors then display them and exit */
-   if ( nerrors > 0 )
-   {
-      /* Display the error details contained in the arg_end struct.*/
-      arg_print_errors( stdout, end, progname );
-      printf( "Try '%s --help' for more information.\n", progname );
-      return -1;
-   }
-
-   if( version->count > 0 )
-   {
-      printf("hop version %.2f \n", HOP_VERSION );
-      return 0;
-   }
-
-   const char* executablePath = nullptr;
-   const char* executableName = nullptr;
+   const LaunchOptions opts = parseArgs( argc, argv );
    processId_t childProcess = 0;
-
-   if( exec->count > 0 )
-   {
-      executablePath = exec->filename[0];
-      executableName = exec->basename[0];
-   }
-   else if( input->count > 0 )
-   {
-      executableName = input->filename[0];
-   }
-   else
-   {
-      arg_print_glossary( stdout, argtable, "  %-30s %s\n" );
-      return 0;
-   }
 
    // Setup signal handlers
    signal( SIGINT, terminateCallback );
@@ -314,7 +291,7 @@ int main( int argc, char* argv[] )
 
    if ( SDL_Init( SDL_INIT_VIDEO ) != 0 )
    {
-      printf( "Failed SDL initialization : %s \n", SDL_GetError() );
+      fprintf( stderr, "Failed SDL initialization : %s \n", SDL_GetError() );
       return -1;
    }
 
@@ -328,7 +305,7 @@ int main( int argc, char* argv[] )
 
    if ( window == NULL )
    {
-      printf( "Could not create window: %s\n", SDL_GetError() );
+      fprintf( stderr, "Could not create window: %s\n", SDL_GetError() );
       return -1;
    }
 
@@ -352,14 +329,14 @@ int main( int argc, char* argv[] )
 
    hop::init();
 
-   auto profiler = std::unique_ptr< hop::Profiler >( new hop::Profiler( executableName ) );
+   auto profiler = std::unique_ptr< hop::Profiler >( new hop::Profiler( opts.processName ) );
    hop::addNewProfiler( profiler.get() );
 
    // If we want to launch an executable to profile, now is the time to do it
-   if( executablePath )
+   if( opts.startExec )
    {
       profiler->setRecording( true );
-      childProcess = startChildProcess(exec->filename[0], executableName);
+      childProcess = startChildProcess( opts.processName, opts.processName );
       if( childProcess == 0 )
       {
          exit(-1);
@@ -427,7 +404,7 @@ int main( int argc, char* argv[] )
    hop::saveOptions();
 
    // We have launched a child process. Let's close it
-   if( executablePath )
+   if( opts.startExec )
    {
       terminateProcess( childProcess );
    }
