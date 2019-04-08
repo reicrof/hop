@@ -173,15 +173,16 @@ typedef HANDLE processId_t;
 typedef int processId_t;
 #endif
 
-static processId_t startChildProcess( const char* path, const char* basename )
+static processId_t startChildProcess( const char* path, char** args )
 {
    processId_t newProcess = 0;
 #if defined( _MSC_VER )
    STARTUPINFO si = {0};
    PROCESS_INFORMATION pi = {0};
 
+   // TODO Fix arguments passing
+   (void)args;
    si.cb = sizeof( si );
-   (void)basename;
    if ( !CreateProcess( NULL, (LPSTR)path, NULL, NULL, FALSE, 0, NULL, NULL, &si, &pi ) )
    {
       return false;
@@ -191,9 +192,7 @@ static processId_t startChildProcess( const char* path, const char* basename )
    newProcess = fork();
    if ( newProcess == 0 )
    {
-      char* processName = strdup( basename );
-      char* const subprocessArg[] = {processName, nullptr};
-      int res = execvp( path, subprocessArg );
+      int res = execvp( path, args );
       if ( res < 0 )
       {
          exit( 0 );
@@ -238,9 +237,25 @@ static void printUsage()
 
 struct LaunchOptions
 {
+   const char* fullProcessPath;
    const char* processName;
+   char** args;
    bool startExec;
 };
+
+static LaunchOptions
+createLaunchOptions( char* fullProcessPath, char** argv, bool startExec )
+{
+   LaunchOptions opts = { fullProcessPath, fullProcessPath, argv, startExec };
+   std::string fullPathStr( fullProcessPath );
+   size_t lastSeparator = fullPathStr.find_last_of("/\\");
+   if( lastSeparator != std::string::npos )
+   {
+      opts.processName = &fullProcessPath[ ++lastSeparator ]; 
+   }
+
+   return opts;
+}
 
 static LaunchOptions parseArgs( int argc, char* argv[] )
 {
@@ -259,7 +274,7 @@ static LaunchOptions parseArgs( int argc, char* argv[] )
          case 'e':
             if (argc > 2)
             {
-               return LaunchOptions{ argv[2], true };
+               return createLaunchOptions( argv[2], &argv[2], true );
             }
             // Fallthrough
          default:
@@ -269,7 +284,7 @@ static LaunchOptions parseArgs( int argc, char* argv[] )
       }
       else
       {
-         return LaunchOptions{ argv[1], false };
+         return createLaunchOptions( argv[1], &argv[1], false );
       }
    }
 
@@ -280,7 +295,6 @@ static LaunchOptions parseArgs( int argc, char* argv[] )
 int main( int argc, char* argv[] )
 {
    const LaunchOptions opts = parseArgs( argc, argv );
-   processId_t childProcess = 0;
 
    // Setup signal handlers
    signal( SIGINT, terminateCallback );
@@ -333,10 +347,11 @@ int main( int argc, char* argv[] )
    hop::addNewProfiler( profiler.get() );
 
    // If we want to launch an executable to profile, now is the time to do it
+   processId_t childProcess = 0;
    if( opts.startExec )
    {
       profiler->setRecording( true );
-      childProcess = startChildProcess( opts.processName, opts.processName );
+      childProcess = startChildProcess( opts.fullProcessPath, opts.args );
       if( childProcess == 0 )
       {
          exit(-1);
