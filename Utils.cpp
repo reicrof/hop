@@ -46,7 +46,7 @@ static uint64_t estimateCpuFreqMhz()
 
 uint64_t getCpuFreqHz()
 {
-   static uint64_t cpuFreq = 0;
+   thread_local uint64_t cpuFreq = 0;
    if( cpuFreq == 0 )
    {
       cpuFreq = estimateCpuFreqMhz();

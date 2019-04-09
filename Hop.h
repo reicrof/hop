@@ -862,6 +862,9 @@ static std::atomic<bool> g_done{false}; // Was the shared memory destroyed? (Are
 SharedMemory::ConnectionState SharedMemory::create( const HOP_CHAR* exeName, size_t requestedSize, bool isConsumer )
 {
    ConnectionState state = CONNECTED;
+
+   // Mutex needed for clients that might use multiple threads and that might call create inside a
+   // EndProfile block
    std::lock_guard<std::mutex> g( _creationMutex );
 
    // Create the shared data if it was not already created
@@ -923,7 +926,6 @@ SharedMemory::ConnectionState SharedMemory::create( const HOP_CHAR* exeName, siz
          ringbuf_t* localRingBuf = reinterpret_cast<ringbuf_t*>( sharedMem + sizeof( SharedMetaInfo ) );
 
          // Then setup the ring buffer
-         memset( localRingBuf, 0, totalSize - sizeof( SharedMetaInfo ) );
          if ( ringbuf_setup( localRingBuf, HOP_MAX_THREAD_NB, requestedSize ) < 0 )
          {
             assert( false && "Ring buffer creation failed" );
@@ -953,7 +955,6 @@ SharedMemory::ConnectionState SharedMemory::create( const HOP_CHAR* exeName, siz
       _sharedMetaData = reinterpret_cast<SharedMetaInfo*>(sharedMem);
       _ringbuf = reinterpret_cast<ringbuf_t*>( sharedMem + sizeof( SharedMetaInfo ) );
       _data = sharedMem + sizeof( SharedMetaInfo ) + ringBufSize;
-      _valid = true;
 
       if ( isConsumer )
       {
@@ -976,6 +977,7 @@ SharedMemory::ConnectionState SharedMemory::create( const HOP_CHAR* exeName, siz
       }
 
       isConsumer ? setConnectedConsumer( true ) : setConnectedProducer( true );
+      _valid.store( true );
    }
 
    return state;

@@ -67,7 +67,7 @@ bool Server::start( const char* name )
          HOP_PROF_FUNC();
 
          // Try to get the shared memory
-         if ( !_sharedMem.data() )
+         if ( !_sharedMem.valid() )
          {
             SharedMemory::ConnectionState state = _sharedMem.create( name, 0 /*will be define in shared metadata*/, true );
             if ( state != SharedMemory::CONNECTED )
@@ -160,7 +160,7 @@ SharedMemory::ConnectionState Server::connectionState() const
 void Server::setRecording( bool recording )
 {
    _recording = recording;
-   if ( _sharedMem.data() )
+   if ( _sharedMem.valid() )
    {
       _sharedMem.setListeningConsumer( recording );
    }
@@ -369,14 +369,14 @@ void Server::stop()
 {
    if( _running )
    {
-      if( _sharedMem.data() )
+      if( _sharedMem.valid() )
       {
          _sharedMem.setListeningConsumer( false );
          _sharedMem.setConnectedConsumer( false );
       }
       _running = false;
       // Wake up semaphore to close properly
-      if( _sharedMem.data() && _sharedMem.semaphore() )
+      if( _sharedMem.valid() && _sharedMem.semaphore() )
       {
          _sharedMem.signalSemaphore();
       }
