@@ -90,4 +90,9 @@ int main( int argc, const char** argv )
        testMutex( g_mutex0, 0, microseconds( 10000 ) );
        testMutex( g_mutex1, 1, microseconds( 100 ) );
     }
+
+    for( auto& t : threads )
+    {
+      t.join();
+    }
 }
