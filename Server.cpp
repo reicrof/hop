@@ -235,43 +235,54 @@ size_t Server::handleNewMessage( uint8_t* data, size_t maxSize, TimeStamp minTim
        }
        case MsgType::PROFILER_TRACE:
        {
-          const Trace* traces = (const Trace*)bufPtr;
-          const size_t traceCount = msgInfo->traces.count;
-
-          TraceData traceData;
-          Depth_t maxDepth = 0;
-          for ( size_t i = 0; i < traceCount; ++i )
+          const size_t tracesCount = msgInfo->traces.count;
+          if ( tracesCount > 0 )
           {
-             const auto& t = traces[i];
-             traceData.entries.ends.push_back( t.end );
-             traceData.entries.deltas.push_back( t.end - t.start );
-             traceData.fileNameIds.push_back( _stringDb.getStringIndex( t.fileNameId ) );
-             traceData.fctNameIds.push_back( _stringDb.getStringIndex( t.fctNameId ) );
-             traceData.lineNbs.push_back( t.lineNumber );
-             traceData.entries.depths.push_back( t.depth );
-             traceData.zones.push_back( t.zone );
-             maxDepth = std::max( maxDepth, t.depth );
-          }
-          traceData.entries.maxDepth = maxDepth;
+             TraceData traceData;
+             const TimeStamp* starts = (const TimeStamp*)bufPtr;
+             const TimeStamp* ends = starts + tracesCount;
+             const Depth_t* depths = (const Depth_t*)( ends + tracesCount );
+             const StrPtr_t* fileNames = (const StrPtr_t*)( depths + tracesCount );
+             const StrPtr_t* fctNames = fileNames + tracesCount;
+             const LineNb_t* lineNbs = (const LineNb_t*)( fctNames + tracesCount );
+             const ZoneId_t* zones = (const ZoneId_t*)( lineNbs + tracesCount );
 
-          // The ends time should already be sorted
-          assert_is_sorted( traceData.entries.ends.begin(), traceData.entries.ends.end() );
+             traceData.entries.ends.insert(
+                 traceData.entries.ends.end(), ends, ends + tracesCount );
+             traceData.entries.depths.insert(
+                 traceData.entries.depths.end(), depths, depths + tracesCount );
+             traceData.entries.maxDepth = *std::max_element( depths, depths + tracesCount );
 
-          bufPtr += ( traceCount * sizeof( Trace ) );
-          assert( ( size_t )( bufPtr - data ) <= maxSize );
+             traceData.lineNbs.insert( traceData.lineNbs.end(), lineNbs, lineNbs + tracesCount );
+             traceData.zones.insert( traceData.zones.end(), zones, zones + tracesCount );
 
-          static_assert(
-              std::is_move_constructible<TraceData>::value,
-              "Trace Data not moveable" );
-          if ( traceCount > 0 )
-          {
+             // Process non trivially copiable members
+             for ( size_t i = 0; i < tracesCount; ++i )
+             {
+                traceData.entries.deltas.push_back( ends[i] - starts[i] );
+                traceData.fileNameIds.push_back( _stringDb.getStringIndex( fileNames[i] ) );
+                traceData.fctNameIds.push_back( _stringDb.getStringIndex( fctNames[i] ) );
+             }
+
+             // The ends time should already be sorted
+             assert_is_sorted( traceData.entries.ends.begin(), traceData.entries.ends.end() );
+
+             bufPtr +=
+                 ( ( sizeof( TimeStamp ) + sizeof( TimeStamp ) + sizeof( Depth_t ) +
+                     sizeof( StrPtr_t ) + sizeof( StrPtr_t ) + sizeof( LineNb_t ) +
+                     sizeof( ZoneId_t ) ) *
+                   tracesCount );
+             assert( ( size_t )( bufPtr - data ) <= maxSize );
+
+             static_assert(
+                 std::is_move_constructible<TraceData>::value, "Trace Data not moveable" );
              // TODO: Could lock later when we received all the messages
              std::lock_guard<hop::Mutex> guard( _sharedPendingDataMutex );
              _sharedPendingData.traces.emplace_back( std::move( traceData ) );
              _sharedPendingData.tracesThreadIndex.push_back( threadIndex );
           }
           return ( size_t )( bufPtr - data );
-      }
+       }
       case MsgType::PROFILER_WAIT_LOCK:
       {
          const LockWait* lws = (const LockWait*)bufPtr;
