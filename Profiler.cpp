@@ -25,12 +25,6 @@ extern bool g_run;
 
 namespace
 {
-static std::chrono::time_point<std::chrono::system_clock> g_Time = std::chrono::system_clock::now();
-static float g_deltaTimeMs = 0.0f;
-std::vector<hop::Profiler*> _profilers;
-
-namespace
-{
    const uint32_t MAGIC_NUMBER = 1095780676; // "DIPA"
    struct SaveFileHeader
    {
@@ -76,82 +70,10 @@ namespace
       }
       return tracksHeight;
    }
-}
-
 } // end of anonymous namespace
 
 namespace hop
 {
-
-void onNewFrame( int width, int height, int mouseX, int mouseY, bool lmbPressed, bool rmbPressed, float mousewheel )
-{
-   if ( !renderer::g_FontTexture ) renderer::createResources();
-
-   ImGuiIO& io = ImGui::GetIO();
-
-   // Setup display size (every frame to accommodate for window resizing)
-   io.DisplaySize = ImVec2( (float)width, (float)height );
-   // io.DisplayFramebufferScale = ImVec2(w > 0 ? ((float)display_w / w) : 0, h > 0 ?
-   // ((float)display_h / h) : 0);
-
-   // Setup time step
-   auto curTime = std::chrono::system_clock::now();
-   const float deltaTime = static_cast<float>(
-       std::chrono::duration_cast<std::chrono::milliseconds>( ( curTime - g_Time ) ).count() );
-   g_deltaTimeMs = deltaTime;
-   io.DeltaTime = std::max( deltaTime * 0.001f, 0.00001f ); // ImGui expect seconds
-   g_Time = curTime;
-
-   // Mouse position in screen coordinates (set to -1,-1 if no mouse / on another screen, etc.)
-   io.MousePos = ImVec2( (float)mouseX, (float)mouseY );
-
-   io.MouseDown[0] = lmbPressed;
-   io.MouseDown[1] = rmbPressed;
-   io.MouseWheel = mousewheel;
-
-   // Reset frame stats
-   hop::g_stats.drawingTimeMs = 0.0;
-   hop::g_stats.traceDrawingTimeMs = 0.0;
-   hop::g_stats.coreDrawingTimeMs = 0.0;
-   hop::g_stats.lockwaitsDrawingTimeMs = 0.0;
-
-   // Start the frame
-   ImGui::NewFrame();
-}
-
-void draw( uint32_t windowWidth, uint32_t windowHeight )
-{
-   for( auto p : _profilers )
-   {
-      p->update( g_deltaTimeMs );
-   }
-
-   for ( auto p : _profilers )
-   {
-      p->draw( windowWidth, windowHeight );
-   }
-
-   if( g_options.debugWindow )
-      hop::drawStatsWindow( g_stats );
-
-   ImGui::Render();
-}
-
-void init()
-{
-   ImGuiIO& io = ImGui::GetIO();
-
-   // Init keys ?
-   // Init callbacks
-   io.RenderDrawListsFn = renderer::renderDrawlist;  // Alternatively you can set this to NULL and call
-                                                     // ImGui::GetDrawData() after ImGui::Render() to get the
-                                                     // same ImDrawData pointer.
-}
-
-void addNewProfiler( Profiler* profiler )
-{
-   _profilers.push_back( profiler );
-}
 
 Profiler::Profiler( const char* name ) : _name( name )
 {

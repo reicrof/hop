@@ -49,15 +49,6 @@ private:
    Server::PendingData _serverPendingData;
 };
 
-// Initialize the imgui framework
-void init();
-// Add new profiler to be drawn
-void addNewProfiler( Profiler* profiler );
-// Updates the imgui data. Should be called each frame
-void onNewFrame( int width, int height, int mouseX, int mouseY, bool lmbPressed, bool rmbPressed, float mouseWheel );
-// Draw the ui
-void draw( uint32_t windowWidth, uint32_t windowHeight );
-
 } // namespace hop
 
 #endif  // PROFILER_H_

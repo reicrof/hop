@@ -1,12 +1,12 @@
 #define HOP_IMPLEMENTATION
 #include <Hop.h>
-#include "Profiler.h"
 #include "Stats.h"
 #include "imgui/imgui.h"
 #include "Options.h"
 #include "ModalWindow.h"
 #include "RendererGL.h"
 #include "Cursor.h"
+#include "Viewer.h"
 #include <SDL.h>
 #undef main
 
@@ -112,6 +112,12 @@ static void sdlImGuiInit()
    style.Colors[ImGuiCol_TitleBgCollapsed]      = ImVec4(0.27f, 0.27f, 0.27f, 1.00f);
    style.Colors[ImGuiCol_TitleBgActive]         = ImVec4(0.20f, 0.20f, 0.20f, 1.00f);
    style.Colors[ImGuiCol_MenuBarBg]             = ImVec4(0.35f, 0.35f, 0.35f, 1.00f);
+
+   // Init keys ?
+   // Init callbacks
+   io.RenderDrawListsFn = renderer::renderDrawlist;  // Alternatively you can set this to NULL and call
+                                                     // ImGui::GetDrawData() after ImGui::Render() to get the
+                                                     // same ImDrawData pointer.
 }
 
 static void handleMouseWheel( const SDL_Event& e )
@@ -341,16 +347,14 @@ int main( int argc, char* argv[] )
    SDL_GetCurrentDisplayMode(0, &DM);
    hop::setupLODResolution( DM.w );
 
-   hop::init();
-
-   auto profiler = std::unique_ptr< hop::Profiler >( new hop::Profiler( opts.processName ) );
-   hop::addNewProfiler( profiler.get() );
+   hop::Viewer viewer;
+   viewer.addNewProfiler( opts.processName );
 
    // If we want to launch an executable to profile, now is the time to do it
    processId_t childProcess = 0;
    if( opts.startExec )
    {
-      profiler->setRecording( true );
+      //profiler->setRecording( true );
       childProcess = startChildProcess( opts.fullProcessPath, opts.args );
       if( childProcess == 0 )
       {
@@ -365,7 +369,7 @@ int main( int argc, char* argv[] )
       handleInput();
 
       const auto startFetch = std::chrono::system_clock::now();
-      profiler->fetchClientData();
+      viewer.fetchClientsData();
       const auto endFetch = std::chrono::system_clock::now();
       hop::g_stats.fetchTimeMs = std::chrono::duration< double, std::milli>( ( endFetch - startFetch ) ).count();
 
@@ -385,7 +389,7 @@ int main( int argc, char* argv[] )
 
       const auto drawStart = std::chrono::system_clock::now();
 
-      hop::onNewFrame(
+      viewer.onNewFrame(
           w,
           h,
           x,
@@ -398,7 +402,7 @@ int main( int argc, char* argv[] )
       renderer::setViewport( 0, 0, w, h );
       renderer::clearColorBuffer();
 
-      hop::draw( w, h );
+      viewer.draw( w, h );
 
       hop::drawCursor();
 
@@ -407,7 +411,7 @@ int main( int argc, char* argv[] )
 
       if (std::chrono::duration< double, std::milli>((drawEnd - frameStart)).count() < 10.0)
       {
-         profiler->fetchClientData();
+         viewer.fetchClientsData();
       }
 
       SDL_GL_SwapWindow( window );
