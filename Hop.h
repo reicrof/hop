@@ -923,7 +923,6 @@ SharedMemory::ConnectionState SharedMemory::create( const HOP_CHAR* exeName, siz
          ringbuf_t* localRingBuf = reinterpret_cast<ringbuf_t*>( sharedMem + sizeof( SharedMetaInfo ) );
 
          // Then setup the ring buffer
-         memset( localRingBuf, 0, totalSize - sizeof( SharedMetaInfo ) );
          if ( ringbuf_setup( localRingBuf, HOP_MAX_THREAD_NB, requestedSize ) < 0 )
          {
             assert( false && "Ring buffer creation failed" );
