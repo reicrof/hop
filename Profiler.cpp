@@ -99,7 +99,7 @@ void onNewFrame( int width, int height, int mouseX, int mouseY, bool lmbPressed,
    const float deltaTime = static_cast<float>(
        std::chrono::duration_cast<std::chrono::milliseconds>( ( curTime - g_Time ) ).count() );
    g_deltaTimeMs = deltaTime;
-   io.DeltaTime = deltaTime * 0.001f; // ImGui expect seconds
+   io.DeltaTime = std::max( deltaTime * 0.001f, 0.00001f ); // ImGui expect seconds
    g_Time = curTime;
 
    // Mouse position in screen coordinates (set to -1,-1 if no mouse / on another screen, etc.)
