@@ -4,9 +4,9 @@
 #include "imgui/imgui.h"
 #include "Options.h"
 #include "ModalWindow.h"
-#include "RendererGL.h"
 #include "Cursor.h"
 #include "Viewer.h"
+#include "Lod.h"
 #include <SDL.h>
 #undef main
 
@@ -112,12 +112,6 @@ static void sdlImGuiInit()
    style.Colors[ImGuiCol_TitleBgCollapsed]      = ImVec4(0.27f, 0.27f, 0.27f, 1.00f);
    style.Colors[ImGuiCol_TitleBgActive]         = ImVec4(0.20f, 0.20f, 0.20f, 1.00f);
    style.Colors[ImGuiCol_MenuBarBg]             = ImVec4(0.35f, 0.35f, 0.35f, 1.00f);
-
-   // Init keys ?
-   // Init callbacks
-   io.RenderDrawListsFn = renderer::renderDrawlist;  // Alternatively you can set this to NULL and call
-                                                     // ImGui::GetDrawData() after ImGui::Render() to get the
-                                                     // same ImDrawData pointer.
 }
 
 static void handleMouseWheel( const SDL_Event& e )
@@ -191,7 +185,7 @@ static processId_t startChildProcess( const char* path, char** args )
    si.cb = sizeof( si );
    if ( !CreateProcess( NULL, (LPSTR)path, NULL, NULL, FALSE, 0, NULL, NULL, &si, &pi ) )
    {
-      return false;
+      return -1;
    }
    newProcess = pi.hProcess;
 #else
@@ -347,8 +341,8 @@ int main( int argc, char* argv[] )
    SDL_GetCurrentDisplayMode(0, &DM);
    hop::setupLODResolution( DM.w );
 
-   hop::Viewer viewer;
-   viewer.addNewProfiler( opts.processName );
+   hop::Viewer viewer( DM.w, DM.h );
+   viewer.addNewProfiler( opts.processName, opts.startExec );
 
    // If we want to launch an executable to profile, now is the time to do it
    processId_t childProcess = 0;
@@ -356,13 +350,13 @@ int main( int argc, char* argv[] )
    {
       //profiler->setRecording( true );
       childProcess = startChildProcess( opts.fullProcessPath, opts.args );
-      if( childProcess == 0 )
+      if( childProcess == -1 )
       {
+         fprintf( stderr, "Could not launch child process\n" );
          exit(-1);
       }
    }
 
-   bool lastVsync = !hop::g_options.vsyncOn;
    while ( g_run )
    {
       const auto frameStart = std::chrono::system_clock::now();
@@ -375,32 +369,17 @@ int main( int argc, char* argv[] )
 
       int w, h, x, y;
       SDL_GetWindowSize( window, &w, &h );
-      uint32_t buttonState = SDL_GetMouseState( &x, &y );
+      const uint32_t buttonState = SDL_GetMouseState( &x, &y );
+      const bool lmb = buttonState & SDL_BUTTON( SDL_BUTTON_LEFT );
+      const bool rmb = buttonState & SDL_BUTTON( SDL_BUTTON_RIGHT );
 
       // Reset cursor at start of the frame
       hop::setCursor( hop::CURSOR_ARROW );
 
-      // Set vsync if it has changed.
-      if( lastVsync != hop::g_options.vsyncOn )
-      {
-         lastVsync = hop::g_options.vsyncOn;
-         renderer::setVSync( hop::g_options.vsyncOn );
-      }
-
       const auto drawStart = std::chrono::system_clock::now();
 
-      viewer.onNewFrame(
-          w,
-          h,
-          x,
-          y,
-          buttonState & SDL_BUTTON( SDL_BUTTON_LEFT ),
-          buttonState & SDL_BUTTON( SDL_BUTTON_RIGHT ),
-          g_mouseWheel );
+      viewer.onNewFrame( w, h, x, y, lmb, rmb, g_mouseWheel );
       g_mouseWheel = 0;
-
-      renderer::setViewport( 0, 0, w, h );
-      renderer::clearColorBuffer();
 
       viewer.draw( w, h );
 
