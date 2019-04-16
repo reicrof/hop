@@ -34,10 +34,11 @@ struct Profiler
    void setRecording( bool recording );
    void clear();
 
+   bool saveToFile( const char* path );
+
 private:
    void drawMenuBar();
    bool openFile( const char* path );
-   bool saveToFile( const char* path );
 
    std::string _name;
    Timeline _timeline;

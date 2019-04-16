@@ -426,32 +426,6 @@ static void drawStatusIcon( const ImVec2& drawPos, hop::SharedMemory::Connection
 void hop::Profiler::draw( uint32_t /*windowWidth*/, uint32_t /*windowHeight*/ )
 {
    HOP_PROF_FUNC();
-   ImGui::SetNextWindowPos( ImVec2( 0.0f, 0.0f ), ImGuiCond_Always );
-   ImGui::SetNextWindowSize( ImGui::GetIO().DisplaySize, ImGuiCond_Always );
-   ImGui::PushStyleVar( ImGuiStyleVar_WindowRounding, 0.0f );
-
-   ImGui::Begin(
-       _name.c_str(),
-       nullptr,
-       ImGuiWindowFlags_NoScrollWithMouse | ImGuiWindowFlags_MenuBar |
-           ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoCollapse |
-           ImGuiWindowFlags_NoBringToFrontOnFocus | ImGuiWindowFlags_NoTitleBar |
-           ImGuiWindowFlags_NoResize );
-
-   // Reset the style var so the floating windows can be drawn properly
-   ImGui::PushStyleVar( ImGuiStyleVar_WindowMinSize, ImVec2( 0, 0 ) );
-   ImGui::PushStyleVar( ImGuiStyleVar_WindowRounding, 5.0f );
-
-   drawMenuBar();
-
-   // Render modal window, if any
-   const bool modalOpen = modalWindowShowing();
-   if( modalOpen )
-   {
-      renderModalWindow();
-   }
-
-   drawOptionsWindow( g_options );
 
    const auto toolbarDrawPos = ImGui::GetCursorScreenPos();
    if( drawPlayStopButton( toolbarDrawPos, _recording ) )
@@ -502,134 +476,11 @@ void hop::Profiler::draw( uint32_t /*windowWidth*/, uint32_t /*windowHeight*/ )
       _timeline.handleDeferredActions( timelineActions );
    }
 
-   handleHotkey( modalOpen );
+   handleHotkey( modalWindowShowing() );
    handleMouse();
 
    ImGui::EndChild(); //"Timeline"
    ImGui::PopStyleVar(2);
-
-   ImGui::End(); // Window
-   ImGui::PopStyleVar(1);
-}
-
-void hop::Profiler::drawMenuBar()
-{
-   HOP_PROF_FUNC();
-   const char* const menuSaveAsHop = "Save as...";
-   const char* const menuOpenHopFile = "Open";
-   const char* const menuHelp = "Help";
-   const char* menuAction = NULL;
-
-   if ( ImGui::BeginMenuBar() )
-   {
-      if ( ImGui::BeginMenu( "Menu" ) )
-      {
-         if ( ImGui::MenuItem( menuSaveAsHop, NULL ) )
-         {
-            menuAction = menuSaveAsHop;
-         }
-         if( ImGui::MenuItem( menuOpenHopFile, NULL ) )
-         {
-           menuAction = menuOpenHopFile;
-         }
-         if( ImGui::MenuItem( menuHelp, NULL ) )
-         {
-            menuAction = menuHelp;
-         }
-         if( ImGui::MenuItem( "Options", NULL ) )
-         {
-            g_options.optionWindowOpened = true;
-         }
-         ImGui::Separator();
-         if ( ImGui::MenuItem( "Exit", NULL ) )
-         {
-            g_run = false;
-         }
-         ImGui::EndMenu();
-      }
-      ImGui::EndMenuBar();
-   }
-
-   if ( menuAction == menuSaveAsHop )
-   {
-      ImGui::OpenPopup( menuSaveAsHop );
-   }
-   else if( menuAction == menuOpenHopFile )
-   {
-      ImGui::OpenPopup( menuOpenHopFile );
-   }
-   else if( menuAction == menuHelp )
-   {
-      ImGui::OpenPopup( menuHelp );
-   }
-
-   if ( ImGui::BeginPopupModal( menuSaveAsHop, NULL, ImGuiWindowFlags_AlwaysAutoResize ) )
-   {
-      static char path[512] = {};
-      bool shouldSave = ImGui::InputText(
-          "Save to",
-          path,
-          sizeof( path ),
-          ImGuiInputTextFlags_AutoSelectAll | ImGuiInputTextFlags_EnterReturnsTrue );
-      ImGui::Separator();
-
-      if ( ImGui::Button( "Save", ImVec2( 120, 0 ) ) || shouldSave )
-      {
-         setRecording( false );
-         saveToFile( path );
-         ImGui::CloseCurrentPopup();
-      }
-
-      ImGui::SameLine();
-
-      if ( ImGui::Button( "Cancel", ImVec2( 120, 0 ) ) )
-      {
-         ImGui::CloseCurrentPopup();
-      }
-
-      ImGui::EndPopup();
-   }
-   
-   if( ImGui::BeginPopupModal( menuOpenHopFile, NULL, ImGuiWindowFlags_AlwaysAutoResize ) )
-   {
-      static char path[512] = {};
-      const bool shouldOpen = ImGui::InputText(
-          "Open file",
-          path,
-          sizeof( path ),
-          ImGuiInputTextFlags_AutoSelectAll | ImGuiInputTextFlags_EnterReturnsTrue );
-
-      ImGui::Separator();
-
-      if ( ImGui::Button( "Open", ImVec2( 120, 0 ) ) || shouldOpen )
-      {
-         openFile( path );
-         ImGui::CloseCurrentPopup();
-      }
-
-      ImGui::SameLine();
-
-      if ( ImGui::Button( "Cancel", ImVec2( 120, 0 ) ) )
-      {
-         ImGui::CloseCurrentPopup();
-      }
-
-      ImGui::EndPopup();
-   }
-
-   if( ImGui::BeginPopupModal( menuHelp, NULL, ImGuiWindowFlags_AlwaysAutoResize ) )
-   {
-      ImGui::Text("Hop version %.1f\n",HOP_VERSION);
-      static bool rdtscpSupported = hop::supportsRDTSCP();
-      static bool constantTscSupported = hop::supportsConstantTSC();
-      ImGui::Text( "RDTSCP Supported : %s\nConstant TSC Supported : %s\n",
-                   rdtscpSupported ? "yes" : "no", constantTscSupported ? "yes" : "no" );
-      if ( ImGui::Button( "Close", ImVec2( 120, 0 ) ) )
-      {
-         ImGui::CloseCurrentPopup();
-      }
-      ImGui::EndPopup();
-   }
 }
 
 void hop::Profiler::handleHotkey( bool modalWindowOpened )
@@ -704,6 +555,7 @@ void hop::Profiler::setRecording(bool recording)
 bool hop::Profiler::saveToFile( const char* path )
 {
    displayModalWindow( "Saving...", MODAL_TYPE_NO_CLOSE );
+   setRecording( false );
    std::thread t( [this, path]() {
       // Compute the size of the serialized data
       const size_t dbSerializedSize = serializedSize( _strDb );
