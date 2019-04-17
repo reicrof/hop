@@ -5,8 +5,9 @@
 
 static std::mutex modalWindowLock;
 
-static bool modalWindowOpen = false;
 static hop::ModalType modalType = hop::MODAL_TYPE_CLOSE;
+static bool modalWindowOpen = false;
+static bool shouldOpenModalWindow = false;
 static bool shouldCloseModalWindow = false;
 static const char* modalWindowMessage = nullptr;
 static std::function<void()> modalFct;
@@ -20,10 +21,20 @@ namespace hop
       const char* localMsg;
       {
          std::lock_guard<std::mutex> g( modalWindowLock );
-         isOpen = modalWindowOpen;
+         if( shouldOpenModalWindow )
+         {
+            modalWindowOpen = true;
+            shouldOpenModalWindow = false;
+            return; // Next time around, we will display the modal window
+         }
+
          type = modalType;
-         shouldClose = shouldCloseModalWindow;
+         isOpen = modalWindowOpen;
          localMsg = modalWindowMessage;
+         shouldClose = shouldCloseModalWindow;
+
+         // Let's reset the shared state here while being protected
+         shouldCloseModalWindow = false;
       }
 
       if ( isOpen )
@@ -46,7 +57,6 @@ namespace hop
                      std::lock_guard<std::mutex> g( modalWindowLock );
                      modalWindowMessage = nullptr;
                      modalWindowOpen = false;
-                     shouldCloseModalWindow = false;
                      if( modalFct )
                      {
                         modalFct();
@@ -68,7 +78,6 @@ namespace hop
                         std::lock_guard<std::mutex> g( modalWindowLock );
                         modalWindowMessage = nullptr;
                         modalWindowOpen = false;
-                        shouldCloseModalWindow = false;
                         if( modalFct )
                         {
                            modalFct();
@@ -105,7 +114,6 @@ namespace hop
                         std::lock_guard<std::mutex> g( modalWindowLock );
                         modalWindowMessage = nullptr;
                         modalWindowOpen = false;
-                        shouldCloseModalWindow = false;
                      }
                      if( execCallback && modalFct )
                      {
@@ -125,10 +133,10 @@ namespace hop
       std::lock_guard<std::mutex> g( modalWindowLock );
 
       // Call to display modal window while it is already open
-      assert( modalWindowOpen == false && shouldCloseModalWindow != true );
+      assert( modalWindowOpen == false && shouldCloseModalWindow == false );
 
-      modalWindowOpen = true;
       modalType = type;
+      shouldOpenModalWindow = true;
       shouldCloseModalWindow = false;
       modalWindowMessage = message;
    }
@@ -146,7 +154,7 @@ namespace hop
 
    bool modalWindowShowing()
    {
-      return modalWindowOpen;
+      return modalWindowOpen || shouldOpenModalWindow;
    }
 
    void closeModalWindow()
