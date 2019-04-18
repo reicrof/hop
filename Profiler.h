@@ -29,7 +29,7 @@ struct Profiler
    void addUnlockEvents(const std::vector<UnlockEvent>& unlockEvents, uint32_t threadIndex);
    void addCoreEvents( const std::vector<CoreEvent>& coreEvents, uint32_t threadIndex );
    void addThreadName( StrPtr_t name, uint32_t threadIndex );
-   void handleHotkey( bool modalWindowOpened );
+   void handleHotkey();
    void handleMouse();
    void setRecording( bool recording );
    void clear();

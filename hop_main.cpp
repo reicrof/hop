@@ -342,7 +342,7 @@ int main( int argc, char* argv[] )
    hop::setupLODResolution( DM.w );
 
    hop::Viewer viewer( DM.w, DM.h );
-   viewer.addNewProfiler( opts.processName, opts.startExec );
+   //viewer.addNewProfiler( opts.processName, opts.startExec );
 
    // If we want to launch an executable to profile, now is the time to do it
    processId_t childProcess = 0;

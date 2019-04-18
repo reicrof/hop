@@ -476,14 +476,14 @@ void hop::Profiler::draw( uint32_t /*windowWidth*/, uint32_t /*windowHeight*/ )
       _timeline.handleDeferredActions( timelineActions );
    }
 
-   handleHotkey( modalWindowShowing() );
+   handleHotkey();
    handleMouse();
 
    ImGui::EndChild(); //"Timeline"
    ImGui::PopStyleVar(2);
 }
 
-void hop::Profiler::handleHotkey( bool modalWindowOpened )
+void hop::Profiler::handleHotkey()
 {
    // Let the tracks handle the hotkeys first.
    if( _tracks.handleHotkey() )
@@ -522,10 +522,6 @@ void hop::Profiler::handleHotkey( bool modalWindowOpened )
    {
       if( ImGui::IsWindowFocused( ImGuiFocusedFlags_RootAndChildWindows ) && !hop::modalWindowShowing() )
          hop::displayModalWindow( "Delete all traces?", hop::MODAL_TYPE_YES_NO, [&](){ clear(); } );
-   }
-   else if( ImGui::IsKeyPressed( ImGui::GetKeyIndex( ImGuiKey_Escape ) ) && !modalWindowOpened )
-   {
-      hop::displayModalWindow( "Exit ?", hop::MODAL_TYPE_YES_NO, [&]() { g_run = false; } );
    }
 }
 
