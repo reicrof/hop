@@ -457,15 +457,14 @@ void Timeline::handleMouseWheel( float mousePosX, float mouseWheel )
    // Handle vertical scroll
    if( ImGui::IsKeyDown( SDL_SCANCODE_LSHIFT ) )
    {
-      const float maxScrollY = maxVerticalPosPxl();
       constexpr float scrollAmount = 50.0f;
       if( mouseWheel > 0)
       {
-         moveVerticalPositionPxl(hop::clamp( verticalPosPxl() - scrollAmount, 0.0f, maxScrollY), ANIMATION_TYPE_NONE);
+         moveVerticalPositionPxl( verticalPosPxl() - scrollAmount, ANIMATION_TYPE_NONE );
       }
       else if( mouseWheel < 0 )
       {
-         moveVerticalPositionPxl(hop::clamp( verticalPosPxl() + scrollAmount, 0.0f, maxScrollY), ANIMATION_TYPE_NONE);
+         moveVerticalPositionPxl( verticalPosPxl() + scrollAmount, ANIMATION_TYPE_NONE );
       }
    }
    else // Handle zoom
@@ -509,10 +508,8 @@ void Timeline::handleMouseDrag( float mouseInCanvasX, float /*mouseInCanvasY*/ )
       const int64_t deltaXInCycles =
           pxlToCycles<int64_t>( windowWidthPxl, _duration, delta.x );
       setStartTime( _timelineStart - deltaXInCycles, ANIMATION_TYPE_NONE );
-   
-      const float maxScrollY = maxVerticalPosPxl();
 
-      moveVerticalPositionPxl(hop::clamp(_verticalPosPxl - delta.y, 0.0f, maxScrollY), ANIMATION_TYPE_NONE);
+      moveVerticalPositionPxl( _verticalPosPxl - delta.y, ANIMATION_TYPE_NONE );
 
       ImGui::ResetMouseDragDelta();
       setRealtime( false );
@@ -665,11 +662,12 @@ void Timeline::setStartTime( int64_t time, AnimationType animType ) noexcept
 
 void Timeline::moveVerticalPositionPxl( float positionPxl, AnimationType animType )
 {
-   _animationState.targetVerticalPosPxl = positionPxl;
+   const float clampedPos = hop::clamp( positionPxl, 0.0f, maxVerticalPosPxl() );
+   _animationState.targetVerticalPosPxl = clampedPos;
    _animationState.type = animType;
    if (animType == ANIMATION_TYPE_NONE)
    {
-      _verticalPosPxl = positionPxl;
+      _verticalPosPxl = clampedPos;
    }
 }
 
