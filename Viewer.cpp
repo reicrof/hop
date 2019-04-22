@@ -144,7 +144,7 @@ static void drawFloatingWindows()
 namespace hop
 {
 Viewer::Viewer( uint32_t screenSizeX, uint32_t /*screenSizeY*/ )
-    : _lastFrameTime( ClockType::now() ), _vsyncEnabled( hop::g_options.vsyncOn )
+    : _selectedTab( 0 ), _lastFrameTime( ClockType::now() ), _vsyncEnabled( hop::g_options.vsyncOn )
 {
    hop::setupLODResolution( screenSizeX );
    renderer::createResources();
@@ -214,6 +214,9 @@ void Viewer::onNewFrame(
 
 void Viewer::draw( uint32_t windowWidth, uint32_t windowHeight )
 {
+   renderer::setViewport( 0, 0, windowWidth, windowHeight );
+   renderer::clearColorBuffer();
+
    ImGui::SetNextWindowPos( ImVec2( 0.0f, 0.0f ), ImGuiCond_Always );
    ImGui::SetNextWindowSize( ImGui::GetIO().DisplaySize, ImGuiCond_Always );
    ImGui::PushStyleVar( ImGuiStyleVar_WindowRounding, 0.0f );
@@ -232,43 +235,36 @@ void Viewer::draw( uint32_t windowWidth, uint32_t windowHeight )
 
    drawMenuBar();
 
-   ImGuiTabBarFlags tab_bar_flags = ImGuiTabBarFlags_Reorderable;
-   if( ImGui::BeginTabBar( "MyTabBar", tab_bar_flags ) )
-   {
-      if( ImGui::BeginTabItem( "+" ) )
-      {
-         ImGui::EndTabItem();
-      }
-      if( ImGui::BeginTabItem( "Avocado" ) )
-      {
-         ImGui::Text( "This is the Avocado tab!\nblah blah blah blah blah" );
-         ImGui::EndTabItem();
-      }
-      if( ImGui::BeginTabItem( "Broccoli" ) )
-      {
-         ImGui::Text( "This is the Broccoli tab!\nblah blah blah blah blah" );
-         ImGui::EndTabItem();
-      }
-      if( ImGui::BeginTabItem( "Cucumber" ) )
-      {
-         ImGui::Text( "This is the Cucumber tab!\nblah blah blah blah blah" );
-         ImGui::EndTabItem();
-      }
-      ImGui::EndTabBar();
-   }
-
    const float dtTimeMs = ImGui::GetIO().DeltaTime * 1000;
    for( auto& p : _profilers )
    {
       p->update( dtTimeMs );
    }
 
-   renderer::setViewport( 0, 0, windowWidth, windowHeight );
-   renderer::clearColorBuffer();
-
-   for( auto& p : _profilers )
+   const ImGuiTabBarFlags tab_bar_flags =
+       ImGuiTabBarFlags_Reorderable | ImGuiTabBarFlags_NoTabListScrollingButtons |
+       ImGuiTabBarFlags_NoTooltip | ImGuiTabBarFlags_AutoSelectNewTabs;
+   if ( ImGui::BeginTabBar( "ProfilerTabs", tab_bar_flags ) )
    {
-      p->draw( windowWidth, windowHeight );
+      if ( ImGui::BeginTabItem( "+" ) )
+      {
+         addNewProfiler("lock_owner2.exe", "lock_owner2.exe" );
+         ImGui::EndTabItem();
+      }
+
+      for ( int i = 0; i < _profilers.size(); ++i )
+      {
+         const ImGuiTabItemFlags_ flags =
+             i == _selectedTab ? ImGuiTabItemFlags_SetSelected : ImGuiTabItemFlags_None;
+         if ( ImGui::BeginTabItem( _profilers[i]->name(), nullptr, flags ) )
+         {
+            _selectedTab = i;
+            _profilers[i]->draw( windowWidth, windowHeight );
+            ImGui::EndTabItem();
+         }
+      }
+
+	  ImGui::EndTabBar();
    }
 
    // Render modal window, if any
@@ -277,8 +273,9 @@ void Viewer::draw( uint32_t windowWidth, uint32_t windowHeight )
       renderModalWindow();
    }
 
+   ImGui::PopStyleVar( 2 );
    ImGui::End(); // Window
-   ImGui::PopStyleVar(1);
+   ImGui::PopStyleVar( 1 );
 
    handleHotkey();
    drawFloatingWindows();

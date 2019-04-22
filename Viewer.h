@@ -29,6 +29,7 @@ class Viewer
 
   private:
    std::vector<std::unique_ptr<hop::Profiler> > _profilers;
+   int _selectedTab;
 
    using ClockType = std::chrono::steady_clock;
    std::chrono::time_point<ClockType> _lastFrameTime;

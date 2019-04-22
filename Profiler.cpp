@@ -234,8 +234,9 @@ void Profiler::addThreadName( StrPtr_t name, uint32_t threadIndex )
 
 Profiler::~Profiler()
 {
-   _server.stop();
-}
+   _server.stop(); }
+
+const char* Profiler::name() const noexcept { return _name.c_str(); }
 
 } // end of namespace hop
 
@@ -480,7 +481,6 @@ void hop::Profiler::draw( uint32_t /*windowWidth*/, uint32_t /*windowHeight*/ )
    handleMouse();
 
    ImGui::EndChild(); //"Timeline"
-   ImGui::PopStyleVar(2);
 }
 
 void hop::Profiler::handleHotkey()

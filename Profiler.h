@@ -20,6 +20,7 @@ struct Profiler
 {
    Profiler( const char* name );
    ~Profiler();
+   const char* name() const noexcept;
    void update( float deltaTimeMs ) noexcept;
    void draw( uint32_t windowWidth, uint32_t windowHeight );
    void fetchClientData();
@@ -37,7 +38,6 @@ struct Profiler
    bool saveToFile( const char* path );
 
 private:
-   void drawMenuBar();
    bool openFile( const char* path );
 
    std::string _name;
