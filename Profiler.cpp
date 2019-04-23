@@ -35,7 +35,7 @@ namespace
       uint32_t threadCount;
    };
 
-   void displayBackgroundHelpMsg()
+   void displayBackgroundHelpMsg( uint32_t windowWidth, uint32_t windowHeight )
    {
       const char* helpTxt =
           "-------------- Hop --------------\n\n"
@@ -49,14 +49,12 @@ namespace
           "Use CTRL+F to search traces\n"
           "Use Del to delete traces\n";
       const auto pos = ImGui::GetWindowPos();
-      const float windowWidthPxl = ImGui::GetWindowWidth();
-      const float windowHeightPxl = ImGui::GetWindowHeight();
       ImDrawList* DrawList = ImGui::GetWindowDrawList();
       auto size = ImGui::CalcTextSize( helpTxt );
       DrawList->AddText(
           ImGui::GetIO().Fonts->Fonts[0],
           30.0f,
-          ImVec2( pos.x + windowWidthPxl / 2 - ( size.x ), pos.y + windowHeightPxl / 2 - size.y ),
+          ImVec2( pos.x + windowWidth / 2 - ( size.x ), pos.y + windowHeight / 2 - size.y ),
           ImGui::GetColorU32( ImGuiCol_TextDisabled ),
           helpTxt );
    }
@@ -75,9 +73,17 @@ namespace
 namespace hop
 {
 
-Profiler::Profiler( const char* name ) : _name( name )
+Profiler::Profiler( const char* name ) : _name( name ? name : "" )
 {
-   _server.start( name );
+   if ( name ) _server.start( name );
+}
+
+const char* Profiler::execName() const noexcept { return _name.c_str(); }
+
+void Profiler::setExecName( const char* name )
+{
+   _server.stop();
+   if ( name ) _server.start( name );
 }
 
 void Profiler::addTraces( const TraceData& traces, uint32_t threadIndex )
@@ -234,9 +240,8 @@ void Profiler::addThreadName( StrPtr_t name, uint32_t threadIndex )
 
 Profiler::~Profiler()
 {
-   _server.stop(); }
-
-const char* Profiler::name() const noexcept { return _name.c_str(); }
+   _server.stop();
+}
 
 } // end of namespace hop
 
@@ -388,6 +393,10 @@ static void drawStatusIcon( const ImVec2& drawPos, hop::SharedMemory::Connection
    const char* msg = nullptr;
    switch ( state )
    {
+      case hop::SharedMemory::NO_TARGET_PROCESS:
+         col = ImColor( 0.6f, 0.6f, 0.6f );
+         msg = "No target process";
+         break;
       case hop::SharedMemory::NOT_CONNECTED:
          col = ImColor( 0.8f, 0.0f, 0.0f );
          msg = "No shared memory found";
@@ -424,11 +433,12 @@ static void drawStatusIcon( const ImVec2& drawPos, hop::SharedMemory::Connection
    }
 }
 
-void hop::Profiler::draw( uint32_t /*windowWidth*/, uint32_t /*windowHeight*/ )
+void hop::Profiler::draw( float drawPosX, float drawPosY, float canvasWidth, float canvasHeight )
 {
    HOP_PROF_FUNC();
+   ImGui::SetCursorPos( ImVec2( drawPosX, drawPosY ) );
 
-   const auto toolbarDrawPos = ImGui::GetCursorScreenPos();
+   const auto toolbarDrawPos = ImVec2( drawPosX, drawPosY );
    if( drawPlayStopButton( toolbarDrawPos, _recording ) )
    {
       setRecording( !_recording );
@@ -442,14 +452,14 @@ void hop::Profiler::draw( uint32_t /*windowWidth*/, uint32_t /*windowHeight*/ )
    }
 
    auto statusPos = toolbarDrawPos;
-   statusPos.x += ImGui::GetWindowWidth() - 25.0f;
+   statusPos.x += canvasWidth - 25.0f;
    statusPos.y += 5.0f;
    drawStatusIcon( statusPos, _server.connectionState() );
 
    ImGui::BeginChild( "Timeline" );
    if( _tracks.size() == 0 && !_recording )
    {
-      displayBackgroundHelpMsg();
+      displayBackgroundHelpMsg( canvasWidth, canvasHeight );
    }
    else
    {

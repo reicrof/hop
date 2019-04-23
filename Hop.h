@@ -535,6 +535,7 @@ class SharedMemory
   public:
    enum ConnectionState
    {
+      NO_TARGET_PROCESS,
       NOT_CONNECTED,
       CONNECTED,
       CONNECTED_NO_CLIENT,

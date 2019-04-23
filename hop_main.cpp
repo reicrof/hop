@@ -102,11 +102,10 @@ static void sdlImGuiInit()
    io.GetClipboardTextFn = getClipboardText;
 
    auto& style = ImGui::GetStyle();
-   style.Colors[ImGuiCol_WindowBg] = ImVec4( 0.14f, 0.14f, 0.14f, 1.00f );
-   style.Colors[ImGuiCol_TitleBg] = ImVec4( 0.24f, 0.24f, 0.24f, 1.00f );
-   style.Colors[ImGuiCol_TitleBgCollapsed] = ImVec4( 0.27f, 0.27f, 0.27f, 1.00f );
-   style.Colors[ImGuiCol_TitleBgActive] = ImVec4( 0.20f, 0.20f, 0.20f, 1.00f );
-   style.Colors[ImGuiCol_MenuBarBg] = ImVec4( 0.35f, 0.35f, 0.35f, 1.00f );
+   style.Colors[ImGuiCol_WindowBg] = ImVec4( 0.20f, 0.20f, 0.20f, 1.00f );
+   style.Colors[ImGuiCol_TitleBg] = ImVec4( 0.15f, 0.15f, 0.15f, 1.00f );
+   style.Colors[ImGuiCol_TitleBgCollapsed] = ImVec4( 0.3f, 0.3f, 0.3f, 1.00f );
+   style.Colors[ImGuiCol_MenuBarBg] = ImVec4( 0.45f, 0.45f, 0.45f, 1.00f );
 }
 
 static void handleMouseWheel( const SDL_Event& e )

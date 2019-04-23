@@ -20,9 +20,10 @@ struct Profiler
 {
    Profiler( const char* name );
    ~Profiler();
-   const char* name() const noexcept;
+   const char* execName() const noexcept;
+   void setExecName( const char* name );
    void update( float deltaTimeMs ) noexcept;
-   void draw( uint32_t windowWidth, uint32_t windowHeight );
+   void draw( float drawPosX, float drawPosY, float windowWidth, float windowHeight );
    void fetchClientData();
    void addStringData( const std::vector< char >& stringData );
    void addTraces( const TraceData& traces, uint32_t threadIndex );
