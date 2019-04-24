@@ -150,8 +150,8 @@ static const char* displayableProfilerName(hop::Profiler* prof)
    return profName;
 }
 
-static bool drawTabs(
-    const std::vector<std::unique_ptr<hop::Profiler> >& profilers,
+static void drawTabs(
+    hop::Viewer& viewer,
     int* selectedTab )
 {
    static const float MAX_FULL_SIZE_TAB = 8.0f;
@@ -162,7 +162,7 @@ static bool drawTabs(
    const float addTabPadding = windowSize.x * 0.001f;
    const float tabBarWidth = windowSize.x - addTabWidth - addTabPadding;
    const float fullSizeTab = tabBarWidth / MAX_FULL_SIZE_TAB;
-   const int profCount = profilers.size();
+   const int profCount = viewer.profilerCount();
    const float tabWidth = std::min( tabBarWidth / profCount, fullSizeTab );
 
    const uint32_t activeWindowColor = ImGui::GetColorU32( ImGuiCol_WindowBg );
@@ -196,7 +196,7 @@ static bool drawTabs(
          continue;
       }
       ImGui::PushID( i );
-      const char* profName = displayableProfilerName( profilers[i].get() );
+      const char* profName = displayableProfilerName( viewer.getProfiler( i ) );
       if ( ImGui::Button( profName, defaultTabSize ) )
       {
          *selectedTab = i;
@@ -207,7 +207,6 @@ static bool drawTabs(
    }
 
    // Draw the "Add Tab button"
-   bool addProfiler = false;
    if ( profCount >= MAX_FULL_SIZE_TAB )
    {
       ImGui::SetCursorPos(
@@ -216,8 +215,24 @@ static bool drawTabs(
    ImGui::PushStyleVar( ImGuiStyleVar_FrameBorderSize, 0.0f );
    if ( ImGui::Button( " + ", ImVec2( addTabWidth, tabHeight ) ) )
    {
-      *selectedTab = profilers.size();
-      addProfiler = true;
+      *selectedTab = profCount;
+      viewer.addNewProfiler( nullptr, false );
+   }
+
+   ImGui::PopStyleVar( 3 );
+   ImGui::PopStyleColor( 4 );
+
+   // Draw the selected tab
+   if ( *selectedTab >= 0 )
+   {
+      ImGui::SetCursorPos( selectedTabPos );
+      ImGui::PushStyleColor( ImGuiCol_Button, activeWindowColor );
+      ImGui::PushStyleColor( ImGuiCol_ButtonHovered, activeWindowColor );
+      ImGui::PushStyleColor( ImGuiCol_ButtonActive, activeWindowColor );
+
+      ImGui::Button( displayableProfilerName( viewer.getProfiler( *selectedTab ) ), defaultTabSize );
+      ImGui::SetItemAllowOverlap(); // Since we will be drawing a close button on top this is needed
+      ImGui::PopStyleColor( 3 );
    }
 
    // Draw the "x" to close tabs
@@ -228,28 +243,24 @@ static bool drawTabs(
    {
       ImGui::PushID( i + 40 );
       ImGui::SetCursorPos( closeButtonPos );
-      ImGui::Button( "x", ImVec2( 20.0f, 20.0f ) );
+      if( ImGui::Button( "x", ImVec2( 20.0f, 20.0f ) ) )
+      {
+         if( i == *selectedTab )
+         {
+            *selectedTab = std::min( profCount-2, *selectedTab );
+         }
+         else if( i < *selectedTab )
+         {
+            *selectedTab = std::max( *selectedTab-1, 0 );
+         }
+
+         viewer.removeProfiler( i );
+      }
       closeButtonPos.x += tabWidth;
       ImGui::PopID();
    }
 
-   ImGui::PopStyleVar( 3 );
-   ImGui::PopStyleColor( 4 );
-
-   if ( !addProfiler && *selectedTab >= 0 )
-   {  // Draw the selected tab
-      ImGui::SetCursorPos( selectedTabPos );
-      ImGui::PushStyleColor( ImGuiCol_Button, activeWindowColor );
-      ImGui::PushStyleColor( ImGuiCol_ButtonHovered, activeWindowColor );
-      ImGui::PushStyleColor( ImGuiCol_ButtonActive, activeWindowColor );
-
-      ImGui::Button( displayableProfilerName( profilers[*selectedTab].get() ), defaultTabSize );
-      ImGui::PopStyleColor( 3 );
-   }
-
    ImGui::SetCursorPos( ImVec2( startDrawPos.x, startDrawPos.y + tabHeight + 10.0f ) );
-
-   return addProfiler;
 }
 
 namespace hop
@@ -265,6 +276,23 @@ void Viewer::addNewProfiler( const char* processName, bool startRecording )
 {
    _profilers.emplace_back( new hop::Profiler( processName ) );
    _profilers.back()->setRecording( startRecording );
+}
+
+void Viewer::removeProfiler( int index )
+{
+   assert( index >= 0 && index < (int)_profilers.size() );
+   _profilers.erase( _profilers.begin() + index );
+}
+
+int Viewer::profilerCount() const
+{
+   return _profilers.size();
+}
+
+Profiler* Viewer::getProfiler( int index )
+{
+   assert( index >= 0 && index < (int)_profilers.size() );
+   return _profilers[index].get();
 }
 
 void Viewer::fetchClientsData()
@@ -353,10 +381,7 @@ void Viewer::draw( uint32_t windowWidth, uint32_t windowHeight )
       p->update( dtTimeMs );
    }
 
-   if ( drawTabs( _profilers, &_selectedTab ) )
-   {
-      addNewProfiler( nullptr, false );
-   }
+   drawTabs( *this, &_selectedTab );
 
    if ( _selectedTab >= 0 )
    {
