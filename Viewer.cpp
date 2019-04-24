@@ -201,6 +201,7 @@ static bool drawTabs(
       {
          *selectedTab = i;
       }
+      ImGui::SetItemAllowOverlap(); // Since we will be drawing a close button on top this is needed
       ImGui::PopID();
       ImGui::SameLine();
    }
@@ -219,10 +220,23 @@ static bool drawTabs(
       addProfiler = true;
    }
 
+   // Draw the "x" to close tabs
+   ImVec2 closeButtonPos = startDrawPos;
+   closeButtonPos.x += tabWidth * 0.9f;
+   closeButtonPos.y += 4.0f;
+   for ( int i = 0; i < profCount; ++i )
+   {
+      ImGui::PushID( i + 40 );
+      ImGui::SetCursorPos( closeButtonPos );
+      ImGui::Button( "x", ImVec2( 20.0f, 20.0f ) );
+      closeButtonPos.x += tabWidth;
+      ImGui::PopID();
+   }
+
    ImGui::PopStyleVar( 3 );
    ImGui::PopStyleColor( 4 );
 
-   if ( !addProfiler )
+   if ( !addProfiler && *selectedTab >= 0 )
    {  // Draw the selected tab
       ImGui::SetCursorPos( selectedTabPos );
       ImGui::PushStyleColor( ImGuiCol_Button, activeWindowColor );
@@ -241,7 +255,7 @@ static bool drawTabs(
 namespace hop
 {
 Viewer::Viewer( uint32_t screenSizeX, uint32_t /*screenSizeY*/ )
-    : _selectedTab( 0 ), _lastFrameTime( ClockType::now() ), _vsyncEnabled( hop::g_options.vsyncOn )
+    : _selectedTab( -1 ), _lastFrameTime( ClockType::now() ), _vsyncEnabled( hop::g_options.vsyncOn )
 {
    hop::setupLODResolution( screenSizeX );
    renderer::createResources();
