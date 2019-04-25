@@ -164,17 +164,15 @@ static void drawTabs(
    const float fullSizeTab = tabBarWidth / MAX_FULL_SIZE_TAB;
    const int profCount = viewer.profilerCount();
    const float tabWidth = std::min( tabBarWidth / profCount, fullSizeTab );
-
    const uint32_t activeWindowColor = ImGui::GetColorU32( ImGuiCol_WindowBg );
    const uint32_t inactiveWindowColor = activeWindowColor + 0x00303030;
+   const float tabFramePadding = 0.1f;
    ImGui::PushStyleColor( ImGuiCol_Border, activeWindowColor );
    ImGui::PushStyleColor( ImGuiCol_Button, inactiveWindowColor );
    ImGui::PushStyleColor( ImGuiCol_ButtonHovered, ImGui::GetColorU32( ImGuiCol_TitleBgCollapsed ) );
    ImGui::PushStyleColor( ImGuiCol_ButtonActive, ImGui::GetColorU32( ImGuiCol_TitleBg ) );
    ImGui::PushStyleVar( ImGuiStyleVar_ItemSpacing, ImVec2( 0.0f, 0.0f ) );
-   ImGui::PushStyleVar( ImGuiStyleVar_FrameBorderSize, 1.0f );
-
-   ImVec2 selectedTabPos( -1.0f, -1.0f );
+   ImGui::PushStyleVar( ImGuiStyleVar_FrameBorderSize, tabFramePadding );
 
    // Draw tab bar background color
    ImDrawList* dl = ImGui::GetWindowDrawList();
@@ -189,12 +187,12 @@ static void drawTabs(
    ImVec2 defaultTabSize( tabWidth, tabHeight );
    for ( int i = 0; i < profCount; ++i )
    {
-      if ( *selectedTab == i )
+      if( *selectedTab == i )
       {
-         selectedTabPos = ImGui::GetCursorPos();
-         ImGui::SetCursorPosX( selectedTabPos.x + tabWidth );
+         // Draw the selected tab as its own entity
          continue;
       }
+
       ImGui::PushID( i );
       const char* profName = displayableProfilerName( viewer.getProfiler( i ) );
       if ( ImGui::Button( profName, defaultTabSize ) )
@@ -206,25 +204,11 @@ static void drawTabs(
       ImGui::SameLine();
    }
 
-   // Draw the "Add Tab button"
-   if ( profCount >= MAX_FULL_SIZE_TAB )
-   {
-      ImGui::SetCursorPos(
-          ImVec2( MAX_FULL_SIZE_TAB * fullSizeTab + addTabPadding, selectedTabPos.y ) );
-   }
-   ImGui::PushStyleVar( ImGuiStyleVar_FrameBorderSize, 0.0f );
-   if ( ImGui::Button( " + ", ImVec2( addTabWidth, tabHeight ) ) )
-   {
-      *selectedTab = profCount;
-      viewer.addNewProfiler( nullptr, false );
-   }
-
-   ImGui::PopStyleVar( 3 );
-   ImGui::PopStyleColor( 4 );
-
    // Draw the selected tab
    if ( *selectedTab >= 0 )
    {
+      ImVec2 selectedTabPos = startDrawPos;
+      selectedTabPos.x += (*selectedTab) * tabWidth + (*selectedTab) * tabFramePadding;
       ImGui::SetCursorPos( selectedTabPos );
       ImGui::PushStyleColor( ImGuiCol_Button, activeWindowColor );
       ImGui::PushStyleColor( ImGuiCol_ButtonHovered, activeWindowColor );
@@ -235,10 +219,30 @@ static void drawTabs(
       ImGui::PopStyleColor( 3 );
    }
 
+   // Draw the "+" button to add a tab
+   ImVec2 addTabPos = startDrawPos;
+   addTabPos.x += profCount * tabWidth + profCount * tabFramePadding;
+   ImGui::SetCursorPos( addTabPos );
+   ImGui::PushStyleVar( ImGuiStyleVar_FrameBorderSize, 0.0f );
+   if ( ImGui::Button( " + ", ImVec2( addTabWidth, tabHeight - 1.0f ) ) )
+   {
+      *selectedTab = profCount;
+      viewer.addNewProfiler( nullptr, false );
+   }
+   if( ImGui::IsItemHovered() )
+   {
+      ImGui::BeginTooltip();
+      ImGui::TextUnformatted( "Add a new profiler" );
+      ImGui::EndTooltip();
+   }
+
+   ImGui::PopStyleVar( 3 );
+   ImGui::PopStyleColor( 4 );
+
    // Draw the "x" to close tabs
    ImVec2 closeButtonPos = startDrawPos;
-   closeButtonPos.x += tabWidth * 0.9f;
-   closeButtonPos.y += 4.0f;
+   closeButtonPos.x += tabWidth - 25.0f;
+   closeButtonPos.y += 5.0f;
    for ( int i = 0; i < profCount; ++i )
    {
       ImGui::PushID( i + 40 );
