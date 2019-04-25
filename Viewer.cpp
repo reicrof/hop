@@ -12,6 +12,9 @@
 
 extern bool g_run;
 
+static const float MAX_FULL_SIZE_TAB_COUNT = 8.0f;
+static const float TAB_HEIGHT = 30.0f;
+
 static void drawMenuBar()
 {
    const char* const menuSaveAsHop = "Save as...";
@@ -150,18 +153,35 @@ static const char* displayableProfilerName(hop::Profiler* prof)
    return profName;
 }
 
+static bool drawAddTabButton( const ImVec2& drawPos )
+{
+   const float addTabWidth = TAB_HEIGHT * 1.0;
+   bool clicked = false;
+   ImGui::SetCursorPos( drawPos );
+   ImGui::PushStyleVar( ImGuiStyleVar_FrameBorderSize, 0.0f );
+   if ( ImGui::Button( " + ", ImVec2( addTabWidth, TAB_HEIGHT - 1.0f ) ) )
+   {
+      clicked = true;
+   }
+   if( ImGui::IsItemHovered() )
+   {
+      ImGui::BeginTooltip();
+      ImGui::TextUnformatted( "Add a new profiler" );
+      ImGui::EndTooltip();
+   }
+   ImGui::PopStyleVar( 1 );
+
+   return clicked;
+}
+
 static void drawTabs(
     hop::Viewer& viewer,
     int* selectedTab )
 {
-   static const float MAX_FULL_SIZE_TAB = 8.0f;
-
    const ImVec2 windowSize = ImGui::GetWindowSize();
-   const float tabHeight = 30.0f;
-   const float addTabWidth = tabHeight * 1.5;
-   const float addTabPadding = windowSize.x * 0.001f;
-   const float tabBarWidth = windowSize.x - addTabWidth - addTabPadding;
-   const float fullSizeTab = tabBarWidth / MAX_FULL_SIZE_TAB;
+   
+   const float tabBarWidth = windowSize.x - TAB_HEIGHT;
+   const float fullSizeTab = tabBarWidth / MAX_FULL_SIZE_TAB_COUNT;
    const int profCount = viewer.profilerCount();
    const float tabWidth = std::min( tabBarWidth / profCount, fullSizeTab );
    const uint32_t activeWindowColor = ImGui::GetColorU32( ImGuiCol_WindowBg );
@@ -180,11 +200,11 @@ static void drawTabs(
    ImGui::SetCursorPos( ImVec2( startDrawPos.x, startDrawPos.y - 1.0f ) );
    dl->AddRectFilled(
        startDrawPos,
-       ImVec2( startDrawPos.x + windowSize.x, startDrawPos.y + tabHeight - 1.0f ),
+       ImVec2( startDrawPos.x + windowSize.x, startDrawPos.y + TAB_HEIGHT - 1.0f ),
        inactiveWindowColor );
 
    // Draw all non selected tabs, whilst keeping the position of the selected one
-   ImVec2 defaultTabSize( tabWidth, tabHeight );
+   ImVec2 defaultTabSize( tabWidth, TAB_HEIGHT );
    for ( int i = 0; i < profCount; ++i )
    {
       if( *selectedTab == i )
@@ -222,21 +242,13 @@ static void drawTabs(
    // Draw the "+" button to add a tab
    ImVec2 addTabPos = startDrawPos;
    addTabPos.x += profCount * tabWidth + profCount * tabFramePadding;
-   ImGui::SetCursorPos( addTabPos );
-   ImGui::PushStyleVar( ImGuiStyleVar_FrameBorderSize, 0.0f );
-   if ( ImGui::Button( " + ", ImVec2( addTabWidth, tabHeight - 1.0f ) ) )
+   if( drawAddTabButton( addTabPos ) )
    {
       *selectedTab = profCount;
       viewer.addNewProfiler( nullptr, false );
    }
-   if( ImGui::IsItemHovered() )
-   {
-      ImGui::BeginTooltip();
-      ImGui::TextUnformatted( "Add a new profiler" );
-      ImGui::EndTooltip();
-   }
 
-   ImGui::PopStyleVar( 3 );
+   ImGui::PopStyleVar( 2 );
    ImGui::PopStyleColor( 4 );
 
    // Draw the "x" to close tabs
@@ -264,7 +276,7 @@ static void drawTabs(
       ImGui::PopID();
    }
 
-   ImGui::SetCursorPos( ImVec2( startDrawPos.x, startDrawPos.y + tabHeight + 10.0f ) );
+   ImGui::SetCursorPos( ImVec2( startDrawPos.x, startDrawPos.y + TAB_HEIGHT + 10.0f ) );
 }
 
 namespace hop
