@@ -1484,7 +1484,6 @@ class Client
          tracesInfo->traces.count = _traces.count;
 
          // Copy trace information into buffer to send
-         const uint32_t count = _traces.count;
          void* outBuffer = (void*)( bufferPtr + sizeof( MsgInfo ) );
          copyTracesTo( &_traces, outBuffer );
       }
