@@ -359,6 +359,7 @@ int main( int argc, char* argv[] )
    while ( g_run )
    {
       const auto frameStart = std::chrono::system_clock::now();
+
       handleInput();
 
       const auto startFetch = std::chrono::system_clock::now();
@@ -385,18 +386,16 @@ int main( int argc, char* argv[] )
 
       hop::drawCursor();
 
-      const auto drawEnd = std::chrono::system_clock::now();
-      hop::g_stats.drawingTimeMs =
-          std::chrono::duration<double, std::milli>( ( drawEnd - drawStart ) ).count();
+      const auto frameEnd = std::chrono::system_clock::now();
 
-      if ( std::chrono::duration<double, std::milli>( ( drawEnd - frameStart ) ).count() < 10.0 )
+      // If we rendered fast, fetch data again instead of stalling on the vsync
+      if ( std::chrono::duration<double, std::milli>( ( frameEnd - frameStart ) ).count() < 10.0 )
       {
          viewer.fetchClientsData();
       }
 
       SDL_GL_SwapWindow( window );
 
-      const auto frameEnd = std::chrono::system_clock::now();
       hop::g_stats.frameTimeMs =
           std::chrono::duration<double, std::milli>( ( frameEnd - frameStart ) ).count();
    }

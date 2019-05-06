@@ -15,8 +15,9 @@ extern bool g_run;
 static const float MAX_FULL_SIZE_TAB_COUNT = 8.0f;
 static const float TAB_HEIGHT = 30.0f;
 
-static void drawMenuBar()
+static void drawMenuBar( hop::Viewer* v )
 {
+   const char* const menuAddProfiler = "Add Profiler";
    const char* const menuSaveAsHop = "Save as...";
    const char* const menuOpenHopFile = "Open";
    const char* const menuHelp = "Help";
@@ -26,6 +27,12 @@ static void drawMenuBar()
    {
       if ( ImGui::BeginMenu( "Menu" ) )
       {
+         if ( ImGui::MenuItem( menuAddProfiler, NULL ) )
+         {
+            hop::displayStringInputModalWindow(
+                "Add Profiler for Process",
+                [=]( const char* process ) { v->addNewProfiler( process, false ); } );
+         }
          if ( ImGui::MenuItem( menuSaveAsHop, NULL ) )
          {
             menuAction = menuSaveAsHop;
@@ -52,18 +59,37 @@ static void drawMenuBar()
       ImGui::EndMenuBar();
    }
 
-   if ( menuAction == menuSaveAsHop )
+   if ( menuAction )
    {
-      ImGui::OpenPopup( menuSaveAsHop );
+      ImGui::OpenPopup( menuAction );
    }
-   else if ( menuAction == menuOpenHopFile )
-   {
-      ImGui::OpenPopup( menuOpenHopFile );
-   }
-   else if ( menuAction == menuHelp )
-   {
-      ImGui::OpenPopup( menuHelp );
-   }
+
+   // if ( ImGui::BeginPopupModal( menuAddProfiler, NULL, ImGuiWindowFlags_AlwaysAutoResize ) )
+   //{
+   // static char processName[512] = {};
+   // bool shouldCreateProfiler = ImGui::InputText(
+   //    "Process Name",
+   //    processName,
+   //    sizeof( processName ),
+   //    ImGuiInputTextFlags_AutoSelectAll | ImGuiInputTextFlags_EnterReturnsTrue );
+   // ImGui::Separator();
+
+   // if ( ImGui::Button( "Add", ImVec2( 120, 0 ) ) || shouldCreateProfiler )
+   //{
+   //   // TODO
+   //   // saveToFile( path );
+   //   ImGui::CloseCurrentPopup();
+   //}
+
+   // ImGui::SameLine();
+
+   // if ( ImGui::Button( "Cancel", ImVec2( 120, 0 ) ) )
+   //{
+   //   ImGui::CloseCurrentPopup();
+   //}
+
+   // ImGui::EndPopup();
+   //}
 
    if ( ImGui::BeginPopupModal( menuSaveAsHop, NULL, ImGuiWindowFlags_AlwaysAutoResize ) )
    {
@@ -137,16 +163,7 @@ static void drawMenuBar()
    }
 }
 
-static void drawFloatingWindows()
-{
-   if ( hop::g_options.debugWindow )
-   {
-      hop::drawStatsWindow( hop::g_stats );
-   }
-   drawOptionsWindow( hop::g_options );
-}
-
-static const char* displayableProfilerName(hop::Profiler* prof)
+static const char* displayableProfilerName( hop::Profiler* prof )
 {
    const char* profName = prof->execName();
    profName = profName[0] == '\0' ? "<No Target Process>" : profName;
@@ -163,7 +180,7 @@ static bool drawAddTabButton( const ImVec2& drawPos )
    {
       clicked = true;
    }
-   if( ImGui::IsItemHovered() )
+   if ( ImGui::IsItemHovered() )
    {
       ImGui::BeginTooltip();
       ImGui::TextUnformatted( "Add a new profiler" );
@@ -174,12 +191,10 @@ static bool drawAddTabButton( const ImVec2& drawPos )
    return clicked;
 }
 
-static void drawTabs(
-    hop::Viewer& viewer,
-    int* selectedTab )
+static void drawTabs( hop::Viewer& viewer, int* selectedTab )
 {
    const ImVec2 windowSize = ImGui::GetWindowSize();
-   
+
    const float tabBarWidth = windowSize.x - TAB_HEIGHT;
    const float fullSizeTab = tabBarWidth / MAX_FULL_SIZE_TAB_COUNT;
    const int profCount = viewer.profilerCount();
@@ -207,9 +222,10 @@ static void drawTabs(
    ImVec2 defaultTabSize( tabWidth, TAB_HEIGHT );
    for ( int i = 0; i < profCount; ++i )
    {
-      if( *selectedTab == i )
+      if ( *selectedTab == i )
       {
          // Draw the selected tab as its own entity
+         ImGui::SetCursorPos( ImVec2( ImGui::GetCursorPosX() + tabWidth, startDrawPos.y ) );
          continue;
       }
 
@@ -219,7 +235,8 @@ static void drawTabs(
       {
          *selectedTab = i;
       }
-      ImGui::SetItemAllowOverlap(); // Since we will be drawing a close button on top this is needed
+      ImGui::SetItemAllowOverlap();  // Since we will be drawing a close button on top this is
+                                     // needed
       ImGui::PopID();
       ImGui::SameLine();
    }
@@ -228,24 +245,27 @@ static void drawTabs(
    if ( *selectedTab >= 0 )
    {
       ImVec2 selectedTabPos = startDrawPos;
-      selectedTabPos.x += (*selectedTab) * tabWidth + (*selectedTab) * tabFramePadding;
+      selectedTabPos.x += ( *selectedTab ) * tabWidth + ( *selectedTab ) * tabFramePadding;
       ImGui::SetCursorPos( selectedTabPos );
       ImGui::PushStyleColor( ImGuiCol_Button, activeWindowColor );
       ImGui::PushStyleColor( ImGuiCol_ButtonHovered, activeWindowColor );
       ImGui::PushStyleColor( ImGuiCol_ButtonActive, activeWindowColor );
 
-      ImGui::Button( displayableProfilerName( viewer.getProfiler( *selectedTab ) ), defaultTabSize );
-      ImGui::SetItemAllowOverlap(); // Since we will be drawing a close button on top this is needed
+      ImGui::Button(
+          displayableProfilerName( viewer.getProfiler( *selectedTab ) ), defaultTabSize );
+      ImGui::SetItemAllowOverlap();  // Since we will be drawing a close button on top this is
+                                     // needed
       ImGui::PopStyleColor( 3 );
    }
 
    // Draw the "+" button to add a tab
    ImVec2 addTabPos = startDrawPos;
    addTabPos.x += profCount * tabWidth + profCount * tabFramePadding;
-   if( drawAddTabButton( addTabPos ) )
+   if ( drawAddTabButton( addTabPos ) )
    {
-      *selectedTab = profCount;
-      viewer.addNewProfiler( nullptr, false );
+      hop::displayStringInputModalWindow(
+          "Add Profiler for Process",
+          [&]( const char* process ) { viewer.addNewProfiler( process, false ); } );
    }
 
    ImGui::PopStyleVar( 2 );
@@ -259,15 +279,15 @@ static void drawTabs(
    {
       ImGui::PushID( i + 40 );
       ImGui::SetCursorPos( closeButtonPos );
-      if( ImGui::Button( "x", ImVec2( 20.0f, 20.0f ) ) )
+      if ( ImGui::Button( "x", ImVec2( 20.0f, 20.0f ) ) )
       {
-         if( i == *selectedTab )
+         if ( i == *selectedTab )
          {
-            *selectedTab = std::min( profCount-2, *selectedTab );
+            *selectedTab = std::min( profCount - 2, *selectedTab );
          }
-         else if( i < *selectedTab )
+         else if ( i < *selectedTab )
          {
-            *selectedTab = std::max( *selectedTab-1, 0 );
+            *selectedTab = std::max( *selectedTab - 1, 0 );
          }
 
          viewer.removeProfiler( i );
@@ -282,7 +302,9 @@ static void drawTabs(
 namespace hop
 {
 Viewer::Viewer( uint32_t screenSizeX, uint32_t /*screenSizeY*/ )
-    : _selectedTab( -1 ), _lastFrameTime( ClockType::now() ), _vsyncEnabled( hop::g_options.vsyncOn )
+    : _selectedTab( -1 ),
+      _lastFrameTime( ClockType::now() ),
+      _vsyncEnabled( hop::g_options.vsyncOn )
 {
    hop::setupLODResolution( screenSizeX );
    renderer::createResources();
@@ -290,8 +312,18 @@ Viewer::Viewer( uint32_t screenSizeX, uint32_t /*screenSizeY*/ )
 
 void Viewer::addNewProfiler( const char* processName, bool startRecording )
 {
+   for ( const auto& p : _profilers )
+   {
+      if ( strcmp( p->execName(), processName ) == 0 )
+      {
+         hop::displayModalWindow( "Cannot profile process twice !", hop::MODAL_TYPE_ERROR );
+         return;
+      }
+   }
+ 
    _profilers.emplace_back( new hop::Profiler( processName ) );
    _profilers.back()->setRecording( startRecording );
+   _selectedTab = _profilers.size() - 1;
 }
 
 void Viewer::removeProfiler( int index )
@@ -300,10 +332,7 @@ void Viewer::removeProfiler( int index )
    _profilers.erase( _profilers.begin() + index );
 }
 
-int Viewer::profilerCount() const
-{
-   return _profilers.size();
-}
+int Viewer::profilerCount() const { return _profilers.size(); }
 
 Profiler* Viewer::getProfiler( int index )
 {
@@ -369,6 +398,8 @@ void Viewer::onNewFrame(
 
 void Viewer::draw( uint32_t windowWidth, uint32_t windowHeight )
 {
+   const auto drawStart = std::chrono::system_clock::now();
+
    renderer::setViewport( 0, 0, windowWidth, windowHeight );
    renderer::clearColorBuffer();
 
@@ -385,11 +416,10 @@ void Viewer::draw( uint32_t windowWidth, uint32_t windowHeight )
            ImGuiWindowFlags_NoBringToFrontOnFocus | ImGuiWindowFlags_NoTitleBar |
            ImGuiWindowFlags_NoResize );
 
-   // Reset the style var so the floating windows can be drawn properly
-   ImGui::PushStyleVar( ImGuiStyleVar_WindowMinSize, ImVec2( 0, 0 ) );
-   ImGui::PushStyleVar( ImGuiStyleVar_WindowRounding, 5.0f );
+   // We only want to remove the padding for the viewer window and not all of its childrens.
+   ImGui::PopStyleVar( 2 );
 
-   drawMenuBar();
+   drawMenuBar( this );
 
    const float dtTimeMs = ImGui::GetIO().DeltaTime * 1000;
    for ( auto& p : _profilers )
@@ -405,9 +435,7 @@ void Viewer::draw( uint32_t windowWidth, uint32_t windowHeight )
       _profilers[_selectedTab]->draw( curPos.x + 5.0f, curPos.y, windowWidth - 5.0f, windowHeight );
    }
 
-   ImGui::PopStyleVar( 2 );
-   ImGui::End();  // Window
-   ImGui::PopStyleVar( 2 );
+   ImGui::End();  // Hop Viewer Window
 
    // Render modal window, if any
    if ( modalWindowShowing() )
@@ -416,7 +444,19 @@ void Viewer::draw( uint32_t windowWidth, uint32_t windowHeight )
    }
 
    handleHotkey();
-   drawFloatingWindows();
+
+   drawOptionsWindow( hop::g_options );
+
+   // Update draw stats before drawing the actual stats window
+   const auto drawEnd = std::chrono::system_clock::now();
+   hop::g_stats.drawingTimeMs =
+       std::chrono::duration<double, std::milli>( ( drawEnd - drawStart ) ).count();
+
+   // Draw stats window
+   if ( hop::g_options.debugWindow )
+   {
+      hop::drawStatsWindow( hop::g_stats );
+   }
 
    // Create the draw commands
    ImGui::Render();

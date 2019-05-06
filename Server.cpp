@@ -29,7 +29,6 @@ static void merge_consecutive( T first, T last, BinaryPredicate pred, MergeFct m
 
 static void mergeAndRemoveDuplicates( std::vector< hop::CoreEvent >& coreEvents )
 {
-   HOP_PROF_FUNC();
    // Merge events that are less than 10 micro apart
    const uint64_t minCycles = hop::nanosToCycles( 10000 );
    auto canMergeCore = [minCycles]( const hop::CoreEvent& lhs, const hop::CoreEvent& rhs ) {
@@ -132,7 +131,7 @@ bool Server::start( const char* name )
          // We were signaled
          lastSignalTime = curTime;
 
-         HOP_PROF_SPLIT( "Handle messages" );
+         //HOP_PROF_SPLIT( "Handle messages" );
          size_t offset = 0;
          const size_t bytesToRead = ringbuf_consume( _sharedMem.ringbuffer(), &offset );
          if ( bytesToRead > 0 )
@@ -389,6 +388,7 @@ void Server::stop()
 
 void Server::PendingData::clear()
 {
+    HOP_PROF_FUNC();
     traces.clear();
     stringData.clear();
     tracesThreadIndex.clear();
