@@ -14,6 +14,7 @@
 #include "miniz.h"
 
 #include <signal.h>
+#include <string>
 
 #ifndef _MSC_VER
 #include <sys/wait.h>
@@ -376,8 +377,6 @@ int main( int argc, char* argv[] )
 
       // Reset cursor at start of the frame
       hop::setCursor( hop::CURSOR_ARROW );
-
-      const auto drawStart = std::chrono::system_clock::now();
 
       viewer.onNewFrame( w, h, x, y, lmb, rmb, g_mouseWheel );
       g_mouseWheel = 0;

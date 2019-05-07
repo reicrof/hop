@@ -75,7 +75,7 @@ void renderModalWindow()
                if ( ImGui::BeginPopupModal(
                         "Error!", NULL, ImGuiWindowFlags_AlwaysAutoResize ) )
                {
-                  ImGui::Text( modalWindowMessage );
+                  ImGui::Text( "%s", modalWindowMessage );
                   ImGui::Separator();
                   if ( ImGui::Button( "Close", ImVec2( 120, 0 ) ) || enterPressed )
                   {

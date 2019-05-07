@@ -16,8 +16,9 @@
 namespace hop
 {
 class Server;
-struct Profiler
+class Profiler
 {
+public:
    Profiler( const char* name );
    ~Profiler();
    const char* execName() const noexcept;
