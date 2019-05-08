@@ -102,11 +102,21 @@ static void sdlImGuiInit()
    io.SetClipboardTextFn = setClipboardText;
    io.GetClipboardTextFn = getClipboardText;
 
+   const ImVec4 darkGrey = ImVec4( 0.15f, 0.15f, 0.15f, 1.0f );
+   const ImVec4 grey = ImVec4( 0.2f, 0.2f, 0.2f, 1.0f );
+   const ImVec4 lightGrey = ImVec4( 0.3f, 0.3f, 0.3f, 1.0f );
+   const ImVec4 lightestGrey = ImVec4( 0.45f, 0.45f, 0.45f, 1.0f );
+
    auto& style = ImGui::GetStyle();
-   style.Colors[ImGuiCol_WindowBg] = ImVec4( 0.20f, 0.20f, 0.20f, 1.00f );
-   style.Colors[ImGuiCol_TitleBg] = ImVec4( 0.15f, 0.15f, 0.15f, 1.00f );
-   style.Colors[ImGuiCol_TitleBgCollapsed] = ImVec4( 0.3f, 0.3f, 0.3f, 1.00f );
-   style.Colors[ImGuiCol_MenuBarBg] = ImVec4( 0.45f, 0.45f, 0.45f, 1.00f );
+   style.Colors[ImGuiCol_TitleBg] = darkGrey;
+   style.Colors[ImGuiCol_WindowBg] = grey;
+   style.Colors[ImGuiCol_ChildBg] = grey;
+   style.Colors[ImGuiCol_PopupBg] = grey;
+   style.Colors[ImGuiCol_MenuBarBg] = lightestGrey;
+
+   style.Colors[ImGuiCol_Button] = lightGrey;
+   style.Colors[ImGuiCol_ButtonHovered] = lightestGrey;
+   style.Colors[ImGuiCol_ButtonActive] = darkGrey;
 }
 
 static void handleMouseWheel( const SDL_Event& e )
@@ -380,6 +390,8 @@ int main( int argc, char* argv[] )
 
       viewer.onNewFrame( w, h, x, y, lmb, rmb, g_mouseWheel );
       g_mouseWheel = 0;
+
+      ImGui::ShowDemoWindow();
 
       viewer.draw( w, h );
 

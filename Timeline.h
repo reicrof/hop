@@ -125,7 +125,7 @@ class Timeline
    void handleMouseDrag( float mousePosX, float mousePosY );
    void handleMouseWheel( float mousePosX, float mouseWheel );
    void zoomOn( int64_t cycleToZoomOn, float zoomFactor );
-   void setStartTime( int64_t timeInMicro, AnimationType animType = ANIMATION_TYPE_NORMAL ) noexcept;
+   void setStartTime( int64_t timeInCyle, AnimationType animType = ANIMATION_TYPE_NORMAL ) noexcept;
    void setZoom( TimeDuration microsToDisplay, AnimationType animType = ANIMATION_TYPE_NORMAL );
 
    // Origin of the timeline in absolute time
@@ -141,13 +141,13 @@ class Timeline
 
    // Drawing Data
    float _verticalPosPxl{0.0f};
-   float _rangeZoomStartPosInCanvas{0.0f};
    float _timelineHoverPos{-1.0f};
    float _timelineDrawPosition[2] = {};
    float _canvasDrawPosition[2] = {};
    float _canvasHeight{0.0f};
    DisplayType _displayType{DISPLAY_TIMES};
 
+   int64_t _rangeZoomCycles[2] = {};
    int64_t _rangeSelectTimeStamp[2] = {};
 
    std::vector< AnimationState > _undoPositionStates, _redoPositionStates;

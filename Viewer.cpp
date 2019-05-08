@@ -272,6 +272,9 @@ static void drawTabs( hop::Viewer& viewer, int* selectedTab )
    ImGui::PopStyleColor( 4 );
 
    // Draw the "x" to close tabs
+   ImGui::PushStyleColor( ImGuiCol_Button, 0XFF101077 );
+   ImGui::PushStyleColor( ImGuiCol_ButtonHovered, 0XFF101099 );
+   ImGui::PushStyleColor( ImGuiCol_ButtonActive, 0XFF101055 );
    ImVec2 closeButtonPos = startDrawPos;
    closeButtonPos.x += tabWidth - 25.0f;
    closeButtonPos.y += 5.0f;
@@ -295,7 +298,9 @@ static void drawTabs( hop::Viewer& viewer, int* selectedTab )
       closeButtonPos.x += tabWidth;
       ImGui::PopID();
    }
+   ImGui::PopStyleColor( 3 );
 
+   // Restore cursor pos for next drawing
    ImGui::SetCursorPos( ImVec2( startDrawPos.x, startDrawPos.y + TAB_HEIGHT + 10.0f ) );
 }
 
