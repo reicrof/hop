@@ -138,7 +138,11 @@ void renderModalWindow()
                   bool closing = false;
                   bool execCallback = false;
 
-                  bool textEnterPressed = ImGui::InputText(
+                  // Set focus on next input text
+                  if( ImGui::IsWindowFocused() && !ImGui::IsAnyItemActive() )
+                     ImGui::SetKeyboardFocusHere();
+
+                  const bool textEnterPressed = ImGui::InputText(
                       "",
                       textField,
                       sizeof( textField ),

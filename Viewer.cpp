@@ -17,10 +17,10 @@ static const float TAB_HEIGHT = 30.0f;
 
 static void drawMenuBar( hop::Viewer* v )
 {
-   const char* const menuAddProfiler = "Add Profiler";
-   const char* const menuSaveAsHop = "Save as...";
-   const char* const menuOpenHopFile = "Open";
-   const char* const menuHelp = "Help";
+   static const char* const menuAddProfiler = "Add Profiler";
+   static const char* const menuSaveAsHop = "Save as...";
+   static const char* const menuOpenHopFile = "Open";
+   static const char* const menuHelp = "Help";
    const char* menuAction = NULL;
 
    if ( ImGui::BeginMenuBar() )
@@ -35,11 +35,15 @@ static void drawMenuBar( hop::Viewer* v )
          }
          if ( ImGui::MenuItem( menuSaveAsHop, NULL ) )
          {
-            menuAction = menuSaveAsHop;
+            hop::displayStringInputModalWindow(
+                menuSaveAsHop,
+                [=]( const char* /*path*/ ) { /*saveToFile( path );*/ } );
          }
          if ( ImGui::MenuItem( menuOpenHopFile, NULL ) )
          {
-            menuAction = menuOpenHopFile;
+            hop::displayStringInputModalWindow(
+                menuOpenHopFile,
+                [=]( const char* /*path*/ ) { /*openFile( path );*/ } );
          }
          if ( ImGui::MenuItem( menuHelp, NULL ) )
          {
@@ -59,93 +63,10 @@ static void drawMenuBar( hop::Viewer* v )
       ImGui::EndMenuBar();
    }
 
-   if ( menuAction )
+   if ( menuAction == menuHelp )
    {
       ImGui::OpenPopup( menuAction );
    }
-
-   // if ( ImGui::BeginPopupModal( menuAddProfiler, NULL, ImGuiWindowFlags_AlwaysAutoResize ) )
-   //{
-   // static char processName[512] = {};
-   // bool shouldCreateProfiler = ImGui::InputText(
-   //    "Process Name",
-   //    processName,
-   //    sizeof( processName ),
-   //    ImGuiInputTextFlags_AutoSelectAll | ImGuiInputTextFlags_EnterReturnsTrue );
-   // ImGui::Separator();
-
-   // if ( ImGui::Button( "Add", ImVec2( 120, 0 ) ) || shouldCreateProfiler )
-   //{
-   //   // TODO
-   //   // saveToFile( path );
-   //   ImGui::CloseCurrentPopup();
-   //}
-
-   // ImGui::SameLine();
-
-   // if ( ImGui::Button( "Cancel", ImVec2( 120, 0 ) ) )
-   //{
-   //   ImGui::CloseCurrentPopup();
-   //}
-
-   // ImGui::EndPopup();
-   //}
-
-   if ( ImGui::BeginPopupModal( menuSaveAsHop, NULL, ImGuiWindowFlags_AlwaysAutoResize ) )
-   {
-      static char path[512] = {};
-      bool shouldSave = ImGui::InputText(
-          "Save to",
-          path,
-          sizeof( path ),
-          ImGuiInputTextFlags_AutoSelectAll | ImGuiInputTextFlags_EnterReturnsTrue );
-      ImGui::Separator();
-
-      if ( ImGui::Button( "Save", ImVec2( 120, 0 ) ) || shouldSave )
-      {
-         // TODO
-         // saveToFile( path );
-         ImGui::CloseCurrentPopup();
-      }
-
-      ImGui::SameLine();
-
-      if ( ImGui::Button( "Cancel", ImVec2( 120, 0 ) ) )
-      {
-         ImGui::CloseCurrentPopup();
-      }
-
-      ImGui::EndPopup();
-   }
-
-   if ( ImGui::BeginPopupModal( menuOpenHopFile, NULL, ImGuiWindowFlags_AlwaysAutoResize ) )
-   {
-      static char path[512] = {};
-      const bool shouldOpen = ImGui::InputText(
-          "Open file",
-          path,
-          sizeof( path ),
-          ImGuiInputTextFlags_AutoSelectAll | ImGuiInputTextFlags_EnterReturnsTrue );
-
-      ImGui::Separator();
-
-      if ( ImGui::Button( "Open", ImVec2( 120, 0 ) ) || shouldOpen )
-      {
-         // TODO
-         // openFile( path );
-         ImGui::CloseCurrentPopup();
-      }
-
-      ImGui::SameLine();
-
-      if ( ImGui::Button( "Cancel", ImVec2( 120, 0 ) ) )
-      {
-         ImGui::CloseCurrentPopup();
-      }
-
-      ImGui::EndPopup();
-   }
-
    if ( ImGui::BeginPopupModal( menuHelp, NULL, ImGuiWindowFlags_AlwaysAutoResize ) )
    {
       ImGui::Text( "Hop version %.1f\n", HOP_VERSION );
