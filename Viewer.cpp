@@ -363,13 +363,13 @@ void Viewer::draw( uint32_t windowWidth, uint32_t windowHeight )
 
    ImGui::End();  // Hop Viewer Window
 
+   handleHotkey();
+
    // Render modal window, if any
    if ( modalWindowShowing() )
    {
       renderModalWindow();
    }
-
-   handleHotkey();
 
    drawOptionsWindow( hop::g_options );
 
