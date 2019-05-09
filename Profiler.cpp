@@ -15,6 +15,7 @@
 #include <cassert>
 #include <cmath>
 #include <chrono>
+#include <string>
 #include <vector>
 #include <algorithm>
 #include <numeric>
@@ -561,10 +562,11 @@ void hop::Profiler::setRecording( bool recording )
    }
 }
 
-bool hop::Profiler::saveToFile( const char* path )
+bool hop::Profiler::saveToFile( const char* savePath )
 {
    displayModalWindow( "Saving...", MODAL_TYPE_NO_CLOSE );
    setRecording( false );
+   std::string path( savePath );
    std::thread t( [this, path]() {
       // Compute the size of the serialized data
       const size_t dbSerializedSize = serializedSize( _strDb );
@@ -621,8 +623,9 @@ bool hop::Profiler::saveToFile( const char* path )
    return true;
 }
 
-bool hop::Profiler::openFile( const char* path )
+bool hop::Profiler::openFile( const char* pathToFile )
 {
+   std::string path( pathToFile );
    std::ifstream input( path, std::ifstream::binary );
    if ( input.is_open() )
    {

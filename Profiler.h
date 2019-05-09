@@ -38,10 +38,9 @@ public:
    void clear();
 
    bool saveToFile( const char* path );
-
-private:
    bool openFile( const char* path );
 
+private:
    std::string _name;
    Timeline _timeline;
    TimelineTracks _tracks;

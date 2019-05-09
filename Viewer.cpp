@@ -27,25 +27,26 @@ static void drawMenuBar( hop::Viewer* v )
    {
       if ( ImGui::BeginMenu( "Menu" ) )
       {
+         const int profIdx = v->activeProfilerIndex();
          if ( ImGui::MenuItem( menuAddProfiler, NULL ) )
          {
             hop::displayStringInputModalWindow(
                 "Add Profiler for Process",
                 [=]( const char* process ) { v->addNewProfiler( process, false ); } );
          }
-         if ( ImGui::MenuItem( menuSaveAsHop, NULL ) )
+         if( ImGui::MenuItem( menuSaveAsHop, NULL, false, profIdx >= 0 ) )
          {
+            hop::Profiler* prof = v->getProfiler( profIdx );
             hop::displayStringInputModalWindow(
-                menuSaveAsHop,
-                [=]( const char* /*path*/ ) { /*saveToFile( path );*/ } );
+                menuSaveAsHop, [=]( const char* path ) { prof->saveToFile( path ); } );
          }
-         if ( ImGui::MenuItem( menuOpenHopFile, NULL ) )
+         if( ImGui::MenuItem( menuOpenHopFile, NULL ) )
          {
+            hop::Profiler* prof = v->getProfiler( profIdx );
             hop::displayStringInputModalWindow(
-                menuOpenHopFile,
-                [=]( const char* /*path*/ ) { /*openFile( path );*/ } );
+                menuOpenHopFile, [=]( const char* path ) { prof->openFile( path ); } );
          }
-         if ( ImGui::MenuItem( menuHelp, NULL ) )
+         if( ImGui::MenuItem( menuHelp, NULL ) )
          {
             menuAction = menuHelp;
          }
@@ -259,6 +260,8 @@ void Viewer::removeProfiler( int index )
 }
 
 int Viewer::profilerCount() const { return _profilers.size(); }
+
+int Viewer::activeProfilerIndex() const { return _selectedTab; }
 
 Profiler* Viewer::getProfiler( int index )
 {

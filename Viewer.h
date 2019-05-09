@@ -17,6 +17,7 @@ class Viewer
    void removeProfiler( int index );
    Profiler* getProfiler( int index );
    int profilerCount() const;
+   int activeProfilerIndex() const;
    void fetchClientsData();
    void onNewFrame(
        int width,
