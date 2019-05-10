@@ -352,7 +352,7 @@ static void drawHoveredEntryPopup(
     EntryNameFct getEntryName,
     bool drawAsCycles )
 {
-   char strBuffer[256];
+   char strBuffer[512];
    char fmtTime[32];
    const char* entryName = getEntryName( dd, ddEntryIdx, strDb );
    int charWritten = snprintf( strBuffer, sizeof( strBuffer ), "%s ", entryName );
@@ -364,18 +364,22 @@ static void drawHoveredEntryPopup(
 
    charWritten += snprintf(
        strBuffer + charWritten,
-       sizeof( strBuffer ) - charWritten,
+       std::max( 0, (int)sizeof( strBuffer ) - charWritten ),
        " (%s)\n   %s:%d ",
        fmtTime,
        strDb.getString( dd.entryData.tData->fileNameIds[entryIndex] ),
        dd.entryData.tData->lineNbs[entryIndex] );
 
+   ImGui::TextUnformatted( strBuffer );
+
+// Print out some debug info as well
 #ifdef HOP_DEBUG
+   char strDebug[512];
    const auto end = dd.entryData.tData->entries.ends[entryIndex];
    const auto delta = dd.entryData.tData->entries.deltas[entryIndex];
    snprintf(
-       strBuffer + charWritten,
-       sizeof( strBuffer ) - charWritten,
+       strDebug,
+       sizeof( strDebug ),
        "\n======== Debug Info ========\n"
        "Trace Index = %zu\n"
        "Trace Start = %zu\n"
@@ -385,9 +389,8 @@ static void drawHoveredEntryPopup(
        end - delta,
        end,
        delta );
+   ImGui::TextUnformatted( strDebug );
 #endif
-
-   ImGui::TextUnformatted( strBuffer );
 }
 
 static void drawHoveredLockWaitPopup(
@@ -857,9 +860,10 @@ void TimelineTracks::drawTraces(
       drawEntries( lodTracesToDraw[ zoneId ], drawInfo.strDb, getEmptyLabel );
 
       // Draw the non-loded traces
-      hoveredIdx = drawEntries( tracesToDraw[ zoneId ], drawInfo.strDb, getTraceLabel );
-      if( hoveredIdx != hop::INVALID_IDX )
+      size_t curHoveredIdx = drawEntries( tracesToDraw[ zoneId ], drawInfo.strDb, getTraceLabel );
+      if( curHoveredIdx != hop::INVALID_IDX )
       {
+         hoveredIdx = curHoveredIdx;
          hoveredDrawData = &tracesToDraw[ zoneId ];
       }
 

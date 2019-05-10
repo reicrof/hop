@@ -207,12 +207,12 @@ SearchSelection drawSearchResult(
 
          // Add dummy invisible button so the next entry show up where they
          // should in the search table
-         const float paddingHeight = std::max( curScrollY - ( 3.0f * entryHeight ), 0.0f );
-         ImGui::InvisibleButton( "padding1", ImVec2( 0.0f, paddingHeight ) );
+         const float paddingHeight = std::max( curScrollY - ( 3.0f * entryHeight ), 0.1f );
+         ImGui::InvisibleButton( "padding1", ImVec2( 1.0f, paddingHeight ) );
          ImGui::NextColumn();
-         ImGui::InvisibleButton( "padding2", ImVec2( 0.0f, paddingHeight ) );
+         ImGui::InvisibleButton( "padding2", ImVec2( 1.0f, paddingHeight ) );
          ImGui::NextColumn();
-         ImGui::InvisibleButton( "padding3", ImVec2( 0.0f, paddingHeight ) );
+         ImGui::InvisibleButton( "padding3", ImVec2( 1.0f, paddingHeight ) );
          ImGui::NextColumn();
 
          static size_t selectedId = -1;
