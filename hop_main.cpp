@@ -391,8 +391,6 @@ int main( int argc, char* argv[] )
       viewer.onNewFrame( w, h, x, y, lmb, rmb, g_mouseWheel );
       g_mouseWheel = 0;
 
-      ImGui::ShowDemoWindow();
-
       viewer.draw( w, h );
 
       hop::drawCursor();
