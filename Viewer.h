@@ -14,7 +14,7 @@ class Viewer
    Viewer( uint32_t screenSizeX, uint32_t screenSizeY );
    ~Viewer();
    void addNewProfiler( const char* processname, bool startRecording );
-   void removeProfiler( int index );
+   int removeProfiler( int index );
    Profiler* getProfiler( int index );
    int profilerCount() const;
    int activeProfilerIndex() const;
