@@ -73,18 +73,24 @@ float computeCanvasSize( const hop::TimelineTracks& tracks )
 
 namespace hop
 {
-Profiler::Profiler( const char* name ) { setExecName( name ); }
-
-const char* Profiler::execName() const noexcept { return _name.c_str(); }
-
-void Profiler::setExecName( const char* name )
+Profiler::Profiler() : _srcType( SRC_TYPE_NONE )
 {
-   _server.stop();
+}
 
-   _name = name ? name : "";
-   if ( !_name.empty() )
+const char* Profiler::name() const noexcept { return _name.c_str(); }
+
+bool Profiler::setSource( SourceType type, const char* str )
+{
+   _name = str;
+   switch( type )
    {
-      _server.start( _name.c_str() );
+      case SRC_TYPE_PROCESS:
+        return setProcess( _name.c_str() );
+      case SRC_TYPE_FILE:
+        return openFile( _name.c_str() );
+      case SRC_TYPE_NONE:
+        assert(false);
+        return false;
    }
 }
 
@@ -623,68 +629,69 @@ bool hop::Profiler::saveToFile( const char* savePath )
    return true;
 }
 
-bool hop::Profiler::openFile( const char* pathToFile )
+bool hop::Profiler::setProcess( const char* process )
 {
-   std::string path( pathToFile );
+    _name = process ? process : "";
+   _server.stop();
+   _srcType = SRC_TYPE_PROCESS;
+   return _server.start( process );
+}
+
+bool hop::Profiler::openFile( const char* path )
+{
+   _name = path ? path : "";
    std::ifstream input( path, std::ifstream::binary );
    if ( input.is_open() )
    {
       clear();
 
       displayModalWindow( "Loading...", MODAL_TYPE_NO_CLOSE );
-      std::thread t( [this, path]() {
-         std::ifstream input( path, std::ifstream::binary );
-         std::vector<char> data(
-             ( std::istreambuf_iterator<char>( input ) ), ( std::istreambuf_iterator<char>() ) );
+      std::vector<char> data(
+          ( std::istreambuf_iterator<char>( input ) ), ( std::istreambuf_iterator<char>() ) );
 
-         SaveFileHeader* header = (SaveFileHeader*)&data[0];
+      SaveFileHeader* header = (SaveFileHeader*)&data[0];
 
-         if ( header->magicNumber != MAGIC_NUMBER )
-         {
-            closeModalWindow();
-            displayModalWindow( "Not a valid hop file.", MODAL_TYPE_ERROR );
-            return false;
-         }
-
-         std::vector<char> uncompressedData( header->uncompressedSize );
-         mz_ulong uncompressedSize = uncompressedData.size();
-
-         int uncompressStatus = uncompress(
-             (unsigned char*)uncompressedData.data(),
-             &uncompressedSize,
-             (unsigned char*)&data[sizeof( SaveFileHeader )],
-             data.size() - sizeof( SaveFileHeader ) );
-
-         if ( uncompressStatus != Z_OK )
-         {
-            closeModalWindow();
-            displayModalWindow(
-                "Error uncompressing file. Nothing will be loaded", MODAL_TYPE_ERROR );
-            return false;
-         }
-
-         size_t i = 0;
-         const size_t dbSize = deserialize( &uncompressedData[i], _strDb );
-         assert( dbSize == header->strDbSize );
-         i += dbSize;
-
-         const size_t timelineSize = deserialize( &uncompressedData[i], _timeline );
-         i += timelineSize;
-
-         std::vector<TimelineTrack> timelineTracks( header->threadCount );
-         for ( uint32_t j = 0; j < header->threadCount; ++j )
-         {
-            size_t timelineTrackSize = deserialize( &uncompressedData[i], timelineTracks[j] );
-            addTraces( timelineTracks[j]._traces, j );
-            addLockWaits( timelineTracks[j]._lockWaits, j );
-            i += timelineTrackSize;
-         }
+      if ( header->magicNumber != MAGIC_NUMBER )
+      {
          closeModalWindow();
-         return true;
-      } );
+         displayModalWindow( "Not a valid hop file.", MODAL_TYPE_ERROR );
+         return false;
+      }
 
-      t.detach();
+      std::vector<char> uncompressedData( header->uncompressedSize );
+      mz_ulong uncompressedSize = uncompressedData.size();
 
+      int uncompressStatus = uncompress(
+          (unsigned char*)uncompressedData.data(),
+          &uncompressedSize,
+          (unsigned char*)&data[sizeof( SaveFileHeader )],
+          data.size() - sizeof( SaveFileHeader ) );
+
+      if ( uncompressStatus != Z_OK )
+      {
+         closeModalWindow();
+         displayModalWindow( "Error uncompressing file. Nothing will be loaded", MODAL_TYPE_ERROR );
+         return false;
+      }
+
+      size_t i = 0;
+      const size_t dbSize = deserialize( &uncompressedData[i], _strDb );
+      assert( dbSize == header->strDbSize );
+      i += dbSize;
+
+      const size_t timelineSize = deserialize( &uncompressedData[i], _timeline );
+      i += timelineSize;
+
+      std::vector<TimelineTrack> timelineTracks( header->threadCount );
+      for ( uint32_t j = 0; j < header->threadCount; ++j )
+      {
+         size_t timelineTrackSize = deserialize( &uncompressedData[i], timelineTracks[j] );
+         addTraces( timelineTracks[j]._traces, j );
+         addLockWaits( timelineTracks[j]._lockWaits, j );
+         i += timelineTrackSize;
+      }
+      _srcType = SRC_TYPE_FILE;
+      closeModalWindow();
       return true;
    }
    displayModalWindow( "File not found", MODAL_TYPE_ERROR );

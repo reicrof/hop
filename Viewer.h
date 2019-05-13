@@ -13,7 +13,8 @@ class Viewer
   public:
    Viewer( uint32_t screenSizeX, uint32_t screenSizeY );
    ~Viewer();
-   void addNewProfiler( const char* processname, bool startRecording );
+   int addNewProfiler( const char* processname, bool startRecording );
+   int openProfilerFile( const char* processname );
    int removeProfiler( int index );
    Profiler* getProfiler( int index );
    int profilerCount() const;

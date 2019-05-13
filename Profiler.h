@@ -19,10 +19,17 @@ class Server;
 class Profiler
 {
 public:
-   Profiler( const char* name );
+   enum SourceType
+   {
+      SRC_TYPE_NONE,
+      SRC_TYPE_FILE,
+      SRC_TYPE_PROCESS,
+   } _srcType;
+
+   Profiler();
    ~Profiler();
-   const char* execName() const noexcept;
-   void setExecName( const char* name );
+   const char* name() const noexcept;
+   bool setSource( SourceType type, const char* str );
    void update( float deltaTimeMs ) noexcept;
    void draw( float drawPosX, float drawPosY, float windowWidth, float windowHeight );
    void fetchClientData();
@@ -38,9 +45,11 @@ public:
    void clear();
 
    bool saveToFile( const char* path );
-   bool openFile( const char* path );
 
 private:
+   bool openFile( const char* path );
+   bool setProcess( const char* process );
+
    std::string _name;
    Timeline _timeline;
    TimelineTracks _tracks;

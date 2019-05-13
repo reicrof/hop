@@ -15,10 +15,17 @@ extern bool g_run;
 static const float MAX_FULL_SIZE_TAB_COUNT = 8.0f;
 static const float TAB_HEIGHT = 30.0f;
 
-static void addNewProfilerPopUp( hop::Viewer* v )
+static void addNewProfilerPopUp( hop::Viewer* v, hop::Profiler::SourceType type )
 {
-   hop::displayStringInputModalWindow( "Add Profiler for Process", [=]( const char* process ) {
-      v->addNewProfiler( process, false );
+   hop::displayStringInputModalWindow( "Add Profiler for Process", [=]( const char* str ) {
+      if ( type == hop::Profiler::SRC_TYPE_PROCESS )
+      {
+         v->addNewProfiler( str, false );
+      }
+      else if ( type == hop::Profiler::SRC_TYPE_FILE )
+      {
+         v->openProfilerFile( str );
+      }
    } );
 }
 
@@ -37,7 +44,7 @@ static void drawMenuBar( hop::Viewer* v )
          const int profIdx = v->activeProfilerIndex();
          if ( ImGui::MenuItem( menuAddProfiler, NULL ) )
          {
-            addNewProfilerPopUp( v );
+            addNewProfilerPopUp( v, hop::Profiler::SRC_TYPE_PROCESS );
          }
          if( ImGui::MenuItem( menuSaveAsHop, NULL, false, profIdx >= 0 ) )
          {
@@ -47,9 +54,9 @@ static void drawMenuBar( hop::Viewer* v )
          }
          if( ImGui::MenuItem( menuOpenHopFile, NULL ) )
          {
-            hop::Profiler* prof = v->getProfiler( profIdx );
-            hop::displayStringInputModalWindow(
-                menuOpenHopFile, [=]( const char* path ) { prof->openFile( path ); } );
+            hop::displayStringInputModalWindow( menuOpenHopFile, [=]( const char* path ) {
+               v->openProfilerFile( path );
+            } );
          }
          if( ImGui::MenuItem( menuHelp, NULL ) )
          {
@@ -92,7 +99,7 @@ static void drawMenuBar( hop::Viewer* v )
 
 static const char* displayableProfilerName( hop::Profiler* prof )
 {
-   const char* profName = prof->execName();
+   const char* profName = prof->name();
    profName = profName[0] == '\0' ? "<No Target Process>" : profName;
    return profName;
 }
@@ -192,7 +199,7 @@ static int drawTabs( hop::Viewer& viewer, int selectedTab )
    addTabPos.x += profCount * tabWidth + profCount * tabFramePadding;
    if ( drawAddTabButton( addTabPos ) )
    {
-      addNewProfilerPopUp( &viewer );
+      addNewProfilerPopUp( &viewer, hop::Profiler::SRC_TYPE_PROCESS );
    }
 
    ImGui::PopStyleVar( 2 );
@@ -235,20 +242,30 @@ Viewer::Viewer( uint32_t screenSizeX, uint32_t /*screenSizeY*/ )
    renderer::createResources();
 }
 
-void Viewer::addNewProfiler( const char* processName, bool startRecording )
+int Viewer::addNewProfiler( const char* processName, bool startRecording )
 {
    for ( const auto& p : _profilers )
    {
-      if ( strcmp( p->execName(), processName ) == 0 )
+      if ( strcmp( p->name(), processName ) == 0 )
       {
          hop::displayModalWindow( "Cannot profile process twice !", hop::MODAL_TYPE_ERROR );
-         return;
+         return -1;
       }
    }
  
-   _profilers.emplace_back( new hop::Profiler( processName ) );
+   _profilers.emplace_back( new hop::Profiler() );
+   _profilers.back()->setSource( Profiler::SRC_TYPE_PROCESS, processName );
    _profilers.back()->setRecording( startRecording );
    _selectedTab = _profilers.size() - 1;
+   return _selectedTab;
+}
+
+int Viewer::openProfilerFile( const char* filePath )
+{
+   _profilers.emplace_back( new hop::Profiler() );
+   _profilers.back()->setSource( Profiler::SRC_TYPE_FILE, filePath );
+   _selectedTab = _profilers.size() - 1;
+   return _selectedTab;
 }
 
 int Viewer::removeProfiler( int index )
@@ -420,7 +437,7 @@ bool Viewer::handleHotkey()
       }
       else if ( ImGui::GetIO().KeyCtrl && ImGui::IsKeyPressed( 't' ) )
       {
-         addNewProfilerPopUp( this );
+         addNewProfilerPopUp( this, Profiler::SRC_TYPE_PROCESS );
       }
    }
 
