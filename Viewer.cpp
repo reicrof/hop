@@ -260,12 +260,19 @@ int Viewer::addNewProfiler( const char* processName, bool startRecording )
    return _selectedTab;
 }
 
-int Viewer::openProfilerFile( const char* filePath )
+void Viewer::openProfilerFile( const char* filePath )
 {
-   _profilers.emplace_back( new hop::Profiler() );
-   _profilers.back()->setSource( Profiler::SRC_TYPE_FILE, filePath );
-   _selectedTab = _profilers.size() - 1;
-   return _selectedTab;
+   assert( !_pendingProfilerLoad.valid() );
+
+   std::string strPath = filePath;
+   _pendingProfilerLoad = std::async(
+       std::launch::async,
+       []( std::string path ) {
+          Profiler* prof = new hop::Profiler();
+          prof->setSource( Profiler::SRC_TYPE_FILE, path.c_str() );
+          return prof;
+       },
+       strPath );
 }
 
 int Viewer::removeProfiler( int index )
@@ -299,6 +306,20 @@ void Viewer::fetchClientsData()
    for ( auto& p : _profilers )
    {
       p->fetchClientData();
+   }
+
+   if ( _pendingProfilerLoad.valid() )
+   {
+      const auto waitRes = _pendingProfilerLoad.wait_for( std::chrono::microseconds( 200 ) );
+      if ( waitRes == std::future_status::ready )
+      {
+         std::unique_ptr<Profiler> loadedProf( _pendingProfilerLoad.get() );
+         if ( strlen( loadedProf->name() ) > 0 )
+         {
+            _profilers.emplace_back( std::move(loadedProf) );
+            _selectedTab = _profilers.size() - 1;
+         }
+      }
    }
 }
 

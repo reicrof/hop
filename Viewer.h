@@ -2,6 +2,7 @@
 #define VIEWER_H_
 
 #include <chrono>
+#include <future>
 #include <memory>
 #include <vector>
 
@@ -14,7 +15,7 @@ class Viewer
    Viewer( uint32_t screenSizeX, uint32_t screenSizeY );
    ~Viewer();
    int addNewProfiler( const char* processname, bool startRecording );
-   int openProfilerFile( const char* processname );
+   void openProfilerFile( const char* processname );
    int removeProfiler( int index );
    Profiler* getProfiler( int index );
    int profilerCount() const;
@@ -33,8 +34,11 @@ class Viewer
    bool handleHotkey();
 
   private:
+
    std::vector<std::unique_ptr<hop::Profiler> > _profilers;
    int _selectedTab;
+
+   std::future< Profiler* > _pendingProfilerLoad;
 
    using ClockType = std::chrono::steady_clock;
    std::chrono::time_point<ClockType> _lastFrameTime;
