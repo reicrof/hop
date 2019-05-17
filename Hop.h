@@ -1213,8 +1213,7 @@ class Client
 
    bool addStringToDb( StrPtr_t strId )
    {
-      // Early return on NULL. The db should always contains NULL as first
-      // entry
+      // Early return on NULL
       if( strId == 0 ) return false;
 
       auto res = _stringPtr.insert( strId );
@@ -1243,13 +1242,13 @@ class Client
       _sentStringDataSize = 0;
       _clientResetTimeStamp = ClientManager::sharedMemory().lastResetTimestamp();
 
-      // Push back first name as empty string
-      _stringPtr.insert( 0 );
-      _stringData.insert( _stringData.begin(), sizeof(StrPtr_t), '\0' );
       // Push back thread name
-      const auto hash = addDynamicStringToDb( tl_threadNameBuffer );
-      HOP_UNUSED(hash);
-      assert( hash == tl_threadName );
+      if( tl_threadNameBuffer[0] != '\0' )
+      {
+         const auto hash = addDynamicStringToDb( tl_threadNameBuffer );
+         HOP_UNUSED(hash);
+         assert( hash == tl_threadName );
+      }
    }
 
    void resetPendingTraces()

@@ -397,9 +397,10 @@ void Viewer::draw( uint32_t windowWidth, uint32_t windowHeight )
    drawMenuBar( this );
 
    const float dtTimeMs = ImGui::GetIO().DeltaTime * 1000;
+   const float globalTimeMs = ImGui::GetTime() * 1000;
    for ( auto& p : _profilers )
    {
-      p->update( dtTimeMs );
+      p->update( dtTimeMs, globalTimeMs );
    }
 
    _selectedTab = drawTabs( *this, _selectedTab );

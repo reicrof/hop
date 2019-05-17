@@ -30,7 +30,7 @@ public:
    ~Profiler();
    const char* name() const noexcept;
    bool setSource( SourceType type, const char* str );
-   void update( float deltaTimeMs ) noexcept;
+   void update( float deltaTimeMs, float globalTimeMs ) noexcept;
    void draw( float drawPosX, float drawPosY, float windowWidth, float windowHeight );
    void fetchClientData();
    void addStringData( const std::vector< char >& stringData );

@@ -295,7 +295,7 @@ static LaunchOptions parseArgs( int argc, char* argv[] )
          return createLaunchOptions( argv[1], &argv[1], false );
       }
    }
-   return LaunchOptions{};
+   return LaunchOptions{nullptr, nullptr, nullptr, false};
 }
 
 int main( int argc, char* argv[] )
@@ -367,8 +367,10 @@ int main( int argc, char* argv[] )
       }
    }
 
+   HOP_SET_THREAD_NAME( "Main" );
    while ( g_run )
    {
+      HOP_PROF( "Main Loop" );
       const auto frameStart = std::chrono::system_clock::now();
 
       handleInput();

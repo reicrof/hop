@@ -79,7 +79,7 @@ class TimelineTracks
   public:
    bool handleMouse( float posX, float posY, bool lmClicked, bool rmClicked, float wheel );
    bool handleHotkey();
-   void update( float deltaTimeMs, TimeDuration timelineDuration );
+   void update( float globalTimeMs, TimeDuration timelineDuration );
    std::vector< TimelineMessage > draw( const TimelineTracksDrawInfo& info );
    void clear();
    float totalHeight() const;

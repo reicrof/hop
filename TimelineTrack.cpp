@@ -636,12 +636,10 @@ bool TimelineTracks::handleHotkey()
    return false;
 }
 
-void TimelineTracks::update( float deltaTimeMs, TimeDuration timelineDuration )
+void TimelineTracks::update( float globalTimeMs, TimeDuration timelineDuration )
 {
    // Update the highlight factor
-   static float x = 0.0f;
-   x += 0.007f * deltaTimeMs;
-   _highlightValue = (std::sin( x ) * 0.8f + 1.0f) / 2.0f;
+   _highlightValue = (std::sin( 0.007f * globalTimeMs ) * 0.8f + 1.0f) / 2.0f;
 
    // Update current lod level
    _lodLevel = 0;
