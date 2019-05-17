@@ -971,7 +971,7 @@ std::vector< LockOwnerInfo > TimelineTracks::highlightLockOwner(
                const float tracesHeight = _tracks[i].heightWithThreadLabel();
 
                auto drawData = createDrawDataForEntry(
-                  lockWaitEndTime,
+                  lockWaitEndTime + lockHoldDuration,
                   lockHoldDuration,
                   0,
                   i,
@@ -981,7 +981,6 @@ std::vector< LockOwnerInfo > TimelineTracks::highlightLockOwner(
                   windowWidthPxl );
 
                ImVec2 topLeft = drawData.posPxl;
-               topLeft.x += drawData.lengthPxl;
                ImVec2 bottomRight = topLeft;
                bottomRight.x += drawData.lengthPxl;
                bottomRight.y += tracesHeight;
