@@ -358,6 +358,7 @@ int main( int argc, char* argv[] )
       }
    }
 
+   HOP_SET_THREAD_NAME( "Main" );
    bool lastVsync = !hop::g_options.vsyncOn;
    while ( g_run )
    {

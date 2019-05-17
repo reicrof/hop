@@ -208,29 +208,27 @@ void Profiler::fetchClientData()
    if( _recording )
    {
       HOP_PROF_SPLIT( "Fetching Str Data" );
-      for( size_t i = 0; i <_serverPendingData.stringData.size(); ++i )
-      {
-         addStringData( _serverPendingData.stringData[i] );
-      }
+      addStringData( _serverPendingData.stringData );
+
       HOP_PROF_SPLIT( "Fetching Traces" );
-      for( size_t i = 0; i <_serverPendingData.traces.size(); ++i )
+      for( const auto& threadTraces : _serverPendingData.tracesPerThread )
       {
-         addTraces(_serverPendingData.traces[i], _serverPendingData.tracesThreadIndex[i] );
+         addTraces( threadTraces.second, threadTraces.first );
       }
       HOP_PROF_SPLIT( "Fetching Lock Waits" );
-      for( size_t i = 0; i < _serverPendingData.lockWaits.size(); ++i )
+      for( const auto& lockwaits : _serverPendingData.lockWaitsPerThread )
       {
-         addLockWaits(_serverPendingData.lockWaits[i], _serverPendingData.lockWaitThreadIndex[i] );
+         addLockWaits( lockwaits.second, lockwaits.first );
       }
       HOP_PROF_SPLIT( "Fetching Unlock Events" );
-      for (size_t i = 0; i < _serverPendingData.unlockEvents.size(); ++i)
+      for( const auto& unlockEvents : _serverPendingData.unlockEventsPerThread )
       {
-         addUnlockEvents(_serverPendingData.unlockEvents[i], _serverPendingData.unlockEventsThreadIndex[i]);
+         addUnlockEvents( unlockEvents.second, unlockEvents.first );
       }
       HOP_PROF_SPLIT( "Fetching CoreEvents" );
-      for (size_t i = 0; i < _serverPendingData.coreEvents.size(); ++i)
+      for( const auto& coreEvents : _serverPendingData.coreEventsPerThread )
       {
-         addCoreEvents( _serverPendingData.coreEvents[i], _serverPendingData.coreEventsThreadIndex[i] );
+         addCoreEvents( coreEvents.second, coreEvents.first );
       }
    }
 

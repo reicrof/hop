@@ -11,8 +11,9 @@
 #include <chrono>
 
 template <typename T, class BinaryPredicate, class MergeFct>
-static void merge_consecutive( T first, T last, BinaryPredicate pred, MergeFct merge )
+static T merge_consecutive( T first, T last, BinaryPredicate pred, MergeFct merge )
 {
+   int mergeCount = 0;
    auto writePos = first;
    while( ++first != last )
    {
@@ -21,15 +22,17 @@ static void merge_consecutive( T first, T last, BinaryPredicate pred, MergeFct m
          merge( *( first - 1 ), *writePos );
          std::swap( *( first - 1 ), *writePos );
          writePos = first;
+         ++mergeCount;
       }
    }
    merge( *( first - 1 ), *writePos );
    std::swap( *( first - 1 ), *writePos );
+
+   return last - mergeCount;
 }
 
-static void mergeAndRemoveDuplicates( std::vector< hop::CoreEvent >& coreEvents )
+static int mergeAndRemoveDuplicates( hop::CoreEvent* coreEvents, uint32_t count )
 {
-   HOP_PROF_FUNC();
    // Merge events that are less than 10 micro apart
    const uint64_t minCycles = hop::nanosToCycles( 10000 );
    auto canMergeCore = [minCycles]( const hop::CoreEvent& lhs, const hop::CoreEvent& rhs ) {
@@ -41,13 +44,13 @@ static void mergeAndRemoveDuplicates( std::vector< hop::CoreEvent >& coreEvents 
       return lhs.core == rhs.core;
    };
 
-   merge_consecutive(
-       coreEvents.begin(),
-       coreEvents.end(),
+   auto mergedEnd = merge_consecutive(
+       coreEvents,
+       coreEvents + count,
        canMergeCore,
        []( hop::CoreEvent& lhs, const hop::CoreEvent& rhs ) { lhs.start = rhs.start; } );
-   auto newEnd = std::unique( coreEvents.begin(), coreEvents.end(), sameCore );
-   coreEvents.erase( newEnd, coreEvents.end() );
+   auto newEnd = std::unique( coreEvents, mergedEnd, sameCore );
+   return std::distance( coreEvents, newEnd );
 }
 
 namespace hop
@@ -62,6 +65,7 @@ bool Server::start( const char* name )
    _thread = std::thread( [this, name]() {
       TimeStamp lastSignalTime = getTimeStamp();
       SharedMemory::ConnectionState localState = SharedMemory::NOT_CONNECTED;
+      HOP_SET_THREAD_NAME( "Server" );
       while ( true )
       {
          HOP_PROF_FUNC();
@@ -218,18 +222,18 @@ size_t Server::handleNewMessage( uint8_t* data, size_t maxSize, TimeStamp minTim
        case MsgType::PROFILER_STRING_DATA:
        {
           // Copy string and add it to database
-          std::vector<char> stringData( msgInfo->stringData.size );
-          if ( stringData.size() > 0 )
+          const size_t strSize = msgInfo->stringData.size;
+          if ( strSize > 0 )
           {
-             memcpy( stringData.data(), bufPtr, stringData.size() );
-             _stringDb.addStringData( stringData );
-             bufPtr += stringData.size();
-
+             const char* strDataPtr = (const char*)bufPtr;
+             _stringDb.addStringData( strDataPtr, strSize );
+             bufPtr += strSize;
              assert( ( size_t )( bufPtr - data ) <= maxSize );
 
              // TODO: Could lock later when we received all the messages
              std::lock_guard<hop::Mutex> guard( _sharedPendingDataMutex );
-             _sharedPendingData.stringData.emplace_back( std::move( stringData ) );
+             _sharedPendingData.stringData.insert(
+                 _sharedPendingData.stringData.end(), strDataPtr, strDataPtr + strSize );
           }
           return ( size_t )( bufPtr - data );
        }
@@ -267,8 +271,7 @@ size_t Server::handleNewMessage( uint8_t* data, size_t maxSize, TimeStamp minTim
           {
              // TODO: Could lock later when we received all the messages
              std::lock_guard<hop::Mutex> guard( _sharedPendingDataMutex );
-             _sharedPendingData.traces.emplace_back( std::move( traceData ) );
-             _sharedPendingData.tracesThreadIndex.push_back( threadIndex );
+             _sharedPendingData.tracesPerThread[threadIndex].append( traceData );
           }
           return ( size_t )( bufPtr - data );
       }
@@ -296,28 +299,28 @@ size_t Server::handleNewMessage( uint8_t* data, size_t maxSize, TimeStamp minTim
 
          // TODO: Could lock later when we received all the messages
          std::lock_guard<hop::Mutex> guard( _sharedPendingDataMutex );
-         _sharedPendingData.lockWaits.emplace_back( std::move( lockwaitData ) );
-         _sharedPendingData.lockWaitThreadIndex.push_back( threadIndex );
+         _sharedPendingData.lockWaitsPerThread[threadIndex].append( lockwaitData );
 
          return (size_t)(bufPtr - data);
       }
       case MsgType::PROFILER_UNLOCK_EVENT:
       {
-         std::vector< UnlockEvent > unlockEvents( msgInfo->unlockEvents.count );
-         memcpy( unlockEvents.data(), bufPtr, unlockEvents.size() * sizeof(UnlockEvent) );
+         const size_t eventCount = msgInfo->unlockEvents.count;
+         UnlockEvent* eventPtr = (UnlockEvent*)bufPtr;
 
-         bufPtr += unlockEvents.size() * sizeof(UnlockEvent);
+         bufPtr += eventCount * sizeof(UnlockEvent);
          assert( (size_t)(bufPtr - data) <= maxSize );
 
          std::sort(
-             unlockEvents.begin(), unlockEvents.end(), []( const UnlockEvent& lhs, const UnlockEvent& rhs ) {
+             eventPtr, eventPtr + eventCount, []( const UnlockEvent& lhs, const UnlockEvent& rhs ) {
                 return lhs.time < rhs.time;
              } );
 
          // TODO: Could lock later when we received all the messages
          std::lock_guard<hop::Mutex> guard(_sharedPendingDataMutex);
-         _sharedPendingData.unlockEvents.emplace_back( std::move( unlockEvents ) );
-         _sharedPendingData.unlockEventsThreadIndex.push_back(threadIndex);
+         auto& unlocks = _sharedPendingData.unlockEventsPerThread[threadIndex];
+         unlocks.insert( unlocks.end(), eventPtr, eventPtr + eventCount );
+
          return (size_t)(bufPtr - data);
       }
       case MsgType::PROFILER_HEARTBEAT:
@@ -326,22 +329,21 @@ size_t Server::handleNewMessage( uint8_t* data, size_t maxSize, TimeStamp minTim
       }
       case MsgType::PROFILER_CORE_EVENT:
       {
-         std::vector< CoreEvent > coreEvents( msgInfo->coreEvents.count );
-
-         memcpy( coreEvents.data(), bufPtr, coreEvents.size() * sizeof(CoreEvent) );
+         const size_t eventCount = msgInfo->coreEvents.count;
+         CoreEvent* coreEventsPtr = (CoreEvent*) bufPtr;
 
          // Must be done before removing duplicates
-         bufPtr += coreEvents.size() * sizeof(CoreEvent);
+         bufPtr += eventCount * sizeof(CoreEvent);
          assert( (size_t)(bufPtr - data) <= maxSize );
 
-         mergeAndRemoveDuplicates( coreEvents );
+         const size_t newCount = mergeAndRemoveDuplicates( coreEventsPtr, eventCount );
 
-         assert_is_sorted( coreEvents.begin(), coreEvents.end() );
+         assert_is_sorted( coreEventsPtr, coreEventsPtr + newCount );
 
          // TODO: Could lock later when we received all the messages
          std::lock_guard<hop::Mutex> guard(_sharedPendingDataMutex);
-         _sharedPendingData.coreEvents.emplace_back( std::move( coreEvents ) );
-         _sharedPendingData.coreEventsThreadIndex.push_back( threadIndex );
+         auto& coreEvents = _sharedPendingData.coreEventsPerThread[threadIndex];
+         coreEvents.insert( coreEvents.end(), coreEventsPtr, coreEventsPtr + newCount );
         return (size_t)(bufPtr - data);
       }
       default:
@@ -389,15 +391,29 @@ void Server::stop()
 
 void Server::PendingData::clear()
 {
-    traces.clear();
+    HOP_PROF_FUNC();
+
     stringData.clear();
-    tracesThreadIndex.clear();
-    lockWaits.clear();
-    lockWaitThreadIndex.clear();
-    unlockEvents.clear();
-    unlockEventsThreadIndex.clear();
-    coreEvents.clear();
-    coreEventsThreadIndex.clear();
+    for( auto& traces : tracesPerThread )
+    {
+       traces.second.clear();
+    }
+
+    for( auto& lockwaits : lockWaitsPerThread )
+    {
+       lockwaits.second.clear();
+    }
+
+    for( auto& unlockEvents : unlockEventsPerThread )
+    {
+       unlockEvents.second.clear();
+    }
+
+    for( auto& coreEvents : coreEventsPerThread )
+    {
+       coreEvents.second.clear();
+    }
+
     threadNames.clear();
 }
 
@@ -405,15 +421,11 @@ void Server::PendingData::swap(PendingData & rhs)
 {
     HOP_PROF_FUNC();
     using std::swap;
-    swap(traces, rhs.traces);
+    swap(tracesPerThread, rhs.tracesPerThread);
     swap(stringData, rhs.stringData);
-    swap(tracesThreadIndex, rhs.tracesThreadIndex);
-    swap(lockWaits, rhs.lockWaits);
-    swap(lockWaitThreadIndex, rhs.lockWaitThreadIndex);
-    swap(unlockEvents, rhs.unlockEvents);
-    swap(unlockEventsThreadIndex, rhs.unlockEventsThreadIndex);
-    swap(coreEvents, rhs.coreEvents);
-    swap(coreEventsThreadIndex, rhs.coreEventsThreadIndex );
+    swap(lockWaitsPerThread, rhs.lockWaitsPerThread);
+    swap(unlockEventsPerThread, rhs.unlockEventsPerThread);
+    swap(coreEventsPerThread, rhs.coreEventsPerThread);
     swap(threadNames, rhs.threadNames);
 }
 
