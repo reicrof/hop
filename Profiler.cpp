@@ -92,6 +92,8 @@ bool Profiler::setSource( SourceType type, const char* str )
         assert(false);
         return false;
    }
+
+   return false;
 }
 
 void Profiler::addTraces( const TraceData& traces, uint32_t threadIndex )

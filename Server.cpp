@@ -85,7 +85,6 @@ bool Server::start( const char* name )
             printf( "Connection to shared data successful.\n" );
          }
 
-         HOP_PROF_SPLIT( "Waiting for new messages" );
          const bool wasSignaled = _sharedMem.tryWaitSemaphore();
 
          // Check if we are done running.
@@ -131,11 +130,11 @@ bool Server::start( const char* name )
          // We were signaled
          lastSignalTime = curTime;
 
-         //HOP_PROF_SPLIT( "Handle messages" );
          size_t offset = 0;
          const size_t bytesToRead = ringbuf_consume( _sharedMem.ringbuffer(), &offset );
          if ( bytesToRead > 0 )
          {
+            HOP_PROF( "Server - Handling new messages" );
             const TimeStamp minTimestamp = _sharedMem.lastResetTimestamp();
             size_t bytesRead = 0;
             while ( bytesRead < bytesToRead )
