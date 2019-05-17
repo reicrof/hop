@@ -1,6 +1,5 @@
 #include "Server.h"
 #include "Utils.h"
-#include "Stats.h"
 
 #include <stdio.h>
 #include <errno.h>
@@ -88,7 +87,6 @@ bool Server::start( const char* name )
             // Clear any remaining messages from previous execution now
             clearPendingMessages();
             _sharedMem.setListeningConsumer( _recording );
-            g_stats.clientSharedMemSize = _sharedMem.sharedMetaInfo()->requestedSize;
             _connectionState = state;
             printf( "Connection to shared data successful.\n" );
          }
@@ -163,6 +161,11 @@ SharedMemory::ConnectionState Server::connectionState() const
    return _connectionState.load();
 }
 
+size_t Server::sharedMemorySize() const
+{
+   return _sharedMem.sharedMetaInfo()->requestedSize;
+}
+
 void Server::setRecording( bool recording )
 {
    _recording = recording;
@@ -228,12 +231,12 @@ size_t Server::handleNewMessage( uint8_t* data, size_t maxSize, TimeStamp minTim
           if ( strSize > 0 )
           {
              const char* strDataPtr = (const char*)bufPtr;
-             _stringDb.addStringData( strDataPtr, strSize );
              bufPtr += strSize;
              assert( ( size_t )( bufPtr - data ) <= maxSize );
 
              // TODO: Could lock later when we received all the messages
              std::lock_guard<hop::Mutex> guard( _sharedPendingDataMutex );
+             _stringDb.addStringData( strDataPtr, strSize );
              _sharedPendingData.stringData.insert(
                  _sharedPendingData.stringData.end(), strDataPtr, strDataPtr + strSize );
           }

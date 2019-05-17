@@ -21,6 +21,7 @@ class Server
    void stop();
    void clear();
    SharedMemory::ConnectionState connectionState() const;
+   size_t sharedMemorySize() const;
 
    struct PendingData
    {

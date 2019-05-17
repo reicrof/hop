@@ -771,6 +771,11 @@ float TimelineTracks::totalHeight() const
    return height;
 }
 
+int TimelineTracks::lodLevel() const
+{
+   return _lodLevel;
+}
+
 // Returns the index of the first set bit
 static uint32_t setBitIndex( ZoneId_t zone )
 {
@@ -810,7 +815,6 @@ void TimelineTracks::drawTraces(
 
    // Find the best lodLevel for our current zoom
    const int lodLevel = _lodLevel;
-   g_stats.currentLOD = lodLevel;
 
    // Get all the timing boundaries
    const TimeStamp globalStartTime = drawInfo.timeline.globalStartTime;

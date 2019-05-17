@@ -18,7 +18,7 @@ public:
    void addStringData( const std::vector<char>& inData );
    void addStringData( const char* inData, size_t count );
    size_t getStringIndex( hop::StrPtr_t strId ) const;
-   size_t sizeInBytes() const noexcept;
+   size_t sizeInBytes() const;
    inline const char* getString( size_t index ) const
    {
       return &_strData[ index ];

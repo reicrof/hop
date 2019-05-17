@@ -35,7 +35,6 @@ void StringDb::clear()
 {
    _strData.clear();
    _stringIndices.clear();
-   g_stats.stringDbSize = 0;
 }
 
 void StringDb::addStringData( const char* inData, size_t count )
@@ -60,8 +59,6 @@ void StringDb::addStringData( const char* inData, size_t count )
 
       i += stringLen;
    }
-
-   g_stats.stringDbSize = _strData.size();
 }
 
 void StringDb::addStringData( const std::vector<char>& inData )
@@ -77,6 +74,11 @@ size_t StringDb::getStringIndex( hop::StrPtr_t strId ) const
    const auto it = _stringIndices.find( strId );
    assert( it != _stringIndices.end() );
    return it->second;
+}
+
+size_t StringDb::sizeInBytes() const
+{
+   return _strData.size();
 }
 
 std::vector< size_t > StringDb::findStringIndexMatching( const char* substrToFind ) const noexcept

@@ -1,7 +1,6 @@
 #include "Profiler.h"
 #include "imgui/imgui.h"
 #include "Lod.h"
-#include "Stats.h"
 #include "Utils.h"
 #include "TraceDetail.h"
 #include "TraceData.h"
@@ -79,6 +78,20 @@ Profiler::Profiler() : _srcType( SRC_TYPE_NONE )
 
 const char* Profiler::name() const noexcept { return _name.c_str(); }
 
+ProfilerStats Profiler::stats() const
+{
+   ProfilerStats stats = {};
+   stats.lodLevel = _tracks.lodLevel();
+   stats.strDbSize = _strDb.sizeInBytes();
+   stats.clientSharedMemSize = _server.sharedMemorySize();
+   for ( size_t i = 0; i < _tracks.size(); ++i )
+   {
+      stats.traceCount += _tracks[i]._traces.entries.ends.size();
+   }
+
+   return stats;
+}
+
 bool Profiler::setSource( SourceType type, const char* str )
 {
    _name = str;
@@ -128,13 +141,6 @@ void Profiler::addTraces( const TraceData& traces, uint32_t threadIndex )
    }
 
    _tracks[threadIndex].addTraces( traces );
-
-   size_t totalTracesCount = 0;
-   for ( size_t i = 0; i < _tracks.size(); ++i )
-   {
-      totalTracesCount += _tracks[i]._traces.entries.ends.size();
-   }
-   g_stats.traceCount = totalTracesCount;
 }
 
 void Profiler::fetchClientData()
@@ -704,5 +710,4 @@ void hop::Profiler::clear()
    _tracks.clear();
    _timeline.clear();
    _recording = false;
-   g_stats.traceCount = 0;
 }

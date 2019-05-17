@@ -15,6 +15,7 @@
 
 namespace hop
 {
+struct ProfilerStats;
 class Server;
 class Profiler
 {
@@ -28,9 +29,10 @@ public:
 
    Profiler();
    ~Profiler();
-   const char* name() const noexcept;
+   const char* name() const;
+   ProfilerStats stats() const;
    bool setSource( SourceType type, const char* str );
-   void update( float deltaTimeMs, float globalTimeMs ) noexcept;
+   void update( float deltaTimeMs, float globalTimeMs );
    void draw( float drawPosX, float drawPosY, float windowWidth, float windowHeight );
    void fetchClientData();
    void addStringData( const std::vector< char >& stringData );
@@ -58,6 +60,14 @@ private:
 
    Server _server;
    Server::PendingData _serverPendingData;
+};
+
+struct ProfilerStats
+{
+   size_t strDbSize;
+   size_t traceCount;
+   size_t clientSharedMemSize;
+   int lodLevel;
 };
 
 } // namespace hop

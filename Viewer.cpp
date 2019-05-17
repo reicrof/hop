@@ -231,6 +231,32 @@ static int drawTabs( hop::Viewer& viewer, int selectedTab )
    return newTabSelection;
 }
 
+static void updateOptions( const hop::Profiler* selectedProf, hop::Stats& stats )
+{
+   const hop::ProfilerStats profStats = selectedProf->stats();
+   stats.currentLOD = profStats.lodLevel;
+   stats.stringDbSize = profStats.strDbSize;
+   stats.traceCount = profStats.traceCount;
+   stats.clientSharedMemSize = profStats.clientSharedMemSize;
+}
+
+static void updateProfilers(
+    std::vector<std::unique_ptr<hop::Profiler> >& profilers,
+    int selectedTab )
+{
+   const float dtTimeMs = ImGui::GetIO().DeltaTime * 1000;
+   const float globalTimeMs = ImGui::GetTime() * 1000;
+   for ( auto& p : profilers )
+   {
+      p->update( dtTimeMs, globalTimeMs );
+   }
+
+   if( hop::g_options.debugWindow && selectedTab >= 0 )
+   {
+      updateOptions( profilers[ selectedTab ].get(), hop::g_stats );
+   }
+}
+
 namespace hop
 {
 Viewer::Viewer( uint32_t screenSizeX, uint32_t /*screenSizeY*/ )
@@ -396,12 +422,7 @@ void Viewer::draw( uint32_t windowWidth, uint32_t windowHeight )
 
    drawMenuBar( this );
 
-   const float dtTimeMs = ImGui::GetIO().DeltaTime * 1000;
-   const float globalTimeMs = ImGui::GetTime() * 1000;
-   for ( auto& p : _profilers )
-   {
-      p->update( dtTimeMs, globalTimeMs );
-   }
+   updateProfilers( _profilers, _selectedTab );
 
    _selectedTab = drawTabs( *this, _selectedTab );
 
