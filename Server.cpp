@@ -14,9 +14,9 @@ static T merge_consecutive( T first, T last, BinaryPredicate pred, MergeFct merg
 {
    int mergeCount = 0;
    auto writePos = first;
-   while( ++first != last )
+   while ( ++first != last )
    {
-      if( !pred( *writePos, *first ) )
+      if ( !pred( *writePos, *first ) )
       {
          merge( *( first - 1 ), *writePos );
          std::swap( *( first - 1 ), *writePos );
@@ -75,12 +75,13 @@ bool Server::start( const char* name )
          // Try to get the shared memory
          if ( !_sharedMem.valid() )
          {
-            SharedMemory::ConnectionState state = _sharedMem.create( name, 0 /*will be define in shared metadata*/, true );
+            SharedMemory::ConnectionState state =
+                _sharedMem.create( name, 0 /*will be define in shared metadata*/, true );
             if ( state != SharedMemory::CONNECTED )
             {
                _connectionState = state;
                localState = state;
-               if (!_running) return; // We are done without even opening the shared mem :(
+               if ( !_running ) return;  // We are done without even opening the shared mem :(
                std::this_thread::sleep_for( std::chrono::milliseconds( 500 ) );
                continue;
             }
@@ -98,18 +99,20 @@ bool Server::start( const char* name )
 
          // Check if its been a while since we have been signaleds
          const TimeStamp curTime = getTimeStamp();
-         const bool producerLost = !_sharedMem.hasConnectedProducer() || curTime - lastSignalTime > 3000000000 ;
-         const auto newState = producerLost ? SharedMemory::CONNECTED_NO_CLIENT : SharedMemory::CONNECTED;
+         const bool producerLost =
+             !_sharedMem.hasConnectedProducer() || curTime - lastSignalTime > 3000000000;
+         const auto newState =
+             producerLost ? SharedMemory::CONNECTED_NO_CLIENT : SharedMemory::CONNECTED;
 
          // Update state if it has changed
-         if( localState != newState )
+         if ( localState != newState )
          {
             localState = newState;
             _connectionState.store( newState );
          }
 
          // A clear was requested so we need to clear our string database
-         if( _clearingRequested.load() )
+         if ( _clearingRequested.load() )
          {
             _stringDb.clear();
             clearPendingMessages();
@@ -146,7 +149,7 @@ bool Server::start( const char* name )
             while ( bytesRead < bytesToRead )
             {
                bytesRead += handleNewMessage(
-                   &_sharedMem.data()[offset + bytesRead], bytesToRead - bytesRead, minTimestamp);
+                   &_sharedMem.data()[offset + bytesRead], bytesToRead - bytesRead, minTimestamp );
             }
             ringbuf_release( _sharedMem.ringbuffer(), bytesToRead );
          }
@@ -156,14 +159,16 @@ bool Server::start( const char* name )
    return true;
 }
 
-SharedMemory::ConnectionState Server::connectionState() const
-{
-   return _connectionState.load();
-}
+SharedMemory::ConnectionState Server::connectionState() const { return _connectionState.load(); }
 
 size_t Server::sharedMemorySize() const
 {
-   return _sharedMem.sharedMetaInfo()->requestedSize;
+   if ( _sharedMem.valid() )
+   {
+      return _sharedMem.sharedMetaInfo()->requestedSize;
+   }
+
+   return 0;
 }
 
 void Server::setRecording( bool recording )
@@ -175,25 +180,25 @@ void Server::setRecording( bool recording )
    }
 }
 
-void Server::getPendingData(PendingData & data)
+void Server::getPendingData( PendingData& data )
 {
-    HOP_PROF_FUNC();
-    std::lock_guard<hop::Mutex> guard(_sharedPendingDataMutex);
-    _sharedPendingData.swap(data);
-    _sharedPendingData.clear();
+   HOP_PROF_FUNC();
+   std::lock_guard<hop::Mutex> guard( _sharedPendingDataMutex );
+   _sharedPendingData.swap( data );
+   _sharedPendingData.clear();
 }
 
 bool Server::addUniqueThreadName( uint32_t threadIndex, StrPtr_t name )
 {
    bool newInsert = false;
-   if( _threadNamesReceived.size() <= threadIndex )
+   if ( _threadNamesReceived.size() <= threadIndex )
    {
       _threadNamesReceived.resize( threadIndex + 1, 0 );
    }
 
-   if( _threadNamesReceived[ threadIndex ] == 0 )
+   if ( _threadNamesReceived[threadIndex] == 0 )
    {
-      _threadNamesReceived[ threadIndex ] = name;
+      _threadNamesReceived[threadIndex] = name;
       newInsert = true;
    }
 
@@ -207,78 +212,75 @@ size_t Server::handleNewMessage( uint8_t* data, size_t maxSize, TimeStamp minTim
    const MsgType msgType = msgInfo->type;
    const uint32_t threadIndex = msgInfo->threadIndex;
 
-    bufPtr += sizeof( MsgInfo );
-    assert( (size_t)(bufPtr - data) <= maxSize );
-    (void)maxSize; // Removed unused warning
+   bufPtr += sizeof( MsgInfo );
+   assert( ( size_t )( bufPtr - data ) <= maxSize );
+   (void)maxSize;  // Removed unused warning
 
-    // If the message was sent prior to the last reset timestamp, ignore it
-    if( msgInfo->timeStamp < minTimestamp )
-       return (size_t)(bufPtr - data);
+   // If the message was sent prior to the last reset timestamp, ignore it
+   if ( msgInfo->timeStamp < minTimestamp ) return ( size_t )( bufPtr - data );
 
-    // If the thread has an assigned name
-    if( msgInfo->threadName != 0 && addUniqueThreadName( threadIndex, msgInfo->threadName ) )
-    {
+   // If the thread has an assigned name
+   if ( msgInfo->threadName != 0 && addUniqueThreadName( threadIndex, msgInfo->threadName ) )
+   {
       std::lock_guard<hop::Mutex> guard( _sharedPendingDataMutex );
       _sharedPendingData.threadNames.emplace_back( threadIndex, msgInfo->threadName );
-    }
+   }
 
-    switch ( msgType )
-    {
-       case MsgType::PROFILER_STRING_DATA:
-       {
-          // Copy string and add it to database
-          const size_t strSize = msgInfo->stringData.size;
-          if ( strSize > 0 )
-          {
-             const char* strDataPtr = (const char*)bufPtr;
-             bufPtr += strSize;
-             assert( ( size_t )( bufPtr - data ) <= maxSize );
+   switch ( msgType )
+   {
+      case MsgType::PROFILER_STRING_DATA:
+      {
+         // Copy string and add it to database
+         const size_t strSize = msgInfo->stringData.size;
+         if ( strSize > 0 )
+         {
+            const char* strDataPtr = (const char*)bufPtr;
+            bufPtr += strSize;
+            assert( ( size_t )( bufPtr - data ) <= maxSize );
 
-             // TODO: Could lock later when we received all the messages
-             std::lock_guard<hop::Mutex> guard( _sharedPendingDataMutex );
-             _stringDb.addStringData( strDataPtr, strSize );
-             _sharedPendingData.stringData.insert(
-                 _sharedPendingData.stringData.end(), strDataPtr, strDataPtr + strSize );
-          }
-          return ( size_t )( bufPtr - data );
-       }
-       case MsgType::PROFILER_TRACE:
-       {
-          const Trace* traces = (const Trace*)bufPtr;
-          const size_t traceCount = msgInfo->traces.count;
+            // TODO: Could lock later when we received all the messages
+            std::lock_guard<hop::Mutex> guard( _sharedPendingDataMutex );
+            _stringDb.addStringData( strDataPtr, strSize );
+            _sharedPendingData.stringData.insert(
+                _sharedPendingData.stringData.end(), strDataPtr, strDataPtr + strSize );
+         }
+         return ( size_t )( bufPtr - data );
+      }
+      case MsgType::PROFILER_TRACE:
+      {
+         const Trace* traces = (const Trace*)bufPtr;
+         const size_t traceCount = msgInfo->traces.count;
 
-          TraceData traceData;
-          Depth_t maxDepth = 0;
-          for ( size_t i = 0; i < traceCount; ++i )
-          {
-             const auto& t = traces[i];
-             traceData.entries.ends.push_back( t.end );
-             traceData.entries.deltas.push_back( t.end - t.start );
-             traceData.fileNameIds.push_back( _stringDb.getStringIndex( t.fileNameId ) );
-             traceData.fctNameIds.push_back( _stringDb.getStringIndex( t.fctNameId ) );
-             traceData.lineNbs.push_back( t.lineNumber );
-             traceData.entries.depths.push_back( t.depth );
-             traceData.zones.push_back( t.zone );
-             maxDepth = std::max( maxDepth, t.depth );
-          }
-          traceData.entries.maxDepth = maxDepth;
+         TraceData traceData;
+         Depth_t maxDepth = 0;
+         for ( size_t i = 0; i < traceCount; ++i )
+         {
+            const auto& t = traces[i];
+            traceData.entries.ends.push_back( t.end );
+            traceData.entries.deltas.push_back( t.end - t.start );
+            traceData.fileNameIds.push_back( _stringDb.getStringIndex( t.fileNameId ) );
+            traceData.fctNameIds.push_back( _stringDb.getStringIndex( t.fctNameId ) );
+            traceData.lineNbs.push_back( t.lineNumber );
+            traceData.entries.depths.push_back( t.depth );
+            traceData.zones.push_back( t.zone );
+            maxDepth = std::max( maxDepth, t.depth );
+         }
+         traceData.entries.maxDepth = maxDepth;
 
-          // The ends time should already be sorted
-          assert_is_sorted( traceData.entries.ends.begin(), traceData.entries.ends.end() );
+         // The ends time should already be sorted
+         assert_is_sorted( traceData.entries.ends.begin(), traceData.entries.ends.end() );
 
-          bufPtr += ( traceCount * sizeof( Trace ) );
-          assert( ( size_t )( bufPtr - data ) <= maxSize );
+         bufPtr += ( traceCount * sizeof( Trace ) );
+         assert( ( size_t )( bufPtr - data ) <= maxSize );
 
-          static_assert(
-              std::is_move_constructible<TraceData>::value,
-              "Trace Data not moveable" );
-          if ( traceCount > 0 )
-          {
-             // TODO: Could lock later when we received all the messages
-             std::lock_guard<hop::Mutex> guard( _sharedPendingDataMutex );
-             _sharedPendingData.tracesPerThread[threadIndex].append( traceData );
-          }
-          return ( size_t )( bufPtr - data );
+         static_assert( std::is_move_constructible<TraceData>::value, "Trace Data not moveable" );
+         if ( traceCount > 0 )
+         {
+            // TODO: Could lock later when we received all the messages
+            std::lock_guard<hop::Mutex> guard( _sharedPendingDataMutex );
+            _sharedPendingData.tracesPerThread[threadIndex].append( traceData );
+         }
+         return ( size_t )( bufPtr - data );
       }
       case MsgType::PROFILER_WAIT_LOCK:
       {
@@ -287,7 +289,7 @@ size_t Server::handleNewMessage( uint8_t* data, size_t maxSize, TimeStamp minTim
 
          LockWaitData lockwaitData;
          Depth_t maxDepth = 0;
-         for( uint32_t i = 0; i < lwCount; ++i )
+         for ( uint32_t i = 0; i < lwCount; ++i )
          {
             lockwaitData.entries.ends.push_back( lws[i].end );
             lockwaitData.entries.deltas.push_back( lws[i].end - lws[i].start );
@@ -306,15 +308,15 @@ size_t Server::handleNewMessage( uint8_t* data, size_t maxSize, TimeStamp minTim
          std::lock_guard<hop::Mutex> guard( _sharedPendingDataMutex );
          _sharedPendingData.lockWaitsPerThread[threadIndex].append( lockwaitData );
 
-         return (size_t)(bufPtr - data);
+         return ( size_t )( bufPtr - data );
       }
       case MsgType::PROFILER_UNLOCK_EVENT:
       {
          const size_t eventCount = msgInfo->unlockEvents.count;
          UnlockEvent* eventPtr = (UnlockEvent*)bufPtr;
 
-         bufPtr += eventCount * sizeof(UnlockEvent);
-         assert( (size_t)(bufPtr - data) <= maxSize );
+         bufPtr += eventCount * sizeof( UnlockEvent );
+         assert( ( size_t )( bufPtr - data ) <= maxSize );
 
          std::sort(
              eventPtr, eventPtr + eventCount, []( const UnlockEvent& lhs, const UnlockEvent& rhs ) {
@@ -322,38 +324,38 @@ size_t Server::handleNewMessage( uint8_t* data, size_t maxSize, TimeStamp minTim
              } );
 
          // TODO: Could lock later when we received all the messages
-         std::lock_guard<hop::Mutex> guard(_sharedPendingDataMutex);
+         std::lock_guard<hop::Mutex> guard( _sharedPendingDataMutex );
          auto& unlocks = _sharedPendingData.unlockEventsPerThread[threadIndex];
          unlocks.insert( unlocks.end(), eventPtr, eventPtr + eventCount );
 
-         return (size_t)(bufPtr - data);
+         return ( size_t )( bufPtr - data );
       }
       case MsgType::PROFILER_HEARTBEAT:
       {
-         return (size_t)(bufPtr - data);
+         return ( size_t )( bufPtr - data );
       }
       case MsgType::PROFILER_CORE_EVENT:
       {
          const size_t eventCount = msgInfo->coreEvents.count;
-         CoreEvent* coreEventsPtr = (CoreEvent*) bufPtr;
+         CoreEvent* coreEventsPtr = (CoreEvent*)bufPtr;
 
          // Must be done before removing duplicates
-         bufPtr += eventCount * sizeof(CoreEvent);
-         assert( (size_t)(bufPtr - data) <= maxSize );
+         bufPtr += eventCount * sizeof( CoreEvent );
+         assert( ( size_t )( bufPtr - data ) <= maxSize );
 
          const size_t newCount = mergeAndRemoveDuplicates( coreEventsPtr, eventCount );
 
          assert_is_sorted( coreEventsPtr, coreEventsPtr + newCount );
 
          // TODO: Could lock later when we received all the messages
-         std::lock_guard<hop::Mutex> guard(_sharedPendingDataMutex);
+         std::lock_guard<hop::Mutex> guard( _sharedPendingDataMutex );
          auto& coreEvents = _sharedPendingData.coreEventsPerThread[threadIndex];
          coreEvents.insert( coreEvents.end(), coreEventsPtr, coreEventsPtr + newCount );
-        return (size_t)(bufPtr - data);
+         return ( size_t )( bufPtr - data );
       }
       default:
          assert( false );
-         return (size_t)(bufPtr - data);
+         return ( size_t )( bufPtr - data );
    }
 }
 
@@ -374,16 +376,16 @@ void Server::clear()
 
 void Server::stop()
 {
-   if( _running )
+   if ( _running )
    {
-      if( _sharedMem.valid() )
+      if ( _sharedMem.valid() )
       {
          _sharedMem.setListeningConsumer( false );
          _sharedMem.setConnectedConsumer( false );
       }
       _running = false;
       // Wake up semaphore to close properly
-      if( _sharedMem.valid() && _sharedMem.semaphore() )
+      if ( _sharedMem.valid() && _sharedMem.semaphore() )
       {
          _sharedMem.signalSemaphore();
       }
@@ -396,42 +398,42 @@ void Server::stop()
 
 void Server::PendingData::clear()
 {
-    HOP_PROF_FUNC();
+   HOP_PROF_FUNC();
 
-    stringData.clear();
-    for( auto& traces : tracesPerThread )
-    {
-       traces.second.clear();
-    }
+   stringData.clear();
+   for ( auto& traces : tracesPerThread )
+   {
+      traces.second.clear();
+   }
 
-    for( auto& lockwaits : lockWaitsPerThread )
-    {
-       lockwaits.second.clear();
-    }
+   for ( auto& lockwaits : lockWaitsPerThread )
+   {
+      lockwaits.second.clear();
+   }
 
-    for( auto& unlockEvents : unlockEventsPerThread )
-    {
-       unlockEvents.second.clear();
-    }
+   for ( auto& unlockEvents : unlockEventsPerThread )
+   {
+      unlockEvents.second.clear();
+   }
 
-    for( auto& coreEvents : coreEventsPerThread )
-    {
-       coreEvents.second.clear();
-    }
+   for ( auto& coreEvents : coreEventsPerThread )
+   {
+      coreEvents.second.clear();
+   }
 
-    threadNames.clear();
+   threadNames.clear();
 }
 
-void Server::PendingData::swap(PendingData & rhs)
+void Server::PendingData::swap( PendingData& rhs )
 {
-    HOP_PROF_FUNC();
-    using std::swap;
-    swap(tracesPerThread, rhs.tracesPerThread);
-    swap(stringData, rhs.stringData);
-    swap(lockWaitsPerThread, rhs.lockWaitsPerThread);
-    swap(unlockEventsPerThread, rhs.unlockEventsPerThread);
-    swap(coreEventsPerThread, rhs.coreEventsPerThread);
-    swap(threadNames, rhs.threadNames);
+   HOP_PROF_FUNC();
+   using std::swap;
+   swap( tracesPerThread, rhs.tracesPerThread );
+   swap( stringData, rhs.stringData );
+   swap( lockWaitsPerThread, rhs.lockWaitsPerThread );
+   swap( unlockEventsPerThread, rhs.unlockEventsPerThread );
+   swap( coreEventsPerThread, rhs.coreEventsPerThread );
+   swap( threadNames, rhs.threadNames );
 }
 
 }  // namespace hop
