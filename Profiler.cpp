@@ -76,7 +76,7 @@ Profiler::Profiler() : _srcType( SRC_TYPE_NONE )
 {
 }
 
-const char* Profiler::name() const noexcept { return _name.c_str(); }
+const char* Profiler::name() const { return _name.c_str(); }
 
 ProfilerStats Profiler::stats() const
 {
@@ -304,7 +304,7 @@ Profiler::~Profiler() { _server.stop(); }
 //    return isOpen;
 // }
 
-void hop::Profiler::update( float deltaTimeMs, float globalTimeMs ) noexcept
+void hop::Profiler::update( float deltaTimeMs, float globalTimeMs )
 {
    _timeline.update( deltaTimeMs );
    _tracks.update( globalTimeMs, _timeline.duration() );

@@ -75,7 +75,8 @@ bool Server::start( const char* name )
          // Try to get the shared memory
          if ( !_sharedMem.valid() )
          {
-            SharedMemory::ConnectionState state = _sharedMem.create( name, 0 /*will be define in shared metadata*/, true );
+            SharedMemory::ConnectionState state =
+                _sharedMem.create( name, 0 /*will be define in shared metadata*/, true );
             if ( state != SharedMemory::CONNECTED )
             {
                _connectionState = state;
@@ -146,7 +147,7 @@ bool Server::start( const char* name )
             while ( bytesRead < bytesToRead )
             {
                bytesRead += handleNewMessage(
-                   &_sharedMem.data()[offset + bytesRead], bytesToRead - bytesRead, minTimestamp);
+                   &_sharedMem.data()[offset + bytesRead], bytesToRead - bytesRead, minTimestamp );
             }
             ringbuf_release( _sharedMem.ringbuffer(), bytesToRead );
          }
@@ -156,14 +157,16 @@ bool Server::start( const char* name )
    return true;
 }
 
-SharedMemory::ConnectionState Server::connectionState() const
-{
-   return _connectionState.load();
-}
+SharedMemory::ConnectionState Server::connectionState() const { return _connectionState.load(); }
 
 size_t Server::sharedMemorySize() const
 {
-   return _sharedMem.sharedMetaInfo()->requestedSize;
+   if ( _sharedMem.valid() )
+   {
+      return _sharedMem.sharedMetaInfo()->requestedSize;
+   }
+
+   return 0;
 }
 
 void Server::setRecording( bool recording )
@@ -175,25 +178,25 @@ void Server::setRecording( bool recording )
    }
 }
 
-void Server::getPendingData(PendingData & data)
+void Server::getPendingData( PendingData& data )
 {
-    HOP_PROF_FUNC();
-    std::lock_guard<hop::Mutex> guard(_sharedPendingDataMutex);
-    _sharedPendingData.swap(data);
-    _sharedPendingData.clear();
+   HOP_PROF_FUNC();
+   std::lock_guard<hop::Mutex> guard( _sharedPendingDataMutex );
+   _sharedPendingData.swap( data );
+   _sharedPendingData.clear();
 }
 
 bool Server::addUniqueThreadName( uint32_t threadIndex, StrPtr_t name )
 {
    bool newInsert = false;
-   if( _threadNamesReceived.size() <= threadIndex )
+   if ( _threadNamesReceived.size() <= threadIndex )
    {
       _threadNamesReceived.resize( threadIndex + 1, 0 );
    }
 
-   if( _threadNamesReceived[ threadIndex ] == 0 )
+   if ( _threadNamesReceived[threadIndex] == 0 )
    {
-      _threadNamesReceived[ threadIndex ] = name;
+      _threadNamesReceived[threadIndex] = name;
       newInsert = true;
    }
 
