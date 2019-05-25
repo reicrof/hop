@@ -1,7 +1,6 @@
 #include "Profiler.h"
 #include "imgui/imgui.h"
 #include "Lod.h"
-#include "Stats.h"
 #include "Utils.h"
 #include "TraceDetail.h"
 #include "TraceData.h"
@@ -15,6 +14,7 @@
 #include <cassert>
 #include <cmath>
 #include <chrono>
+#include <string>
 #include <vector>
 #include <algorithm>
 #include <numeric>
@@ -25,143 +25,96 @@ extern bool g_run;
 
 namespace
 {
-static std::chrono::time_point<std::chrono::system_clock> g_Time = std::chrono::system_clock::now();
-static float g_deltaTimeMs = 0.0f;
-std::vector<hop::Profiler*> _profilers;
-
-namespace
+const uint32_t MAGIC_NUMBER = 1095780676;  // "DIPA"
+struct SaveFileHeader
 {
-   const uint32_t MAGIC_NUMBER = 1095780676; // "DIPA"
-   struct SaveFileHeader
-   {
-      uint32_t magicNumber;
-      uint32_t version;
-      size_t uncompressedSize;
-      uint32_t strDbSize;
-      uint32_t threadCount;
-   };
+   uint32_t magicNumber;
+   uint32_t version;
+   size_t uncompressedSize;
+   uint32_t strDbSize;
+   uint32_t threadCount;
+};
 
-   void displayBackgroundHelpMsg()
-   {
-      const char* helpTxt =
-          "-------------- Hop --------------\n\n"
-          "Press 'R' to start/stop recording\n"
-          "Right mouse click to get traces details\n"
-          "Double click on a trace to focus it\n"
-          "Right mouse drag to zoom on a region\n"
-          "Left mouse drag to measure time in region\n"
-          "Right click on the timeline to create a bookmark\n"
-          "Use arrow keys <-/-> to navigate bookmarks\n"
-          "Use CTRL+F to search traces\n"
-          "Use Del to delete traces\n";
-      const auto pos = ImGui::GetWindowPos();
-      const float windowWidthPxl = ImGui::GetWindowWidth();
-      const float windowHeightPxl = ImGui::GetWindowHeight();
-      ImDrawList* DrawList = ImGui::GetWindowDrawList();
-      auto size = ImGui::CalcTextSize( helpTxt );
-      DrawList->AddText(
-          ImGui::GetIO().Fonts->Fonts[0],
-          30.0f,
-          ImVec2( pos.x + windowWidthPxl / 2 - ( size.x ), pos.y + windowHeightPxl / 2 - size.y ),
-          ImGui::GetColorU32( ImGuiCol_TextDisabled ),
-          helpTxt );
-   }
-
-   float computeCanvasSize( const hop::TimelineTracks& tracks )
-   {
-      float tracksHeight = tracks.totalHeight();
-      if( tracksHeight > 0.0f )
-      {
-         tracksHeight -= (ImGui::GetWindowHeight() - tracks[0]._absoluteDrawPos[1]);
-      }
-      return tracksHeight;
-   }
+void displayBackgroundHelpMsg( uint32_t windowWidth, uint32_t windowHeight )
+{
+   const char* helpTxt =
+       "-------------- Hop --------------\n\n"
+       "Press 'R' to start/stop recording\n"
+       "Right mouse click to get traces details\n"
+       "Double click on a trace to focus it\n"
+       "Right mouse drag to zoom on a region\n"
+       "Left mouse drag to measure time in region\n"
+       "Right click on the timeline to create a bookmark\n"
+       "Use arrow keys <-/-> to navigate bookmarks\n"
+       "Use CTRL+F to search traces\n"
+       "Use Del to delete traces\n";
+   const auto pos = ImGui::GetWindowPos();
+   ImDrawList* DrawList = ImGui::GetWindowDrawList();
+   auto size = ImGui::CalcTextSize( helpTxt );
+   DrawList->AddText(
+       ImGui::GetIO().Fonts->Fonts[0],
+       30.0f,
+       ImVec2( pos.x + windowWidth / 2 - ( size.x ), pos.y + windowHeight / 2 - size.y ),
+       ImGui::GetColorU32( ImGuiCol_TextDisabled ),
+       helpTxt );
 }
 
-} // end of anonymous namespace
+float computeCanvasSize( const hop::TimelineTracks& tracks )
+{
+   float tracksHeight = tracks.totalHeight();
+   if ( tracksHeight > 0.0f )
+   {
+      tracksHeight -= ( ImGui::GetWindowHeight() - tracks[0]._absoluteDrawPos[1] );
+   }
+   return tracksHeight;
+}
+}  // end of anonymous namespace
 
 namespace hop
 {
-
-void onNewFrame( int width, int height, int mouseX, int mouseY, bool lmbPressed, bool rmbPressed, float mousewheel )
+Profiler::Profiler() : _srcType( SRC_TYPE_NONE )
 {
-   if ( !renderer::g_FontTexture ) renderer::createResources();
-
-   ImGuiIO& io = ImGui::GetIO();
-
-   // Setup display size (every frame to accommodate for window resizing)
-   io.DisplaySize = ImVec2( (float)width, (float)height );
-   // io.DisplayFramebufferScale = ImVec2(w > 0 ? ((float)display_w / w) : 0, h > 0 ?
-   // ((float)display_h / h) : 0);
-
-   // Setup time step
-   auto curTime = std::chrono::system_clock::now();
-   const float deltaTime = static_cast<float>(
-       std::chrono::duration_cast<std::chrono::milliseconds>( ( curTime - g_Time ) ).count() );
-   g_deltaTimeMs = deltaTime;
-   io.DeltaTime = std::max( deltaTime * 0.001f, 0.00001f ); // ImGui expect seconds
-   g_Time = curTime;
-
-   // Mouse position in screen coordinates (set to -1,-1 if no mouse / on another screen, etc.)
-   io.MousePos = ImVec2( (float)mouseX, (float)mouseY );
-
-   io.MouseDown[0] = lmbPressed;
-   io.MouseDown[1] = rmbPressed;
-   io.MouseWheel = mousewheel;
-
-   // Reset frame stats
-   hop::g_stats.drawingTimeMs = 0.0;
-   hop::g_stats.traceDrawingTimeMs = 0.0;
-   hop::g_stats.coreDrawingTimeMs = 0.0;
-   hop::g_stats.lockwaitsDrawingTimeMs = 0.0;
-
-   // Start the frame
-   ImGui::NewFrame();
 }
 
-void draw( uint32_t windowWidth, uint32_t windowHeight )
+const char* Profiler::name() const { return _name.c_str(); }
+
+ProfilerStats Profiler::stats() const
 {
-   for( auto p : _profilers )
+   ProfilerStats stats = {};
+   stats.lodLevel = _tracks.lodLevel();
+   stats.strDbSize = _strDb.sizeInBytes();
+   stats.clientSharedMemSize = _server.sharedMemorySize();
+   for ( size_t i = 0; i < _tracks.size(); ++i )
    {
-      p->update( g_deltaTimeMs );
+      stats.traceCount += _tracks[i]._traces.entries.ends.size();
    }
 
-   for ( auto p : _profilers )
+   return stats;
+}
+
+bool Profiler::setSource( SourceType type, const char* str )
+{
+   _name = str;
+   switch( type )
    {
-      p->draw( windowWidth, windowHeight );
+      case SRC_TYPE_PROCESS:
+        return setProcess( _name.c_str() );
+      case SRC_TYPE_FILE:
+        return openFile( _name.c_str() );
+      case SRC_TYPE_NONE:
+        assert(false);
+        return false;
    }
 
-   if( g_options.debugWindow )
-      hop::drawStatsWindow( g_stats );
-
-   ImGui::Render();
+   return false;
 }
 
-void init()
-{
-   ImGuiIO& io = ImGui::GetIO();
-
-   // Init keys ?
-   // Init callbacks
-   io.RenderDrawListsFn = renderer::renderDrawlist;  // Alternatively you can set this to NULL and call
-                                                     // ImGui::GetDrawData() after ImGui::Render() to get the
-                                                     // same ImDrawData pointer.
-}
-
-void addNewProfiler( Profiler* profiler )
-{
-   _profilers.push_back( profiler );
-}
-
-Profiler::Profiler( const char* name ) : _name( name )
-{
-   _server.start( name );
-}
+Profiler::SourceType Profiler::sourceType() const { return _srcType; }
 
 void Profiler::addTraces( const TraceData& traces, uint32_t threadIndex )
 {
    // Ignore empty traces
-   if( traces.entries.ends.empty() ) return;
+   if ( traces.entries.ends.empty() ) return;
 
    // Add new thread as they come
    if ( threadIndex >= _tracks.size() )
@@ -190,54 +143,47 @@ void Profiler::addTraces( const TraceData& traces, uint32_t threadIndex )
    }
 
    _tracks[threadIndex].addTraces( traces );
-
-   size_t totalTracesCount = 0;
-   for( size_t i = 0; i < _tracks.size(); ++i )
-   {
-      totalTracesCount += _tracks[i]._traces.entries.ends.size();
-   }
-   g_stats.traceCount = totalTracesCount;
 }
 
 void Profiler::fetchClientData()
 {
    HOP_PROF_FUNC();
 
-   _server.getPendingData(_serverPendingData);
+   _server.getPendingData( _serverPendingData );
 
-   if( _recording )
+   if ( _recording )
    {
       HOP_PROF_SPLIT( "Fetching Str Data" );
-      for( size_t i = 0; i <_serverPendingData.stringData.size(); ++i )
-      {
-         addStringData( _serverPendingData.stringData[i] );
-      }
+
+      addStringData( _serverPendingData.stringData );
+
       HOP_PROF_SPLIT( "Fetching Traces" );
-      for( size_t i = 0; i <_serverPendingData.traces.size(); ++i )
+      for( const auto& threadTraces : _serverPendingData.tracesPerThread )
       {
-         addTraces(_serverPendingData.traces[i], _serverPendingData.tracesThreadIndex[i] );
+         addTraces( threadTraces.second, threadTraces.first );
       }
       HOP_PROF_SPLIT( "Fetching Lock Waits" );
-      for( size_t i = 0; i < _serverPendingData.lockWaits.size(); ++i )
+      for( const auto& lockwaits : _serverPendingData.lockWaitsPerThread )
       {
-         addLockWaits(_serverPendingData.lockWaits[i], _serverPendingData.lockWaitThreadIndex[i] );
+         addLockWaits( lockwaits.second, lockwaits.first );
       }
       HOP_PROF_SPLIT( "Fetching Unlock Events" );
-      for (size_t i = 0; i < _serverPendingData.unlockEvents.size(); ++i)
+      for( const auto& unlockEvents : _serverPendingData.unlockEventsPerThread )
       {
-         addUnlockEvents(_serverPendingData.unlockEvents[i], _serverPendingData.unlockEventsThreadIndex[i]);
+         addUnlockEvents( unlockEvents.second, unlockEvents.first );
       }
       HOP_PROF_SPLIT( "Fetching CoreEvents" );
-      for (size_t i = 0; i < _serverPendingData.coreEvents.size(); ++i)
+      for( const auto& coreEvents : _serverPendingData.coreEventsPerThread )
       {
-         addCoreEvents( _serverPendingData.coreEvents[i], _serverPendingData.coreEventsThreadIndex[i] );
+         addCoreEvents( coreEvents.second, coreEvents.first );
       }
    }
 
    // We need to get the thread name even when not recording as they are only sent once
-   for( size_t i = 0; i < _serverPendingData.threadNames.size(); ++i )
+   for ( size_t i = 0; i < _serverPendingData.threadNames.size(); ++i )
    {
-      addThreadName( _serverPendingData.threadNames[i].second, _serverPendingData.threadNames[i].first );
+      addThreadName(
+          _serverPendingData.threadNames[i].second, _serverPendingData.threadNames[i].first );
    }
 }
 
@@ -261,7 +207,7 @@ void Profiler::addLockWaits( const LockWaitData& lockWaits, uint32_t threadIndex
       _tracks.resize( threadIndex + 1 );
    }
 
-   if( !lockWaits.entries.ends.empty() )
+   if ( !lockWaits.entries.ends.empty() )
    {
       _tracks[threadIndex].addLockWaits( lockWaits );
    }
@@ -276,7 +222,7 @@ void Profiler::addUnlockEvents( const std::vector<UnlockEvent>& unlockEvents, ui
       _tracks.resize( threadIndex + 1 );
    }
 
-   if( !unlockEvents.empty() )
+   if ( !unlockEvents.empty() )
    {
       _tracks[threadIndex].addUnlockEvents( unlockEvents );
    }
@@ -286,7 +232,7 @@ void Profiler::addCoreEvents( const std::vector<CoreEvent>& coreEvents, uint32_t
 {
    HOP_PROF_FUNC();
    // Check if new thread
-   if (threadIndex >= _tracks.size())
+   if ( threadIndex >= _tracks.size() )
    {
       _tracks.resize( threadIndex + 1 );
    }
@@ -305,18 +251,14 @@ void Profiler::addThreadName( StrPtr_t name, uint32_t threadIndex )
       _tracks.resize( threadIndex + 1 );
    }
 
-   assert( name != 0 ); // should not be empty name
+   assert( name != 0 );  // should not be empty name
 
    _tracks[threadIndex].setTrackName( name );
 }
 
-Profiler::~Profiler()
-{
-   _server.stop();
-}
+Profiler::~Profiler() { _server.stop(); }
 
-} // end of namespace hop
-
+}  // end of namespace hop
 
 // static bool drawDispTrace( const hop::DisplayableTraceFrame& frame, size_t& i )
 // {
@@ -325,8 +267,10 @@ Profiler::~Profiler()
 
 //    bool isOpen = false;
 //    // bool isOpen = trace.classNameIndex
-//    //                   ? ImGui::TreeNode( trace.classNameIndex, "%s::%s :    %f us", 0trace.name, trace.deltaTime )
-//    //                   : ImGui::TreeNode( trace.fctNameIndex, "%s :    %f us", trace.name, trace.deltaTime );
+//    //                   ? ImGui::TreeNode( trace.classNameIndex, "%s::%s :    %f us",
+//    0trace.name, trace.deltaTime )
+//    //                   : ImGui::TreeNode( trace.fctNameIndex, "%s :    %f us", trace.name,
+//    trace.deltaTime );
 
 //    if( isOpen )
 //    {
@@ -362,10 +306,10 @@ Profiler::~Profiler()
 //    return isOpen;
 // }
 
-void hop::Profiler::update( float deltaTimeMs ) noexcept
+void hop::Profiler::update( float deltaTimeMs, float globalTimeMs )
 {
    _timeline.update( deltaTimeMs );
-   _tracks.update( deltaTimeMs, _timeline.duration() );
+   _tracks.update( globalTimeMs, _timeline.duration() );
 }
 
 static constexpr float TOOLBAR_BUTTON_HEIGHT = 15.0f;
@@ -378,24 +322,24 @@ static bool drawPlayStopButton( const ImVec2& drawPos, bool isRecording )
    ImDrawList* DrawList = ImGui::GetWindowDrawList();
 
    const auto& mousePos = ImGui::GetMousePos();
-   const bool hovering =
-       ImGui::IsMouseHoveringWindow() &&
-       hop::ptInRect(
-           mousePos.x, mousePos.y,
-           drawPos.x, drawPos.y,
-           drawPos.x + TOOLBAR_BUTTON_WIDTH,
-           drawPos.y + TOOLBAR_BUTTON_HEIGHT );
+   const bool hovering = ImGui::IsMouseHoveringWindow() && hop::ptInRect(
+                                                               mousePos.x,
+                                                               mousePos.y,
+                                                               drawPos.x,
+                                                               drawPos.y,
+                                                               drawPos.x + TOOLBAR_BUTTON_WIDTH,
+                                                               drawPos.y + TOOLBAR_BUTTON_HEIGHT );
 
    if ( isRecording )
    {
       DrawList->AddRectFilled(
           drawPos,
           ImVec2( drawPos.x + TOOLBAR_BUTTON_WIDTH, drawPos.y + TOOLBAR_BUTTON_HEIGHT ),
-          hovering ? ImColor( 0.9f, 0.0f, 0.0f ) : ImColor( 0.7f, 0.0f, .0f ) );\
-      if( hovering )
+          hovering ? ImColor( 0.9f, 0.0f, 0.0f ) : ImColor( 0.7f, 0.0f, .0f ) );
+      if ( hovering )
       {
          ImGui::BeginTooltip();
-         ImGui::Text("Stop recording traces ('r')");
+         ImGui::Text( "Stop recording traces ('r')" );
          ImGui::EndTooltip();
       }
    }
@@ -408,10 +352,10 @@ static bool drawPlayStopButton( const ImVec2& drawPos, bool isRecording )
       DrawList->AddConvexPolyFilled(
           pts, 3, hovering ? ImColor( 0.0f, 0.9f, 0.0f ) : ImColor( 0.0f, 0.7f, 0.0f ) );
 
-      if( hovering )
+      if ( hovering )
       {
          ImGui::BeginTooltip();
-         ImGui::Text("Start recording traces ('r')");
+         ImGui::Text( "Start recording traces ('r')" );
          ImGui::EndTooltip();
       }
    }
@@ -427,13 +371,13 @@ static bool drawDeleteTracesButton( const ImVec2& drawPos, bool active )
    ImDrawList* DrawList = ImGui::GetWindowDrawList();
 
    const auto& mousePos = ImGui::GetMousePos();
-   const bool hovering =
-       ImGui::IsMouseHoveringWindow() &&
-       hop::ptInRect(
-           mousePos.x, mousePos.y,
-           drawPos.x, drawPos.y,
-           drawPos.x + TOOLBAR_BUTTON_WIDTH,
-           drawPos.y + TOOLBAR_BUTTON_HEIGHT );
+   const bool hovering = ImGui::IsMouseHoveringWindow() && hop::ptInRect(
+                                                               mousePos.x,
+                                                               mousePos.y,
+                                                               drawPos.x,
+                                                               drawPos.y,
+                                                               drawPos.x + TOOLBAR_BUTTON_WIDTH,
+                                                               drawPos.y + TOOLBAR_BUTTON_HEIGHT );
 
    ImColor col = active ? ( hovering ? ImColor( 0.9f, 0.0f, 0.0f ) : ImColor( 0.7f, 0.0f, 0.0f ) )
                         : ImColor( 0.5f, 0.5f, 0.5f );
@@ -449,10 +393,10 @@ static bool drawDeleteTracesButton( const ImVec2& drawPos, bool active )
        col,
        3.0f );
 
-   if( active && hovering )
+   if ( active && hovering )
    {
       ImGui::BeginTooltip();
-      ImGui::Text("Delete all recorded traces ('Del')");
+      ImGui::Text( "Delete all recorded traces ('Del')" );
       ImGui::EndTooltip();
    }
 
@@ -465,6 +409,10 @@ static void drawStatusIcon( const ImVec2& drawPos, hop::SharedMemory::Connection
    const char* msg = nullptr;
    switch ( state )
    {
+      case hop::SharedMemory::NO_TARGET_PROCESS:
+         col = ImColor( 0.6f, 0.6f, 0.6f );
+         msg = "No target process";
+         break;
       case hop::SharedMemory::NOT_CONNECTED:
          col = ImColor( 0.8f, 0.0f, 0.0f );
          msg = "No shared memory found";
@@ -493,7 +441,7 @@ static void drawStatusIcon( const ImVec2& drawPos, hop::SharedMemory::Connection
    const auto& mousePos = ImGui::GetMousePos();
    const bool hovering = ImGui::IsMouseHoveringWindow() &&
                          hop::ptInCircle( mousePos.x, mousePos.y, drawPos.x, drawPos.y, 10.0f );
-   if( hovering && msg )
+   if ( hovering && msg )
    {
       ImGui::BeginTooltip();
       ImGui::Text( "%s", msg );
@@ -501,58 +449,33 @@ static void drawStatusIcon( const ImVec2& drawPos, hop::SharedMemory::Connection
    }
 }
 
-void hop::Profiler::draw( uint32_t /*windowWidth*/, uint32_t /*windowHeight*/ )
+void hop::Profiler::draw( float drawPosX, float drawPosY, float canvasWidth, float canvasHeight )
 {
    HOP_PROF_FUNC();
-   ImGui::SetNextWindowPos( ImVec2( 0.0f, 0.0f ), ImGuiCond_Always );
-   ImGui::SetNextWindowSize( ImGui::GetIO().DisplaySize, ImGuiCond_Always );
-   ImGui::PushStyleVar( ImGuiStyleVar_WindowRounding, 0.0f );
+   ImGui::SetCursorPos( ImVec2( drawPosX, drawPosY ) );
 
-   ImGui::Begin(
-       _name.c_str(),
-       nullptr,
-       ImGuiWindowFlags_NoScrollWithMouse | ImGuiWindowFlags_MenuBar |
-           ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoCollapse |
-           ImGuiWindowFlags_NoBringToFrontOnFocus | ImGuiWindowFlags_NoTitleBar |
-           ImGuiWindowFlags_NoResize );
-
-   // Reset the style var so the floating windows can be drawn properly
-   ImGui::PushStyleVar( ImGuiStyleVar_WindowMinSize, ImVec2( 0, 0 ) );
-   ImGui::PushStyleVar( ImGuiStyleVar_WindowRounding, 5.0f );
-
-   drawMenuBar();
-
-   // Render modal window, if any
-   const bool modalOpen = modalWindowShowing();
-   if( modalOpen )
-   {
-      renderModalWindow();
-   }
-
-   drawOptionsWindow( g_options );
-
-   const auto toolbarDrawPos = ImGui::GetCursorScreenPos();
-   if( drawPlayStopButton( toolbarDrawPos, _recording ) )
+   const auto toolbarDrawPos = ImVec2( drawPosX, drawPosY );
+   if ( sourceType() == SRC_TYPE_PROCESS && drawPlayStopButton( toolbarDrawPos, _recording ) )
    {
       setRecording( !_recording );
    }
 
    auto deleteTracePos = toolbarDrawPos;
-   deleteTracePos.x += (2.0f*TOOLBAR_BUTTON_PADDING) + TOOLBAR_BUTTON_WIDTH;
-   if( drawDeleteTracesButton( deleteTracePos, _tracks.size() > 0 ) )
+   deleteTracePos.x += ( 2.0f * TOOLBAR_BUTTON_PADDING ) + TOOLBAR_BUTTON_WIDTH;
+   if ( drawDeleteTracesButton( deleteTracePos, _tracks.size() > 0 ) )
    {
-      hop::displayModalWindow( "Delete all traces?", hop::MODAL_TYPE_YES_NO, [&](){ clear(); } );
+      hop::displayModalWindow( "Delete all traces?", hop::MODAL_TYPE_YES_NO, [&]() { clear(); } );
    }
 
    auto statusPos = toolbarDrawPos;
-   statusPos.x += ImGui::GetWindowWidth() - 25.0f;
+   statusPos.x += canvasWidth - 25.0f;
    statusPos.y += 5.0f;
    drawStatusIcon( statusPos, _server.connectionState() );
 
    ImGui::BeginChild( "Timeline" );
-   if( _tracks.size() == 0 && !_recording )
+   if ( _tracks.size() == 0 && !_recording )
    {
-      displayBackgroundHelpMsg();
+      displayBackgroundHelpMsg( canvasWidth, canvasHeight );
    }
    else
    {
@@ -580,179 +503,52 @@ void hop::Profiler::draw( uint32_t /*windowWidth*/, uint32_t /*windowHeight*/ )
       _timeline.handleDeferredActions( timelineActions );
    }
 
-   handleHotkey( modalOpen );
+   handleHotkey();
    handleMouse();
 
-   ImGui::EndChild(); //"Timeline"
-   ImGui::PopStyleVar(2);
-
-   ImGui::End(); // Window
-   ImGui::PopStyleVar(1);
+   ImGui::EndChild();  //"Timeline"
 }
 
-void hop::Profiler::drawMenuBar()
-{
-   HOP_PROF_FUNC();
-   const char* const menuSaveAsHop = "Save as...";
-   const char* const menuOpenHopFile = "Open";
-   const char* const menuHelp = "Help";
-   const char* menuAction = NULL;
-
-   if ( ImGui::BeginMenuBar() )
-   {
-      if ( ImGui::BeginMenu( "Menu" ) )
-      {
-         if ( ImGui::MenuItem( menuSaveAsHop, NULL ) )
-         {
-            menuAction = menuSaveAsHop;
-         }
-         if( ImGui::MenuItem( menuOpenHopFile, NULL ) )
-         {
-           menuAction = menuOpenHopFile;
-         }
-         if( ImGui::MenuItem( menuHelp, NULL ) )
-         {
-            menuAction = menuHelp;
-         }
-         if( ImGui::MenuItem( "Options", NULL ) )
-         {
-            g_options.optionWindowOpened = true;
-         }
-         ImGui::Separator();
-         if ( ImGui::MenuItem( "Exit", NULL ) )
-         {
-            g_run = false;
-         }
-         ImGui::EndMenu();
-      }
-      ImGui::EndMenuBar();
-   }
-
-   if ( menuAction == menuSaveAsHop )
-   {
-      ImGui::OpenPopup( menuSaveAsHop );
-   }
-   else if( menuAction == menuOpenHopFile )
-   {
-      ImGui::OpenPopup( menuOpenHopFile );
-   }
-   else if( menuAction == menuHelp )
-   {
-      ImGui::OpenPopup( menuHelp );
-   }
-
-   if ( ImGui::BeginPopupModal( menuSaveAsHop, NULL, ImGuiWindowFlags_AlwaysAutoResize ) )
-   {
-      static char path[512] = {};
-      bool shouldSave = ImGui::InputText(
-          "Save to",
-          path,
-          sizeof( path ),
-          ImGuiInputTextFlags_AutoSelectAll | ImGuiInputTextFlags_EnterReturnsTrue );
-      ImGui::Separator();
-
-      if ( ImGui::Button( "Save", ImVec2( 120, 0 ) ) || shouldSave )
-      {
-         setRecording( false );
-         saveToFile( path );
-         ImGui::CloseCurrentPopup();
-      }
-
-      ImGui::SameLine();
-
-      if ( ImGui::Button( "Cancel", ImVec2( 120, 0 ) ) )
-      {
-         ImGui::CloseCurrentPopup();
-      }
-
-      ImGui::EndPopup();
-   }
-   
-   if( ImGui::BeginPopupModal( menuOpenHopFile, NULL, ImGuiWindowFlags_AlwaysAutoResize ) )
-   {
-      static char path[512] = {};
-      const bool shouldOpen = ImGui::InputText(
-          "Open file",
-          path,
-          sizeof( path ),
-          ImGuiInputTextFlags_AutoSelectAll | ImGuiInputTextFlags_EnterReturnsTrue );
-
-      ImGui::Separator();
-
-      if ( ImGui::Button( "Open", ImVec2( 120, 0 ) ) || shouldOpen )
-      {
-         openFile( path );
-         ImGui::CloseCurrentPopup();
-      }
-
-      ImGui::SameLine();
-
-      if ( ImGui::Button( "Cancel", ImVec2( 120, 0 ) ) )
-      {
-         ImGui::CloseCurrentPopup();
-      }
-
-      ImGui::EndPopup();
-   }
-
-   if( ImGui::BeginPopupModal( menuHelp, NULL, ImGuiWindowFlags_AlwaysAutoResize ) )
-   {
-      ImGui::Text("Hop version %.1f\n",HOP_VERSION);
-      static bool rdtscpSupported = hop::supportsRDTSCP();
-      static bool constantTscSupported = hop::supportsConstantTSC();
-      ImGui::Text( "RDTSCP Supported : %s\nConstant TSC Supported : %s\n",
-                   rdtscpSupported ? "yes" : "no", constantTscSupported ? "yes" : "no" );
-      if ( ImGui::Button( "Close", ImVec2( 120, 0 ) ) )
-      {
-         ImGui::CloseCurrentPopup();
-      }
-      ImGui::EndPopup();
-   }
-}
-
-void hop::Profiler::handleHotkey( bool modalWindowOpened )
+void hop::Profiler::handleHotkey()
 {
    // Let the tracks handle the hotkeys first.
-   if( _tracks.handleHotkey() )
-      return;
+   if ( _tracks.handleHotkey() ) return;
 
-   if( ImGui::IsKeyReleased( ImGui::GetKeyIndex( ImGuiKey_Home ) ) )
+   if ( ImGui::IsKeyReleased( ImGui::GetKeyIndex( ImGuiKey_Home ) ) )
    {
       _timeline.moveToStart();
    }
-   else if( ImGui::IsKeyReleased( ImGui::GetKeyIndex( ImGuiKey_End ) ) )
+   else if ( ImGui::IsKeyReleased( ImGui::GetKeyIndex( ImGuiKey_End ) ) )
    {
       _timeline.moveToPresentTime();
-      _timeline.setRealtime ( true );
+      _timeline.setRealtime( true );
    }
-   else if( ImGui::IsKeyReleased( 'r' ) && ImGui::IsRootWindowOrAnyChildFocused() )
+   else if ( ImGui::IsKeyReleased( 'r' ) && ImGui::IsRootWindowOrAnyChildFocused() )
    {
       setRecording( !_recording );
    }
-   else if( ImGui::GetIO().KeyCtrl && ImGui::IsKeyPressed( 'z' ) )
+   else if ( ImGui::GetIO().KeyCtrl && ImGui::IsKeyPressed( 'z' ) )
    {
       _timeline.undoNavigation();
    }
-   else if( ImGui::GetIO().KeyCtrl && ImGui::IsKeyPressed( 'y' ) )
+   else if ( ImGui::GetIO().KeyCtrl && ImGui::IsKeyPressed( 'y' ) )
    {
       _timeline.redoNavigation();
    }
-   else if( ImGui::IsKeyPressed( ImGui::GetKeyIndex( ImGuiKey_LeftArrow ) ) )
+   else if ( ImGui::IsKeyPressed( ImGui::GetKeyIndex( ImGuiKey_LeftArrow ) ) )
    {
       _timeline.previousBookmark();
    }
-   else if( ImGui::IsKeyPressed( ImGui::GetKeyIndex( ImGuiKey_RightArrow ) ) )
+   else if ( ImGui::IsKeyPressed( ImGui::GetKeyIndex( ImGuiKey_RightArrow ) ) )
    {
       _timeline.nextBookmark();
    }
-   else if( ImGui::IsKeyDown( ImGui::GetKeyIndex( ImGuiKey_Delete ) ) && _tracks.size() > 0 )
+   else if ( ImGui::IsKeyDown( ImGui::GetKeyIndex( ImGuiKey_Delete ) ) && _tracks.size() > 0 )
    {
-      if( ImGui::IsWindowFocused( ImGuiFocusedFlags_RootAndChildWindows ) && !hop::modalWindowShowing() )
-         hop::displayModalWindow( "Delete all traces?", hop::MODAL_TYPE_YES_NO, [&](){ clear(); } );
-   }
-   else if( ImGui::IsKeyPressed( ImGui::GetKeyIndex( ImGuiKey_Escape ) ) && !modalWindowOpened )
-   {
-      hop::displayModalWindow( "Exit ?", hop::MODAL_TYPE_YES_NO, [&]() { g_run = false; } );
+      if ( ImGui::IsWindowFocused( ImGuiFocusedFlags_RootAndChildWindows ) &&
+           !hop::modalWindowShowing() )
+         hop::displayModalWindow(
+             "Delete all traces?", hop::MODAL_TYPE_YES_NO, [&]() { clear(); } );
    }
 }
 
@@ -769,19 +565,21 @@ void hop::Profiler::handleMouse()
    }
 }
 
-void hop::Profiler::setRecording(bool recording)
+void hop::Profiler::setRecording( bool recording )
 {
    _recording = recording;
-   _server.setRecording(recording);
-   if (recording)
+   _server.setRecording( recording );
+   if ( recording )
    {
-      _timeline.setRealtime(true);
+      _timeline.setRealtime( true );
    }
 }
 
-bool hop::Profiler::saveToFile( const char* path )
+bool hop::Profiler::saveToFile( const char* savePath )
 {
    displayModalWindow( "Saving...", MODAL_TYPE_NO_CLOSE );
+   setRecording( false );
+   std::string path( savePath );
    std::thread t( [this, path]() {
       // Compute the size of the serialized data
       const size_t dbSerializedSize = serializedSize( _strDb );
@@ -793,9 +591,9 @@ bool hop::Profiler::saveToFile( const char* path )
       }
 
       const size_t totalSerializedSize =
-          std::accumulate( timelineTrackSerializedSize.begin(), timelineTrackSerializedSize.end(), size_t{0} ) +
-          timelineSerializedSize +
-          dbSerializedSize;
+          std::accumulate(
+              timelineTrackSerializedSize.begin(), timelineTrackSerializedSize.end(), size_t{0} ) +
+          timelineSerializedSize + dbSerializedSize;
 
       std::vector<char> data( totalSerializedSize );
 
@@ -816,7 +614,7 @@ bool hop::Profiler::saveToFile( const char* path )
       if ( compressionStatus != Z_OK )
       {
          closeModalWindow();
-         displayModalWindow( "Compression failed. File not saved!", MODAL_TYPE_CLOSE );
+         displayModalWindow( "Compression failed. File not saved!", MODAL_TYPE_ERROR );
          return false;
       }
 
@@ -838,69 +636,72 @@ bool hop::Profiler::saveToFile( const char* path )
    return true;
 }
 
+bool hop::Profiler::setProcess( const char* process )
+{
+    _name = process ? process : "";
+   _server.stop();
+   _srcType = SRC_TYPE_PROCESS;
+   return _server.start( process );
+}
+
 bool hop::Profiler::openFile( const char* path )
 {
+   _name = path ? path : "";
    std::ifstream input( path, std::ifstream::binary );
    if ( input.is_open() )
    {
       clear();
 
       displayModalWindow( "Loading...", MODAL_TYPE_NO_CLOSE );
-      std::thread t( [this, path]() {
-         std::ifstream input( path, std::ifstream::binary );
-         std::vector<char> data(
-             ( std::istreambuf_iterator<char>( input ) ), ( std::istreambuf_iterator<char>() ) );
+      std::vector<char> data(
+          ( std::istreambuf_iterator<char>( input ) ), ( std::istreambuf_iterator<char>() ) );
 
-         SaveFileHeader* header = (SaveFileHeader*)&data[0];
+      SaveFileHeader* header = (SaveFileHeader*)&data[0];
 
-         if( header->magicNumber != MAGIC_NUMBER )
-         {
-            closeModalWindow();
-            displayModalWindow( "Not a valid hop file.", MODAL_TYPE_CLOSE );
-            return false;
-         }
-
-         std::vector<char> uncompressedData( header->uncompressedSize );
-         mz_ulong uncompressedSize = uncompressedData.size();
-
-         int uncompressStatus = uncompress(
-             (unsigned char*)uncompressedData.data(),
-             &uncompressedSize,
-             (unsigned char*)&data[sizeof( SaveFileHeader )],
-             data.size() - sizeof( SaveFileHeader ) );
-
-         if ( uncompressStatus != Z_OK )
-         {
-            closeModalWindow();
-            displayModalWindow( "Error uncompressing file. Nothing will be loaded", MODAL_TYPE_CLOSE );
-            return false;
-         }
-
-         size_t i = 0;
-         const size_t dbSize = deserialize( &uncompressedData[i], _strDb );
-         assert( dbSize == header->strDbSize );
-         i += dbSize;
-
-         const size_t timelineSize = deserialize( &uncompressedData[i], _timeline );
-         i += timelineSize;
-
-         std::vector<TimelineTrack> timelineTracks( header->threadCount );
-         for ( uint32_t j = 0; j < header->threadCount; ++j )
-         {
-            size_t timelineTrackSize = deserialize( &uncompressedData[i], timelineTracks[j] );
-            addTraces( timelineTracks[j]._traces, j );
-            addLockWaits( timelineTracks[j]._lockWaits, j );
-            i += timelineTrackSize;
-         }
+      if ( header->magicNumber != MAGIC_NUMBER )
+      {
          closeModalWindow();
-         return true;
-      } );
+         displayModalWindow( "Not a valid hop file.", MODAL_TYPE_ERROR );
+         return false;
+      }
 
-      t.detach();
+      std::vector<char> uncompressedData( header->uncompressedSize );
+      mz_ulong uncompressedSize = uncompressedData.size();
 
+      int uncompressStatus = uncompress(
+          (unsigned char*)uncompressedData.data(),
+          &uncompressedSize,
+          (unsigned char*)&data[sizeof( SaveFileHeader )],
+          data.size() - sizeof( SaveFileHeader ) );
+
+      if ( uncompressStatus != Z_OK )
+      {
+         closeModalWindow();
+         displayModalWindow( "Error uncompressing file. Nothing will be loaded", MODAL_TYPE_ERROR );
+         return false;
+      }
+
+      size_t i = 0;
+      const size_t dbSize = deserialize( &uncompressedData[i], _strDb );
+      assert( dbSize == header->strDbSize );
+      i += dbSize;
+
+      const size_t timelineSize = deserialize( &uncompressedData[i], _timeline );
+      i += timelineSize;
+
+      std::vector<TimelineTrack> timelineTracks( header->threadCount );
+      for ( uint32_t j = 0; j < header->threadCount; ++j )
+      {
+         size_t timelineTrackSize = deserialize( &uncompressedData[i], timelineTracks[j] );
+         addTraces( timelineTracks[j]._traces, j );
+         addLockWaits( timelineTracks[j]._lockWaits, j );
+         i += timelineTrackSize;
+      }
+      _srcType = SRC_TYPE_FILE;
+      closeModalWindow();
       return true;
    }
-   displayModalWindow( "File not found", MODAL_TYPE_CLOSE );
+   displayModalWindow( "File not found", MODAL_TYPE_ERROR );
    return false;
 }
 
@@ -911,6 +712,4 @@ void hop::Profiler::clear()
    _tracks.clear();
    _timeline.clear();
    _recording = false;
-   g_stats.traceCount = 0;
 }
-

@@ -35,22 +35,12 @@ void StringDb::clear()
 {
    _strData.clear();
    _stringIndices.clear();
-   g_stats.stringDbSize = 0;
-   // First character should always be 8 NULL
-   _strData.insert( _strData.begin(), sizeof(StrPtr_t), '\0' );
 }
 
 void StringDb::addStringData( const char* inData, size_t count )
 {
    using namespace hop;
    size_t i = 0;
-
-   // Check if the first entry is NULL.
-   StrPtr_t firstStrPtr = *( (StrPtr_t*)&inData[0] );
-   if ( firstStrPtr == 0 )
-   {
-      i += sizeof( StrPtr_t );
-   }
 
    while ( i < count )
    {
@@ -69,8 +59,6 @@ void StringDb::addStringData( const char* inData, size_t count )
 
       i += stringLen;
    }
-
-   g_stats.stringDbSize = _strData.size();
 }
 
 void StringDb::addStringData( const std::vector<char>& inData )
@@ -88,11 +76,16 @@ size_t StringDb::getStringIndex( hop::StrPtr_t strId ) const
    return it->second;
 }
 
+size_t StringDb::sizeInBytes() const
+{
+   return _strData.size();
+}
+
 std::vector< size_t > StringDb::findStringIndexMatching( const char* substrToFind ) const noexcept
 {
    std::vector< size_t > indices;
    indices.reserve( 64 );
-   size_t i = 8;
+   size_t i = 0;
    while( i < _strData.size() )
    {
       const auto length = alignOn( strlen( &_strData[i] ) + 1, 8 );

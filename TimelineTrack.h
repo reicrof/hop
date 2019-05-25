@@ -59,8 +59,6 @@ private:
    friend size_t deserialize( const char* data, TimelineTrack& ti );
 };
 
-class StringDb;
-
 struct LockOwnerInfo
 {
    LockOwnerInfo( TimeDuration dur, uint32_t tIdx ) : lockDuration(dur), threadIndex(tIdx){}
@@ -68,6 +66,7 @@ struct LockOwnerInfo
    uint32_t threadIndex{0};
 };
 
+class StringDb;
 struct TimelineTracksDrawInfo
 {
    const TimelineInfo& timeline;
@@ -79,12 +78,13 @@ class TimelineTracks
   public:
    bool handleMouse( float posX, float posY, bool lmClicked, bool rmClicked, float wheel );
    bool handleHotkey();
-   void update( float deltaTimeMs, TimeDuration timelineDuration );
+   void update( float globalTimeMs, TimeDuration timelineDuration );
    std::vector< TimelineMessage > draw( const TimelineTracksDrawInfo& info );
    void clear();
-   float totalHeight() const;
    void resizeAllTracksToFit();
    void setAllTracksCollapsed( bool collapsed );
+   float totalHeight() const;
+   int lodLevel() const;
    
 
    // Vector overloads

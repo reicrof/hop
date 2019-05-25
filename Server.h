@@ -6,9 +6,10 @@
 #include "StringDb.h"
 #include "TraceData.h"
 
-#include <vector>
-#include <thread>
 #include <atomic>
+#include <thread>
+#include <unordered_map>
+#include <vector>
 
 namespace hop
 {
@@ -20,21 +21,15 @@ class Server
    void stop();
    void clear();
    SharedMemory::ConnectionState connectionState() const;
+   size_t sharedMemorySize() const;
 
    struct PendingData
    {
-       std::vector< TraceData > traces;
-       std::vector<std::vector<char> > stringData;
-       std::vector<uint32_t> tracesThreadIndex;
-
-       std::vector< LockWaitData > lockWaits;
-       std::vector<uint32_t> lockWaitThreadIndex;
-
-       std::vector<std::vector<UnlockEvent> > unlockEvents;
-       std::vector<uint32_t> unlockEventsThreadIndex;
-
-       std::vector<std::vector<CoreEvent> > coreEvents;
-       std::vector<uint32_t> coreEventsThreadIndex;
+       std::vector<char> stringData;
+       std::unordered_map< uint32_t, TraceData > tracesPerThread;
+       std::unordered_map< uint32_t, LockWaitData > lockWaitsPerThread;
+       std::unordered_map< uint32_t, std::vector<UnlockEvent> > unlockEventsPerThread;
+       std::unordered_map< uint32_t, std::vector<CoreEvent> > coreEventsPerThread;
 
        std::vector< std::pair< uint32_t, StrPtr_t > > threadNames;
 

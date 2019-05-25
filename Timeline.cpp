@@ -264,14 +264,28 @@ void Timeline::drawOverlay()
       ImGui::PopStyleColor(3);
    }
 
+
+   // Draw zoom region
+   if( _rangeZoomCycles[0] != _rangeZoomCycles[1] )
+   {
+      const auto minmaxCycles = std::minmax( _rangeZoomCycles[0], _rangeZoomCycles[1] );
+      const float startPxl =
+          cyclesToPxl<float>( windowSize.x, _duration, minmaxCycles.first - _timelineStart );
+      const TimeDuration deltaCycles = minmaxCycles.second - minmaxCycles.first;
+      const float durationPxl = cyclesToPxl( windowSize.x, _duration, deltaCycles );
+
+      ImDrawList* drawList = ImGui::GetWindowDrawList();
+      drawList->AddRectFilled(
+          ImVec2( startPxl, 0 ), ImVec2( startPxl + durationPxl, 9999 ), ImColor( 255, 255, 255, 64 ) );
+   }
+
    // Draw selection region
    if( _rangeSelectTimeStamp[0] != _rangeSelectTimeStamp[1] )
    {
-      const auto minmaxX = std::minmax( _rangeSelectTimeStamp[0], _rangeSelectTimeStamp[1] );
-      const float endPxl =
-          cyclesToPxl<int64_t>( windowSize.x, _duration, minmaxX.second - _timelineStart ) +
-          _timelineDrawPosition[0];
-      const TimeDuration deltaCycles = minmaxX.second - minmaxX.first;
+      const auto minmaxCycles = std::minmax( _rangeSelectTimeStamp[0], _rangeSelectTimeStamp[1] );
+      const float startPxl =
+          cyclesToPxl<float>( windowSize.x, _duration, minmaxCycles.first - _timelineStart );
+      const TimeDuration deltaCycles = minmaxCycles.second - minmaxCycles.first;
       const float durationPxl = cyclesToPxl( windowSize.x, _duration, deltaCycles );
 
       hop::formatCyclesDurationToDisplay(
@@ -279,7 +293,7 @@ void Timeline::drawOverlay()
           durationText,
           sizeof( durationText ),
           _displayType == DISPLAY_CYCLES );
-      drawRangeSelection( endPxl - durationPxl, endPxl, _canvasDrawPosition[1], durationText );
+      drawRangeSelection( startPxl, startPxl + durationPxl, _canvasDrawPosition[1], durationText );
    }
 }
 
@@ -291,7 +305,7 @@ TimelineInfo Timeline::constructTimelineInfo() const noexcept
                        globalStartTime(),
                        relativeStartTime(),
                        duration(),
-                       _rangeZoomStartPosInCanvas != 0.0f,
+                       _rangeZoomCycles[0] != 0,
                        _displayType == DISPLAY_CYCLES};
 }
 
@@ -457,15 +471,14 @@ void Timeline::handleMouseWheel( float mousePosX, float mouseWheel )
    // Handle vertical scroll
    if( ImGui::IsKeyDown( SDL_SCANCODE_LSHIFT ) )
    {
-      const float maxScrollY = maxVerticalPosPxl();
       constexpr float scrollAmount = 50.0f;
       if( mouseWheel > 0)
       {
-         moveVerticalPositionPxl(hop::clamp( verticalPosPxl() - scrollAmount, 0.0f, maxScrollY), ANIMATION_TYPE_NONE);
+         moveVerticalPositionPxl( verticalPosPxl() - scrollAmount, ANIMATION_TYPE_NONE );
       }
       else if( mouseWheel < 0 )
       {
-         moveVerticalPositionPxl(hop::clamp( verticalPosPxl() + scrollAmount, 0.0f, maxScrollY), ANIMATION_TYPE_NONE);
+         moveVerticalPositionPxl( verticalPosPxl() + scrollAmount, ANIMATION_TYPE_NONE );
       }
    }
    else // Handle zoom
@@ -485,12 +498,12 @@ void Timeline::handleMouseDrag( float mouseInCanvasX, float /*mouseInCanvasY*/ )
 {   
    const float windowWidthPxl = ImGui::GetWindowWidth();
 
+   const int64_t mousePosAsCycles =
+          _timelineStart + pxlToCycles<int64_t>( windowWidthPxl, _duration, mouseInCanvasX );
+
    // Ctrl + left mouse dragging ( Range Selection )
    if( ImGui::GetIO().KeyCtrl && ImGui::IsMouseDragging( 0 ) )
    {
-      const TimeStamp mousePosAsCycles =
-          _timelineStart + pxlToCycles<int64_t>( windowWidthPxl, _duration, mouseInCanvasX );
-
       // If it is the first time we enter, setup the start position
       if ( _rangeSelectTimeStamp[0] == 0 )
       {
@@ -509,10 +522,8 @@ void Timeline::handleMouseDrag( float mouseInCanvasX, float /*mouseInCanvasY*/ )
       const int64_t deltaXInCycles =
           pxlToCycles<int64_t>( windowWidthPxl, _duration, delta.x );
       setStartTime( _timelineStart - deltaXInCycles, ANIMATION_TYPE_NONE );
-   
-      const float maxScrollY = maxVerticalPosPxl();
 
-      moveVerticalPositionPxl(hop::clamp(_verticalPosPxl - delta.y, 0.0f, maxScrollY), ANIMATION_TYPE_NONE);
+      moveVerticalPositionPxl( _verticalPosPxl - delta.y, ANIMATION_TYPE_NONE );
 
       ImGui::ResetMouseDragDelta();
       setRealtime( false );
@@ -520,37 +531,26 @@ void Timeline::handleMouseDrag( float mouseInCanvasX, float /*mouseInCanvasY*/ )
    // Right mouse button dragging ( Range Zoom )
    else if ( ImGui::IsMouseDragging( 1 ) )
    {
-      ImDrawList* DrawList = ImGui::GetWindowDrawList();
-      const auto delta = ImGui::GetMouseDragDelta( 1 );
-
-      const auto curMousePosInScreen = ImGui::GetMousePos();
-      DrawList->AddRectFilled(
-          ImVec2( curMousePosInScreen.x, 0 ),
-          ImVec2( curMousePosInScreen.x - delta.x, 9999 ),
-          ImColor( 255, 255, 255, 64 ) );
-
       // If it is the first time we enter
-      if ( _rangeZoomStartPosInCanvas == 0.0f )
+      if ( _rangeZoomCycles[0] == 0 )
       {
-         _rangeZoomStartPosInCanvas = mouseInCanvasX;
+         _rangeZoomCycles[0] = mousePosAsCycles;
          setRealtime( false );
       }
+      _rangeZoomCycles[1] = mousePosAsCycles;
    }
 
    // Handle right mouse click up. (Finished right click selection zoom)
-   if ( ImGui::IsMouseReleased( 1 ) && _rangeZoomStartPosInCanvas != 0.0f )
+   if ( ImGui::IsMouseReleased( 1 ) && _rangeZoomCycles[0] != 0 )
    {
-      pushNavigationState();
+       pushNavigationState();
 
-      const float minX = std::min( _rangeZoomStartPosInCanvas, mouseInCanvasX );
-      const float maxX = std::max( _rangeZoomStartPosInCanvas, mouseInCanvasX );
-      const int64_t minXinCycles =
-        pxlToCycles<int64_t>( windowWidthPxl, _duration, minX - 2 );
-      setStartTime( _timelineStart + minXinCycles );
-      setZoom( pxlToCycles<TimeDuration>( windowWidthPxl, _duration, maxX - minX) );
+       const auto minmaxPos = std::minmax( _rangeZoomCycles[0], _rangeZoomCycles[1] );
+       setStartTime( minmaxPos.first );
+       setZoom( minmaxPos.second - minmaxPos.first );
 
-      // Reset position
-      _rangeZoomStartPosInCanvas = 0.0f;
+       // Reset values
+       _rangeZoomCycles[0] = _rangeZoomCycles[1] = 0;
    }
 }
 
@@ -665,11 +665,12 @@ void Timeline::setStartTime( int64_t time, AnimationType animType ) noexcept
 
 void Timeline::moveVerticalPositionPxl( float positionPxl, AnimationType animType )
 {
-   _animationState.targetVerticalPosPxl = positionPxl;
+   const float clampedPos = hop::clamp( positionPxl, 0.0f, maxVerticalPosPxl() );
+   _animationState.targetVerticalPosPxl = clampedPos;
    _animationState.type = animType;
    if (animType == ANIMATION_TYPE_NONE)
    {
-      _verticalPosPxl = positionPxl;
+      _verticalPosPxl = clampedPos;
    }
 }
 

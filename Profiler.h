@@ -15,13 +15,26 @@
 
 namespace hop
 {
+struct ProfilerStats;
 class Server;
-struct Profiler
+class Profiler
 {
-   Profiler( const char* name );
+public:
+   enum SourceType
+   {
+      SRC_TYPE_NONE,
+      SRC_TYPE_FILE,
+      SRC_TYPE_PROCESS,
+   };
+
+   Profiler();
    ~Profiler();
-   void update( float deltaTimeMs ) noexcept;
-   void draw( uint32_t windowWidth, uint32_t windowHeight );
+   const char* name() const;
+   ProfilerStats stats() const;
+   bool setSource( SourceType type, const char* str );
+   SourceType sourceType() const;
+   void update( float deltaTimeMs, float globalTimeMs );
+   void draw( float drawPosX, float drawPosY, float windowWidth, float windowHeight );
    void fetchClientData();
    void addStringData( const std::vector< char >& stringData );
    void addTraces( const TraceData& traces, uint32_t threadIndex );
@@ -29,34 +42,35 @@ struct Profiler
    void addUnlockEvents(const std::vector<UnlockEvent>& unlockEvents, uint32_t threadIndex);
    void addCoreEvents( const std::vector<CoreEvent>& coreEvents, uint32_t threadIndex );
    void addThreadName( StrPtr_t name, uint32_t threadIndex );
-   void handleHotkey( bool modalWindowOpened );
+   void handleHotkey();
    void handleMouse();
    void setRecording( bool recording );
    void clear();
 
-private:
-   void drawMenuBar();
-   bool openFile( const char* path );
    bool saveToFile( const char* path );
+
+private:
+   bool openFile( const char* path );
+   bool setProcess( const char* process );
 
    std::string _name;
    Timeline _timeline;
    TimelineTracks _tracks;
    StringDb _strDb;
    bool _recording{ false };
+   SourceType _srcType;
 
    Server _server;
    Server::PendingData _serverPendingData;
 };
 
-// Initialize the imgui framework
-void init();
-// Add new profiler to be drawn
-void addNewProfiler( Profiler* profiler );
-// Updates the imgui data. Should be called each frame
-void onNewFrame( int width, int height, int mouseX, int mouseY, bool lmbPressed, bool rmbPressed, float mouseWheel );
-// Draw the ui
-void draw( uint32_t windowWidth, uint32_t windowHeight );
+struct ProfilerStats
+{
+   size_t strDbSize;
+   size_t traceCount;
+   size_t clientSharedMemSize;
+   int lodLevel;
+};
 
 } // namespace hop
 

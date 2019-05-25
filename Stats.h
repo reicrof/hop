@@ -17,7 +17,6 @@ namespace hop
       int currentLOD;
       size_t stringDbSize;
       size_t traceCount;
-      size_t traceSize;
       size_t clientSharedMemSize;
    };
 

@@ -1,12 +1,12 @@
 #define HOP_IMPLEMENTATION
 #include <Hop.h>
-#include "Profiler.h"
 #include "Stats.h"
 #include "imgui/imgui.h"
 #include "Options.h"
 #include "ModalWindow.h"
-#include "RendererGL.h"
 #include "Cursor.h"
+#include "Viewer.h"
+#include "Lod.h"
 #include <SDL.h>
 #undef main
 
@@ -14,6 +14,7 @@
 #include "miniz.h"
 
 #include <signal.h>
+#include <string>
 
 #ifndef _MSC_VER
 #include <sys/wait.h>
@@ -29,18 +30,12 @@ void terminateCallback( int sig )
    g_run = false;
 }
 
-const char* (*GetClipboardTextFn)(void* user_data);
-void(*SetClipboardTextFn)(void* user_data, const char* text);
+const char* ( *GetClipboardTextFn )( void* user_data );
+void ( *SetClipboardTextFn )( void* user_data, const char* text );
 
-static const char* getClipboardText(void*)
-{
-   return SDL_GetClipboardText();
-}
+static const char* getClipboardText( void* ) { return SDL_GetClipboardText(); }
 
-static void setClipboardText(void*, const char* text)
-{
-   SDL_SetClipboardText(text);
-}
+static void setClipboardText( void*, const char* text ) { SDL_SetClipboardText( text ); }
 
 static void createIcon( SDL_Window* window )
 {
@@ -83,7 +78,8 @@ static void sdlImGuiInit()
    ImGui::CreateContext();
 
    ImGuiIO& io = ImGui::GetIO();
-   io.KeyMap[ImGuiKey_Tab] = SDLK_TAB; // Keyboard mapping. ImGui will use those indices to peek into the io.KeyDown[] array.
+   io.KeyMap[ImGuiKey_Tab] = SDLK_TAB;  // Keyboard mapping. ImGui will use those indices to peek
+                                        // into the io.KeyDown[] array.
    io.KeyMap[ImGuiKey_LeftArrow] = SDL_SCANCODE_LEFT;
    io.KeyMap[ImGuiKey_RightArrow] = SDL_SCANCODE_RIGHT;
    io.KeyMap[ImGuiKey_UpArrow] = SDL_SCANCODE_UP;
@@ -106,12 +102,21 @@ static void sdlImGuiInit()
    io.SetClipboardTextFn = setClipboardText;
    io.GetClipboardTextFn = getClipboardText;
 
+   const ImVec4 darkGrey = ImVec4( 0.15f, 0.15f, 0.15f, 1.0f );
+   const ImVec4 grey = ImVec4( 0.2f, 0.2f, 0.2f, 1.0f );
+   const ImVec4 lightGrey = ImVec4( 0.3f, 0.3f, 0.3f, 1.0f );
+   const ImVec4 lightestGrey = ImVec4( 0.45f, 0.45f, 0.45f, 1.0f );
+
    auto& style = ImGui::GetStyle();
-   style.Colors[ImGuiCol_WindowBg]              = ImVec4(0.14f, 0.14f, 0.14f, 1.00f);
-   style.Colors[ImGuiCol_TitleBg]               = ImVec4(0.24f, 0.24f, 0.24f, 1.00f);
-   style.Colors[ImGuiCol_TitleBgCollapsed]      = ImVec4(0.27f, 0.27f, 0.27f, 1.00f);
-   style.Colors[ImGuiCol_TitleBgActive]         = ImVec4(0.20f, 0.20f, 0.20f, 1.00f);
-   style.Colors[ImGuiCol_MenuBarBg]             = ImVec4(0.35f, 0.35f, 0.35f, 1.00f);
+   style.Colors[ImGuiCol_TitleBg] = darkGrey;
+   style.Colors[ImGuiCol_WindowBg] = grey;
+   style.Colors[ImGuiCol_ChildBg] = grey;
+   style.Colors[ImGuiCol_PopupBg] = grey;
+   style.Colors[ImGuiCol_MenuBarBg] = lightestGrey;
+
+   style.Colors[ImGuiCol_Button] = lightGrey;
+   style.Colors[ImGuiCol_ButtonHovered] = lightestGrey;
+   style.Colors[ImGuiCol_ButtonActive] = darkGrey;
 }
 
 static void handleMouseWheel( const SDL_Event& e )
@@ -185,7 +190,7 @@ static processId_t startChildProcess( const char* path, char** args )
    si.cb = sizeof( si );
    if ( !CreateProcess( NULL, (LPSTR)path, NULL, NULL, FALSE, 0, NULL, NULL, &si, &pi ) )
    {
-      return false;
+      return (processId_t)-1;
    }
    newProcess = pi.hProcess;
 #else
@@ -224,14 +229,17 @@ static void terminateProcess( processId_t id )
    {
       kill( id, SIGINT );
       int status, wpid;
-      while ((wpid = wait(&status)) > 0);
+      while ( ( wpid = wait( &status ) ) > 0 )
+         ;
    }
 #endif
 }
 
 static void printUsage()
 {
-   printf( "Usage : hop [OPTION] <process name>\n\n OPTIONS:\n\t-e Launch specified executable and start recording\n\t-v Display version info and exit\n\t-h Show usage\n" );
+   printf(
+       "Usage : hop [OPTION] <process name>\n\n OPTIONS:\n\t-e Launch specified executable and "
+       "start recording\n\t-v Display version info and exit\n\t-h Show usage\n" );
    exit( 0 );
 }
 
@@ -243,15 +251,14 @@ struct LaunchOptions
    bool startExec;
 };
 
-static LaunchOptions
-createLaunchOptions( char* fullProcessPath, char** argv, bool startExec )
+static LaunchOptions createLaunchOptions( char* fullProcessPath, char** argv, bool startExec )
 {
-   LaunchOptions opts = { fullProcessPath, fullProcessPath, argv, startExec };
+   LaunchOptions opts = {fullProcessPath, fullProcessPath, argv, startExec};
    std::string fullPathStr( fullProcessPath );
-   size_t lastSeparator = fullPathStr.find_last_of("/\\");
-   if( lastSeparator != std::string::npos )
+   size_t lastSeparator = fullPathStr.find_last_of( "/\\" );
+   if ( lastSeparator != std::string::npos )
    {
-      opts.processName = &fullProcessPath[ ++lastSeparator ]; 
+      opts.processName = &fullProcessPath[++lastSeparator];
    }
 
    return opts;
@@ -259,27 +266,28 @@ createLaunchOptions( char* fullProcessPath, char** argv, bool startExec )
 
 static LaunchOptions parseArgs( int argc, char* argv[] )
 {
-   if (argc > 1)
+   if ( argc > 1 )
    {
-      if (argv[1][0] == '-')
+      if ( argv[1][0] == '-' )
       {
-         switch (argv[1][1])
+         switch ( argv[1][1] )
          {
-         case 'v':
-            printf( "hop version %.2f \n", HOP_VERSION );
-            exit( 0 );
-            break;
-         case 'h':
-            break;
-         case 'e':
-            if (argc > 2)
-            {
-               return createLaunchOptions( argv[2], &argv[2], true );
-            }
-            // Fallthrough
-         default:
-            fprintf( stderr, "Invalid arguments\n" );
-            break;
+            case 'v':
+               printf( "hop version %.2f \n", HOP_VERSION );
+               exit( 0 );
+               break;
+            case 'h':
+               printUsage();
+               exit( 0 );
+            case 'e':
+               if ( argc > 2 )
+               {
+                  return createLaunchOptions( argv[2], &argv[2], true );
+               }
+               // Fallthrough
+            default:
+               fprintf( stderr, "Invalid arguments\n" );
+               break;
          }
       }
       else
@@ -287,9 +295,7 @@ static LaunchOptions parseArgs( int argc, char* argv[] )
          return createLaunchOptions( argv[1], &argv[1], false );
       }
    }
-
-   printUsage();
-   exit( 0 );
+   return LaunchOptions{nullptr, nullptr, nullptr, false};
 }
 
 int main( int argc, char* argv[] )
@@ -312,7 +318,7 @@ int main( int argc, char* argv[] )
    hop::loadOptions();
 
    uint32_t createWindowFlags = SDL_WINDOW_OPENGL | SDL_WINDOW_RESIZABLE;
-   if( hop::g_options.startFullScreen ) createWindowFlags |= SDL_WINDOW_MAXIMIZED;
+   if ( hop::g_options.startFullScreen ) createWindowFlags |= SDL_WINDOW_MAXIMIZED;
 
    SDL_Window* window = SDL_CreateWindow(
        "Hop", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, 1600, 1024, createWindowFlags );
@@ -326,11 +332,11 @@ int main( int argc, char* argv[] )
    sdlImGuiInit();
 
    SDL_GLContext mainContext = SDL_GL_CreateContext( window );
-   SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_CORE);
-   SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 3);
-   SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 2);
-   SDL_GL_SetAttribute(SDL_GL_DOUBLEBUFFER, 1);
-   SDL_GL_SetSwapInterval(1);
+   SDL_GL_SetAttribute( SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_CORE );
+   SDL_GL_SetAttribute( SDL_GL_CONTEXT_MAJOR_VERSION, 3 );
+   SDL_GL_SetAttribute( SDL_GL_CONTEXT_MINOR_VERSION, 2 );
+   SDL_GL_SetAttribute( SDL_GL_DOUBLEBUFFER, 1 );
+   SDL_GL_SetSwapInterval( 1 );
 
    createIcon( window );
 
@@ -338,88 +344,77 @@ int main( int argc, char* argv[] )
 
    // Setup the LOD granularity based on screen resolution
    SDL_DisplayMode DM;
-   SDL_GetCurrentDisplayMode(0, &DM);
+   SDL_GetCurrentDisplayMode( 0, &DM );
    hop::setupLODResolution( DM.w );
 
-   hop::init();
+   hop::Viewer viewer( DM.w, DM.h );
 
-   auto profiler = std::unique_ptr< hop::Profiler >( new hop::Profiler( opts.processName ) );
-   hop::addNewProfiler( profiler.get() );
-
-   // If we want to launch an executable to profile, now is the time to do it
    processId_t childProcess = 0;
-   if( opts.startExec )
+   if ( opts.processName )
    {
-      profiler->setRecording( true );
-      childProcess = startChildProcess( opts.fullProcessPath, opts.args );
-      if( childProcess == 0 )
+      viewer.addNewProfiler( opts.processName, opts.startExec );
+
+      // If we want to launch an executable to profile, now is the time to do it
+      if ( opts.startExec )
       {
-         exit(-1);
+         // profiler->setRecording( true );
+         childProcess = startChildProcess( opts.fullProcessPath, opts.args );
+         if ( childProcess == (processId_t)-1 )
+         {
+            fprintf( stderr, "Could not launch child process\n" );
+            exit( -1 );
+         }
       }
    }
 
-   bool lastVsync = !hop::g_options.vsyncOn;
+   HOP_SET_THREAD_NAME( "Main" );
    while ( g_run )
    {
+      HOP_PROF( "Main Loop" );
       const auto frameStart = std::chrono::system_clock::now();
+
       handleInput();
 
       const auto startFetch = std::chrono::system_clock::now();
-      profiler->fetchClientData();
+      viewer.fetchClientsData();
       const auto endFetch = std::chrono::system_clock::now();
-      hop::g_stats.fetchTimeMs = std::chrono::duration< double, std::milli>( ( endFetch - startFetch ) ).count();
+      hop::g_stats.fetchTimeMs =
+          std::chrono::duration<double, std::milli>( ( endFetch - startFetch ) ).count();
 
       int w, h, x, y;
       SDL_GetWindowSize( window, &w, &h );
-      uint32_t buttonState = SDL_GetMouseState( &x, &y );
+      const uint32_t buttonState = SDL_GetMouseState( &x, &y );
+      const bool lmb = buttonState & SDL_BUTTON( SDL_BUTTON_LEFT );
+      const bool rmb = buttonState & SDL_BUTTON( SDL_BUTTON_RIGHT );
 
       // Reset cursor at start of the frame
       hop::setCursor( hop::CURSOR_ARROW );
 
-      // Set vsync if it has changed.
-      if( lastVsync != hop::g_options.vsyncOn )
-      {
-         lastVsync = hop::g_options.vsyncOn;
-         renderer::setVSync( hop::g_options.vsyncOn );
-      }
-
-      const auto drawStart = std::chrono::system_clock::now();
-
-      hop::onNewFrame(
-          w,
-          h,
-          x,
-          y,
-          buttonState & SDL_BUTTON( SDL_BUTTON_LEFT ),
-          buttonState & SDL_BUTTON( SDL_BUTTON_RIGHT ),
-          g_mouseWheel );
+      viewer.onNewFrame( w, h, x, y, lmb, rmb, g_mouseWheel );
       g_mouseWheel = 0;
 
-      renderer::setViewport( 0, 0, w, h );
-      renderer::clearColorBuffer();
-
-      hop::draw( w, h );
+      viewer.draw( w, h );
 
       hop::drawCursor();
 
-      const auto drawEnd = std::chrono::system_clock::now();
-      hop::g_stats.drawingTimeMs = std::chrono::duration< double, std::milli>( ( drawEnd - drawStart ) ).count();
+      const auto frameEnd = std::chrono::system_clock::now();
 
-      if (std::chrono::duration< double, std::milli>((drawEnd - frameStart)).count() < 10.0)
+      // If we rendered fast, fetch data again instead of stalling on the vsync
+      if ( std::chrono::duration<double, std::milli>( ( frameEnd - frameStart ) ).count() < 10.0 )
       {
-         profiler->fetchClientData();
+         viewer.fetchClientsData();
       }
 
       SDL_GL_SwapWindow( window );
 
-      const auto frameEnd = std::chrono::system_clock::now();
-      hop::g_stats.frameTimeMs = std::chrono::duration< double, std::milli>( ( frameEnd - frameStart ) ).count();
+      hop::g_stats.frameTimeMs =
+          std::chrono::duration<double, std::milli>( ( frameEnd - frameStart ) ).count();
    }
 
    hop::saveOptions();
 
    // We have launched a child process. Let's close it
-   if( opts.startExec )
+   if ( opts.startExec )
    {
       terminateProcess( childProcess );
    }
