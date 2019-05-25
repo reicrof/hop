@@ -25,13 +25,14 @@ public:
       SRC_TYPE_NONE,
       SRC_TYPE_FILE,
       SRC_TYPE_PROCESS,
-   } _srcType;
+   };
 
    Profiler();
    ~Profiler();
    const char* name() const;
    ProfilerStats stats() const;
    bool setSource( SourceType type, const char* str );
+   SourceType sourceType() const;
    void update( float deltaTimeMs, float globalTimeMs );
    void draw( float drawPosX, float drawPosY, float windowWidth, float windowHeight );
    void fetchClientData();
@@ -57,6 +58,7 @@ private:
    TimelineTracks _tracks;
    StringDb _strDb;
    bool _recording{ false };
+   SourceType _srcType;
 
    Server _server;
    Server::PendingData _serverPendingData;

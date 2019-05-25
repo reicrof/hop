@@ -173,6 +173,13 @@ static int drawTabs( hop::Viewer& viewer, int selectedTab )
       }
       ImGui::SetItemAllowOverlap();  // Since we will be drawing a close button on top this is
                                      // needed
+      if ( ImGui::IsItemHovered() )
+      {
+         ImGui::BeginTooltip();
+         ImGui::TextUnformatted( profName );
+         ImGui::EndTooltip();
+      }
+
       ImGui::PopID();
       ImGui::SameLine();
    }
@@ -187,10 +194,17 @@ static int drawTabs( hop::Viewer& viewer, int selectedTab )
       ImGui::PushStyleColor( ImGuiCol_ButtonHovered, activeWindowColor );
       ImGui::PushStyleColor( ImGuiCol_ButtonActive, activeWindowColor );
 
-      ImGui::Button(
-          displayableProfilerName( viewer.getProfiler( selectedTab ) ), defaultTabSize );
+      const char* profName = displayableProfilerName( viewer.getProfiler( selectedTab ) );
+      ImGui::Button( profName, defaultTabSize );
       ImGui::SetItemAllowOverlap();  // Since we will be drawing a close button on top this is
                                      // needed
+      if ( ImGui::IsItemHovered() )
+      {
+         ImGui::BeginTooltip();
+         ImGui::TextUnformatted( profName );
+         ImGui::EndTooltip();
+      }
+
       ImGui::PopStyleColor( 3 );
    }
 

@@ -109,6 +109,8 @@ bool Profiler::setSource( SourceType type, const char* str )
    return false;
 }
 
+Profiler::SourceType Profiler::sourceType() const { return _srcType; }
+
 void Profiler::addTraces( const TraceData& traces, uint32_t threadIndex )
 {
    // Ignore empty traces
@@ -453,7 +455,7 @@ void hop::Profiler::draw( float drawPosX, float drawPosY, float canvasWidth, flo
    ImGui::SetCursorPos( ImVec2( drawPosX, drawPosY ) );
 
    const auto toolbarDrawPos = ImVec2( drawPosX, drawPosY );
-   if ( drawPlayStopButton( toolbarDrawPos, _recording ) )
+   if ( sourceType() == SRC_TYPE_PROCESS && drawPlayStopButton( toolbarDrawPos, _recording ) )
    {
       setRecording( !_recording );
    }
