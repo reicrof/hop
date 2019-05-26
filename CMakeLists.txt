@@ -62,4 +62,11 @@ target_link_libraries( hop PUBLIC -lpthread ${HOP_LIBRT_FLAG} ${HOP_WINDOWS_LIB}
 #####################
 add_subdirectory(test_clients)
 
+#####################
+### Test executables
+#####################
+
+enable_testing ()
+add_subdirectory (tests)
+
 #windows build : cmake -G "Visual Studio 15 2017 Win64" -DSDL2_INCLUDE_DIR:STRING=C:\\Users\\XXXX\\source\\repos\\SDL2\\include -DSDL2_LIBRARY:STRING=C:\\Users\\XXXX\\source\\repos\\SDL2\\lib\\x64\\SDL2.lib .. 
