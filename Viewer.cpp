@@ -7,6 +7,7 @@
 #include "RendererGL.h"
 #include "Stats.h"
 #include "Utils.h"
+#include "Cursor.h"
 
 #include "imgui/imgui.h"
 
@@ -279,6 +280,7 @@ Viewer::Viewer( uint32_t screenSizeX, uint32_t /*screenSizeY*/ )
       _vsyncEnabled( hop::g_options.vsyncOn )
 {
    hop::setupLODResolution( screenSizeX );
+   hop::initCursors();
    renderer::createResources();
 }
 
@@ -409,6 +411,9 @@ void Viewer::onNewFrame(
 
    // Start the frame
    ImGui::NewFrame();
+
+   // Reset cursor at start of the frame
+   hop::setCursor( hop::CURSOR_ARROW );
 }
 
 void Viewer::draw( uint32_t windowWidth, uint32_t windowHeight )
@@ -474,6 +479,8 @@ void Viewer::draw( uint32_t windowWidth, uint32_t windowHeight )
 
    // Do the actual render
    renderer::renderDrawlist( ImGui::GetDrawData() );
+
+   hop::drawCursor();
 }
 
 bool Viewer::handleHotkey()
@@ -501,6 +508,9 @@ bool Viewer::handleHotkey()
    return false;
 }
 
-Viewer::~Viewer() {}
+Viewer::~Viewer()
+{
+   hop::uninitCursors();
+}
 
 }  // namespace hop

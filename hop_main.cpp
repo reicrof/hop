@@ -3,10 +3,8 @@
 #include "Stats.h"
 #include "imgui/imgui.h"
 #include "Options.h"
-#include "ModalWindow.h"
-#include "Cursor.h"
 #include "Viewer.h"
-#include "Lod.h"
+#include "Utils.h"
 #include <SDL.h>
 #undef main
 
@@ -24,7 +22,7 @@ bool g_run = true;
 static float g_mouseWheel = 0.0f;
 static SDL_Surface* iconSurface = nullptr;
 
-void terminateCallback( int sig )
+static void terminateCallback( int sig )
 {
    signal( sig, SIG_IGN );
    g_run = false;
@@ -207,7 +205,7 @@ static processId_t startChildProcess( const char* path, char** args )
    return newProcess;
 }
 
-bool processAlive( processId_t id )
+static bool processAlive( processId_t id )
 {
 #if defined( _MSC_VER )
    DWORD exitCode;
@@ -233,6 +231,25 @@ static void terminateProcess( processId_t id )
          ;
    }
 #endif
+}
+
+static bool verifyPlatform()
+{
+   if ( !hop::supportsRDTSCP() )
+   {
+      printf(
+          "This platform does not seem to support RDTSCP. Hop will not be "
+          "able to work properly.\n" );
+      return false;
+   }
+
+   if ( !hop::supportsConstantTSC() )
+   {
+      printf(
+          "This platform does not seem to support Invariant TSC. Hop will be "
+          "able to run, but no precision on the measurement are guaranteed.\n" );
+   }
+   return true;
 }
 
 static void printUsage()
@@ -309,6 +326,12 @@ int main( int argc, char* argv[] )
    signal( SIGCHLD, SIG_IGN );
 #endif
 
+   // Confirm the platform can use HOP
+   if ( !verifyPlatform() )
+   {
+      return -2;
+   }
+
    if ( SDL_Init( SDL_INIT_VIDEO ) != 0 )
    {
       fprintf( stderr, "Failed SDL initialization : %s \n", SDL_GetError() );
@@ -340,12 +363,9 @@ int main( int argc, char* argv[] )
 
    createIcon( window );
 
-   hop::initCursors();
-
    // Setup the LOD granularity based on screen resolution
    SDL_DisplayMode DM;
    SDL_GetCurrentDisplayMode( 0, &DM );
-   hop::setupLODResolution( DM.w );
 
    hop::Viewer viewer( DM.w, DM.h );
 
@@ -387,15 +407,10 @@ int main( int argc, char* argv[] )
       const bool lmb = buttonState & SDL_BUTTON( SDL_BUTTON_LEFT );
       const bool rmb = buttonState & SDL_BUTTON( SDL_BUTTON_RIGHT );
 
-      // Reset cursor at start of the frame
-      hop::setCursor( hop::CURSOR_ARROW );
-
       viewer.onNewFrame( w, h, x, y, lmb, rmb, g_mouseWheel );
       g_mouseWheel = 0;
 
       viewer.draw( w, h );
-
-      hop::drawCursor();
 
       const auto frameEnd = std::chrono::system_clock::now();
 
@@ -420,8 +435,6 @@ int main( int argc, char* argv[] )
    }
 
    destroyIcon();
-
-   hop::uninitCursors();
 
    ImGui::DestroyContext();
 
