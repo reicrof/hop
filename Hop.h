@@ -232,7 +232,6 @@ inline TimeStamp getTimeStamp( Core_t& core )
    // of precision. It will instead be used to flag if a trace uses dynamic strings or not in its
    // start time. See hop::StartProfileDynString
    return rdtscp( core ) & ~1ull;
-   ;
 }
 
 inline TimeStamp getTimeStamp()
@@ -1363,18 +1362,6 @@ class Client
       _unlockEvents.clear();
    }
 
-   TimeStamp getMsgTimeStamp() const
-   {
-      if ( _traces.count == 0 )
-      {
-         return getTimeStamp();
-      }
-      else
-      {
-         return _traces.starts[_traces.count];
-      }
-   }
-
    uint8_t* acquireSharedChunk( ringbuf_t* ringbuf, size_t size )
    {
       uint8_t* data = NULL;
@@ -1392,7 +1379,7 @@ class Client
       return data;
    }
 
-   bool sendStringData()
+   bool sendStringData( TimeStamp timeStamp )
    {
       // Add all strings to the database
       for ( uint32_t i = 0; i < _traces.count; ++i )
@@ -1435,7 +1422,7 @@ class Client
          msgInfo->threadId = tl_threadId;
          msgInfo->threadName = tl_threadName;
          msgInfo->threadIndex = tl_threadIndex;
-         msgInfo->timeStamp = getMsgTimeStamp();
+         msgInfo->timeStamp = timeStamp;
          msgInfo->stringData.size = stringToSendSize;
 
          // Copy string data into its array
@@ -1452,7 +1439,7 @@ class Client
       return true;
    }
 
-   bool sendTraces()
+   bool sendTraces( TimeStamp timeStamp )
    {
       // Get size of profiling traces message
       const size_t profilerMsgSize = sizeof( MsgInfo ) + traceDataSize( &_traces );
@@ -1480,7 +1467,7 @@ class Client
          tracesInfo->threadId = tl_threadId;
          tracesInfo->threadName = tl_threadName;
          tracesInfo->threadIndex = tl_threadIndex;
-         tracesInfo->timeStamp = getMsgTimeStamp();
+         tracesInfo->timeStamp = timeStamp;
          tracesInfo->traces.count = _traces.count;
 
          // Copy trace information into buffer to send
@@ -1496,7 +1483,7 @@ class Client
       return true;
    }
 
-   bool sendCores()
+   bool sendCores( TimeStamp timeStamp )
    {
       if ( _cores.empty() ) return false;
 
@@ -1520,7 +1507,7 @@ class Client
          coreInfo->threadId = tl_threadId;
          coreInfo->threadName = tl_threadName;
          coreInfo->threadIndex = tl_threadIndex;
-         coreInfo->timeStamp = getMsgTimeStamp();
+         coreInfo->timeStamp = timeStamp;
          coreInfo->coreEvents.count = static_cast<uint32_t>( _cores.size() );
          bufferPtr += sizeof( MsgInfo );
          memcpy( bufferPtr, _cores.data(), _cores.size() * sizeof( CoreEvent ) );
@@ -1536,7 +1523,7 @@ class Client
       return true;
    }
 
-   bool sendLockWaits()
+   bool sendLockWaits( TimeStamp timeStamp )
    {
       if ( _lockWaits.empty() ) return false;
 
@@ -1574,7 +1561,7 @@ class Client
       return true;
    }
 
-   bool sendUnlockEvents()
+   bool sendUnlockEvents( TimeStamp timeStamp )
    {
       if ( _unlockEvents.empty() ) return false;
 
@@ -1613,7 +1600,7 @@ class Client
       return true;
    }
 
-   bool sendHeartbeat()
+   bool sendHeartbeat( TimeStamp timeStamp )
    {
       const size_t heartbeatSize = sizeof( MsgInfo );
 
@@ -1634,7 +1621,7 @@ class Client
          hbInfo->threadId = tl_threadId;
          hbInfo->threadName = tl_threadName;
          hbInfo->threadIndex = tl_threadIndex;
-         hbInfo->timeStamp = getTimeStamp();
+         hbInfo->timeStamp = timeStamp;
          bufferPtr += sizeof( MsgInfo );
       }
 
@@ -1646,10 +1633,12 @@ class Client
 
    void flushToConsumer()
    {
+      const TimeStamp timeStamp = getTimeStamp();
+
       // If we have a consumer, send life signal
       if ( ClientManager::HasConnectedConsumer() )
       {
-         sendHeartbeat();
+         sendHeartbeat( timeStamp );
       }
 
       // If no one is there to listen, no need to send any data
@@ -1672,11 +1661,11 @@ class Client
          return;
       }
 
-      sendStringData();  // Always send string data first
-      sendTraces();
-      sendLockWaits();
-      sendUnlockEvents();
-      sendCores();
+      sendStringData( timeStamp );  // Always send string data first
+      sendTraces( timeStamp );
+      sendLockWaits( timeStamp );
+      sendUnlockEvents( timeStamp );
+      sendCores( timeStamp );
    }
 
    Traces _traces;
