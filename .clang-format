@@ -1,0 +1,20 @@
+---
+BasedOnStyle: Google
+AlignAfterOpenBracket: AlwaysBreak
+AllowAllParametersOfDeclarationOnNextLine: 'false'
+AllowShortIfStatementsOnASingleLine: 'true'
+BinPackArguments: 'false'
+BinPackParameters: 'false'
+BreakBeforeBraces: Allman
+ColumnLimit: '100'
+DerivePointerAlignment: 'false'
+IndentWidth: '3'
+PointerAlignment: Left
+SpacesInParentheses: 'true'
+TabWidth: '3'
+UseTab: Never
+SortIncludes: 'false'
+FixNamespaceComments: 'true'
+AlignConsecutiveAssignments: 'true
+SpaceBeforeParens: Never
+...
