@@ -1124,26 +1124,13 @@ static uint32_t alignOn( uint32_t val, uint32_t alignment )
 static void allocTraces( Traces* t, unsigned size )
 {
    t->maxSize = size;
-   if( t->count == 0 )
-   {
-      t->starts      = (TimeStamp*)malloc( size * sizeof( TimeStamp ) );
-      t->ends        = (TimeStamp*)malloc( size * sizeof( TimeStamp ) );
-      t->depths      = (Depth_t*)malloc( size * sizeof( Depth_t ) );
-      t->fctNameIds  = (StrPtr_t*)malloc( size * sizeof( StrPtr_t ) );
-      t->fileNameIds = (StrPtr_t*)malloc( size * sizeof( StrPtr_t ) );
-      t->lineNumbers = (LineNb_t*)malloc( size * sizeof( LineNb_t ) );
-      t->zones       = (ZoneId_t*)malloc( size * sizeof( ZoneId_t ) );
-   }
-   else
-   {
-      t->starts      = (TimeStamp*)realloc( t->starts, size * sizeof( TimeStamp ) );
-      t->ends        = (TimeStamp*)realloc( t->ends, size * sizeof( TimeStamp ) );
-      t->depths      = (Depth_t*)realloc( t->depths, size * sizeof( Depth_t ) );
-      t->fctNameIds  = (StrPtr_t*)realloc( t->fctNameIds, size * sizeof( StrPtr_t ) );
-      t->fileNameIds = (StrPtr_t*)realloc( t->fileNameIds, size * sizeof( StrPtr_t ) );
-      t->lineNumbers = (LineNb_t*)realloc( t->lineNumbers, size * sizeof( LineNb_t ) );
-      t->zones       = (ZoneId_t*)realloc( t->zones, size * sizeof( ZoneId_t ) );
-   }
+   t->starts      = (TimeStamp*)realloc( t->starts, size * sizeof( TimeStamp ) );
+   t->ends        = (TimeStamp*)realloc( t->ends, size * sizeof( TimeStamp ) );
+   t->depths      = (Depth_t*)realloc( t->depths, size * sizeof( Depth_t ) );
+   t->fctNameIds  = (StrPtr_t*)realloc( t->fctNameIds, size * sizeof( StrPtr_t ) );
+   t->fileNameIds = (StrPtr_t*)realloc( t->fileNameIds, size * sizeof( StrPtr_t ) );
+   t->lineNumbers = (LineNb_t*)realloc( t->lineNumbers, size * sizeof( LineNb_t ) );
+   t->zones       = (ZoneId_t*)realloc( t->zones, size * sizeof( ZoneId_t ) );
 }
 
 static void freeTraces( Traces* t )
