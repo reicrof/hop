@@ -217,71 +217,84 @@ size_t Server::handleNewMessage( uint8_t* data, size_t maxSize, TimeStamp minTim
    (void)maxSize;  // Removed unused warning
 
    // If the message was sent prior to the last reset timestamp, ignore it
-   if ( msgInfo->timeStamp < minTimestamp ) return ( size_t )( bufPtr - data );
+   if ( msgInfo->timeStamp < minTimestamp ) { return maxSize; }
 
    // If the thread has an assigned name
    if ( msgInfo->threadName != 0 && addUniqueThreadName( threadIndex, msgInfo->threadName ) )
    {
       std::lock_guard<hop::Mutex> guard( _sharedPendingDataMutex );
       _sharedPendingData.threadNames.emplace_back( threadIndex, msgInfo->threadName );
-   }
+    }
 
-   switch ( msgType )
-   {
-      case MsgType::PROFILER_STRING_DATA:
-      {
-         // Copy string and add it to database
-         const size_t strSize = msgInfo->stringData.size;
-         if ( strSize > 0 )
-         {
-            const char* strDataPtr = (const char*)bufPtr;
-            bufPtr += strSize;
-            assert( ( size_t )( bufPtr - data ) <= maxSize );
+    switch ( msgType )
+    {
+       case MsgType::PROFILER_STRING_DATA:
+       {
+          // Copy string and add it to database
+          const size_t strSize = msgInfo->stringData.size;
+          if ( strSize > 0 )
+          {
+             const char* strDataPtr = (const char*)bufPtr;
+             bufPtr += strSize;
+             assert( ( size_t )( bufPtr - data ) <= maxSize );
 
-            // TODO: Could lock later when we received all the messages
-            std::lock_guard<hop::Mutex> guard( _sharedPendingDataMutex );
-            _stringDb.addStringData( strDataPtr, strSize );
-            _sharedPendingData.stringData.insert(
-                _sharedPendingData.stringData.end(), strDataPtr, strDataPtr + strSize );
-         }
-         return ( size_t )( bufPtr - data );
-      }
-      case MsgType::PROFILER_TRACE:
-      {
-         const Trace* traces = (const Trace*)bufPtr;
-         const size_t traceCount = msgInfo->traces.count;
+             // TODO: Could lock later when we received all the messages
+             std::lock_guard<hop::Mutex> guard( _sharedPendingDataMutex );
+             _stringDb.addStringData( strDataPtr, strSize );
+             _sharedPendingData.stringData.insert(
+                 _sharedPendingData.stringData.end(), strDataPtr, strDataPtr + strSize );
+          }
+          return ( size_t )( bufPtr - data );
+       }
+       case MsgType::PROFILER_TRACE:
+       {
+          const size_t tracesCount = msgInfo->traces.count;
+          if ( tracesCount > 0 )
+          {
+             TraceData traceData;
+             const TimeStamp* starts = (const TimeStamp*)bufPtr;
+             const TimeStamp* ends = starts + tracesCount;
+             const Depth_t* depths = (const Depth_t*)( ends + tracesCount );
+             const StrPtr_t* fileNames = (const StrPtr_t*)( depths + tracesCount );
+             const StrPtr_t* fctNames = fileNames + tracesCount;
+             const LineNb_t* lineNbs = (const LineNb_t*)( fctNames + tracesCount );
+             const ZoneId_t* zones = (const ZoneId_t*)( lineNbs + tracesCount );
 
-         TraceData traceData;
-         Depth_t maxDepth = 0;
-         for ( size_t i = 0; i < traceCount; ++i )
-         {
-            const auto& t = traces[i];
-            traceData.entries.ends.push_back( t.end );
-            traceData.entries.deltas.push_back( t.end - t.start );
-            traceData.fileNameIds.push_back( _stringDb.getStringIndex( t.fileNameId ) );
-            traceData.fctNameIds.push_back( _stringDb.getStringIndex( t.fctNameId ) );
-            traceData.lineNbs.push_back( t.lineNumber );
-            traceData.entries.depths.push_back( t.depth );
-            traceData.zones.push_back( t.zone );
-            maxDepth = std::max( maxDepth, t.depth );
-         }
-         traceData.entries.maxDepth = maxDepth;
+             traceData.entries.ends.insert(
+                 traceData.entries.ends.end(), ends, ends + tracesCount );
+             traceData.entries.depths.insert(
+                 traceData.entries.depths.end(), depths, depths + tracesCount );
+             traceData.entries.maxDepth = *std::max_element( depths, depths + tracesCount );
 
-         // The ends time should already be sorted
-         assert_is_sorted( traceData.entries.ends.begin(), traceData.entries.ends.end() );
+             traceData.lineNbs.insert( traceData.lineNbs.end(), lineNbs, lineNbs + tracesCount );
+             traceData.zones.insert( traceData.zones.end(), zones, zones + tracesCount );
 
-         bufPtr += ( traceCount * sizeof( Trace ) );
-         assert( ( size_t )( bufPtr - data ) <= maxSize );
+             // Process non trivially copiable members
+             for ( size_t i = 0; i < tracesCount; ++i )
+             {
+                traceData.entries.deltas.push_back( ends[i] - starts[i] );
+                traceData.fileNameIds.push_back( _stringDb.getStringIndex( fileNames[i] ) );
+                traceData.fctNameIds.push_back( _stringDb.getStringIndex( fctNames[i] ) );
+             }
 
-         static_assert( std::is_move_constructible<TraceData>::value, "Trace Data not moveable" );
-         if ( traceCount > 0 )
-         {
-            // TODO: Could lock later when we received all the messages
-            std::lock_guard<hop::Mutex> guard( _sharedPendingDataMutex );
-            _sharedPendingData.tracesPerThread[threadIndex].append( traceData );
-         }
-         return ( size_t )( bufPtr - data );
-      }
+             // The ends time should already be sorted
+             assert_is_sorted( traceData.entries.ends.begin(), traceData.entries.ends.end() );
+
+             bufPtr +=
+                 ( ( sizeof( TimeStamp ) + sizeof( TimeStamp ) + sizeof( Depth_t ) +
+                     sizeof( StrPtr_t ) + sizeof( StrPtr_t ) + sizeof( LineNb_t ) +
+                     sizeof( ZoneId_t ) ) *
+                   tracesCount );
+             assert( ( size_t )( bufPtr - data ) <= maxSize );
+
+             static_assert(
+                 std::is_move_constructible<TraceData>::value, "Trace Data not moveable" );
+             // TODO: Could lock later when we received all the messages
+             std::lock_guard<hop::Mutex> guard( _sharedPendingDataMutex );
+             _sharedPendingData.tracesPerThread[threadIndex].append( traceData );
+          }
+          return ( size_t )( bufPtr - data );
+       }
       case MsgType::PROFILER_WAIT_LOCK:
       {
          const LockWait* lws = (const LockWait*)bufPtr;
