@@ -1533,7 +1533,7 @@ class Client
          lwInfo->threadId        = tl_threadId;
          lwInfo->threadName      = tl_threadName;
          lwInfo->threadIndex     = tl_threadIndex;
-         lwInfo->timeStamp       = _lockWaits.back().start;
+         lwInfo->timeStamp       = timeStamp;
          lwInfo->lockwaits.count = static_cast<uint32_t>( _lockWaits.size() );
          bufferPtr += sizeof( MsgInfo );
          memcpy( bufferPtr, _lockWaits.data(), _lockWaits.size() * sizeof( LockWait ) );
@@ -1572,7 +1572,7 @@ class Client
          uInfo->threadId           = tl_threadId;
          uInfo->threadName         = tl_threadName;
          uInfo->threadIndex        = tl_threadIndex;
-         uInfo->timeStamp          = _unlockEvents.back().time;
+         uInfo->timeStamp          = timeStamp;
          uInfo->unlockEvents.count = static_cast<uint32_t>( _unlockEvents.size() );
          bufferPtr += sizeof( MsgInfo );
          memcpy( bufferPtr, _unlockEvents.data(), _unlockEvents.size() * sizeof( UnlockEvent ) );
