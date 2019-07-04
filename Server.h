@@ -26,7 +26,7 @@ class Server
    struct PendingData
    {
        std::vector<char> stringData;
-       std::unordered_map< uint32_t, TraceData > tracesPerThread;
+       std::unordered_map< uint32_t, TraceDataBlock > tracesPerThread;
        std::unordered_map< uint32_t, LockWaitData > lockWaitsPerThread;
        std::unordered_map< uint32_t, std::vector<UnlockEvent> > unlockEventsPerThread;
        std::unordered_map< uint32_t, std::vector<CoreEvent> > coreEventsPerThread;

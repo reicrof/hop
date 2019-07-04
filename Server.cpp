@@ -70,8 +70,6 @@ bool Server::start( const char* name )
       HOP_SET_THREAD_NAME( serverName );
       while ( true )
       {
-         HOP_PROF_FUNC();
-
          // Try to get the shared memory
          if ( !_sharedMem.valid() )
          {
@@ -91,6 +89,8 @@ bool Server::start( const char* name )
             _connectionState = state;
             printf( "Connection to shared data successful.\n" );
          }
+
+         HOP_PROF_FUNC();
 
          const bool wasSignaled = _sharedMem.tryWaitSemaphore();
 
@@ -251,7 +251,6 @@ size_t Server::handleNewMessage( uint8_t* data, size_t maxSize, TimeStamp minTim
           const size_t tracesCount = msgInfo->traces.count;
           if ( tracesCount > 0 )
           {
-             TraceData traceData;
              const TimeStamp* starts = (const TimeStamp*)bufPtr;
              const TimeStamp* ends = starts + tracesCount;
              const Depth_t* depths = (const Depth_t*)( ends + tracesCount );
@@ -260,6 +259,8 @@ size_t Server::handleNewMessage( uint8_t* data, size_t maxSize, TimeStamp minTim
              const LineNb_t* lineNbs = (const LineNb_t*)( fctNames + tracesCount );
              const ZoneId_t* zones = (const ZoneId_t*)( lineNbs + tracesCount );
 
+            TraceDataBlock traceData;
+             traceData.clear();
              traceData.entries.ends.insert(
                  traceData.entries.ends.end(), ends, ends + tracesCount );
              traceData.entries.depths.insert(

@@ -37,7 +37,7 @@ public:
    void draw( float drawPosX, float drawPosY, float windowWidth, float windowHeight );
    void fetchClientData();
    void addStringData( const std::vector< char >& stringData );
-   void addTraces( const TraceData& traces, uint32_t threadIndex );
+   void addTraces( const TraceDataBlock& traces, uint32_t threadIndex );
    void addLockWaits( const LockWaitData& lockWaits, uint32_t threadIndex);
    void addUnlockEvents(const std::vector<UnlockEvent>& unlockEvents, uint32_t threadIndex);
    void addCoreEvents( const std::vector<CoreEvent>& coreEvents, uint32_t threadIndex );

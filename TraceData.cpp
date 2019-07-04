@@ -24,6 +24,15 @@ void Entries::append( const Entries& newEntries )
    maxDepth = std::max( maxDepth, newEntries.maxDepth );
 }
 
+void Entries::append( const EntriesBlock& newEntries )
+{
+   deltas.insert( deltas.end(), newEntries.deltas.begin(), newEntries.deltas.end() );
+   ends.insert( ends.end(), newEntries.ends.begin(), newEntries.ends.end() );
+   depths.insert( depths.end(), newEntries.depths.begin(), newEntries.depths.end() );
+
+   maxDepth = std::max( maxDepth, newEntries.maxDepth );
+}
+
 Entries Entries::copy() const
 {
    Entries copy;
@@ -34,7 +43,48 @@ Entries Entries::copy() const
    return copy;
 }
 
+void EntriesBlock::clear()
+{
+   ends.clear();
+   deltas.clear();
+   depths.clear();
+   maxDepth = 0;
+}
+
+void EntriesBlock::append( const EntriesBlock& newEntries )
+{
+   deltas.insert( deltas.end(), newEntries.deltas.begin(), newEntries.deltas.end() );
+   ends.insert( ends.end(), newEntries.ends.begin(), newEntries.ends.end() );
+   depths.insert( depths.end(), newEntries.depths.begin(), newEntries.depths.end() );
+
+   maxDepth = std::max( maxDepth, newEntries.maxDepth );
+}
+
+EntriesBlock EntriesBlock::copy() const
+{
+   EntriesBlock copy;
+   copy.ends = this->ends;
+   copy.deltas = this->deltas;
+   copy.maxDepth = this->maxDepth;
+   copy.depths = this->depths;
+   return copy;
+}
+
 void TraceData::append( const TraceData& newTraces )
+{
+   const size_t prevSize = entries.deltas.size();
+
+   entries.append( newTraces.entries );
+   fileNameIds.insert(
+       fileNameIds.end(), newTraces.fileNameIds.begin(), newTraces.fileNameIds.end() );
+   fctNameIds.insert( fctNameIds.end(), newTraces.fctNameIds.begin(), newTraces.fctNameIds.end() );
+   lineNbs.insert( lineNbs.end(), newTraces.lineNbs.begin(), newTraces.lineNbs.end() );
+   zones.insert( zones.end(), newTraces.zones.begin(), newTraces.zones.end() );
+
+   appendLods( lods, computeLods( newTraces.entries, prevSize ) );
+}
+
+void TraceData::append( const TraceDataBlock& newTraces )
 {
    const size_t prevSize = entries.deltas.size();
 
@@ -62,6 +112,44 @@ void TraceData::clear()
 TraceData TraceData::copy() const
 {
    TraceData copy;
+   copy.entries = this->entries.copy();
+
+   copy.fileNameIds = this->fileNameIds;
+   copy.fctNameIds = this->fctNameIds;
+   copy.lineNbs = this->lineNbs;
+   copy.zones = this->zones;
+   copy.lods = this->lods;
+   return copy;
+}
+
+void TraceDataBlock::append( const TraceDataBlock& newTraces )
+{
+   //const size_t prevSize = entries.deltas.size();
+
+   entries.append( newTraces.entries );
+   fileNameIds.insert(
+       fileNameIds.end(), newTraces.fileNameIds.begin(), newTraces.fileNameIds.end() );
+   fctNameIds.insert( fctNameIds.end(), newTraces.fctNameIds.begin(), newTraces.fctNameIds.end() );
+   lineNbs.insert( lineNbs.end(), newTraces.lineNbs.begin(), newTraces.lineNbs.end() );
+   zones.insert( zones.end(), newTraces.zones.begin(), newTraces.zones.end() );
+
+   //appendLods( lods, computeLods( newTraces.entries, prevSize ) );
+}
+
+void TraceDataBlock::clear()
+{
+   entries.clear();
+   fileNameIds.clear();
+   fctNameIds.clear();
+   lineNbs.clear();
+   zones.clear();
+   for( auto& dq : lods )
+      dq.clear();
+}
+
+TraceDataBlock TraceDataBlock::copy() const
+{
+   TraceDataBlock copy;
    copy.entries = this->entries.copy();
 
    copy.fileNameIds = this->fileNameIds;

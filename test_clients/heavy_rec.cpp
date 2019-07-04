@@ -79,4 +79,7 @@ int main( int argc, const char** argv )
    {
       startRec();
    }
+
+   for( int i = 0; i < threadNum; ++i )
+      threads[i].join();
 }

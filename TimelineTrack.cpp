@@ -473,7 +473,7 @@ StrPtr_t TimelineTrack::trackName() const noexcept
    return _trackName;
 }
 
-void TimelineTrack::addTraces( const TraceData& newTraces )
+void TimelineTrack::addTraces( const TraceDataBlock& newTraces )
 {
    HOP_ZONE( HOP_ZONE_COLOR_4 );
    HOP_PROF_FUNC();
@@ -689,7 +689,10 @@ std::vector< TimelineMessage > TimelineTracks::draw( const TimelineTracksDrawInf
          snprintf(
              threadNameBuffer + threadNamePrefix, sizeof( threadNameBuffer ) - threadNamePrefix, "%lu", i );
       }
-      HOP_PROF_DYN_NAME( threadName );
+
+      char threadDrawLabel[128];
+      snprintf( threadDrawLabel, sizeof(threadDrawLabel), "Drawing track : %s", threadName );
+      HOP_PROF_DYN_NAME( threadDrawLabel );
 
       // First draw the separator of the track
       const bool highlightSeparator = ImGui::IsRootWindowOrAnyChildFocused();

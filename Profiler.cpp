@@ -111,7 +111,7 @@ bool Profiler::setSource( SourceType type, const char* str )
 
 Profiler::SourceType Profiler::sourceType() const { return _srcType; }
 
-void Profiler::addTraces( const TraceData& traces, uint32_t threadIndex )
+void Profiler::addTraces( const TraceDataBlock& traces, uint32_t threadIndex )
 {
    // Ignore empty traces
    if ( traces.entries.ends.empty() ) return;
@@ -693,7 +693,7 @@ bool hop::Profiler::openFile( const char* path )
       for ( uint32_t j = 0; j < header->threadCount; ++j )
       {
          size_t timelineTrackSize = deserialize( &uncompressedData[i], timelineTracks[j] );
-         addTraces( timelineTracks[j]._traces, j );
+         //addTraces( timelineTracks[j]._traces, j );
          addLockWaits( timelineTracks[j]._lockWaits, j );
          i += timelineTrackSize;
       }

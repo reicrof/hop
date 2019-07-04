@@ -12,6 +12,9 @@ namespace hop
 {
 static constexpr size_t INVALID_IDX = std::numeric_limits<size_t>::max();
 
+struct EntriesBlock;
+struct TraceDataBlock;
+
 struct Entries
 {
    std::deque< TimeStamp > ends; // in ns
@@ -20,7 +23,21 @@ struct Entries
 
    void clear();
    void append( const Entries& newEntries );
+   void append( const EntriesBlock& newEntries );
    Entries copy() const;
+
+   Depth_t maxDepth{ 0 };
+};
+
+struct EntriesBlock
+{
+   std::vector< TimeStamp > ends; // in ns
+   std::vector< TimeDuration > deltas; // in ns
+   std::vector< Depth_t > depths;
+
+   void clear();
+   void append( const EntriesBlock& newEntries );
+   EntriesBlock copy() const;
 
    Depth_t maxDepth{ 0 };
 };
@@ -36,6 +53,7 @@ struct TraceData
    TraceData copy() const;
 
    void append( const TraceData& newTraces );
+   void append( const TraceDataBlock& newTraces );
    void clear();
 
    Entries entries;
@@ -46,6 +64,31 @@ struct TraceData
 
    std::deque< LineNb_t > lineNbs;
    std::deque< ZoneId_t > zones;
+
+   LodsArray lods;
+};
+
+struct TraceDataBlock
+{
+   TraceDataBlock() = default;
+   TraceDataBlock(TraceDataBlock&& ) = default;
+   TraceDataBlock(const TraceDataBlock& ) = delete;
+   TraceDataBlock& operator=(const TraceDataBlock& ) = delete;
+
+   // Explicit copy to avoid accidental one
+   TraceDataBlock copy() const;
+
+   void append( const TraceDataBlock& newTraces );
+   void clear();
+
+   EntriesBlock entries;
+
+   //Indexes of the name in the string database
+   std::vector< StrPtr_t > fileNameIds;
+   std::vector< StrPtr_t > fctNameIds;
+
+   std::vector< LineNb_t > lineNbs;
+   std::vector< ZoneId_t > zones;
 
    LodsArray lods;
 };
