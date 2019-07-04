@@ -70,8 +70,6 @@ bool Server::start( const char* name )
       HOP_SET_THREAD_NAME( serverName );
       while ( true )
       {
-         HOP_PROF_FUNC();
-
          // Try to get the shared memory
          if ( !_sharedMem.valid() )
          {
@@ -92,6 +90,7 @@ bool Server::start( const char* name )
             printf( "Connection to shared data successful.\n" );
          }
 
+         HOP_PROF_FUNC();
          const bool wasSignaled = _sharedMem.tryWaitSemaphore();
 
          // Check if we are done running.
