@@ -361,6 +361,8 @@ class HOP_API ClientManager
    static ZoneId_t PushNewZone( ZoneId_t newZone );
    static bool HasConnectedConsumer() HOP_NOEXCEPT;
    static bool HasListeningConsumer() HOP_NOEXCEPT;
+   static bool ShouldSendHeartbeat( TimeStamp curTimestamp ) HOP_NOEXCEPT;
+   static void SetLastHeartbeatTimestamp( TimeStamp t ) HOP_NOEXCEPT;
 
    static SharedMemory& sharedMemory() HOP_NOEXCEPT;
 };
@@ -547,6 +549,7 @@ class SharedMemory
       uint32_t maxThreadNb{0};
       size_t requestedSize{0};
       std::atomic<TimeStamp> lastResetTimeStamp{0};
+      std::atomic<TimeStamp> lastHeartbeatTimeStamp{0};
    };
 
    bool hasConnectedProducer() const HOP_NOEXCEPT;
@@ -555,6 +558,8 @@ class SharedMemory
    void setConnectedConsumer( bool ) HOP_NOEXCEPT;
    bool hasListeningConsumer() const HOP_NOEXCEPT;
    void setListeningConsumer( bool ) HOP_NOEXCEPT;
+   bool shouldSendHeartbeat( TimeStamp t ) const HOP_NOEXCEPT;
+   void setLastHeartbeatTimestamp( TimeStamp t ) HOP_NOEXCEPT;
    TimeStamp lastResetTimestamp() const HOP_NOEXCEPT;
    void setResetTimestamp( TimeStamp t ) HOP_NOEXCEPT;
    ringbuf_t* ringbuffer() const HOP_NOEXCEPT;
@@ -1003,6 +1008,20 @@ void SharedMemory::setConnectedProducer( bool connected ) HOP_NOEXCEPT
 bool SharedMemory::hasConnectedConsumer() const HOP_NOEXCEPT
 {
    return ( sharedMetaInfo()->flags & SharedMetaInfo::CONNECTED_CONSUMER ) > 0;
+}
+
+bool SharedMemory::shouldSendHeartbeat( TimeStamp curTimestamp ) const HOP_NOEXCEPT
+{
+   // When a profiled app is open, in the viewer but not listed to, we would spam
+   // unnecessary heartbeats every time a trace stack was sent. This make sure we only
+   // send them every few milliseconds
+   static const uint64_t cyclesBetweenHB = 100000000;
+   return curTimestamp - _sharedMetaData->lastHeartbeatTimeStamp.load() > cyclesBetweenHB;
+}
+
+void SharedMemory::setLastHeartbeatTimestamp( TimeStamp t ) HOP_NOEXCEPT
+{
+   _sharedMetaData->lastHeartbeatTimeStamp.store( t );
 }
 
 void SharedMemory::setConnectedConsumer( bool connected ) HOP_NOEXCEPT
@@ -1588,6 +1607,8 @@ class Client
 
    bool sendHeartbeat( TimeStamp timeStamp )
    {
+      ClientManager::SetLastHeartbeatTimestamp( timeStamp );
+
       const size_t heartbeatSize = sizeof( MsgInfo );
 
       ringbuf_t* ringbuf = ClientManager::sharedMemory().ringbuffer();
@@ -1622,7 +1643,7 @@ class Client
       const TimeStamp timeStamp = getTimeStamp();
 
       // If we have a consumer, send life signal
-      if( ClientManager::HasConnectedConsumer() )
+      if( ClientManager::HasConnectedConsumer() && ClientManager::ShouldSendHeartbeat( timeStamp ) )
       {
          sendHeartbeat( timeStamp );
       }
@@ -1805,6 +1826,17 @@ bool ClientManager::HasListeningConsumer() HOP_NOEXCEPT
 {
    return ClientManager::sharedMemory().valid() &&
           ClientManager::sharedMemory().hasListeningConsumer();
+}
+
+bool ClientManager::ShouldSendHeartbeat( TimeStamp t ) HOP_NOEXCEPT
+{
+   return ClientManager::sharedMemory().valid() &&
+          ClientManager::sharedMemory().shouldSendHeartbeat( t );
+}
+
+void ClientManager::SetLastHeartbeatTimestamp( TimeStamp t ) HOP_NOEXCEPT
+{
+   ClientManager::sharedMemory().setLastHeartbeatTimestamp( t );
 }
 
 SharedMemory& ClientManager::sharedMemory() HOP_NOEXCEPT
