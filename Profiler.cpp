@@ -80,7 +80,7 @@ const char* Profiler::name() const { return _name.c_str(); }
 
 ProfilerStats Profiler::stats() const
 {
-   ProfilerStats stats = {};
+   ProfilerStats stats = {0};
    stats.lodLevel = _tracks.lodLevel();
    stats.strDbSize = _strDb.sizeInBytes();
    stats.clientSharedMemSize = _server.sharedMemorySize();
@@ -92,13 +92,13 @@ ProfilerStats Profiler::stats() const
    return stats;
 }
 
-bool Profiler::setSource( SourceType type, const char* str )
+bool Profiler::setSource( SourceType type, int processId, const char* str )
 {
    _name = str;
    switch( type )
    {
       case SRC_TYPE_PROCESS:
-        return setProcess( _name.c_str() );
+        return setProcess( processId, _name.c_str() );
       case SRC_TYPE_FILE:
         return openFile( _name.c_str() );
       case SRC_TYPE_NONE:
@@ -636,12 +636,12 @@ bool hop::Profiler::saveToFile( const char* savePath )
    return true;
 }
 
-bool hop::Profiler::setProcess( const char* process )
+bool hop::Profiler::setProcess( int processId, const char* process )
 {
     _name = process ? process : "";
    _server.stop();
    _srcType = SRC_TYPE_PROCESS;
-   return _server.start( process );
+   return _server.start( processId, process );
 }
 
 bool hop::Profiler::openFile( const char* path )

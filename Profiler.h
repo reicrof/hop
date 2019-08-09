@@ -31,7 +31,7 @@ public:
    ~Profiler();
    const char* name() const;
    ProfilerStats stats() const;
-   bool setSource( SourceType type, const char* str );
+   bool setSource( SourceType type, int processId, const char* str );
    SourceType sourceType() const;
    void update( float deltaTimeMs, float globalTimeMs );
    void draw( float drawPosX, float drawPosY, float windowWidth, float windowHeight );
@@ -51,7 +51,7 @@ public:
 
 private:
    bool openFile( const char* path );
-   bool setProcess( const char* process );
+   bool setProcess( int processId, const char* process );
 
    std::string _name;
    Timeline _timeline;

@@ -1,5 +1,6 @@
 #include "Viewer.h"
 
+#include "Cursor.h"
 #include "Lod.h"
 #include "ModalWindow.h"
 #include "Options.h"
@@ -7,7 +8,8 @@
 #include "RendererGL.h"
 #include "Stats.h"
 #include "Utils.h"
-#include "Cursor.h"
+
+#include "platform/Platform.h"
 
 #include "imgui/imgui.h"
 
@@ -272,6 +274,23 @@ static void updateProfilers(
    }
 }
 
+static bool isNumber( const char* str )
+{
+   const size_t length = strlen( str );
+   return std::all_of( str, str + length, ::isdigit );
+}
+
+static int getPIDFromString( const char* str )
+{
+   int pid = -1;
+   if( isNumber( str ) )
+   {
+      pid = strtol( str, nullptr, 10 );
+   }
+
+   return pid;
+}
+
 namespace hop
 {
 Viewer::Viewer( uint32_t screenSizeX, uint32_t /*screenSizeY*/ )
@@ -294,9 +313,14 @@ int Viewer::addNewProfiler( const char* processName, bool startRecording )
          return -1;
       }
    }
- 
+
+   const int pid = getPIDFromString( processName );
+
+   const hop::ProcessInfo procInfo = pid != -1 ? hop::getProcessInfoFromPID( pid )
+                                               : hop::getProcessInfoFromProcessName( processName );
+
    _profilers.emplace_back( new hop::Profiler() );
-   _profilers.back()->setSource( Profiler::SRC_TYPE_PROCESS, processName );
+   _profilers.back()->setSource( Profiler::SRC_TYPE_PROCESS, procInfo.pid, processName );
    _profilers.back()->setRecording( startRecording );
    _selectedTab = _profilers.size() - 1;
    return _selectedTab;
@@ -311,7 +335,7 @@ void Viewer::openProfilerFile( const char* filePath )
        std::launch::async,
        []( std::string path ) {
           Profiler* prof = new hop::Profiler();
-          prof->setSource( Profiler::SRC_TYPE_FILE, path.c_str() );
+          prof->setSource( Profiler::SRC_TYPE_FILE, -1, path.c_str() );
           return prof;
        },
        strPath );

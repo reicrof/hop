@@ -1,5 +1,6 @@
 #include "Server.h"
 #include "Utils.h"
+#include "platform/Platform.h"
 
 #include <stdio.h>
 #include <errno.h>
@@ -54,14 +55,14 @@ static int mergeAndRemoveDuplicates( hop::CoreEvent* coreEvents, uint32_t count 
 
 namespace hop
 {
-bool Server::start( const char* name )
+bool Server::start( int processId, const char* name )
 {
    assert( name != nullptr );
 
    _running = true;
    _connectionState = SharedMemory::NOT_CONNECTED;
 
-   _thread = std::thread( [this, name]() {
+   _thread = std::thread( [this, processId, name]() {
       TimeStamp lastSignalTime = getTimeStamp();
       SharedMemory::ConnectionState localState = SharedMemory::NOT_CONNECTED;
 
@@ -73,8 +74,11 @@ bool Server::start( const char* name )
          // Try to get the shared memory
          if ( !_sharedMem.valid() )
          {
+            const hop::ProcessInfo procInfo = processId != -1
+                                                  ? hop::getProcessInfoFromPID( processId )
+                                                  : hop::getProcessInfoFromProcessName( name );
             SharedMemory::ConnectionState state =
-                _sharedMem.create( name, 0 /*will be define in shared metadata*/, true );
+                _sharedMem.create( procInfo.pid, 0 /*will be define in shared metadata*/, true );
             if ( state != SharedMemory::CONNECTED )
             {
                _connectionState = state;

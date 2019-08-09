@@ -156,7 +156,7 @@ enum HopZoneColor
 #include <stdint.h>
 
 // Useful macros
-#define HOP_VERSION 0.7f
+#define HOP_VERSION 0.8f
 #define HOP_CONSTEXPR constexpr
 #define HOP_NOEXCEPT noexcept
 #define HOP_STATIC_ASSERT static_assert
@@ -533,7 +533,7 @@ class SharedMemory
       UNKNOWN_CONNECTION_ERROR
    };
 
-   ConnectionState create( const HOP_CHAR* path, size_t size, bool isConsumer );
+   ConnectionState create( int pid, size_t size, bool isConsumer );
    void destroy();
 
    struct SharedMetaInfo
@@ -629,8 +629,7 @@ const HOP_CHAR HOP_SHARED_SEM_SUFFIX[] = "_sem";
 #define HOP_GET_THREAD_ID() reinterpret_cast<size_t>( pthread_self() )
 #define HOP_SLEEP_MS( x ) usleep( x * 1000 )
 
-extern HOP_CHAR* __progname;
-inline const HOP_CHAR* HOP_GET_PROG_NAME() HOP_NOEXCEPT { return __progname; }
+inline int HOP_GET_PID() HOP_NOEXCEPT{ return getpid(); }
 
 #else  // !defined( _MSC_VER )
 
@@ -651,16 +650,7 @@ const HOP_CHAR HOP_SHARED_SEM_SUFFIX[] = _T("_sem");
 #define HOP_GET_THREAD_ID() ( size_t ) GetCurrentThreadId()
 #define HOP_SLEEP_MS( x ) Sleep( x )
 
-inline const HOP_CHAR* HOP_GET_PROG_NAME() HOP_NOEXCEPT
-{
-   static HOP_CHAR fullname[MAX_PATH];
-   static HOP_CHAR* shortname = []() {
-      DWORD size = GetModuleFileName( NULL, fullname, MAX_PATH );
-      while( size > 0 && fullname[size] != '\\' ) --size;
-      return &fullname[size + 1];
-   }();
-   return shortname;
-}
+inline int HOP_GET_PID() HOP_NOEXCEPT { return GetCurrentProcessId(); }
 
 #endif  // !defined( _MSC_VER )
 
@@ -862,7 +852,7 @@ static thread_local StrPtr_t tl_threadName = 0;
 static std::atomic<bool> g_done{false};  // Was the shared memory destroyed? (Are we done?)
 
 SharedMemory::ConnectionState
-SharedMemory::create( const HOP_CHAR* exeName, size_t requestedSize, bool isConsumer )
+SharedMemory::create( int pid, size_t requestedSize, bool isConsumer )
 {
    ConnectionState state = CONNECTED;
 
@@ -875,12 +865,14 @@ SharedMemory::create( const HOP_CHAR* exeName, size_t requestedSize, bool isCons
    {
       _isConsumer = isConsumer;
 
+      char pidStr[16];
+      snprintf( pidStr, sizeof( pidStr ), "%d", pid );  
       // Create shared mem name
       HOP_STRNCPYW(
           _sharedMemPath, HOP_SHARED_MEM_PREFIX, HOP_STRLEN( HOP_SHARED_MEM_PREFIX ) + 1 );
       HOP_STRNCATW(
           _sharedMemPath,
-          exeName,
+          pidStr,
           HOP_SHARED_MEM_MAX_NAME_SIZE - HOP_STRLEN( HOP_SHARED_MEM_PREFIX ) - 1 );
 
       HOP_STRNCPYW( _sharedSemPath, _sharedMemPath, HOP_SHARED_MEM_MAX_NAME_SIZE );
@@ -1697,7 +1689,7 @@ Client* ClientManager::Get()
    if( !ClientManager::sharedMemory().valid() )
    {
       SharedMemory::ConnectionState state =
-          ClientManager::sharedMemory().create( HOP_GET_PROG_NAME(), HOP_SHARED_MEM_SIZE, false );
+          ClientManager::sharedMemory().create( HOP_GET_PID(), HOP_SHARED_MEM_SIZE, false );
       if( state != SharedMemory::CONNECTED )
       {
          const char* reason = "";

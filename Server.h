@@ -16,7 +16,7 @@ namespace hop
 class Server
 {
   public:
-   bool start( const char* name );
+   bool start( int processId, const char* name );
    void setRecording( bool recording );
    void stop();
    void clear();
