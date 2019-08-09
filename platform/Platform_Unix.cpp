@@ -20,7 +20,7 @@ ProcessInfo getProcessInfoFromPID( processId_t pid )
    ProcessInfo info = {0, 0};
 
    char cmd[128] = {};
-   snprintf( cmd, sizeof( cmd ), "basename `ps -p %d -o comm=`", pid );
+   snprintf( cmd, sizeof( cmd ), "basename -z `ps -p %d -o comm=`", pid );
 
    // Get name from PID
    if( FILE* fp = popen( cmd, "r" ) )
@@ -46,7 +46,7 @@ ProcessInfo getProcessInfoFromProcessName( const char* name )
    // Get name from PID
    if( FILE* fp = popen( cmd, "r" ) )
    {
-      char pidStr[16]{};
+      char pidStr[16] = {};
       if( fgets( pidStr, sizeof( pidStr ), fp ) != nullptr )
       {
          info.pid = strtol( pidStr, nullptr, 10 );
