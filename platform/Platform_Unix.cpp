@@ -17,10 +17,10 @@ void cpuid( int reg[4], int fctId )
 
 ProcessInfo getProcessInfoFromPID( processId_t pid )
 {
-   ProcessInfo info = {0, 0};
+   ProcessInfo info = {};
 
    char cmd[128] = {};
-   snprintf( cmd, sizeof( cmd ), "basename -z `ps -p %d -o comm=`", pid );
+   snprintf( cmd, sizeof( cmd ), "basename `ps -p %d -o comm=` | tr -d '\n'", pid );
 
    // Get name from PID
    if( FILE* fp = popen( cmd, "r" ) )
@@ -37,11 +37,11 @@ ProcessInfo getProcessInfoFromPID( processId_t pid )
 
 ProcessInfo getProcessInfoFromProcessName( const char* name )
 {
-   ProcessInfo info = {0, 0};
+   ProcessInfo info = {};
 
    // Get actual PID from process name
    char cmd[128] = {};
-   snprintf( cmd, sizeof( cmd ), "pgrep %s", name );
+   snprintf( cmd, sizeof( cmd ), "ps -A | grep -m1 %s | awk '{print $1}'", name );
 
    // Get name from PID
    if( FILE* fp = popen( cmd, "r" ) )

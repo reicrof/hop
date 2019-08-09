@@ -80,7 +80,7 @@ const char* Profiler::name() const { return _name.c_str(); }
 
 ProfilerStats Profiler::stats() const
 {
-   ProfilerStats stats = {0};
+   ProfilerStats stats = {};
    stats.lodLevel = _tracks.lodLevel();
    stats.strDbSize = _strDb.sizeInBytes();
    stats.clientSharedMemSize = _server.sharedMemorySize();
