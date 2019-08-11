@@ -175,7 +175,7 @@ static bool processAlive( hop::processId_t id )
 {
 #if defined( _MSC_VER )
    DWORD exitCode;
-   GetExitCodeProcess( id, &exitCode );
+   GetExitCodeProcess( (HANDLE)id, &exitCode );
    return exitCode == STILL_ACTIVE;
 #else
    return kill( id, 0 ) == 0;
@@ -185,9 +185,9 @@ static bool processAlive( hop::processId_t id )
 static void terminateProcess( hop::processId_t id )
 {
 #if defined( _MSC_VER )
-   TerminateProcess( id, 0 );
-   WaitForSingleObject( id, INFINITE );
-   CloseHandle( id );
+   TerminateProcess( (HANDLE)id, 0 );
+   WaitForSingleObject( (HANDLE)id, INFINITE );
+   CloseHandle( (HANDLE)id );
 #else
    if ( processAlive( id ) )
    {

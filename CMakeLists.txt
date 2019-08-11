@@ -12,7 +12,7 @@ if(UNIX)
    endif()
    set( CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -Wextra -pedantic" )
 else()
-   set( CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall" )
+   set( CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS}" )
    set( HOP_WRAP_SRC wrap_library/hop_wrap_windows.cpp )
    set( HOP_WINDOWS_LIB "Shlwapi.lib" ) # Used for StrStrI
 endif()
