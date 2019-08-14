@@ -20,8 +20,6 @@ ProcessInfo getProcessInfoFromProcessName( const char* name );
 
 processId_t startChildProcess( const char* path, char** args );
 
-const char* locateSubString( const char* haystack, const char* needle );
-
 }  // namespace hop
 
 #endif

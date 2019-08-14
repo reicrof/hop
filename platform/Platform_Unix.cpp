@@ -78,9 +78,4 @@ processId_t startChildProcess( const char* path, char** args )
    return newProcess;
 }
 
-const char* locateSubString( const char* haystack, const char* needle )
-{
-   return strcasestr( haystack, needle );
-}
-
 } //  namespace hop

@@ -1,15 +1,9 @@
 #include "StringDb.h"
 #include "Stats.h"
+#include "Utils.h"
 
 #include <cassert>
 #include <cstring>
-
-#if defined( _MSC_VER )
-#include <Shlwapi.h>
-#define HOP_STRCASESTR StrStrI
-#else
-#define HOP_STRCASESTR strcasestr
-#endif
 
 static uint32_t alignOn( uint32_t val, uint32_t alignment )
 {
@@ -85,15 +79,18 @@ std::vector< size_t > StringDb::findStringIndexMatching( const char* substrToFin
 {
    std::vector< size_t > indices;
    indices.reserve( 64 );
+
+   const int subStrLen = strlen( substrToFind );
+
    size_t i = 0;
    while( i < _strData.size() )
    {
-      const auto length = alignOn( strlen( &_strData[i] ) + 1, 8 );
-      if(HOP_STRCASESTR( &_strData[i], substrToFind ) )
+      const int entryLength = strlen( &_strData[i] );
+      if( findSubstrNoCase( &_strData[i], entryLength, substrToFind, subStrLen ) != -1 )
       {
          indices.push_back( i );
       }
-      i += length;
+      i += alignOn( entryLength + 1, 8 );
    }
    return indices;
 }

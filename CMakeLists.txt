@@ -14,7 +14,6 @@ if(UNIX)
 else()
    set( CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS}" )
    set( HOP_WRAP_SRC wrap_library/hop_wrap_windows.cpp )
-   set( HOP_WINDOWS_LIB "Shlwapi.lib" ) # Used for StrStrI
 endif()
 
 set( default_build_type "Release" )

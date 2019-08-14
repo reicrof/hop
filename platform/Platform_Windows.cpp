@@ -5,7 +5,6 @@
 
 #include <intrin.h>
 #include <Psapi.h>
-#include <Shlwapi.h>
 #include <TlHelp32.h>
 
 
@@ -73,11 +72,6 @@ ProcessInfo getProcessInfoFromProcessName( const char* name )
    CloseHandle(snapshot);
 
    return info;
-}
-
-const char* locateSubString( const char* haystack, const char* needle )
-{
-   return StrStrI( haystack, needle );
 }
 
 }  // namespace hop
