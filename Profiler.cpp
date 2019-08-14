@@ -76,7 +76,7 @@ Profiler::Profiler() : _srcType( SRC_TYPE_NONE )
 {
 }
 
-const char* Profiler::name() const { return _name.c_str(); }
+const char* Profiler::name() const { return _server.processName(); }
 
 ProfilerStats Profiler::stats() const
 {
@@ -94,13 +94,12 @@ ProfilerStats Profiler::stats() const
 
 bool Profiler::setSource( SourceType type, int processId, const char* str )
 {
-   _name = str;
    switch( type )
    {
       case SRC_TYPE_PROCESS:
-        return setProcess( processId, _name.c_str() );
+        return setProcess( processId, str );
       case SRC_TYPE_FILE:
-        return openFile( _name.c_str() );
+        return openFile( str );
       case SRC_TYPE_NONE:
         assert(false);
         return false;
@@ -638,7 +637,6 @@ bool hop::Profiler::saveToFile( const char* savePath )
 
 bool hop::Profiler::setProcess( int processId, const char* process )
 {
-    _name = process ? process : "";
    _server.stop();
    _srcType = SRC_TYPE_PROCESS;
    return _server.start( processId, process );
@@ -646,7 +644,6 @@ bool hop::Profiler::setProcess( int processId, const char* process )
 
 bool hop::Profiler::openFile( const char* path )
 {
-   _name = path ? path : "";
    std::ifstream input( path, std::ifstream::binary );
    if ( input.is_open() )
    {
