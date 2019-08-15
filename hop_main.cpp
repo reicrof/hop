@@ -318,6 +318,8 @@ int main( int argc, char* argv[] )
       return -1;
    }
 
+   HOP_SET_THREAD_NAME( "Main" );
+
    sdlImGuiInit();
 
    SDL_GLContext mainContext = SDL_GL_CreateContext( window );
@@ -353,7 +355,6 @@ int main( int argc, char* argv[] )
       }
    }
 
-   HOP_SET_THREAD_NAME( "Main" );
    while ( g_run )
    {
       HOP_PROF( "Main Loop" );
