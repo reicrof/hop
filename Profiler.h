@@ -29,7 +29,7 @@ public:
 
    Profiler();
    ~Profiler();
-   const char* name() const;
+   const char* nameAndPID( int* processId = nullptr );
    ProfilerStats stats() const;
    bool setSource( SourceType type, int processId, const char* str );
    SourceType sourceType() const;
@@ -54,6 +54,7 @@ private:
    bool setProcess( int processId, const char* process );
 
    std::string _name;
+   int _pid;
    Timeline _timeline;
    TimelineTracks _tracks;
    StringDb _strDb;

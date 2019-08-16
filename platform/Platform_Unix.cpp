@@ -39,24 +39,27 @@ ProcessInfo getProcessInfoFromProcessName( const char* name )
 {
    ProcessInfo info = {};
 
-   // Get actual PID from process name
-   char cmd[128] = {};
-   snprintf( cmd, sizeof( cmd ), "ps -A | grep -m1 %s | awk '{print $1}'", name );
-
-   // Get name from PID
-   if( FILE* fp = popen( cmd, "r" ) )
+   if( strlen( name ) > 0 )
    {
-      char pidStr[16] = {};
-      if( fgets( pidStr, sizeof( pidStr ), fp ) != nullptr )
+      // Get actual PID from process name
+      char cmd[128] = {};
+      snprintf( cmd, sizeof( cmd ), "ps -A | grep -m1 %s | awk '{print $1}'", name );
+
+      // Get name from PID
+      if( FILE* fp = popen( cmd, "r" ) )
       {
-         info.pid = strtol( pidStr, nullptr, 10 );
-         strncpy( info.name, name, sizeof( info.name ) - 1 );
+         char pidStr[16] = {};
+         if( fgets( pidStr, sizeof( pidStr ), fp ) != nullptr )
+         {
+            info.pid = strtol( pidStr, nullptr, 10 );
+            strncpy( info.name, name, sizeof( info.name ) - 1 );
+         }
+         else
+         {
+            info.pid = -1;
+         }
+         pclose( fp );
       }
-      else
-      {
-         info.pid = -1;
-      }
-      pclose( fp );
    }
 
    return info;

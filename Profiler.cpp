@@ -76,7 +76,11 @@ Profiler::Profiler() : _srcType( SRC_TYPE_NONE )
 {
 }
 
-const char* Profiler::name() const { return _server.processName(); }
+const char* Profiler::nameAndPID( int* processId )
+{
+   if( processId ) *processId = _pid;
+   return _name.c_str();
+}
 
 ProfilerStats Profiler::stats() const
 {
@@ -309,6 +313,14 @@ void hop::Profiler::update( float deltaTimeMs, float globalTimeMs )
 {
    _timeline.update( deltaTimeMs );
    _tracks.update( globalTimeMs, _timeline.duration() );
+   if( _name.empty() )
+   {
+      const char* name = _server.processInfo( &_pid );
+      if( name )
+      {
+         _name = name;
+      }
+   }
 }
 
 static constexpr float TOOLBAR_BUTTON_HEIGHT = 15.0f;

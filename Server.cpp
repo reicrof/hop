@@ -60,7 +60,12 @@ bool Server::start( int processId, const char* name )
    assert( name != nullptr );
 
    _state.running = true;
+   _state.pid = -1;
+   _state.processName = name;
    _state.connectionState = SharedMemory::NOT_CONNECTED;
+
+   // Swap for ptr owned by the state
+   name = _state.processName.c_str();
 
    _thread = std::thread( [this, processId, name]() {
       TimeStamp lastSignalTime = getTimeStamp();
@@ -181,10 +186,11 @@ bool Server::start( int processId, const char* name )
    return true;
 }
 
-const char* Server::processName() const
+const char* Server::processInfo( int* processId ) const
 {
    std::lock_guard<hop::Mutex> guard( _stateMutex );
    static const char* noProcessStr = "<No Process>";
+   if( processId ) *processId = _state.pid;
    return _state.processName.empty() ? noProcessStr : _state.processName.c_str();
 }
 

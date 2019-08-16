@@ -337,21 +337,20 @@ int main( int argc, char* argv[] )
 
    hop::Viewer viewer( DM.w, DM.h );
 
-   hop::processId_t childProcess = 0;
+   hop::processId_t childProcId = 0;
    if ( opts.processName )
    {
-      viewer.addNewProfiler( opts.processName, opts.startExec );
-
       // If we want to launch an executable to profile, now is the time to do it
       if ( opts.startExec )
       {
          // profiler->setRecording( true );
-         childProcess = hop::startChildProcess( opts.fullProcessPath, opts.args );
-         if ( childProcess == (hop::processId_t)-1 )
+         childProcId = hop::startChildProcess( opts.fullProcessPath, opts.args );
+         if ( childProcId == (hop::processId_t)-1 )
          {
             fprintf( stderr, "Could not launch child process\n" );
             exit( -1 );
          }
+         viewer.addNewProfiler( opts.processName, opts.startExec );
       }
    }
 
@@ -398,7 +397,7 @@ int main( int argc, char* argv[] )
    // We have launched a child process. Let's close it
    if ( opts.startExec )
    {
-      terminateProcess( childProcess );
+      terminateProcess( childProcId );
    }
 
    destroyIcon();

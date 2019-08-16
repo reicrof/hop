@@ -19,7 +19,7 @@ class Server
    void setRecording( bool recording );
    void stop();
    void clear();
-   const char* processName() const;
+   const char* processInfo( int* processId ) const;
    SharedMemory::ConnectionState connectionState() const;
    size_t sharedMemorySize() const;
 
@@ -55,7 +55,7 @@ class Server
    {
       SharedMemory::ConnectionState connectionState;
       std::string processName;
-      int32_t pid;
+      int pid;
       bool running;
       bool recording;
       bool clearingRequested;
