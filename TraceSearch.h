@@ -1,8 +1,6 @@
 #ifndef TRACE_SEARCH_H_
 #define TRACE_SEARCH_H_
 
-#include <Hop.h>
-
 #include <vector>
 #include <string>
 
