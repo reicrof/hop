@@ -20,7 +20,7 @@ static const float TAB_HEIGHT = 30.0f;
 
 static void addNewProfilerPopUp( hop::Viewer* v, hop::Profiler::SourceType type )
 {
-   hop::displayStringInputModalWindow( "Add Profiler for Process", [=]( const char* str ) {
+   hop::displayStringInputModalWindow( "Enter name or PID of process", [=]( const char* str ) {
       if ( type == hop::Profiler::SRC_TYPE_PROCESS )
       {
          v->addNewProfiler( str, false );
