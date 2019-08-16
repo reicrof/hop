@@ -1,9 +1,9 @@
 #include "Viewer.h"
 
+#include "Profiler.h"
 #include "Lod.h"
 #include "ModalWindow.h"
 #include "Options.h"
-#include "Profiler.h"
 #include "RendererGL.h"
 #include "Stats.h"
 #include "Utils.h"

@@ -42,7 +42,7 @@ endif()
 #####################
 ### Main executable
 #####################
-add_definitions( -DHOP_ENABLED -DHOP_VIEWER )
+add_definitions( -DHOP_ENABLED )
 file(GLOB hop_server_src
     "*.h"
     "*.cpp"

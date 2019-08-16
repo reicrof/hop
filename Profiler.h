@@ -1,12 +1,11 @@
 #ifndef PROFILER_H_
 #define PROFILER_H_
 
-#include "Hop.h"
+#include "Server.h"
 #include "Timeline.h"
 #include "TimelineTrack.h"
 #include "TraceSearch.h"
 #include "StringDb.h"
-#include "Server.h"
 
 #include <array>
 #include <chrono>
