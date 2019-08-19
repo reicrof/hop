@@ -78,19 +78,23 @@ bool Server::start( int processId, const char* name )
          // Try to get the shared memory
          if ( !_sharedMem.valid() )
          {
+            HOP_PROF( "Trying to open process..." );
             const hop::ProcessInfo procInfo = processId != -1
                                                   ? hop::getProcessInfoFromPID( processId )
                                                   : hop::getProcessInfoFromProcessName( name );
             SharedMemory::ConnectionState state =
                 _sharedMem.create( procInfo.pid, 0 /*will be define in shared metadata*/, true );
 
-            std::lock_guard<hop::Mutex> guard( _stateMutex );
             if ( state != SharedMemory::CONNECTED )
             {
-               _state.connectionState = state;
-               prevConnectionState = state;
-               if ( !_state.running ) return;  // We are done without even opening the shared mem :(
+               { // Update state then go to sleep a few MS
+                  std::lock_guard<hop::Mutex> guard( _stateMutex );
+                  _state.connectionState = state;
+                  if( !_state.running )
+                     return;  // We are done without even opening the shared mem :(
+               }
 
+               prevConnectionState = state;
                // Sleep few ms before retrying. Increase timeout time each try
                std::this_thread::sleep_for( std::chrono::milliseconds( reconnectTimeoutMs ) );
                reconnectTimeoutMs = std::min( reconnectTimeoutMs + 10, MAX_RECONNECT_TIMEOUT_MS );
@@ -100,6 +104,8 @@ bool Server::start( int processId, const char* name )
             // Clear any remaining messages from previous execution now
             clearPendingMessages();
             _sharedMem.setListeningConsumer( _state.recording );
+
+            std::lock_guard<hop::Mutex> guard( _stateMutex );
             _state.connectionState = state;
             _state.pid             = procInfo.pid;
             _state.processName     = std::string( procInfo.name );

@@ -350,8 +350,10 @@ int main( int argc, char* argv[] )
             fprintf( stderr, "Could not launch child process\n" );
             exit( -1 );
          }
-         viewer.addNewProfiler( opts.processName, opts.startExec );
       }
+
+      // Add new profiler after having potentially started it.
+      viewer.addNewProfiler( opts.processName, opts.startExec );
    }
 
    while ( g_run )
