@@ -313,7 +313,7 @@ void hop::Profiler::update( float deltaTimeMs, float globalTimeMs )
 {
    _timeline.update( deltaTimeMs );
    _tracks.update( globalTimeMs, _timeline.duration() );
-   if( _name.empty() )
+   if( _name.empty() || _pid < 0 )
    {
       const char* name = _server.processInfo( &_pid );
       if( name )
