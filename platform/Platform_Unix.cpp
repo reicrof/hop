@@ -15,7 +15,7 @@ void cpuid( int reg[4], int fctId )
                  : "a"( fctId ), "c"( 0 ) );
 }
 
-ProcessInfo getProcessInfoFromPID( processId_t pid )
+ProcessInfo getProcessInfoFromPID( ProcessID pid )
 {
    ProcessInfo info = {};
 
@@ -65,11 +65,11 @@ ProcessInfo getProcessInfoFromProcessName( const char* name )
    return info;
 }
 
-processId_t startChildProcess( const char* path, char** args )
+ProcessID startChildProcess( const char* path, char** args )
 {
-   processId_t newProcess = 0;
+   ProcessID newProcess = 0;
 
-   newProcess = (processId_t) fork();
+   newProcess = (ProcessID) fork();
    if ( newProcess == 0 )
    {
       int res = execvp( path, args );

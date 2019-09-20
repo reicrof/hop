@@ -6,19 +6,19 @@
 namespace hop
 {
 
-typedef int processId_t;
+typedef int ProcessID;
 struct ProcessInfo
 {
-   processId_t pid;
+   ProcessID pid;
    char name[64];
 };
 
 void cpuid( int reg[4], int fctId );
 
-ProcessInfo getProcessInfoFromPID( processId_t pid );
+ProcessInfo getProcessInfoFromPID( ProcessID pid );
 ProcessInfo getProcessInfoFromProcessName( const char* name );
 
-processId_t startChildProcess( const char* path, char** args );
+ProcessID startChildProcess( const char* path, char** args );
 
 }  // namespace hop
 

@@ -171,7 +171,7 @@ static void handleInput()
    }
 }
 
-static bool processAlive( hop::processId_t id )
+static bool processAlive( hop::ProcessID id )
 {
 #if defined( _MSC_VER )
    DWORD exitCode;
@@ -182,7 +182,7 @@ static bool processAlive( hop::processId_t id )
 #endif
 }
 
-static void terminateProcess( hop::processId_t id )
+static void terminateProcess( hop::ProcessID id )
 {
 #if defined( _MSC_VER )
    TerminateProcess( (HANDLE)id, 0 );
@@ -337,7 +337,7 @@ int main( int argc, char* argv[] )
 
    hop::Viewer viewer( DM.w, DM.h );
 
-   hop::processId_t childProcId = 0;
+   hop::ProcessID childProcId = 0;
    if ( opts.processName )
    {
       // If we want to launch an executable to profile, now is the time to do it
@@ -345,7 +345,7 @@ int main( int argc, char* argv[] )
       {
          // profiler->setRecording( true );
          childProcId = hop::startChildProcess( opts.fullProcessPath, opts.args );
-         if ( childProcId == (hop::processId_t)-1 )
+         if ( childProcId == (hop::ProcessID)-1 )
          {
             fprintf( stderr, "Could not launch child process\n" );
             exit( -1 );

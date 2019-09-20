@@ -12,9 +12,9 @@ namespace hop
 {
 void cpuid( int reg[4], int fctId ) { __cpuid( reg, fctId ); }
 
-processId_t startChildProcess( const char* path, char** )
+ProcessID startChildProcess( const char* path, char** )
 {
-   processId_t newProcess = 0;
+   ProcessID newProcess = 0;
    STARTUPINFO si         = {0};
    PROCESS_INFORMATION pi = {0};
 
@@ -22,13 +22,13 @@ processId_t startChildProcess( const char* path, char** )
    si.cb = sizeof( si );
    if( !CreateProcess( NULL, (LPSTR)path, NULL, NULL, FALSE, 0, NULL, NULL, &si, &pi ) )
    {
-      return (processId_t)-1;
+      return (ProcessID)-1;
    }
-   newProcess = (processId_t)pi.hProcess;
+   newProcess = (ProcessID)pi.hProcess;
    return newProcess;
 }
 
-ProcessInfo getProcessInfoFromPID( processId_t pid )
+ProcessInfo getProcessInfoFromPID( ProcessID pid )
 {
    ProcessInfo info = {};
 
