@@ -46,9 +46,10 @@ ProcessInfo getProcessInfoFromProcessName( const char* name )
 
       /**
        * Trying to find a whole word match for the process name. We also need to remove the
-       * grep process from the result.
+       * grep process from the result. On MacOs the process name also contains the path, we
+       * thus have to check for a preceding '/'
        */
-      snprintf( cmd, sizeof( cmd ), "ps -A | grep \"\\s%s\\b\" | grep -v grep | awk '{print $1}'", name );
+      snprintf( cmd, sizeof( cmd ), "ps -A | grep '[ \\/]%s$' | grep -v grep | awk '{print $1}'", name );
 
       // Get name from PID
       if( FILE* fp = popen( cmd, "r" ) )
