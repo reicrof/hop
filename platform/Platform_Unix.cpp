@@ -43,7 +43,12 @@ ProcessInfo getProcessInfoFromProcessName( const char* name )
    {
       // Get actual PID from process name
       char cmd[128] = {};
-      snprintf( cmd, sizeof( cmd ), "ps -A | grep \"\\b%s\\b\" | grep -v grep | awk '{print $1}'", name );
+
+      /**
+       * Trying to find a whole word match for the process name. We also need to remove the
+       * grep process from the result.
+       */
+      snprintf( cmd, sizeof( cmd ), "ps -A | grep \"\\s%s\\b\" | grep -v grep | awk '{print $1}'", name );
 
       // Get name from PID
       if( FILE* fp = popen( cmd, "r" ) )
