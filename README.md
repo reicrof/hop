@@ -1,3 +1,3 @@
 # HOP (Header Only Profiler)
 
-[![Build Status](https://travis-ci.org/simkimsia/UtilityBehaviors.png)](https://travis-ci.org/simkimsia/UtilityBehaviors) [![Coverity Scan](https://img.shields.io/coverity/scan/6789.svg)](https://scan.coverity.com/projects/reicrof-hop)
+[![Build Status](https://travis-ci.com/reicrof/hop.svg?branch=develop)](https://travis-ci.com/reicrof/hop) [![Coverity Scan](https://scan.coverity.com/projects/19261/badge.svg)](https://scan.coverity.com/projects/reicrof-hop)
