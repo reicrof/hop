@@ -8,7 +8,7 @@
 #include "StringDb.h"
 #include "TraceData.h"
 
-#include <atomic>
+#include <string>
 #include <thread>
 #include <unordered_map>
 #include <vector>
@@ -18,10 +18,11 @@ namespace hop
 class Server
 {
   public:
-   bool start( const char* name );
+   bool start( int processId, const char* name );
    void setRecording( bool recording );
    void stop();
    void clear();
+   const char* processInfo( int* processId ) const;
    SharedMemory::ConnectionState connectionState() const;
    size_t sharedMemorySize() const;
 
@@ -49,13 +50,19 @@ class Server
    void clearPendingMessages();
 
    std::thread _thread;
-   std::atomic< bool > _running{false};
-   std::atomic< bool > _recording{false};
    SharedMemory _sharedMem;
-   std::atomic< SharedMemory::ConnectionState > _connectionState;
-
-   std::atomic< bool > _clearingRequested{false};
    StringDb _stringDb;
+
+   mutable hop::Mutex _stateMutex;
+   struct ServerState
+   {
+      SharedMemory::ConnectionState connectionState;
+      std::string processName;
+      int pid;
+      bool running;
+      bool recording;
+      bool clearingRequested;
+   } _state;
 
    hop::Mutex _sharedPendingDataMutex;
    PendingData _sharedPendingData;

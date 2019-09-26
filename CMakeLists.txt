@@ -12,9 +12,8 @@ if(UNIX)
    endif()
    set( CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -Wextra -pedantic" )
 else()
-   set( CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall" )
+   set( CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS}" )
    set( HOP_WRAP_SRC wrap_library/hop_wrap_windows.cpp )
-   set( HOP_WINDOWS_LIB "Shlwapi.lib" ) # Used for StrStrI
 endif()
 
 set( default_build_type "Release" )
@@ -42,15 +41,21 @@ endif()
 #####################
 ### Main executable
 #####################
+if(UNIX)
+   set( viewer_platform_src "platform/Platform_Unix.cpp" )
+else()
+   set( viewer_platform_src "platform/Platform_Windows.cpp" )
+endif()
+
 add_definitions( -DHOP_ENABLED )
-file(GLOB hop_server_src
+file(GLOB hop_viewer_src
     "*.h"
     "*.cpp"
     "*.c"
     "imgui/*.h"
     "imgui/*.cpp"
 )
-add_executable(hop ${hop_server_src})
+add_executable(hop ${hop_viewer_src} ${viewer_platform_src})
 
 set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -DHOP_DEBUG")
 

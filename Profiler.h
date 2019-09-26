@@ -28,9 +28,9 @@ public:
 
    Profiler();
    ~Profiler();
-   const char* name() const;
+   const char* nameAndPID( int* processId = nullptr );
    ProfilerStats stats() const;
-   bool setSource( SourceType type, const char* str );
+   bool setSource( SourceType type, int processId, const char* str );
    SourceType sourceType() const;
    void update( float deltaTimeMs, float globalTimeMs );
    void draw( float drawPosX, float drawPosY, float windowWidth, float windowHeight );
@@ -50,9 +50,10 @@ public:
 
 private:
    bool openFile( const char* path );
-   bool setProcess( const char* process );
+   bool setProcess( int processId, const char* process );
 
    std::string _name;
+   int _pid;
    Timeline _timeline;
    TimelineTracks _tracks;
    StringDb _strDb;

@@ -1,5 +1,6 @@
 #include "Server.h"
 #include "Utils.h"
+#include "platform/Platform.h"
 
 #include <stdio.h>
 #include <errno.h>
@@ -54,71 +55,104 @@ static int mergeAndRemoveDuplicates( hop::CoreEvent* coreEvents, uint32_t count 
 
 namespace hop
 {
-bool Server::start( const char* name )
+bool Server::start( int processId, const char* name )
 {
    assert( name != nullptr );
 
-   _running = true;
-   _connectionState = SharedMemory::NOT_CONNECTED;
+   _state.running = true;
+   _state.pid = -1;
+   _state.processName = name;
+   _state.connectionState = SharedMemory::NOT_CONNECTED;
 
-   _thread = std::thread( [this, name]() {
+   // Swap for ptr owned by the state
+   name = _state.processName.c_str();
+
+   _thread = std::thread( [this, processId, name]() {
       TimeStamp lastSignalTime = getTimeStamp();
-      SharedMemory::ConnectionState localState = SharedMemory::NOT_CONNECTED;
+      SharedMemory::ConnectionState prevConnectionState = SharedMemory::NOT_CONNECTED;
 
-      char serverName[64];
-      snprintf( serverName, sizeof( serverName ), "%s [Producer]", name );
-      HOP_SET_THREAD_NAME( serverName );
+      const uint32_t MAX_RECONNECT_TIMEOUT_MS = 500;
+      uint32_t reconnectTimeoutMs = 10;
       while ( true )
       {
          // Try to get the shared memory
          if ( !_sharedMem.valid() )
          {
+            HOP_PROF( "Trying to open process..." );
+            const hop::ProcessInfo procInfo = processId != -1
+                                                  ? hop::getProcessInfoFromPID( processId )
+                                                  : hop::getProcessInfoFromProcessName( name );
             SharedMemory::ConnectionState state =
-                _sharedMem.create( name, 0 /*will be define in shared metadata*/, true );
+                _sharedMem.create( procInfo.pid, 0 /*will be define in shared metadata*/, true );
+
             if ( state != SharedMemory::CONNECTED )
             {
-               _connectionState = state;
-               localState = state;
-               if ( !_running ) return;  // We are done without even opening the shared mem :(
-               std::this_thread::sleep_for( std::chrono::milliseconds( 500 ) );
+               { // Update state then go to sleep a few MS
+                  std::lock_guard<hop::Mutex> guard( _stateMutex );
+                  _state.connectionState = state;
+                  if( !_state.running )
+                     return;  // We are done without even opening the shared mem :(
+               }
+
+               prevConnectionState = state;
+               // Sleep few ms before retrying. Increase timeout time each try
+               std::this_thread::sleep_for( std::chrono::milliseconds( reconnectTimeoutMs ) );
+               reconnectTimeoutMs = std::min( reconnectTimeoutMs + 10, MAX_RECONNECT_TIMEOUT_MS );
                continue;
             }
+
             // Clear any remaining messages from previous execution now
             clearPendingMessages();
-            _sharedMem.setListeningConsumer( _recording );
-            _connectionState = state;
+            _sharedMem.setListeningConsumer( _state.recording );
+
+            std::lock_guard<hop::Mutex> guard( _stateMutex );
+            _state.connectionState = state;
+            _state.pid             = procInfo.pid;
+            _state.processName     = std::string( procInfo.name );
+            prevConnectionState    = state;
+
+            // Set HOP thread name
+            char serverName[64];
+            snprintf( serverName, sizeof( serverName ), "%s [Producer]", _state.processName.c_str() );
+            HOP_SET_THREAD_NAME( serverName );
+
             printf( "Connection to shared data successful.\n" );
          }
 
          HOP_PROF_FUNC();
          const bool wasSignaled = _sharedMem.tryWaitSemaphore();
 
-         // Check if we are done running.
-         if ( !_running.load() ) break;
-
          // Check if its been a while since we have been signaleds
          const TimeStamp curTime = getTimeStamp();
          const bool producerLost =
              !_sharedMem.hasConnectedProducer() || curTime - lastSignalTime > 3000000000;
-         const auto newState =
+         const auto newConnectionState =
              producerLost ? SharedMemory::CONNECTED_NO_CLIENT : SharedMemory::CONNECTED;
 
-         // Update state if it has changed
-         if ( localState != newState )
+         // Check and update current server state
          {
-            localState = newState;
-            _connectionState.store( newState );
-         }
+            std::lock_guard<hop::Mutex> guard( _stateMutex );
 
-         // A clear was requested so we need to clear our string database
-         if ( _clearingRequested.load() )
-         {
-            _stringDb.clear();
-            clearPendingMessages();
-            _clearingRequested.store( false );
-            _sharedMem.setResetTimestamp( getTimeStamp() );
-            _threadNamesReceived.clear();
-            continue;
+            //  Stop processing if we are done running
+            if( !_state.running ) break;
+
+            // A clear was requested so we need to clear our string database
+            if( _state.clearingRequested )
+            {
+               _stringDb.clear();
+               clearPendingMessages();
+               _state.clearingRequested = false;
+               _sharedMem.setResetTimestamp( getTimeStamp() );
+               _threadNamesReceived.clear();
+               continue;
+            }
+
+            // Update state if it has changed
+            if( prevConnectionState != newConnectionState )
+            {
+               prevConnectionState    = newConnectionState;
+               _state.connectionState = newConnectionState;
+            }
          }
 
          if ( !wasSignaled )
@@ -158,7 +192,19 @@ bool Server::start( const char* name )
    return true;
 }
 
-SharedMemory::ConnectionState Server::connectionState() const { return _connectionState.load(); }
+const char* Server::processInfo( int* processId ) const
+{
+   std::lock_guard<hop::Mutex> guard( _stateMutex );
+   static const char* noProcessStr = "<No Process>";
+   if( processId ) *processId = _state.pid;
+   return _state.processName.empty() ? noProcessStr : _state.processName.c_str();
+}
+
+SharedMemory::ConnectionState Server::connectionState() const
+{
+   std::lock_guard<hop::Mutex> guard( _stateMutex );
+   return _state.connectionState;
+}
 
 size_t Server::sharedMemorySize() const
 {
@@ -172,7 +218,8 @@ size_t Server::sharedMemorySize() const
 
 void Server::setRecording( bool recording )
 {
-   _recording = recording;
+   std::lock_guard<hop::Mutex> guard( _stateMutex );
+   _state.recording = recording;
    if ( _sharedMem.valid() )
    {
       _sharedMem.setListeningConsumer( recording );
@@ -383,25 +430,36 @@ void Server::clearPendingMessages()
 void Server::clear()
 {
    setRecording( false );
-   _clearingRequested.store( true );
+
+   std::lock_guard<hop::Mutex> guard( _stateMutex );
+   _state.clearingRequested = true;
 }
 
 void Server::stop()
 {
-   if ( _running )
+   bool wasRunning = false;
    {
-      if ( _sharedMem.valid() )
+      std::lock_guard<hop::Mutex> guard( _stateMutex );
+      if( _state.running )
+      {
+         wasRunning     = true;
+         _state.running = false;
+      }
+   }
+
+   if( wasRunning )
+   {
+      if( _sharedMem.valid() )
       {
          _sharedMem.setListeningConsumer( false );
          _sharedMem.setConnectedConsumer( false );
       }
-      _running = false;
       // Wake up semaphore to close properly
-      if ( _sharedMem.valid() && _sharedMem.semaphore() )
+      if( _sharedMem.valid() && _sharedMem.semaphore() )
       {
          _sharedMem.signalSemaphore();
       }
-      if ( _thread.joinable() )
+      if( _thread.joinable() )
       {
          _thread.join();
       }

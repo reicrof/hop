@@ -76,7 +76,11 @@ Profiler::Profiler() : _srcType( SRC_TYPE_NONE )
 {
 }
 
-const char* Profiler::name() const { return _name.c_str(); }
+const char* Profiler::nameAndPID( int* processId )
+{
+   if( processId ) *processId = _pid;
+   return _name.c_str();
+}
 
 ProfilerStats Profiler::stats() const
 {
@@ -92,15 +96,14 @@ ProfilerStats Profiler::stats() const
    return stats;
 }
 
-bool Profiler::setSource( SourceType type, const char* str )
+bool Profiler::setSource( SourceType type, int processId, const char* str )
 {
-   _name = str;
    switch( type )
    {
       case SRC_TYPE_PROCESS:
-        return setProcess( _name.c_str() );
+        return setProcess( processId, str );
       case SRC_TYPE_FILE:
-        return openFile( _name.c_str() );
+        return openFile( str );
       case SRC_TYPE_NONE:
         assert(false);
         return false;
@@ -310,6 +313,14 @@ void hop::Profiler::update( float deltaTimeMs, float globalTimeMs )
 {
    _timeline.update( deltaTimeMs );
    _tracks.update( globalTimeMs, _timeline.duration() );
+   if( _name.empty() || _pid < 0 )
+   {
+      const char* name = _server.processInfo( &_pid );
+      if( name )
+      {
+         _name = name;
+      }
+   }
 }
 
 static constexpr float TOOLBAR_BUTTON_HEIGHT = 15.0f;
@@ -636,17 +647,15 @@ bool hop::Profiler::saveToFile( const char* savePath )
    return true;
 }
 
-bool hop::Profiler::setProcess( const char* process )
+bool hop::Profiler::setProcess( int processId, const char* process )
 {
-    _name = process ? process : "";
    _server.stop();
    _srcType = SRC_TYPE_PROCESS;
-   return _server.start( process );
+   return _server.start( processId, process );
 }
 
 bool hop::Profiler::openFile( const char* path )
 {
-   _name = path ? path : "";
    std::ifstream input( path, std::ifstream::binary );
    if ( input.is_open() )
    {

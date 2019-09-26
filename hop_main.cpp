@@ -1,6 +1,7 @@
 #define HOP_IMPLEMENTATION
 #include <Hop.h>
 #include "Stats.h"
+#include "platform/Platform.h"
 #include "imgui/imgui.h"
 #include "Options.h"
 #include "Viewer.h"
@@ -170,58 +171,23 @@ static void handleInput()
    }
 }
 
-#if defined( _MSC_VER )
-typedef HANDLE processId_t;
-#else
-typedef int processId_t;
-#endif
-
-static processId_t startChildProcess( const char* path, char** args )
-{
-   processId_t newProcess = 0;
-#if defined( _MSC_VER )
-   STARTUPINFO si = {0};
-   PROCESS_INFORMATION pi = {0};
-
-   // TODO Fix arguments passing
-   (void)args;
-   si.cb = sizeof( si );
-   if ( !CreateProcess( NULL, (LPSTR)path, NULL, NULL, FALSE, 0, NULL, NULL, &si, &pi ) )
-   {
-      return (processId_t)-1;
-   }
-   newProcess = pi.hProcess;
-#else
-   newProcess = fork();
-   if ( newProcess == 0 )
-   {
-      int res = execvp( path, args );
-      if ( res < 0 )
-      {
-         exit( 0 );
-      }
-   }
-#endif
-   return newProcess;
-}
-
-static bool processAlive( processId_t id )
+static bool processAlive( hop::ProcessID id )
 {
 #if defined( _MSC_VER )
    DWORD exitCode;
-   GetExitCodeProcess( id, &exitCode );
+   GetExitCodeProcess( (HANDLE)id, &exitCode );
    return exitCode == STILL_ACTIVE;
 #else
    return kill( id, 0 ) == 0;
 #endif
 }
 
-static void terminateProcess( processId_t id )
+static void terminateProcess( hop::ProcessID id )
 {
 #if defined( _MSC_VER )
-   TerminateProcess( id, 0 );
-   WaitForSingleObject( id, INFINITE );
-   CloseHandle( id );
+   TerminateProcess( (HANDLE)id, 0 );
+   WaitForSingleObject( (HANDLE)id, INFINITE );
+   CloseHandle( (HANDLE)id );
 #else
    if ( processAlive( id ) )
    {
@@ -352,6 +318,8 @@ int main( int argc, char* argv[] )
       return -1;
    }
 
+   HOP_SET_THREAD_NAME( "Main" );
+
    sdlImGuiInit();
 
    SDL_GLContext mainContext = SDL_GL_CreateContext( window );
@@ -369,25 +337,25 @@ int main( int argc, char* argv[] )
 
    hop::Viewer viewer( DM.w, DM.h );
 
-   processId_t childProcess = 0;
+   hop::ProcessID childProcId = 0;
    if ( opts.processName )
    {
-      viewer.addNewProfiler( opts.processName, opts.startExec );
-
       // If we want to launch an executable to profile, now is the time to do it
       if ( opts.startExec )
       {
          // profiler->setRecording( true );
-         childProcess = startChildProcess( opts.fullProcessPath, opts.args );
-         if ( childProcess == (processId_t)-1 )
+         childProcId = hop::startChildProcess( opts.fullProcessPath, opts.args );
+         if ( childProcId == (hop::ProcessID)-1 )
          {
             fprintf( stderr, "Could not launch child process\n" );
             exit( -1 );
          }
       }
+
+      // Add new profiler after having potentially started it.
+      viewer.addNewProfiler( opts.processName, opts.startExec );
    }
 
-   HOP_SET_THREAD_NAME( "Main" );
    while ( g_run )
    {
       HOP_PROF( "Main Loop" );
@@ -431,7 +399,7 @@ int main( int argc, char* argv[] )
    // We have launched a child process. Let's close it
    if ( opts.startExec )
    {
-      terminateProcess( childProcess );
+      terminateProcess( childProcId );
    }
 
    destroyIcon();

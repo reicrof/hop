@@ -5,6 +5,7 @@
 
 #include <algorithm>
 #include <cassert>
+#include <cctype> // toupper
 #include <chrono>
 #include <cstdio>
 
@@ -115,7 +116,28 @@ inline bool ptInCircle( float ptx, float pty, float centerx, float centery, floa
    return dx * dx + dy * dy <= radius * radius;
 }
 
+static bool noCaseCmp( char lhs, char rhs )
+{
+   return std::toupper( lhs ) == std::toupper( rhs );
+}
 
+inline int findSubstrNoCase(
+    const char* haystack,
+    uint32_t haystackSize,
+    const char* needle,
+    uint32_t needleSize )
+{
+   const auto it =
+       std::search( haystack, haystack + haystackSize, needle, needle + needleSize, noCaseCmp );
+   if( it != haystack + haystackSize )
+   {
+      return it - haystack;
+   }
+   else
+   {
+      return -1;  // not found
+   }
+}
 
 } // namespace hop
 

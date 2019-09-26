@@ -1,5 +1,6 @@
 #include "Viewer.h"
 
+#include "Cursor.h"
 #include "Profiler.h"
 #include "Lod.h"
 #include "ModalWindow.h"
@@ -7,7 +8,8 @@
 #include "RendererGL.h"
 #include "Stats.h"
 #include "Utils.h"
-#include "Cursor.h"
+
+#include "platform/Platform.h"
 
 #include "imgui/imgui.h"
 
@@ -18,7 +20,7 @@ static const float TAB_HEIGHT = 30.0f;
 
 static void addNewProfilerPopUp( hop::Viewer* v, hop::Profiler::SourceType type )
 {
-   hop::displayStringInputModalWindow( "Add Profiler for Process", [=]( const char* str ) {
+   hop::displayStringInputModalWindow( "Enter name or PID of process", [=]( const char* str ) {
       if ( type == hop::Profiler::SRC_TYPE_PROCESS )
       {
          v->addNewProfiler( str, false );
@@ -98,11 +100,16 @@ static void drawMenuBar( hop::Viewer* v )
    }
 }
 
-static const char* displayableProfilerName( hop::Profiler* prof )
+static int displayableProfilerName( hop::Profiler* prof, char* outName, uint32_t size )
 {
-   const char* profName = prof->name();
-   profName = profName[0] == '\0' ? "<No Target Process>" : profName;
-   return profName;
+   int pid;
+   const char* profName = prof->nameAndPID( &pid );
+   if( !profName )
+   {
+      return snprintf( outName, size, "%s", "<No Target Process>" );
+   }
+
+   return snprintf( outName, size, "%s (%d)", profName, pid );
 }
 
 static bool drawAddTabButton( const ImVec2& drawPos )
@@ -166,8 +173,9 @@ static int drawTabs( hop::Viewer& viewer, int selectedTab )
          continue;
       }
 
+      char profName[64];
+      displayableProfilerName( viewer.getProfiler( i ), profName, sizeof( profName ) );
       ImGui::PushID( i );
-      const char* profName = displayableProfilerName( viewer.getProfiler( i ) );
       if ( ImGui::Button( profName, defaultTabSize ) )
       {
          newTabSelection = i;
@@ -195,7 +203,8 @@ static int drawTabs( hop::Viewer& viewer, int selectedTab )
       ImGui::PushStyleColor( ImGuiCol_ButtonHovered, activeWindowColor );
       ImGui::PushStyleColor( ImGuiCol_ButtonActive, activeWindowColor );
 
-      const char* profName = displayableProfilerName( viewer.getProfiler( selectedTab ) );
+      char profName[64];
+      displayableProfilerName( viewer.getProfiler( selectedTab ), profName, sizeof( profName ) );
       ImGui::Button( profName, defaultTabSize );
       ImGui::SetItemAllowOverlap();  // Since we will be drawing a close button on top this is
                                      // needed
@@ -272,6 +281,52 @@ static void updateProfilers(
    }
 }
 
+static bool isNumber( const char* str )
+{
+   const size_t length = strlen( str );
+   return std::all_of( str, str + length, ::isdigit );
+}
+
+static int getPIDFromString( const char* str )
+{
+   int pid = -1;
+   if( isNumber( str ) )
+   {
+      pid = strtol( str, nullptr, 10 );
+   }
+
+   return pid;
+}
+
+static bool profilerAlreadyExist(
+    const std::vector<std::unique_ptr<hop::Profiler> >& profilers,
+    int pid,
+    const char* processName )
+{
+   bool alreadyExist = false;
+   if( pid > -1 )
+   {
+      alreadyExist =
+          std::find_if(
+              profilers.begin(), profilers.end(), [pid]( const std::unique_ptr<hop::Profiler>& p ) {
+                 int curPid;
+                 p->nameAndPID( &curPid );
+                 return curPid == pid;
+              } ) != profilers.end();
+   }
+   else  // Do a string comparison since we do not have a pid
+   {
+      alreadyExist = std::find_if(
+                         profilers.begin(),
+                         profilers.end(),
+                         [processName]( const std::unique_ptr<hop::Profiler>& p ) {
+                            return strcmp( p->nameAndPID(), processName ) == 0;
+                         } ) != profilers.end();
+   }
+
+   return alreadyExist;
+}
+
 namespace hop
 {
 Viewer::Viewer( uint32_t screenSizeX, uint32_t /*screenSizeY*/ )
@@ -286,17 +341,18 @@ Viewer::Viewer( uint32_t screenSizeX, uint32_t /*screenSizeY*/ )
 
 int Viewer::addNewProfiler( const char* processName, bool startRecording )
 {
-   for ( const auto& p : _profilers )
+   const int pid = getPIDFromString( processName );
+   if( profilerAlreadyExist( _profilers, pid, processName ) )
    {
-      if ( strcmp( p->name(), processName ) == 0 )
-      {
-         hop::displayModalWindow( "Cannot profile process twice !", hop::MODAL_TYPE_ERROR );
-         return -1;
-      }
+      hop::displayModalWindow( "Cannot profile process twice !", hop::MODAL_TYPE_ERROR );
+      return -1;
    }
- 
+
+   const hop::ProcessInfo procInfo = pid != -1 ? hop::getProcessInfoFromPID( pid )
+                                               : hop::getProcessInfoFromProcessName( processName );
+
    _profilers.emplace_back( new hop::Profiler() );
-   _profilers.back()->setSource( Profiler::SRC_TYPE_PROCESS, processName );
+   _profilers.back()->setSource( Profiler::SRC_TYPE_PROCESS, procInfo.pid, processName );
    _profilers.back()->setRecording( startRecording );
    _selectedTab = _profilers.size() - 1;
    return _selectedTab;
@@ -311,7 +367,7 @@ void Viewer::openProfilerFile( const char* filePath )
        std::launch::async,
        []( std::string path ) {
           Profiler* prof = new hop::Profiler();
-          prof->setSource( Profiler::SRC_TYPE_FILE, path.c_str() );
+          prof->setSource( Profiler::SRC_TYPE_FILE, -1, path.c_str() );
           return prof;
        },
        strPath );
@@ -356,7 +412,7 @@ void Viewer::fetchClientsData()
       if ( waitRes == std::future_status::ready )
       {
          std::unique_ptr<Profiler> loadedProf( _pendingProfilerLoad.get() );
-         if ( strlen( loadedProf->name() ) > 0 )
+         if ( strlen( loadedProf->nameAndPID() ) > 0 )
          {
             _profilers.emplace_back( std::move(loadedProf) );
             _selectedTab = _profilers.size() - 1;

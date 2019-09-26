@@ -27,4 +27,4 @@ before_script:
 
 script:
   - make -j $CPU_NUM
-  - ./tests/Tsc_test
+  - make test
