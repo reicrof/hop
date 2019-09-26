@@ -26,6 +26,19 @@ before_install:
       brew install sdl2;
     fi
 
+addons:
+  coverity_scan:
+    project:
+      name: reicrof/hop
+      description: HOP
+
+    notification_email: c.l.forcier@gmail.com
+    build_command_prepend: cmake .
+    build_command: make
+    branch_pattern: coverity_scan
+  script:
+    - echo -n | openssl s_client -CApath /etc/ssl/certs -connect scan.coverity.com:443 | sed -ne '/-BEGIN CERTIFICATE-/,/-END CERTIFICATE-/p' | sudo tee -a /etc/ssl/certs/ca-
+
 before_script:
   - mkdir release
   - cd release
@@ -34,14 +47,3 @@ before_script:
 script:
   - make -j $CPU_NUM
   - ./tests/Tsc_test
-
-addons:
-  coverity_scan:
-    project:
-      name: reicrof/hop
-      description: HOP
-
-    notification_email: c.l.forcier@gmail.com
-    build_command_prepend: 
-    build_command: make
-    branch_pattern: coverity_scan
