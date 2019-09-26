@@ -25,7 +25,6 @@ before_install:
       brew update;
       brew install sdl2;
     fi
-  - echo -n | openssl s_client -connect https://scan.coverity.com:443 | sed -ne '/-BEGIN CERTIFICATE-/,/-END CERTIFICATE-/p' | sudo tee -a /etc/ssl/certs/ca-
 
 before_script:
   - mkdir release
@@ -39,8 +38,8 @@ script:
 addons:
   coverity_scan:
     project:
-      name: "reicrof/hop"
-      description: "HOP"
+      name: reicrof/hop
+      description: HOP
 
     notification_email: c.l.forcier@gmail.com
     build_command_prepend: 
