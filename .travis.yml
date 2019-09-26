@@ -25,6 +25,10 @@ before_script:
   - cd release
   - cmake -DCMAKE_BUILD_TYPE=Release ..
 
+script:
+  - make -j $CPU_NUM
+  - ./tests/Tsc_test
+
 env:
   global:
    # The next declaration is the encrypted COVERITY_SCAN_TOKEN, created
@@ -43,7 +47,3 @@ addons:
     build_command_prepend: ""
     build_command: "make -j2"
     branch_pattern: coverity_scan
-
-script:
-  - make -j $CPU_NUM
-  - ./tests/Tsc_test
