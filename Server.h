@@ -8,6 +8,7 @@
 #include "StringDb.h"
 #include "TraceData.h"
 
+#include <string>
 #include <thread>
 #include <unordered_map>
 #include <vector>
