@@ -25,6 +25,25 @@ before_script:
   - cd release
   - cmake -DCMAKE_BUILD_TYPE=Release ..
 
+env:
+  global:
+   # The next declaration is the encrypted COVERITY_SCAN_TOKEN, created
+   #   via the "travis encrypt" command using the project repo's public key
+   - secure: "ZIBR1NSAMKvlueNWYAYKJuVTPsqU65wpYbkVs8mJ/Vh21MxSlAY8Fpht8VAiC/LSj+DygEDpx48LxUtWVSWzDcPZoxRO+lEyaKXgJJau8FNBu5Tw5YXJr3/4P4jt0swalwp70i00ne14eoAirFsWLIFNmeo4OfGcc5Pk4ltOqjU5+Nk6acoQKEVQXVGOPCUFFn+b/Ahvw6WBtM5kdSgsUHOWDPxF44gAI5KB0kBcBrQVeM3Cy8FWuiQ1wlZXwyc1UVldv89TlPLP52AFfvMlxqtwPb6DTe2zeoafuSiVutUM3EIY/gL9tXhjujrrmyR7gFFAbD1cdulxFXKpIH3IQopknTOlwPr/v0iSWQ+iDUg/YmnqXMmOApqxqC1Y6Gxr+rJsePg+nYKePXyxmqa2bogaJ1VAEn9EWQJlX5F52qhNpe5XoesUDjgkcrynKKxry+S9FbPCN4r0hdsF/UPRWibCMH9xMxkCrm5+sqDezko/fjmVEGjViz+SIKt7gQVKTUow5uR6RNTfKhOt7s9dHzVTPOtQPVOH9UtauxIkKRpjNbTSNta/EaS0iU0+iY8zUQ/LEJtGZ7DsC1JwEkFETFZTI3NcKVmtyrgPCffQMpNbqs7ZSyZlr2JkRd9huAAZE/uqWqO+lxjpxPjYOmUGsI14h9xacHo7ag7hmUuFyM0="
+
+before_install:
+  - echo -n | openssl s_client -connect https://scan.coverity.com:443 | sed -ne '/-BEGIN CERTIFICATE-/,/-END CERTIFICATE-/p' | sudo tee -a /etc/ssl/certs/ca-
+
+addons:
+  coverity_scan:
+    project:
+      name: "reicrof/hop"
+      description: "HOP"
+    notification_email: c.l.forcier@gmail.com
+    build_command_prepend: ""
+    build_command: "make -j2"
+    branch_pattern: coverity_scan
+
 script:
   - make -j $CPU_NUM
   - ./tests/Tsc_test
