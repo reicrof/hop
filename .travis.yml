@@ -25,6 +25,7 @@ before_install:
       brew update;
       brew install sdl2;
     fi
+  - echo -n | openssl s_client -CApath /etc/ssl/certs -connect scan.coverity.com:443 | sed -ne '/-BEGIN CERTIFICATE-/,/-END CERTIFICATE-/p' | sudo tee -a /etc/ssl/certs/ca-
 
 addons:
   coverity_scan:
@@ -36,8 +37,6 @@ addons:
     build_command_prepend:
     build_command: make
     branch_pattern: coverity_scan
-  script:
-    - echo -n | openssl s_client -CApath /etc/ssl/certs -connect scan.coverity.com:443 | sed -ne '/-BEGIN CERTIFICATE-/,/-END CERTIFICATE-/p' | sudo tee -a /etc/ssl/certs/ca-
 
 before_script:
   - mkdir release
