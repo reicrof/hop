@@ -1,7 +1,9 @@
 #ifndef HOP_SERVER_H_
 #define HOP_SERVER_H_
 
+#define HOP_VIEWER
 #include <Hop.h>
+
 #include "Mutex.h"
 #include "StringDb.h"
 #include "TraceData.h"

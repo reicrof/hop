@@ -428,7 +428,8 @@ static void drawHoveredLockWaitPopup(
       snprintf(
           buffer + charWritten,
           sizeof( buffer ) - charWritten,
-          "\n  Threads owning the lock were not profiled" );
+          "\n  Threads owning the lock were not profiled or the number of cycles required\n  to "
+          "acquire the lock was smaller than what HOP_MIN_LOCK_CYCLES defines" );
    }
    ImGui::TextUnformatted( buffer );
 }
@@ -944,6 +945,7 @@ std::vector< LockOwnerInfo > TimelineTracks::highlightLockOwner(
         auto lockDataIdx = std::distance( lockWaits.entries.ends.cbegin(), lastUnlock );
         if( lockDataIdx != 0 ) --lockDataIdx;
 
+        const float tracesHeight = _tracks[i].heightWithThreadLabel();
         while( lockDataIdx != 0 )
         {
             if( lockWaits.mutexAddrs[ lockDataIdx ] == highlightedMutexAddr )
@@ -970,8 +972,6 @@ std::vector< LockOwnerInfo > TimelineTracks::highlightLockOwner(
                }
                if ( !added )
                   lockInfos.emplace_back( lockHoldDuration, i );
-
-               const float tracesHeight = _tracks[i].heightWithThreadLabel();
 
                auto drawData = createDrawDataForEntry(
                   lockWaitEndTime + lockHoldDuration,

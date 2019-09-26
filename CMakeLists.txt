@@ -47,7 +47,7 @@ else()
    set( viewer_platform_src "platform/Platform_Windows.cpp" )
 endif()
 
-add_definitions( -DHOP_ENABLED -DHOP_VIEWER )
+add_definitions( -DHOP_ENABLED )
 file(GLOB hop_viewer_src
     "*.h"
     "*.cpp"
