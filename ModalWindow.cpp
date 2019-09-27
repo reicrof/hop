@@ -198,7 +198,7 @@ void displayModalWindow( const char* message, ModalType type, std::function<void
    // Copy callback and call other overload
    {
       std::lock_guard<std::mutex> g( modalWindowLock );
-      noArgModalFct = fctToExec;
+      noArgModalFct = std::move( fctToExec );
    }
 
    assert( type != MODAL_TYPE_STRING_OK_CANCEL );
@@ -212,7 +212,7 @@ void displayStringInputModalWindow(
    // Copy callback and call other overload
    {
       std::lock_guard<std::mutex> g( modalWindowLock );
-      stringModalFct = fctToExec;
+      stringModalFct = std::move( fctToExec );
    }
 
    displayModalWindow( message, MODAL_TYPE_STRING_OK_CANCEL );

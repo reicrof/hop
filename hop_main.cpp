@@ -193,8 +193,11 @@ static void terminateProcess( hop::ProcessID id )
    {
       kill( id, SIGINT );
       int status, wpid;
-      while ( ( wpid = wait( &status ) ) > 0 )
-         ;
+      do
+      {
+         wpid = wait( &status );
+      }
+      while ( wpid > 0 );
    }
 #endif
 }
