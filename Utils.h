@@ -8,6 +8,7 @@
 #include <cctype> // toupper
 #include <chrono>
 #include <cstdio>
+#include <math.h>
 
 #define __STDC_FORMAT_MACROS
 #include <inttypes.h>
@@ -69,16 +70,16 @@ static inline T pxlToCycles( double windowWidth, uint64_t timelineRange, double 
    return static_cast<T>( cyclesPerPxl * pxl );
 }
 
-static inline int64_t cyclesToNanos( int64_t cycles )
+inline int64_t cyclesToNanos( int64_t cycles )
 {
    static const double cpuFreqGhz = getCpuFreqHz() / 1000000000.0;
-   return (cycles / cpuFreqGhz) + 0.5;
+   return llround( cycles / cpuFreqGhz);
 }
 
-static inline uint64_t nanosToCycles( uint64_t nanos )
+   inline uint64_t nanosToCycles( uint64_t nanos )
 {
    static const double cpuFreqGhz = getCpuFreqHz() / 1000000000.0;
-   return (nanos * cpuFreqGhz) + 0.5;
+   return llround(nanos * cpuFreqGhz);
 }
 
 inline uint32_t addColorWithClamping( uint32_t c1, uint32_t c2 )

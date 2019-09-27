@@ -68,22 +68,22 @@ enum
 enum HopZoneColor
 {
    HOP_ZONE_COLOR_NONE = 0xFFFF,
-   HOP_ZONE_COLOR_1    = 1 << 0,
-   HOP_ZONE_COLOR_2    = 1 << 1,
-   HOP_ZONE_COLOR_3    = 1 << 2,
-   HOP_ZONE_COLOR_4    = 1 << 3,
-   HOP_ZONE_COLOR_5    = 1 << 4,
-   HOP_ZONE_COLOR_6    = 1 << 5,
-   HOP_ZONE_COLOR_7    = 1 << 6,
-   HOP_ZONE_COLOR_8    = 1 << 7,
-   HOP_ZONE_COLOR_9    = 1 << 8,
-   HOP_ZONE_COLOR_10   = 1 << 9,
-   HOP_ZONE_COLOR_11   = 1 << 10,
-   HOP_ZONE_COLOR_12   = 1 << 11,
-   HOP_ZONE_COLOR_13   = 1 << 12,
-   HOP_ZONE_COLOR_14   = 1 << 13,
-   HOP_ZONE_COLOR_15   = 1 << 14,
-   HOP_ZONE_COLOR_16   = 1 << 15,
+   HOP_ZONE_COLOR_1    = 1U << 0U,
+   HOP_ZONE_COLOR_2    = 1U << 1U,
+   HOP_ZONE_COLOR_3    = 1U << 2U,
+   HOP_ZONE_COLOR_4    = 1U << 3U,
+   HOP_ZONE_COLOR_5    = 1U << 4U,
+   HOP_ZONE_COLOR_6    = 1U << 5U,
+   HOP_ZONE_COLOR_7    = 1U << 6U,
+   HOP_ZONE_COLOR_8    = 1U << 7U,
+   HOP_ZONE_COLOR_9    = 1U << 8U,
+   HOP_ZONE_COLOR_10   = 1U << 9U,
+   HOP_ZONE_COLOR_11   = 1U << 10U,
+   HOP_ZONE_COLOR_12   = 1U << 11U,
+   HOP_ZONE_COLOR_13   = 1U << 12U,
+   HOP_ZONE_COLOR_14   = 1U << 13U,
+   HOP_ZONE_COLOR_15   = 1U << 14U,
+   HOP_ZONE_COLOR_16   = 1U << 15U,
 };
 
 ///////////////////////////////////////////////////////////////
@@ -222,7 +222,7 @@ inline TimeStamp rdtscp( uint32_t& aux )
 #else
    uint64_t rax, rdx;
    asm volatile( "rdtscp\n" : "=a"( rax ), "=d"( rdx ), "=c"( aux ) : : );
-   return ( rdx << 32 ) + rax;
+   return ( rdx << 32U ) + rax;
 #endif
 }
 
@@ -231,7 +231,7 @@ inline TimeStamp getTimeStamp( Core_t& core )
    // We return the tsc with the first bit set to 0. We do not require this last cycle
    // of precision. It will instead be used to flag if a trace uses dynamic strings or not in its
    // start time. See hop::StartProfileDynString
-   return rdtscp( core ) & ~1ull;
+   return rdtscp( core ) & ~1ULL;
 }
 
 inline TimeStamp getTimeStamp()
@@ -409,19 +409,18 @@ class ProfGuard
 
 class LockWaitGuard
 {
+   TimeStamp start;
+   void* mutexAddr;
   public:
    LockWaitGuard( void* mutAddr ) : start( getTimeStamp() ), mutexAddr( mutAddr ) {}
    ~LockWaitGuard() { ClientManager::EndLockWait( mutexAddr, start, getTimeStamp() ); }
-
-   TimeStamp start;
-   void* mutexAddr;
 };
 
 class ProfGuardDynamicString
 {
   public:
    ProfGuardDynamicString( const char* fileName, LineNb_t lineNb, const char* fctName ) HOP_NOEXCEPT
-       : _start( getTimeStamp() | 1 ),  // Set the first bit to 1 to flag the use of dynamic strings
+       : _start( getTimeStamp() | 1ULL ),  // Set the first bit to 1 to signal dynamic strings
          _fileName( reinterpret_cast<StrPtr_t>( fileName ) ),
          _lineNb( lineNb )
    {

@@ -362,7 +362,7 @@ static void drawHoveredEntryPopup(
    hop::formatCyclesDurationToDisplay(
        ddEntry.duration, fmtTime, sizeof( fmtTime ), drawAsCycles );
 
-   charWritten += snprintf(
+   snprintf(
        strBuffer + charWritten,
        std::max( 0, (int)sizeof( strBuffer ) - charWritten ),
        " (%s)\n   %s:%d ",
