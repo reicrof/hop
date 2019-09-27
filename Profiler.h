@@ -4,6 +4,7 @@
 #include "Server.h"
 #include "Timeline.h"
 #include "TimelineTrack.h"
+#include "TimelineStats.h"
 #include "TraceSearch.h"
 #include "StringDb.h"
 
@@ -19,11 +20,17 @@ class Server;
 class Profiler
 {
 public:
-   enum SourceType
+   enum class SourceType
    {
-      SRC_TYPE_NONE,
-      SRC_TYPE_FILE,
-      SRC_TYPE_PROCESS,
+      NONE,
+      FILE,
+      PROCESS,
+   };
+
+   enum class ViewType
+   {
+      PROFILER,
+      STATS
    };
 
    Profiler();
@@ -54,11 +61,16 @@ private:
 
    std::string _name;
    int _pid;
-   Timeline _timeline;
-   TimelineTracks _tracks;
    StringDb _strDb;
+   Timeline _timeline;
+
+   // Canvas content
+   TimelineTracks _tracks;
+   TimelineStats _stats;
+
    bool _recording{ false };
    SourceType _srcType;
+   ViewType _viewType;
 
    Server _server;
    Server::PendingData _serverPendingData;

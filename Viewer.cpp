@@ -21,11 +21,11 @@ static const float TAB_HEIGHT = 30.0f;
 static void addNewProfilerPopUp( hop::Viewer* v, hop::Profiler::SourceType type )
 {
    hop::displayStringInputModalWindow( "Enter name or PID of process", [=]( const char* str ) {
-      if ( type == hop::Profiler::SRC_TYPE_PROCESS )
+      if ( type == hop::Profiler::SourceType::PROCESS )
       {
          v->addNewProfiler( str, false );
       }
-      else if ( type == hop::Profiler::SRC_TYPE_FILE )
+      else if ( type == hop::Profiler::SourceType::FILE )
       {
          v->openProfilerFile( str );
       }
@@ -47,7 +47,7 @@ static void drawMenuBar( hop::Viewer* v )
          const int profIdx = v->activeProfilerIndex();
          if ( ImGui::MenuItem( menuAddProfiler, NULL ) )
          {
-            addNewProfilerPopUp( v, hop::Profiler::SRC_TYPE_PROCESS );
+            addNewProfilerPopUp( v, hop::Profiler::SourceType::PROCESS );
          }
          if( ImGui::MenuItem( menuSaveAsHop, NULL, false, profIdx >= 0 ) )
          {
@@ -223,7 +223,7 @@ static int drawTabs( hop::Viewer& viewer, int selectedTab )
    addTabPos.x += profCount * tabWidth + profCount * tabFramePadding;
    if ( drawAddTabButton( addTabPos ) )
    {
-      addNewProfilerPopUp( &viewer, hop::Profiler::SRC_TYPE_PROCESS );
+      addNewProfilerPopUp( &viewer, hop::Profiler::SourceType::PROCESS );
    }
 
    ImGui::PopStyleVar( 2 );
@@ -352,7 +352,7 @@ int Viewer::addNewProfiler( const char* processName, bool startRecording )
                                                : hop::getProcessInfoFromProcessName( processName );
 
    _profilers.emplace_back( new hop::Profiler() );
-   _profilers.back()->setSource( Profiler::SRC_TYPE_PROCESS, procInfo.pid, processName );
+   _profilers.back()->setSource( Profiler::SourceType::PROCESS, procInfo.pid, processName );
    _profilers.back()->setRecording( startRecording );
    _selectedTab = _profilers.size() - 1;
    return _selectedTab;
@@ -367,7 +367,7 @@ void Viewer::openProfilerFile( const char* filePath )
        std::launch::async,
        []( std::string path ) {
           Profiler* prof = new hop::Profiler();
-          prof->setSource( Profiler::SRC_TYPE_FILE, -1, path.c_str() );
+          prof->setSource( Profiler::SourceType::FILE, -1, path.c_str() );
           return prof;
        },
        strPath );
@@ -557,7 +557,7 @@ bool Viewer::handleHotkey()
       }
       else if ( ImGui::GetIO().KeyCtrl && ImGui::IsKeyPressed( 't' ) )
       {
-         addNewProfilerPopUp( this, Profiler::SRC_TYPE_PROCESS );
+         addNewProfilerPopUp( this, Profiler::SourceType::PROCESS );
       }
    }
 

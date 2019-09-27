@@ -72,7 +72,7 @@ float computeCanvasSize( const hop::TimelineTracks& tracks )
 
 namespace hop
 {
-Profiler::Profiler() : _srcType( SRC_TYPE_NONE )
+Profiler::Profiler() : _srcType( SourceType::NONE ), _viewType( ViewType::PROFILER )
 {
 }
 
@@ -100,11 +100,11 @@ bool Profiler::setSource( SourceType type, int processId, const char* str )
 {
    switch( type )
    {
-      case SRC_TYPE_PROCESS:
+      case SourceType::PROCESS:
         return setProcess( processId, str );
-      case SRC_TYPE_FILE:
+      case SourceType::FILE:
         return openFile( str );
-      case SRC_TYPE_NONE:
+      case SourceType::NONE:
         assert(false);
         return false;
    }
@@ -390,8 +390,9 @@ static bool drawDeleteTracesButton( const ImVec2& drawPos, bool active )
                                                                drawPos.x + TOOLBAR_BUTTON_WIDTH,
                                                                drawPos.y + TOOLBAR_BUTTON_HEIGHT );
 
-   ImColor col = active ? ( hovering ? ImColor( 0.9f, 0.0f, 0.0f ) : ImColor( 0.7f, 0.0f, 0.0f ) )
-                        : ImColor( 0.5f, 0.5f, 0.5f );
+   const ImColor col =
+       active ? ( hovering ? ImColor( 0.9f, 0.0f, 0.0f ) : ImColor( 0.7f, 0.0f, 0.0f ) )
+              : ImColor( 0.5f, 0.5f, 0.5f );
 
    DrawList->AddLine(
        drawPos,
@@ -412,6 +413,57 @@ static bool drawDeleteTracesButton( const ImVec2& drawPos, bool active )
    }
 
    return hovering && active && ImGui::IsMouseClicked( 0 );
+}
+
+static bool drawViewTypeButton( const ImVec2& drawPos, hop::Profiler::ViewType viewType )
+{
+   ImDrawList* DrawList = ImGui::GetWindowDrawList();
+
+   const auto& mousePos = ImGui::GetMousePos();
+   const bool hovering = ImGui::IsMouseHoveringWindow() && hop::ptInRect(
+                                                               mousePos.x,
+                                                               mousePos.y,
+                                                               drawPos.x,
+                                                               drawPos.y,
+                                                               drawPos.x + TOOLBAR_BUTTON_WIDTH,
+                                                               drawPos.y + TOOLBAR_BUTTON_HEIGHT );
+
+   const ImColor col = hovering ? ImColor( 1.0f, 1.0f, 1.0f ) : ImColor( 0.7f, 0.7f, 0.7f );
+
+   if( viewType == hop::Profiler::ViewType::PROFILER )
+   {
+      const float lineWidth = 3.0f;
+      float lineOffset          = 0;
+      const ImVec2 topLine( drawPos.x, drawPos.y + lineOffset );
+      const ImVec2 topLineEnd( drawPos.x + TOOLBAR_BUTTON_WIDTH, drawPos.y + lineOffset );
+      lineOffset += lineWidth + 2.0f;
+      const ImVec2 midLine( drawPos.x, drawPos.y + lineOffset );
+      const ImVec2 midLineEnd( drawPos.x + TOOLBAR_BUTTON_WIDTH, drawPos.y + lineOffset );
+      lineOffset += lineWidth + 2.0f;
+      const ImVec2 lastLine1( drawPos.x, drawPos.y + lineOffset );
+      const ImVec2 lastLineEnd1(
+          drawPos.x + TOOLBAR_BUTTON_WIDTH * 0.5 - 2.0f, drawPos.y + lineOffset );
+      const ImVec2 lastLine2(
+          drawPos.x + TOOLBAR_BUTTON_WIDTH * 0.5, drawPos.y + lineOffset );
+      const ImVec2 lastLineEnd2( drawPos.x + TOOLBAR_BUTTON_WIDTH, drawPos.y + lineOffset );
+      DrawList->AddLine( topLine, topLineEnd, col, lineWidth );
+      DrawList->AddLine( midLine, midLineEnd, col, lineWidth );
+      DrawList->AddLine( lastLine1, lastLineEnd1, col, lineWidth );
+      DrawList->AddLine( lastLine2, lastLineEnd2, col, lineWidth );
+   }
+   else if( viewType == hop::Profiler::ViewType::STATS )
+   {
+
+   }
+
+   if ( hovering )
+   {
+      ImGui::BeginTooltip();
+      ImGui::Text( "Change View Type" );
+      ImGui::EndTooltip();
+   }
+
+   return hovering && ImGui::IsMouseClicked( 0 );
 }
 
 static void drawStatusIcon( const ImVec2& drawPos, hop::SharedMemory::ConnectionState state )
@@ -465,17 +517,24 @@ void hop::Profiler::draw( float drawPosX, float drawPosY, float canvasWidth, flo
    HOP_PROF_FUNC();
    ImGui::SetCursorPos( ImVec2( drawPosX, drawPosY ) );
 
-   const auto toolbarDrawPos = ImVec2( drawPosX, drawPosY );
-   if ( sourceType() == SRC_TYPE_PROCESS && drawPlayStopButton( toolbarDrawPos, _recording ) )
+   const ImVec2 toolbarDrawPos = ImVec2( drawPosX, drawPosY );
+   if ( sourceType() == SourceType::PROCESS && drawPlayStopButton( toolbarDrawPos, _recording ) )
    {
       setRecording( !_recording );
    }
 
-   auto deleteTracePos = toolbarDrawPos;
+   ImVec2 deleteTracePos = toolbarDrawPos;
    deleteTracePos.x += ( 2.0f * TOOLBAR_BUTTON_PADDING ) + TOOLBAR_BUTTON_WIDTH;
    if ( drawDeleteTracesButton( deleteTracePos, _tracks.size() > 0 ) )
    {
       hop::displayModalWindow( "Delete all traces?", hop::MODAL_TYPE_YES_NO, [&]() { clear(); } );
+   }
+
+   ImVec2 viewTypeButton = deleteTracePos;
+   viewTypeButton.x += ( 2.0f * TOOLBAR_BUTTON_PADDING ) + TOOLBAR_BUTTON_WIDTH;
+   if( drawViewTypeButton( viewTypeButton, _viewType ) )
+   {
+      _viewType = _viewType == ViewType::PROFILER ? ViewType::STATS : ViewType::PROFILER;
    }
 
    auto statusPos = toolbarDrawPos;
@@ -502,12 +561,18 @@ void hop::Profiler::draw( float drawPosX, float drawPosY, float canvasWidth, flo
       // Start the canvas drawing
       _timeline.beginDrawCanvas( computeCanvasSize( _tracks ) );
 
-      // Draw the tracks inside the canvaws
-      auto timelineActions =
-          _tracks.draw( TimelineTracksDrawInfo{_timeline.constructTimelineInfo(), _strDb} );
+      // Draw the tracks inside the canvas
+      std::vector< TimelineMessage > timelineActions;
+      if( _viewType == ViewType::PROFILER )
+      {
+         timelineActions = _tracks.draw( TimelineTracksDrawInfo{_timeline.constructTimelineInfo(), _strDb} );
+      }
+      else
+      {
+         timelineActions = _stats.draw();
+      }
 
       _timeline.drawOverlay();
-
       _timeline.endDrawCanvas();
 
       // Handle deferred timeline actions created by the module
@@ -650,7 +715,7 @@ bool hop::Profiler::saveToFile( const char* savePath )
 bool hop::Profiler::setProcess( int processId, const char* process )
 {
    _server.stop();
-   _srcType = SRC_TYPE_PROCESS;
+   _srcType = SourceType::PROCESS;
    return _server.start( processId, process );
 }
 
@@ -706,7 +771,7 @@ bool hop::Profiler::openFile( const char* path )
          addLockWaits( timelineTracks[j]._lockWaits, j );
          i += timelineTrackSize;
       }
-      _srcType = SRC_TYPE_FILE;
+      _srcType = SourceType::FILE;
       closeModalWindow();
       return true;
    }
