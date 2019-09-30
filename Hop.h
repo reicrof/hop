@@ -119,6 +119,8 @@ enum HopZoneColor
 // be considered for each thread.
 #define HOP_SET_THREAD_NAME( x ) hop::ClientManager::SetThreadName( ( x ) )
 
+#define HOP_STATS_UINT64( name, value ) hop::ClientManager::StatsUint64( ( name ), ( value ) )
+
 ///////////////////////////////////////////////////////////////
 /////     EVERYTHING AFTER THIS IS IMPL DETAILS        ////////
 ///////////////////////////////////////////////////////////////
@@ -197,13 +199,6 @@ typedef char HOP_CHAR;
 
 #endif
 
-// -----------------------------
-// Forward declarations of type used by ringbuffer as adapted from
-// Mindaugas Rasiukevicius. See below for Copyright/Disclaimer
-typedef struct ringbuf ringbuf_t;
-typedef struct ringbuf_worker ringbuf_worker_t;
-// -----------------------------
-
 namespace hop
 {
 // Custom trace types
@@ -248,32 +243,8 @@ enum class MsgType : uint32_t
    PROFILER_UNLOCK_EVENT,
    PROFILER_HEARTBEAT,
    PROFILER_CORE_EVENT,
+   STATS_UINT64_EVENT,
    INVALID_MESSAGE,
-};
-
-struct TracesMsgInfo
-{
-   uint32_t count;
-};
-
-struct StringDataMsgInfo
-{
-   uint32_t size;
-};
-
-struct LockWaitsMsgInfo
-{
-   uint32_t count;
-};
-
-struct UnlockEventsMsgInfo
-{
-   uint32_t count;
-};
-
-struct CoreEventMsgInfo
-{
-   uint32_t count;
 };
 
 HOP_CONSTEXPR uint32_t EXPECTED_MSG_INFO_SIZE = 40;
@@ -285,14 +256,7 @@ struct MsgInfo
    uint64_t threadId;
    TimeStamp timeStamp;
    StrPtr_t threadName;
-   // Specific message data
-   union {
-      TracesMsgInfo traces;
-      StringDataMsgInfo stringData;
-      LockWaitsMsgInfo lockwaits;
-      UnlockEventsMsgInfo unlockEvents;
-      CoreEventMsgInfo coreEvents;
-   };
+   uint32_t count;
 };
 HOP_STATIC_ASSERT(
     sizeof( MsgInfo ) == EXPECTED_MSG_INFO_SIZE,
@@ -338,6 +302,12 @@ struct CoreEvent
    Core_t core;
 };
 
+struct Uint64StatEvent
+{
+   StrPtr_t eventName; // Index into string array for the event name
+   uint64_t  value;
+};
+
 class Client;
 class SharedMemory;
 
@@ -359,6 +329,9 @@ class HOP_API ClientManager
    static void UnlockEvent( void* mutexAddr, TimeStamp time );
    static void SetThreadName( const char* name ) HOP_NOEXCEPT;
    static ZoneId_t PushNewZone( ZoneId_t newZone );
+
+   static void StatsUint64( const char* name, uint64_t value );
+
    static bool HasConnectedConsumer() HOP_NOEXCEPT;
    static bool HasListeningConsumer() HOP_NOEXCEPT;
    static bool ShouldSendHeartbeat( TimeStamp curTimestamp ) HOP_NOEXCEPT;
@@ -496,6 +469,10 @@ class ZoneGuard
  * OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
  * SUCH DAMAGE.
  */
+
+typedef struct ringbuf ringbuf_t;
+typedef struct ringbuf_worker ringbuf_worker_t;
+
 int ringbuf_setup( ringbuf_t*, unsigned, size_t );
 void ringbuf_get_sizes( unsigned, size_t*, size_t* );
 
@@ -1221,6 +1198,20 @@ static void copyTracesTo( const Traces* t, void* outBuffer )
    memcpy( zonesPtr, t->zones, zoneSize );
 }
 
+static void fillMsgInfoHeader(
+    hop::MsgInfo* msgInfo,
+    hop::MsgType type,
+    hop::TimeStamp timeStamp,
+    uint32_t count )
+{
+   msgInfo->type        = type;
+   msgInfo->threadId    = tl_threadId;
+   msgInfo->threadName  = tl_threadName;
+   msgInfo->threadIndex = tl_threadIndex;
+   msgInfo->timeStamp   = timeStamp;
+   msgInfo->count       = count;
+}
+
 class Client
 {
   public:
@@ -1277,6 +1268,11 @@ class Client
          tl_threadNameBuffer[sizeof( tl_threadNameBuffer ) - 1] = '\0';
          tl_threadName = addDynamicStringToDb( tl_threadNameBuffer );
       }
+   }
+
+   void statsUint64( StrPtr_t name, uint64_t value )
+   {
+      _uint64StatEvent.push_back( Uint64StatEvent{ name, value } );
    }
 
    StrPtr_t addDynamicStringToDb( const char* dynStr )
@@ -1412,16 +1408,11 @@ class Client
          // msgInfo     = Profiler specific infos  - Information about the message sent
          // stringData  = String Data              - Array with all strings referenced by the traces
          MsgInfo* msgInfo = reinterpret_cast<MsgInfo*>( bufferPtr );
-         char* stringData = reinterpret_cast<char*>( bufferPtr + sizeof( MsgInfo ) );
 
-         msgInfo->type            = MsgType::PROFILER_STRING_DATA;
-         msgInfo->threadId        = tl_threadId;
-         msgInfo->threadName      = tl_threadName;
-         msgInfo->threadIndex     = tl_threadIndex;
-         msgInfo->timeStamp       = timeStamp;
-         msgInfo->stringData.size = stringToSendSize;
+         fillMsgInfoHeader( msgInfo, MsgType::PROFILER_STRING_DATA, timeStamp, stringToSendSize );
 
          // Copy string data into its array
+         char* stringData = reinterpret_cast<char*>( bufferPtr + sizeof( MsgInfo ) );
          const auto itFrom = _stringData.begin() + _sentStringDataSize;
          std::copy( itFrom, itFrom + stringToSendSize, stringData );
       }
@@ -1453,19 +1444,8 @@ class Client
 
       // Fill the buffer with the profiling trace message
       {
-         // The data layout is as follow:
-         // =========================================================
-         // msgInfo     = Profiler specific infos  - Information about the message sent
-         // traceToSend = Traces                   - Array containing all of the traces
          MsgInfo* tracesInfo = reinterpret_cast<MsgInfo*>( bufferPtr );
-
-         tracesInfo->type         = MsgType::PROFILER_TRACE;
-         tracesInfo->threadId     = tl_threadId;
-         tracesInfo->threadName   = tl_threadName;
-         tracesInfo->threadIndex  = tl_threadIndex;
-         tracesInfo->timeStamp    = timeStamp;
-         tracesInfo->traces.count = _traces.count;
-
+         fillMsgInfoHeader( tracesInfo, MsgType::PROFILER_TRACE, timeStamp, _traces.count );
          // Copy trace information into buffer to send
          void* outBuffer = (void*)( bufferPtr + sizeof( MsgInfo ) );
          copyTracesTo( &_traces, outBuffer );
@@ -1498,13 +1478,8 @@ class Client
 
       // Fill the buffer with the core event message
       {
-         MsgInfo* coreInfo          = reinterpret_cast<MsgInfo*>( bufferPtr );
-         coreInfo->type             = MsgType::PROFILER_CORE_EVENT;
-         coreInfo->threadId         = tl_threadId;
-         coreInfo->threadName       = tl_threadName;
-         coreInfo->threadIndex      = tl_threadIndex;
-         coreInfo->timeStamp        = timeStamp;
-         coreInfo->coreEvents.count = static_cast<uint32_t>( _cores.size() );
+         MsgInfo* coreInfo = reinterpret_cast<MsgInfo*>( bufferPtr );
+         fillMsgInfoHeader( coreInfo, MsgType::PROFILER_CORE_EVENT, timeStamp, _cores.size() );
          bufferPtr += sizeof( MsgInfo );
          memcpy( bufferPtr, _cores.data(), _cores.size() * sizeof( CoreEvent ) );
       }
@@ -1538,13 +1513,8 @@ class Client
 
       // Fill the buffer with the lock message
       {
-         MsgInfo* lwInfo         = reinterpret_cast<MsgInfo*>( bufferPtr );
-         lwInfo->type            = MsgType::PROFILER_WAIT_LOCK;
-         lwInfo->threadId        = tl_threadId;
-         lwInfo->threadName      = tl_threadName;
-         lwInfo->threadIndex     = tl_threadIndex;
-         lwInfo->timeStamp       = timeStamp;
-         lwInfo->lockwaits.count = static_cast<uint32_t>( _lockWaits.size() );
+         MsgInfo* lwInfo     = reinterpret_cast<MsgInfo*>( bufferPtr );
+         fillMsgInfoHeader( lwInfo, MsgType::PROFILER_WAIT_LOCK, timeStamp, _lockWaits.size() );
          bufferPtr += sizeof( MsgInfo );
          memcpy( bufferPtr, _lockWaits.data(), _lockWaits.size() * sizeof( LockWait ) );
       }
@@ -1577,13 +1547,8 @@ class Client
 
       // Fill the buffer with the lock message
       {
-         MsgInfo* uInfo            = reinterpret_cast<MsgInfo*>( bufferPtr );
-         uInfo->type               = MsgType::PROFILER_UNLOCK_EVENT;
-         uInfo->threadId           = tl_threadId;
-         uInfo->threadName         = tl_threadName;
-         uInfo->threadIndex        = tl_threadIndex;
-         uInfo->timeStamp          = timeStamp;
-         uInfo->unlockEvents.count = static_cast<uint32_t>( _unlockEvents.size() );
+         MsgInfo* uInfo     = reinterpret_cast<MsgInfo*>( bufferPtr );
+         fillMsgInfoHeader( uInfo, MsgType::PROFILER_UNLOCK_EVENT, timeStamp, _unlockEvents.size() );
          bufferPtr += sizeof( MsgInfo );
          memcpy( bufferPtr, _unlockEvents.data(), _unlockEvents.size() * sizeof( UnlockEvent ) );
       }
@@ -1592,6 +1557,46 @@ class Client
       ClientManager::sharedMemory().signalSemaphore();
 
       _unlockEvents.clear();
+
+      return true;
+   }
+
+   bool sendStatsEvent( TimeStamp timeStamp )
+   {
+      if( _uint64StatEvent.empty() ) return false;
+
+      const size_t uint64StatMsgSize =
+          sizeof( MsgInfo ) + _uint64StatEvent.size() * sizeof( Uint64StatEvent );
+
+      ringbuf_t* ringbuf = ClientManager::sharedMemory().ringbuffer();
+      uint8_t* bufferPtr = acquireSharedChunk( ringbuf, uint64StatMsgSize );
+      if( !bufferPtr )
+      {
+         printf(
+             "HOP - Failed to acquire enough shared memory. Consider increasing shared memory "
+             "size\n" );
+         _uint64StatEvent.clear();
+         return false;
+      }
+
+      // Fill the buffer with stats message
+      {
+         MsgInfo* sinfo     = reinterpret_cast<MsgInfo*>( bufferPtr );
+         fillMsgInfoHeader( sinfo, MsgType::STATS_UINT64_EVENT, timeStamp, _uint64StatEvent.size() );
+         sinfo->type        = MsgType::STATS_UINT64_EVENT;
+         sinfo->threadId    = tl_threadId;
+         sinfo->threadName  = tl_threadName;
+         sinfo->threadIndex = tl_threadIndex;
+         sinfo->timeStamp   = timeStamp;
+         sinfo->count       = static_cast<uint32_t>( _uint64StatEvent.size() );
+         bufferPtr += sizeof( MsgInfo );
+         memcpy( bufferPtr, _uint64StatEvent.data(), _uint64StatEvent.size() * sizeof( Uint64StatEvent ) );
+      }
+
+      ringbuf_produce( ringbuf, _worker );
+      ClientManager::sharedMemory().signalSemaphore();
+
+      _uint64StatEvent.clear();
 
       return true;
    }
@@ -1664,12 +1669,14 @@ class Client
       sendLockWaits( timeStamp );
       sendUnlockEvents( timeStamp );
       sendCores( timeStamp );
+      sendStatsEvent( timeStamp );
    }
 
    Traces _traces;
    std::vector<CoreEvent> _cores;
    std::vector<LockWait> _lockWaits;
    std::vector<UnlockEvent> _unlockEvents;
+   std::vector<Uint64StatEvent> _uint64StatEvent;
    std::unordered_set<StrPtr_t> _stringPtr;
    std::vector<char> _stringData;
    TimeStamp _clientResetTimeStamp{0};
@@ -1798,6 +1805,14 @@ void ClientManager::SetThreadName( const char* name ) HOP_NOEXCEPT
    if( unlikely( !client ) ) return;
 
    client->setThreadName( reinterpret_cast<StrPtr_t>( name ) );
+}
+
+void ClientManager::StatsUint64( const char* name, uint64_t value ) HOP_NOEXCEPT
+{
+   auto client = ClientManager::Get();
+   if( unlikely( !client ) ) return;
+
+   client->statsUint64( reinterpret_cast<StrPtr_t>( name ), value );
 }
 
 ZoneId_t ClientManager::PushNewZone( ZoneId_t newZone )
