@@ -27,7 +27,7 @@ public:
 
 MyMutex g_mutex;
 
-bool g_run = true;
+volatile bool g_run = true;
 
 static const int RECURSION_COUNT = 20;
 thread_local std::vector< MyMutex > mxs( RECURSION_COUNT + 1 );

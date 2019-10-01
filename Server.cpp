@@ -415,13 +415,13 @@ size_t Server::handleNewMessage( uint8_t* data, size_t maxSize, TimeStamp minTim
       case MsgType::STATS_UINT64_EVENT:
       {
          const uint32_t eventCount = msgInfo->count;
-         const Uint64StatEvent* statEvents = (Uint64StatEvent*)bufPtr;
+         const StatEvent* statEvents = (StatEvent*)bufPtr;
          for( uint32_t i = 0; i < eventCount; ++i )
          {
-            printf("Stat event value %zu\n", (size_t)statEvents[i].value );
+            printf("Stat event %s = %zu\n", _stringDb.getString( _stringDb.getStringIndex( statEvents[i].eventName ) ), (size_t)statEvents[i].value_uint64 );
          }
 
-         bufPtr += eventCount * sizeof( Uint64StatEvent );
+         bufPtr += eventCount * sizeof( StatEvent );
          assert( ( size_t )( bufPtr - data ) <= maxSize );
 
          return ( size_t )( bufPtr - data );

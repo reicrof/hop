@@ -1,56 +1,33 @@
 #include <cstring>
 #include <chrono>
 #include <thread>
-#include <string>
 
-#include <stdio.h>
-#include <stdlib.h>
-#include <mutex>
 #include <time.h>
 #include <signal.h>
 
 #define HOP_IMPLEMENTATION
 #include <Hop.h>
 
-class MyMutex
-{
-public:
-   void lock()
-   {
-      HOP_PROF_MUTEX_LOCK( &m );
-      m.lock();
-   }
-
-   void unlock()
-   {
-      HOP_PROF_MUTEX_UNLOCK( &m );
-      m.unlock();
-   }
-
-   std::mutex m;
-};
-
 volatile bool g_run = true;
-MyMutex g_mutex0;
-MyMutex g_mutex1;
 
 static std::atomic<int> workerId{0};
-void testMutex( MyMutex& m, int mtxId, std::chrono::microseconds sleepTime )
+void sleepSome( std::chrono::microseconds sleepTime )
 {
+   HOP_PROF_FUNC();
    HOP_ZONE( HOP_ZONE_COLOR_1 );
    char name[256];
-   snprintf( name, 256, "MUTEX WORKER %d", workerId.fetch_add(1) );
+   snprintf( name, 256, "Worker %d", workerId.fetch_add(1) );
    HOP_SET_THREAD_NAME( name );
-   
-   char profGuardName[64];
-   snprintf( profGuardName, sizeof( profGuardName ), "LockGuard for Mutex %d", mtxId );
-   HOP_PROF_DYN_NAME( &profGuardName[13] );
 
-   {
-   std::lock_guard<MyMutex> g(m);
-   HOP_PROF_DYN_NAME( profGuardName );
+   thread_local int64_t  int64value = -250;
+   thread_local uint64_t uint64value = 250;
+   thread_local float    floatValue = 0.5f;
+
+   HOP_STATS_INT64( "Int Value", ++int64value );
+   HOP_STATS_UINT64( "Uint Value", ++uint64value );
+   HOP_STATS_FLOAT( "Float Value", ++floatValue );
+
    std::this_thread::sleep_for( sleepTime );
-   }
 }
 
 #if !defined(_MSC_VER)
@@ -79,8 +56,8 @@ int main( int argc, const char** argv )
    for (int i = 0; i < threadNum; ++i)
    {
       threads.emplace_back( []() { while (g_run) {
-         testMutex( g_mutex1, 1, microseconds( 10000 ) );
-         testMutex( g_mutex0, 0, microseconds( 100 ) );
+         sleepSome( microseconds( 10000 ) );
+         sleepSome( microseconds( 100 ) );
       } } );
    }
 
@@ -88,8 +65,8 @@ int main( int argc, const char** argv )
     std::this_thread::sleep_for( microseconds( 2500 ) );
     while(g_run)
     {
-       testMutex( g_mutex0, 0, microseconds( 10000 ) );
-       testMutex( g_mutex1, 1, microseconds( 100 ) );
+       sleepSome( microseconds( 10000 ) );
+       sleepSome( microseconds( 100 ) );
     }
 
     for( auto& t : threads )

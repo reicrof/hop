@@ -119,7 +119,9 @@ enum HopZoneColor
 // be considered for each thread.
 #define HOP_SET_THREAD_NAME( x ) hop::ClientManager::SetThreadName( ( x ) )
 
+#define HOP_STATS_INT64( name, value )  hop::ClientManager::StatsInt64(  ( name ), ( value ) )
 #define HOP_STATS_UINT64( name, value ) hop::ClientManager::StatsUint64( ( name ), ( value ) )
+#define HOP_STATS_FLOAT( name, value )  hop::ClientManager::StatsFloat(  ( name ), ( value ) )
 
 ///////////////////////////////////////////////////////////////
 /////     EVERYTHING AFTER THIS IS IMPL DETAILS        ////////
@@ -302,11 +304,29 @@ struct CoreEvent
    Core_t core;
 };
 
-struct Uint64StatEvent
+enum StatEventDataType
 {
-   StrPtr_t eventName; // Index into string array for the event name
-   uint64_t  value;
+   STAT_EVENT_INT64,
+   STAT_EVENT_UINT64,
+   STAT_EVENT_FLOAT,
 };
+
+HOP_CONSTEXPR uint32_t EXPECTED_STAT_EVENT_SIZE = 32;
+struct StatEvent
+{
+   TimeStamp time;
+   StrPtr_t eventName; // Index into string array for the event name
+   union
+   {
+      int64_t  value_int64;
+      uint64_t value_uint64;
+      float    value_float;
+   };
+   StatEventDataType valueType;
+};
+HOP_STATIC_ASSERT(
+    sizeof( StatEvent ) == EXPECTED_STAT_EVENT_SIZE,
+    "Stat Event layout has changed unexpectedly" );
 
 class Client;
 class SharedMemory;
@@ -331,6 +351,8 @@ class HOP_API ClientManager
    static ZoneId_t PushNewZone( ZoneId_t newZone );
 
    static void StatsUint64( const char* name, uint64_t value ) HOP_NOEXCEPT;
+   static void StatsInt64( const char* name, int64_t value ) HOP_NOEXCEPT;
+   static void StatsFloat( const char* name, float value ) HOP_NOEXCEPT;
 
    static bool HasConnectedConsumer() HOP_NOEXCEPT;
    static bool HasListeningConsumer() HOP_NOEXCEPT;
@@ -1270,9 +1292,25 @@ class Client
       }
    }
 
+   void statsInt64( StrPtr_t name, int64_t value )
+   {
+      StatEvent event{ getTimeStamp(), name, 0, STAT_EVENT_INT64 };
+      event.value_int64 = value;
+      _statEvents.push_back( event );
+   }
+
    void statsUint64( StrPtr_t name, uint64_t value )
    {
-      _uint64StatEvent.push_back( Uint64StatEvent{ name, value } );
+      StatEvent event{ getTimeStamp(), name, 0, STAT_EVENT_UINT64 };
+      event.value_uint64 = value;
+      _statEvents.push_back( event );
+   }
+
+   void statsFloat( StrPtr_t name, float value )
+   {
+      StatEvent event{ getTimeStamp(), name, 0, STAT_EVENT_FLOAT };
+      event.value_float = value;
+      _statEvents.push_back( event );
    }
 
    StrPtr_t addDynamicStringToDb( const char* dynStr )
@@ -1373,7 +1411,7 @@ class Client
 
    bool sendStringData( TimeStamp timeStamp )
    {
-      // Add all strings to the database
+      // Add all strings coming from traces to the database
       for( uint32_t i = 0; i < _traces.count; ++i )
       {
          addStringToDb( _traces.fileNameIds[i] );
@@ -1383,6 +1421,12 @@ class Client
          // time being 1. Therefore we only need to add the
          // non-dynamic strings. (first bit of start time being 0)
          if( ( _traces.starts[i] & 1 ) == 0 ) addStringToDb( _traces.fctNameIds[i] );
+      }
+
+      // Add all strings coming from the stats event to the database
+      for( uint32_t i = 0; i < _statEvents.size(); ++i )
+      {
+         addStringToDb( _statEvents[i].eventName );
       }
 
       const uint32_t stringDataSize = static_cast<uint32_t>( _stringData.size() );
@@ -1563,10 +1607,10 @@ class Client
 
    bool sendStatsEvent( TimeStamp timeStamp )
    {
-      if( _uint64StatEvent.empty() ) return false;
+      if( _statEvents.empty() ) return false;
 
       const size_t uint64StatMsgSize =
-          sizeof( MsgInfo ) + _uint64StatEvent.size() * sizeof( Uint64StatEvent );
+          sizeof( MsgInfo ) + _statEvents.size() * sizeof( StatEvent );
 
       ringbuf_t* ringbuf = ClientManager::sharedMemory().ringbuffer();
       uint8_t* bufferPtr = acquireSharedChunk( ringbuf, uint64StatMsgSize );
@@ -1575,28 +1619,28 @@ class Client
          printf(
              "HOP - Failed to acquire enough shared memory. Consider increasing shared memory "
              "size\n" );
-         _uint64StatEvent.clear();
+         _statEvents.clear();
          return false;
       }
 
       // Fill the buffer with stats message
       {
          MsgInfo* sinfo     = reinterpret_cast<MsgInfo*>( bufferPtr );
-         fillMsgInfoHeader( sinfo, MsgType::STATS_UINT64_EVENT, timeStamp, _uint64StatEvent.size() );
+         fillMsgInfoHeader( sinfo, MsgType::STATS_UINT64_EVENT, timeStamp, _statEvents.size() );
          sinfo->type        = MsgType::STATS_UINT64_EVENT;
          sinfo->threadId    = tl_threadId;
          sinfo->threadName  = tl_threadName;
          sinfo->threadIndex = tl_threadIndex;
          sinfo->timeStamp   = timeStamp;
-         sinfo->count       = static_cast<uint32_t>( _uint64StatEvent.size() );
+         sinfo->count       = static_cast<uint32_t>( _statEvents.size() );
          bufferPtr += sizeof( MsgInfo );
-         memcpy( bufferPtr, _uint64StatEvent.data(), _uint64StatEvent.size() * sizeof( Uint64StatEvent ) );
+         memcpy( bufferPtr, _statEvents.data(), _statEvents.size() * sizeof( StatEvent ) );
       }
 
       ringbuf_produce( ringbuf, _worker );
       ClientManager::sharedMemory().signalSemaphore();
 
-      _uint64StatEvent.clear();
+      _statEvents.clear();
 
       return true;
    }
@@ -1676,7 +1720,7 @@ class Client
    std::vector<CoreEvent> _cores;
    std::vector<LockWait> _lockWaits;
    std::vector<UnlockEvent> _unlockEvents;
-   std::vector<Uint64StatEvent> _uint64StatEvent;
+   std::vector<StatEvent> _statEvents;
    std::unordered_set<StrPtr_t> _stringPtr;
    std::vector<char> _stringData;
    TimeStamp _clientResetTimeStamp{0};
@@ -1807,12 +1851,28 @@ void ClientManager::SetThreadName( const char* name ) HOP_NOEXCEPT
    client->setThreadName( reinterpret_cast<StrPtr_t>( name ) );
 }
 
+void ClientManager::StatsInt64( const char* name, int64_t value ) HOP_NOEXCEPT
+{
+   auto client = ClientManager::Get();
+   if( unlikely( !client ) ) return;
+
+   client->statsInt64( reinterpret_cast<StrPtr_t>( name ), value );
+}
+
 void ClientManager::StatsUint64( const char* name, uint64_t value ) HOP_NOEXCEPT
 {
    auto client = ClientManager::Get();
    if( unlikely( !client ) ) return;
 
    client->statsUint64( reinterpret_cast<StrPtr_t>( name ), value );
+}
+
+void ClientManager::StatsFloat( const char* name, float value ) HOP_NOEXCEPT
+{
+   auto client = ClientManager::Get();
+   if( unlikely( !client ) ) return;
+
+   client->statsFloat( reinterpret_cast<StrPtr_t>( name ), value );
 }
 
 ZoneId_t ClientManager::PushNewZone( ZoneId_t newZone )

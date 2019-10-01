@@ -49,7 +49,7 @@ ProcessInfo getProcessInfoFromProcessName( const char* name )
        * grep process from the result. On MacOs the process name also contains the path, we
        * thus have to check for a preceding '/'
        */
-      snprintf( cmd, sizeof( cmd ), "ps -A | grep '[ \\/]%s$' | grep -v grep | awk '{print $1}'", name );
+      snprintf( cmd, sizeof( cmd ), "ps -A -o pid,comm | grep '[ \\/]%s$' | grep -v grep | awk '{print $1}'", name );
 
       // Get name from PID
       if( FILE* fp = popen( cmd, "r" ) )
