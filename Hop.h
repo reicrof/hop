@@ -330,7 +330,7 @@ class HOP_API ClientManager
    static void SetThreadName( const char* name ) HOP_NOEXCEPT;
    static ZoneId_t PushNewZone( ZoneId_t newZone );
 
-   static void StatsUint64( const char* name, uint64_t value );
+   static void StatsUint64( const char* name, uint64_t value ) HOP_NOEXCEPT;
 
    static bool HasConnectedConsumer() HOP_NOEXCEPT;
    static bool HasListeningConsumer() HOP_NOEXCEPT;
