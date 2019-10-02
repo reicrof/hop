@@ -418,7 +418,7 @@ size_t Server::handleNewMessage( uint8_t* data, size_t maxSize, TimeStamp minTim
          const StatEvent* statEvents = (StatEvent*)bufPtr;
          for( uint32_t i = 0; i < eventCount; ++i )
          {
-            printf("Stat event %s = %zu\n", _stringDb.getString( _stringDb.getStringIndex( statEvents[i].eventName ) ), (size_t)statEvents[i].value_uint64 );
+            printf("Stat event %s = %zu\n", _stringDb.getString( _stringDb.getStringIndex( statEvents[i].eventName ) ), (size_t)statEvents[i].value.uint64_ );
          }
 
          bufPtr += eventCount * sizeof( StatEvent );

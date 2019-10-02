@@ -72,6 +72,14 @@ struct CoreEventData
    std::deque<CoreEvent> data;
 };
 
+struct StatEventData
+{
+   std::deque<TimeStamp> times;
+   std::deque<StrPtr_t> names;
+   std::deque<StatEventValue> values;
+   std::deque<StatEventValueType> valueTypes;
+};
+
 std::pair<size_t, size_t>
 visibleIndexSpan( const LodsArray& lodsArr, int lodLvl, TimeStamp absoluteStart, TimeStamp absoluteEnd, int baseDepth );
 

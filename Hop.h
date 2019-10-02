@@ -304,7 +304,7 @@ struct CoreEvent
    Core_t core;
 };
 
-enum StatEventDataType
+enum StatEventValueType
 {
    STAT_EVENT_INT64,
    STAT_EVENT_UINT64,
@@ -312,17 +312,18 @@ enum StatEventDataType
 };
 
 HOP_CONSTEXPR uint32_t EXPECTED_STAT_EVENT_SIZE = 32;
+union StatEventValue
+{
+   int64_t  int64_;
+   uint64_t uint64_;
+   float    float_;
+};
 struct StatEvent
 {
    TimeStamp time;
    StrPtr_t eventName; // Index into string array for the event name
-   union
-   {
-      int64_t  value_int64;
-      uint64_t value_uint64;
-      float    value_float;
-   };
-   StatEventDataType valueType;
+   StatEventValue value;
+   StatEventValueType valueType;
 };
 HOP_STATIC_ASSERT(
     sizeof( StatEvent ) == EXPECTED_STAT_EVENT_SIZE,
@@ -1295,21 +1296,21 @@ class Client
    void statsInt64( StrPtr_t name, int64_t value )
    {
       StatEvent event{ getTimeStamp(), name, 0, STAT_EVENT_INT64 };
-      event.value_int64 = value;
+      event.value.int64_ = value;
       _statEvents.push_back( event );
    }
 
    void statsUint64( StrPtr_t name, uint64_t value )
    {
       StatEvent event{ getTimeStamp(), name, 0, STAT_EVENT_UINT64 };
-      event.value_uint64 = value;
+      event.value.uint64_ = value;
       _statEvents.push_back( event );
    }
 
    void statsFloat( StrPtr_t name, float value )
    {
       StatEvent event{ getTimeStamp(), name, 0, STAT_EVENT_FLOAT };
-      event.value_float = value;
+      event.value.float_ = value;
       _statEvents.push_back( event );
    }
 
