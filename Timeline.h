@@ -113,7 +113,7 @@ class Timeline
       TimeDuration targetTimelineRange{5000000000};
       float targetVerticalPosPxl{0.0f};
       float highlightPercent{0.0f};
-      AnimationType type;
+      AnimationType type{ANIMATION_TYPE_NONE};
    } _animationState;
 
    struct Bookmarks
