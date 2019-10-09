@@ -1200,11 +1200,7 @@ static void copyTracesTo( const Traces* t, void* outBuffer )
    const size_t endsSize = sizeof( t->ends[0] ) * count;
    memcpy( endsPtr, t->ends, endsSize );
 
-   void* depthsPtr         = (uint8_t*)endsPtr + endsSize;
-   const size_t depthsSize = sizeof( t->depths[0] ) * count;
-   memcpy( depthsPtr, t->depths, depthsSize );
-
-   void* fileNamesPtr         = (uint8_t*)depthsPtr + depthsSize;
+   void* fileNamesPtr         = (uint8_t*)endsPtr + endsSize;
    const size_t fileNamesSize = sizeof( t->fileNameIds[0] ) * count;
    memcpy( fileNamesPtr, t->fileNameIds, fileNamesSize );
 
@@ -1216,7 +1212,11 @@ static void copyTracesTo( const Traces* t, void* outBuffer )
    const size_t lineNbSize = sizeof( t->lineNumbers[0] ) * count;
    memcpy( lineNbPtr, t->lineNumbers, lineNbSize );
 
-   void* zonesPtr        = (uint8_t*)lineNbPtr + lineNbSize;
+   void* depthsPtr         = (uint8_t*)lineNbPtr + lineNbSize;
+   const size_t depthsSize = sizeof( t->depths[0] ) * count;
+   memcpy( depthsPtr, t->depths, depthsSize );
+
+   void* zonesPtr        = (uint8_t*)depthsPtr + depthsSize;
    const size_t zoneSize = sizeof( t->zones[0] ) * count;
    memcpy( zonesPtr, t->zones, zoneSize );
 }

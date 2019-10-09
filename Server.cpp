@@ -300,11 +300,11 @@ size_t Server::handleNewMessage( uint8_t* data, size_t maxSize, TimeStamp minTim
              TraceData traceData;
              const TimeStamp* starts = (const TimeStamp*)bufPtr;
              const TimeStamp* ends = starts + tracesCount;
-             const Depth_t* depths = (const Depth_t*)( ends + tracesCount );
-             const StrPtr_t* fileNames = (const StrPtr_t*)( depths + tracesCount );
+             const StrPtr_t* fileNames = (const StrPtr_t*)( ends + tracesCount );
              const StrPtr_t* fctNames = fileNames + tracesCount;
              const LineNb_t* lineNbs = (const LineNb_t*)( fctNames + tracesCount );
-             const ZoneId_t* zones = (const ZoneId_t*)( lineNbs + tracesCount );
+             const Depth_t* depths = (const Depth_t*)( lineNbs + tracesCount );
+             const ZoneId_t* zones = (const ZoneId_t*)( depths + tracesCount );
 
              traceData.entries.ends.insert(
                  traceData.entries.ends.end(), ends, ends + tracesCount );

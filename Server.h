@@ -58,10 +58,10 @@ class Server
    {
       SharedMemory::ConnectionState connectionState;
       std::string processName;
-      int pid;
-      bool running;
-      bool recording;
-      bool clearingRequested;
+      int pid{-1};
+      bool running{false};
+      bool recording{false};
+      bool clearingRequested{false};
    } _state;
 
    hop::Mutex _sharedPendingDataMutex;
