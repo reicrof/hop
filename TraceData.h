@@ -74,10 +74,7 @@ struct CoreEventData
 
 struct StatEventData
 {
-   std::deque<TimeStamp> times;
-   std::deque<StrPtr_t> names;
-   std::deque<StatEventValue> values;
-   std::deque<StatEventValueType> valueTypes;
+   std::deque<StatEvent> events;
 };
 
 std::pair<size_t, size_t>

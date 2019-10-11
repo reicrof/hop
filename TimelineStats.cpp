@@ -8,4 +8,9 @@ namespace hop
 
       return messages;
    }
+
+   void TimelineStats::addStatEvents( const std::vector<StatEvent>& statEvents )
+   {
+      _statEvents.insert( _statEvents.end(), statEvents.begin(), statEvents.end() );
+   }
 }

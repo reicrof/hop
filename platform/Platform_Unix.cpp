@@ -17,10 +17,17 @@ void cpuid( int reg[4], int fctId )
 
 ProcessInfo getProcessInfoFromPID( ProcessID pid )
 {
-   ProcessInfo info = {};
+   ProcessInfo info;
+   info.pid = -1;
+   info.name[0] = '\0';
 
    char cmd[128] = {};
-   snprintf( cmd, sizeof( cmd ), "ps -p %d -o comm= | xargs basename | tr -d '\n'", pid );
+   const unsigned writeSize =
+       snprintf( cmd, sizeof( cmd ), "ps -p %d -o comm= | xargs basename | tr -d '\n'", pid );
+
+   // Has truncation occured ?
+   if( writeSize >= sizeof( cmd ) )
+      return info;
 
    // Get name from PID
    if( FILE* fp = popen( cmd, "r" ) )
@@ -37,7 +44,9 @@ ProcessInfo getProcessInfoFromPID( ProcessID pid )
 
 ProcessInfo getProcessInfoFromProcessName( const char* name )
 {
-   ProcessInfo info = {};
+   ProcessInfo info;
+   info.pid = -1;
+   info.name[0] = '\0';
 
    if( strlen( name ) > 0 )
    {
@@ -49,7 +58,15 @@ ProcessInfo getProcessInfoFromProcessName( const char* name )
        * grep process from the result. On MacOs the process name also contains the path, we
        * thus have to check for a preceding '/'
        */
-      snprintf( cmd, sizeof( cmd ), "ps -A -o pid,comm | grep '[ \\/]%s$' | grep -v grep | awk '{print $1}'", name );
+      const unsigned writeSize = snprintf(
+          cmd,
+          sizeof( cmd ),
+          "ps -A -o pid,comm | grep '[ \\/]%s$' | grep -v grep | awk '{print $1}'",
+          name );
+
+      // Has truncation occured ?
+      if( writeSize >= sizeof( cmd ) )
+         return info;
 
       // Get name from PID
       if( FILE* fp = popen( cmd, "r" ) )

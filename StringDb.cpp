@@ -5,11 +5,6 @@
 #include <cassert>
 #include <cstring>
 
-static uint32_t alignOn( uint32_t val, uint32_t alignment )
-{
-   return (( val + alignment-1) & ~(alignment-1));
-}
-
 namespace hop
 {
 
@@ -42,7 +37,7 @@ void StringDb::addStringData( const char* inData, size_t count )
       i += sizeof( StrPtr_t );
 
       auto& strIndex = _stringIndices[strPtr];
-      const size_t stringLen = alignOn( strlen( &inData[i] ) + 1, 8 );
+      const size_t stringLen = hop::alignOn( strlen( &inData[i] ) + 1, 8 );
       // If not already in the db, add it
       if ( strIndex == 0 )
       {
@@ -90,7 +85,7 @@ std::vector< size_t > StringDb::findStringIndexMatching( const char* substrToFin
       {
          indices.push_back( i );
       }
-      i += alignOn( entryLength + 1, 8 );
+      i += hop::alignOn( entryLength + 1, 8 );
    }
    return indices;
 }

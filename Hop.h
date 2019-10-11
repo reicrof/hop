@@ -245,7 +245,7 @@ enum class MsgType : uint32_t
    PROFILER_UNLOCK_EVENT,
    PROFILER_HEARTBEAT,
    PROFILER_CORE_EVENT,
-   STATS_UINT64_EVENT,
+   STATS_EVENT,
    INVALID_MESSAGE,
 };
 
@@ -517,6 +517,7 @@ void ringbuf_release( ringbuf_t*, size_t );
 
 // On MacOs the max name length seems to be 30...
 #define HOP_SHARED_MEM_MAX_NAME_SIZE 30
+#define HOP_AMORTIZED_FACTOR 1.5f
 namespace hop
 {
 class SharedMemory
@@ -836,6 +837,12 @@ void closeSharedMemory( const HOP_CHAR* name, shm_handle handle, void* dataPtr )
    if( shm_unlink( name ) != 0 ) perror( " HOP - Could not unlink shared memory" );
 #endif
 }
+
+uint64_t alignOn( uint64_t val, uint64_t alignment )
+{
+   return ( ( val + alignment - 1 ) & ~( alignment - 1 ) );
+}
+
 }  // namespace
 
 namespace hop
@@ -1126,21 +1133,16 @@ static StrPtr_t cStringHash( const char* str, size_t strLen )
    return result;
 }
 
-static uint32_t alignOn( uint32_t val, uint32_t alignment )
+static void allocTraces( Traces* t, uint32_t size )
 {
-   return ( ( val + alignment - 1 ) & ~( alignment - 1 ) );
-}
-
-static void allocTraces( Traces* t, unsigned size )
-{
-   t->maxSize = size;
-   t->starts      = (TimeStamp*)realloc( t->starts, size * sizeof( TimeStamp ) );
-   t->ends        = (TimeStamp*)realloc( t->ends, size * sizeof( TimeStamp ) );
-   t->depths      = (Depth_t*)realloc( t->depths, size * sizeof( Depth_t ) );
-   t->fctNameIds  = (StrPtr_t*)realloc( t->fctNameIds, size * sizeof( StrPtr_t ) );
-   t->fileNameIds = (StrPtr_t*)realloc( t->fileNameIds, size * sizeof( StrPtr_t ) );
-   t->lineNumbers = (LineNb_t*)realloc( t->lineNumbers, size * sizeof( LineNb_t ) );
-   t->zones       = (ZoneId_t*)realloc( t->zones, size * sizeof( ZoneId_t ) );
+   t->maxSize     = size;
+   t->starts      = (TimeStamp*)realloc( t->starts, size * sizeof( *t->starts ) );
+   t->ends        = (TimeStamp*)realloc( t->ends, size * sizeof( *t->ends ) );
+   t->depths      = (Depth_t*)realloc( t->depths, size * sizeof( *t->depths ) );
+   t->fctNameIds  = (StrPtr_t*)realloc( t->fctNameIds, size * sizeof( *t->fctNameIds ) );
+   t->fileNameIds = (StrPtr_t*)realloc( t->fileNameIds, size * sizeof( *t->fileNameIds ) );
+   t->lineNumbers = (LineNb_t*)realloc( t->lineNumbers, size * sizeof( *t->lineNumbers ) );
+   t->zones       = (ZoneId_t*)realloc( t->zones, size * sizeof( *t->zones ) );
 }
 
 static void freeTraces( Traces* t )
@@ -1168,7 +1170,7 @@ static void addTrace(
    const uint32_t curCount = t->count;
    if( curCount == t->maxSize )
    {
-      allocTraces( t, t->maxSize * 2 );
+      allocTraces( t, t->maxSize * HOP_AMORTIZED_FACTOR );
    }
 
    t->starts[curCount]      = start;
@@ -1627,13 +1629,7 @@ class Client
       // Fill the buffer with stats message
       {
          MsgInfo* sinfo     = reinterpret_cast<MsgInfo*>( bufferPtr );
-         fillMsgInfoHeader( sinfo, MsgType::STATS_UINT64_EVENT, timeStamp, _statEvents.size() );
-         sinfo->type        = MsgType::STATS_UINT64_EVENT;
-         sinfo->threadId    = tl_threadId;
-         sinfo->threadName  = tl_threadName;
-         sinfo->threadIndex = tl_threadIndex;
-         sinfo->timeStamp   = timeStamp;
-         sinfo->count       = static_cast<uint32_t>( _statEvents.size() );
+         fillMsgInfoHeader( sinfo, MsgType::STATS_EVENT, timeStamp, _statEvents.size() );
          bufferPtr += sizeof( MsgInfo );
          memcpy( bufferPtr, _statEvents.data(), _statEvents.size() * sizeof( StatEvent ) );
       }
@@ -1665,11 +1661,7 @@ class Client
       // Fill the buffer with the lock message
       {
          MsgInfo* hbInfo     = reinterpret_cast<MsgInfo*>( bufferPtr );
-         hbInfo->type        = MsgType::PROFILER_HEARTBEAT;
-         hbInfo->threadId    = tl_threadId;
-         hbInfo->threadName  = tl_threadName;
-         hbInfo->threadIndex = tl_threadIndex;
-         hbInfo->timeStamp   = timeStamp;
+         fillMsgInfoHeader( hbInfo, MsgType::PROFILER_HEARTBEAT, timeStamp, 0 );
          bufferPtr += sizeof( MsgInfo );
       }
 
@@ -1993,7 +1985,8 @@ int ringbuf_setup( ringbuf_t* rbuf, unsigned nworkers, size_t length )
    {
       return -1;
    }
-   memset( rbuf, 0, sizeof( ringbuf_t ) );
+   rbuf->next     = 0;
+   rbuf->written  = 0;
    rbuf->space    = length;
    rbuf->end      = RBUF_OFF_MAX;
    rbuf->nworkers = nworkers;

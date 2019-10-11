@@ -412,18 +412,17 @@ size_t Server::handleNewMessage( uint8_t* data, size_t maxSize, TimeStamp minTim
          coreEvents.insert( coreEvents.end(), coreEventsPtr, coreEventsPtr + newCount );
          return ( size_t )( bufPtr - data );
       }
-      case MsgType::STATS_UINT64_EVENT:
+      case MsgType::STATS_EVENT:
       {
          const uint32_t eventCount = msgInfo->count;
-         const StatEvent* statEvents = (StatEvent*)bufPtr;
-         for( uint32_t i = 0; i < eventCount; ++i )
-         {
-            printf("Stat event %s = %zu\n", _stringDb.getString( _stringDb.getStringIndex( statEvents[i].eventName ) ), (size_t)statEvents[i].value.uint64_ );
-         }
+         const StatEvent* statEventsPtr = (StatEvent*)bufPtr;
 
          bufPtr += eventCount * sizeof( StatEvent );
          assert( ( size_t )( bufPtr - data ) <= maxSize );
 
+         std::lock_guard<hop::Mutex> guard( _sharedPendingDataMutex );
+         auto& statEvents = _sharedPendingData.statEventsPerThread[threadIndex];
+         statEvents.insert( statEvents.end(), statEventsPtr, statEventsPtr + eventCount );
          return ( size_t )( bufPtr - data );
       }
       default:
@@ -505,6 +504,11 @@ void Server::PendingData::clear()
       coreEvents.second.clear();
    }
 
+   for( auto& statEvents : statEventsPerThread )
+   {
+      statEvents.second.clear();
+   }
+
    threadNames.clear();
 }
 
@@ -517,6 +521,7 @@ void Server::PendingData::swap( PendingData& rhs )
    swap( lockWaitsPerThread, rhs.lockWaitsPerThread );
    swap( unlockEventsPerThread, rhs.unlockEventsPerThread );
    swap( coreEventsPerThread, rhs.coreEventsPerThread );
+   swap( statEventsPerThread, rhs.statEventsPerThread );
    swap( threadNames, rhs.threadNames );
 }
 

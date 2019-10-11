@@ -26,6 +26,7 @@ find_package(SDL2 REQUIRED)
 find_package(OpenGL REQUIRED)
 
 set(CMAKE_CXX_FLAGS "-ffast-math -fno-exceptions -fno-rtti ${CMAKE_CXX_FLAGS}")
+set(CMAKE_CXX_FLAGS_RELEASE "-O3")
 
 set( CMAKE_VERBOSE_MAKEFILE on )
 

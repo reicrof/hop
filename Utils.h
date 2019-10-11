@@ -55,6 +55,11 @@ inline int sign( const T& val )
     return (T(0) < val) - (val < T(0));
 }
 
+inline uint64_t alignOn( uint64_t val, uint64_t alignment )
+{
+   return (( val + alignment-1) & ~(alignment-1));
+}
+
 // TODO template these 2 functions so they can be used with different time ratios
 template< typename T = uint64_t >
 static inline T cyclesToPxl( double windowWidth, uint64_t timelineRange, uint64_t cycles )
