@@ -444,10 +444,26 @@ static bool drawViewTypeButton( const ImVec2& drawPos, hop::Profiler::ViewType v
 
    const ImColor col = hovering ? ImColor( 1.0f, 1.0f, 1.0f ) : ImColor( 0.7f, 0.7f, 0.7f );
 
+   const char* tooltip = "";
    if( viewType == hop::Profiler::ViewType::PROFILER )
    {
+      tooltip               = "Change To Stats View";
+      const float lineWidth = 5.0f;
+      ImVec2 bottomPt( drawPos.x, drawPos.y + TOOLBAR_BUTTON_HEIGHT );
+      ImVec2 topPt( drawPos.x, drawPos.y + 0.7f * TOOLBAR_BUTTON_HEIGHT );
+      for( int i = 0; i < 3; ++i )
+      {
+         DrawList->AddLine( bottomPt, topPt, col, lineWidth );
+         bottomPt.x += lineWidth + 2.0f;
+         topPt.x += lineWidth + 2.0f;
+         topPt.y -= 0.3f * TOOLBAR_BUTTON_HEIGHT;   
+      }
+   }
+   else if( viewType == hop::Profiler::ViewType::STATS )
+   {
+      tooltip = "Change To Profiler View";
       const float lineWidth = 3.0f;
-      float lineOffset          = 0;
+      float lineOffset      = 0;
       const ImVec2 topLine( drawPos.x, drawPos.y + lineOffset );
       const ImVec2 topLineEnd( drawPos.x + TOOLBAR_BUTTON_WIDTH, drawPos.y + lineOffset );
       lineOffset += lineWidth + 2.0f;
@@ -457,23 +473,18 @@ static bool drawViewTypeButton( const ImVec2& drawPos, hop::Profiler::ViewType v
       const ImVec2 lastLine1( drawPos.x, drawPos.y + lineOffset );
       const ImVec2 lastLineEnd1(
           drawPos.x + TOOLBAR_BUTTON_WIDTH * 0.5 - 2.0f, drawPos.y + lineOffset );
-      const ImVec2 lastLine2(
-          drawPos.x + TOOLBAR_BUTTON_WIDTH * 0.5, drawPos.y + lineOffset );
+      const ImVec2 lastLine2( drawPos.x + TOOLBAR_BUTTON_WIDTH * 0.5, drawPos.y + lineOffset );
       const ImVec2 lastLineEnd2( drawPos.x + TOOLBAR_BUTTON_WIDTH, drawPos.y + lineOffset );
       DrawList->AddLine( topLine, topLineEnd, col, lineWidth );
       DrawList->AddLine( midLine, midLineEnd, col, lineWidth );
       DrawList->AddLine( lastLine1, lastLineEnd1, col, lineWidth );
       DrawList->AddLine( lastLine2, lastLineEnd2, col, lineWidth );
    }
-   else if( viewType == hop::Profiler::ViewType::STATS )
-   {
-
-   }
 
    if ( hovering )
    {
       ImGui::BeginTooltip();
-      ImGui::Text( "Change View Type" );
+      ImGui::Text( tooltip );
       ImGui::EndTooltip();
    }
 
