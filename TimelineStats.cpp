@@ -26,7 +26,6 @@ namespace hop
       auto it2 = std::upper_bound( _statEvents.begin(), _statEvents.end(), lastEv, cmp );
 
       if( it2 != _statEvents.end() ) ++it2;
-      if( it2 != _statEvents.end() ) ++it2;
 
       if( it1 == it2 ) return messages; // Nothing to draw here
 
