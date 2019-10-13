@@ -1393,6 +1393,7 @@ class Client
       _cores.clear();
       _lockWaits.clear();
       _unlockEvents.clear();
+      _statEvents.clear();
    }
 
    uint8_t* acquireSharedChunk( ringbuf_t* ringbuf, size_t size )

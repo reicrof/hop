@@ -594,7 +594,7 @@ void hop::Profiler::draw( float drawPosX, float drawPosY, float canvasWidth, flo
       }
       else
       {
-         timelineActions = _stats.draw();
+         timelineActions = _stats.draw( _timeline.constructTimelineInfo(), _strDb );
       }
 
       _timeline.drawOverlay();

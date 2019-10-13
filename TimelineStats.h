@@ -9,10 +9,12 @@
 
 namespace hop
 {
+   class StringDb;
+   struct TimelineInfo;
    class TimelineStats
    {
    public:
-      std::vector< TimelineMessage > draw();
+      std::vector< TimelineMessage > draw( const const TimelineInfo&, const StringDb& );
       void addStatEvents( const std::vector<StatEvent>& statEvents );
    private:
       std::deque<StatEvent> _statEvents;
