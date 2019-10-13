@@ -16,7 +16,7 @@
 
 #include <cstdlib> // fix for std::abs for older libc++ impl
 
-static constexpr hop::TimeDuration MIN_CYCLES_TO_DISPLAY = 2000;
+static constexpr hop::TimeDuration MIN_CYCLES_TO_DISPLAY = 1000;
 static constexpr hop::TimeDuration MAX_CYCLES_TO_DISPLAY = 1800000000000;
 static constexpr float TIMELINE_TOTAL_HEIGHT = 50.0f;
 
@@ -129,8 +129,6 @@ namespace hop
 
 void Timeline::update( float deltaTimeMs ) noexcept
 {
-   HOP_PROF_FUNC();
-
    switch ( _animationState.type )
    {
       case ANIMATION_TYPE_NONE:
@@ -546,8 +544,13 @@ void Timeline::handleMouseDrag( float mouseInCanvasX, float /*mouseInCanvasY*/ )
        pushNavigationState();
 
        const auto minmaxPos = std::minmax( _rangeZoomCycles[0], _rangeZoomCycles[1] );
-       setStartTime( minmaxPos.first );
-       setZoom( minmaxPos.second - minmaxPos.first );
+       const TimeDuration newZoomDuration = minmaxPos.second - minmaxPos.first;
+
+       // Number of cycles that are clamped if we are past the minimum zoom possible
+       const TimeDuration deltaClamped =
+           newZoomDuration < MIN_CYCLES_TO_DISPLAY ? MIN_CYCLES_TO_DISPLAY - newZoomDuration : 0;
+       setStartTime( minmaxPos.first - (deltaClamped/2) );
+       setZoom( newZoomDuration );
 
        // Reset values
        _rangeZoomCycles[0] = _rangeZoomCycles[1] = 0;
