@@ -306,7 +306,7 @@ typedef int (*EntryNameFct)(const DrawData& dd, size_t ddEntryIdx, const hop::St
 static int buildTraceLabelWithTime( const char* labelName, uint64_t duration, bool asCycles, uint32_t arrSz, char* arr)
 {
    char fmtTime[32];
-   hop::formatCyclesDurationToDisplay( duration, fmtTime, sizeof( fmtTime ), false );
+   hop::formatCyclesDurationToDisplay( duration, fmtTime, sizeof( fmtTime ), asCycles );
 
    return snprintf( arr, arrSz, "%s (%s)", labelName, fmtTime );
 }
@@ -325,15 +325,14 @@ getTraceLabel( const DrawData& dd, size_t entryIndex, const hop::StringDb& strDb
 static int
 getLockWaitLabel( const DrawData& dd, size_t entryIndex, const hop::StringDb&, uint32_t arrSz, char* arr )
 {
-   static constexpr char* waitLockTxt = "Waiting lock...";
+   static const char* waitLockTxt = "Waiting lock...";
    const DrawData::Entry& ddEntry = dd.entries[entryIndex];
-   const size_t idx = ddEntry.traceIndex;
 
    return buildTraceLabelWithTime( waitLockTxt,  ddEntry.duration, false, arrSz, arr );
 }
 
 static int
-getEmptyLabel( const DrawData&, size_t, const hop::StringDb&, uint32_t arrSz, char* arr )
+getEmptyLabel( const DrawData&, size_t, const hop::StringDb&, uint32_t /*arrSz*/, char* arr )
 {
    arr[0] = '\0';
    return 0;
@@ -367,7 +366,7 @@ static void drawHoveredEntryPopup(
     const hop::StringDb& strDb,
     size_t ddEntryIdx,
     EntryNameFct getEntryName,
-    bool drawAsCycles )
+    bool /*drawAsCycles*/ )
 {
    char strBuffer[512];
    const int charWritten = getEntryName( dd, ddEntryIdx, strDb, sizeof( strBuffer ), strBuffer );
