@@ -9,15 +9,20 @@
 
 namespace hop
 {
-   std::vector< TimelineMessage > TimelineStats::draw( const TimelineInfo& tinfo, const StringDb& )
+   float TimelineStats::canvasHeight() const
+   {
+      return 1000.0f;
+   }
+
+   std::vector< TimelineMessage > TimelineStats::draw( const TimelineDrawInfo& tinfo )
    {
       std::vector< TimelineMessage > messages;
 
-      const auto globalStartTime = tinfo.globalStartTime;
+      const auto globalStartTime = tinfo.timeline.globalStartTime;
 
       // The time range to draw in absolute time
-      const TimeStamp firstTraceAbsoluteTime = globalStartTime + tinfo.relativeStartTime;
-      const TimeStamp lastTraceAbsoluteTime = firstTraceAbsoluteTime + tinfo.duration;
+      const TimeStamp firstTraceAbsoluteTime = globalStartTime + tinfo.timeline.relativeStartTime;
+      const TimeStamp lastTraceAbsoluteTime = firstTraceAbsoluteTime + tinfo.timeline.duration;
 
       StatEvent firstEv = { firstTraceAbsoluteTime, 0, 0, STAT_EVENT_INT64 };
       StatEvent lastEv = { lastTraceAbsoluteTime, 0, 0, STAT_EVENT_INT64 };
@@ -36,8 +41,8 @@ namespace hop
          const TimeStamp localTime = it1->time - globalStartTime;
          const auto posPxlX = cyclesToPxl<float>(
             windowWidthPxl,
-            tinfo.duration,
-            localTime - tinfo.relativeStartTime );
+            tinfo.timeline.duration,
+            localTime - tinfo.timeline.relativeStartTime );
          drawList->AddCircle( ImVec2(posPxlX, 350.0f), 5.0f, 0XFF0000FF );
       }
 

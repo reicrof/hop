@@ -5,6 +5,8 @@
 
 namespace hop
 {
+   class StringDb;
+
    struct TimelineInfo
    {
       float canvasPosX;
@@ -15,6 +17,12 @@ namespace hop
       TimeDuration duration;
       bool mouseDragging;
       bool useCycles;
+   };
+
+   struct TimelineDrawInfo
+   {
+      const TimelineInfo& timeline;
+      const StringDb& strDb;
    };
 
    enum class TimelineMessageType

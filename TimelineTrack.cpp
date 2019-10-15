@@ -55,7 +55,7 @@ static DrawData::Entry createDrawDataForEntry(
     size_t traceIdx,
     const float posX,
     const float posY,
-    const hop::TimelineTracksDrawInfo& drawInfo,
+    const hop::TimelineDrawInfo& drawInfo,
     const float windowWidthPxl )
 {
    using namespace hop;
@@ -156,7 +156,7 @@ static void drawHighlightedTraces(
 static void drawCoresLabels(
     const ImVec2& drawPos,
     const hop::CoreEventData& coreData,
-    const hop::TimelineTracksDrawInfo& di )
+    const hop::TimelineDrawInfo& di )
 {
    if( coreData.data.empty() ) return;
 
@@ -263,7 +263,7 @@ static void drawLabels(
     const char* threadName,
     std::vector<hop::TimelineTrack>& tracks,
     uint32_t trackIndex,
-    const hop::TimelineTracksDrawInfo& info )
+    const hop::TimelineDrawInfo& info )
 {
    const ImVec2 threadLabelSize = ImGui::CalcTextSize( threadName );
    ImGui::PushClipRect(
@@ -667,7 +667,7 @@ void TimelineTracks::update( float globalTimeMs, TimeDuration timelineDuration )
    TimelineTrack::PADDED_TRACE_SIZE = TimelineTrack::TRACE_HEIGHT + TimelineTrack::TRACE_VERTICAL_PADDING;
 }
 
-std::vector< TimelineMessage > TimelineTracks::draw( const TimelineTracksDrawInfo& info )
+std::vector< TimelineMessage > TimelineTracks::draw( const TimelineDrawInfo& info )
 {
    std::vector< TimelineMessage > timelineActions;
    timelineActions.reserve( 4 );
@@ -680,7 +680,6 @@ std::vector< TimelineMessage > TimelineTracks::draw( const TimelineTracksDrawInf
 
    char threadNameBuffer[128] = "Thread ";
    const size_t threadNamePrefix = sizeof( "Thread" );
-   const float timelineOffsetY = info.timeline.canvasPosY + info.timeline.scrollAmount;
    for ( size_t i = 0; i < _tracks.size(); ++i )
    {
       // Skip empty threads
@@ -712,7 +711,7 @@ std::vector< TimelineMessage > TimelineTracks::draw( const TimelineTracksDrawInf
       // Then draw the interesting stuff
       const auto absDrawPos = ImGui::GetCursorScreenPos();
       _tracks[i]._absoluteDrawPos[0] = absDrawPos.x;
-      _tracks[i]._absoluteDrawPos[1] = absDrawPos.y + info.timeline.scrollAmount - timelineOffsetY;
+      _tracks[i]._absoluteDrawPos[1] = absDrawPos.y - info.timeline.canvasPosY;
       _tracks[i]._localDrawPos[0] = absDrawPos.x;
       _tracks[i]._localDrawPos[1] = absDrawPos.y;
 
@@ -774,7 +773,7 @@ std::vector< TimelineMessage > TimelineTracks::draw( const TimelineTracksDrawInf
    return timelineActions;
 }
 
-float TimelineTracks::totalHeight() const
+float TimelineTracks::canvasHeight() const
 {
    float height = 0.0f;
    const size_t trackCount = _tracks.size();
@@ -806,7 +805,7 @@ void TimelineTracks::drawTraces(
     uint32_t threadIndex,
     const float posX,
     const float posY,
-    const TimelineTracksDrawInfo& drawInfo,
+    const TimelineDrawInfo& drawInfo,
     std::vector< TimelineMessage >& timelineMsg )
 {
    const TimelineTrack& data = _tracks[ threadIndex ];
@@ -929,7 +928,7 @@ void TimelineTracks::drawTraces(
 std::vector< LockOwnerInfo > TimelineTracks::highlightLockOwner(
     uint32_t threadIndex,
     uint32_t hoveredLwIndex,
-    const TimelineTracksDrawInfo& info )
+    const TimelineDrawInfo& info )
 {
     HOP_PROF_FUNC();
     std::vector< LockOwnerInfo > lockInfos;
@@ -1018,7 +1017,7 @@ void TimelineTracks::drawLockWaits(
     const uint32_t threadIndex,
     const float posX,
     const float posY,
-    const TimelineTracksDrawInfo& drawInfo,
+    const TimelineDrawInfo& drawInfo,
     std::vector< TimelineMessage >& timelineMsg )
 {
    const LockWaitData& lockWaits =_tracks[ threadIndex ]._lockWaits;
@@ -1114,7 +1113,7 @@ void TimelineTracks::drawLockWaits(
 }
 
 void TimelineTracks::drawSearchWindow(
-    const TimelineTracksDrawInfo& di,
+    const TimelineDrawInfo& di,
     std::vector<TimelineMessage>& timelineMsg )
 {
    HOP_PROF_FUNC();
@@ -1154,7 +1153,7 @@ void TimelineTracks::drawSearchWindow(
    }
 }
 
-void TimelineTracks::drawTraceDetailsWindow( const TimelineTracksDrawInfo& info, std::vector< TimelineMessage >& timelineMsg )
+void TimelineTracks::drawTraceDetailsWindow( const TimelineDrawInfo& info, std::vector< TimelineMessage >& timelineMsg )
 {
    const TraceDetailDrawResult traceDetailRes =
        drawTraceDetails( _traceDetails, _tracks, info.strDb, info.timeline.useCycles );
@@ -1195,7 +1194,7 @@ void TimelineTracks::drawTraceDetailsWindow( const TimelineTracksDrawInfo& info,
    }
 }
 
-void TimelineTracks::drawContextMenu( const TimelineTracksDrawInfo& info )
+void TimelineTracks::drawContextMenu( const TimelineDrawInfo& info )
 {
    // No trace were right clicked. Check for right click in canvas
    if( ImGui::IsMouseReleased( 1 ) && !_contextMenuInfo.open && !info.timeline.mouseDragging )
@@ -1287,7 +1286,7 @@ void TimelineTracks::drawContextMenu( const TimelineTracksDrawInfo& info )
    }
 }
 
-void TimelineTracks::addTraceToHighlight( size_t traceId, uint32_t threadIndex, const TimelineTracksDrawInfo& drawInfo )
+void TimelineTracks::addTraceToHighlight( size_t traceId, uint32_t threadIndex, const TimelineDrawInfo& drawInfo )
 {
    // Gather draw data for visible highlighted traces
    const TimelineTrack& data = _tracks[ threadIndex ];

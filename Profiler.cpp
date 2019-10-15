@@ -60,15 +60,16 @@ void displayBackgroundHelpMsg( uint32_t windowWidth, uint32_t windowHeight )
        helpTxt );
 }
 
-float computeCanvasSize( const hop::TimelineTracks& tracks )
+// Reduce the canvas size so that there is no scroll if all contents fits in the canvas
+float computeCanvasSize( float requiredCanvasHeight, const hop::TimelineInfo& tinfo )
 {
-   float tracksHeight = tracks.totalHeight();
-   if ( tracksHeight > 0.0f )
+   if ( requiredCanvasHeight > 0.0f )
    {
-      tracksHeight -= ( ImGui::GetWindowHeight() - tracks[0]._absoluteDrawPos[1] );
+      requiredCanvasHeight -= ( ImGui::GetWindowHeight() - tinfo.canvasPosY - tinfo.scrollAmount );
    }
-   return tracksHeight;
+   return requiredCanvasHeight;
 }
+
 }  // end of anonymous namespace
 
 namespace hop
@@ -584,18 +585,22 @@ void hop::Profiler::draw( float drawPosX, float drawPosY, float canvasWidth, flo
       // Draw the timeline ruler
       _timeline.draw();
 
-      // Start the canvas drawing
-      _timeline.beginDrawCanvas( computeCanvasSize( _tracks ) );
-
       // Draw the tracks inside the canvas
-      std::vector< TimelineMessage > timelineActions;
+      std::vector<TimelineMessage> timelineActions;
+      TimelineDrawInfo tlDrawInfo = {_timeline.constructTimelineInfo(), _strDb};
       if( _viewType == ViewType::PROFILER )
       {
-         timelineActions = _tracks.draw( TimelineTracksDrawInfo{_timeline.constructTimelineInfo(), _strDb} );
+         // Start the canvas drawing
+         const float canvasSize = computeCanvasSize( _tracks.canvasHeight(), tlDrawInfo.timeline );
+         _timeline.beginDrawCanvas( canvasSize );
+         timelineActions = _tracks.draw( tlDrawInfo );
       }
       else
       {
-         timelineActions = _stats.draw( _timeline.constructTimelineInfo(), _strDb );
+         // Start the canvas drawing
+         const float canvasSize = computeCanvasSize( _stats.canvasHeight(), tlDrawInfo.timeline );
+         _timeline.beginDrawCanvas( canvasSize );
+         timelineActions = _stats.draw( tlDrawInfo );
       }
 
       _timeline.drawOverlay();

@@ -14,7 +14,8 @@ namespace hop
    class TimelineStats
    {
    public:
-      std::vector< TimelineMessage > draw( const TimelineInfo&, const StringDb& );
+      float canvasHeight() const;
+      std::vector< TimelineMessage > draw( const TimelineDrawInfo& );
       void addStatEvents( const std::vector<StatEvent>& statEvents );
    private:
       std::deque<StatEvent> _statEvents;

@@ -104,7 +104,7 @@ void findTraces( const char* string, const StringDb& strDb, const TimelineTracks
 
 SearchSelection drawSearchResult(
     SearchResult& searchRes,
-    const TimelineTracksDrawInfo& di,
+    const TimelineDrawInfo& di,
     const TimelineTracks& tracks )
 {
    HOP_PROF_FUNC();

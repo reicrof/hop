@@ -8,7 +8,7 @@ namespace hop
 {
    class Timeline;
    class TimelineTracks;
-   struct TimelineTracksDrawInfo;
+   struct TimelineDrawInfo;
    class StringDb;
 
    struct SearchResult
@@ -29,7 +29,7 @@ namespace hop
    };
 
    void findTraces( const char* string, const StringDb& strDb, const TimelineTracks& tracks, SearchResult& result );
-   SearchSelection drawSearchResult( SearchResult& searchRes, const TimelineTracksDrawInfo& drawInfo, const TimelineTracks& tracks );
+   SearchSelection drawSearchResult( SearchResult& searchRes, const TimelineDrawInfo& drawInfo, const TimelineTracks& tracks );
    void clearSearchResult( SearchResult& res );
 }
 
