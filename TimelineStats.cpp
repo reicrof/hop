@@ -7,16 +7,42 @@
 
 #include <algorithm>
 
+static double valueAsDbl( hop::StatEvent ev )
+{
+    switch( ev.valueType )
+    {
+    case hop::STAT_EVENT_INT64:
+        return ev.value.int64_;
+    case hop::STAT_EVENT_UINT64:
+        return ev.value.uint64_;
+    case hop::STAT_EVENT_FLOAT:
+        return ev.value.float_;
+    }
+}
+
 namespace hop
 {
+    TimelineStats::TimelineStats() : _zoomFactor( 1.0f ), _minRange( -500 ), _maxRange( 500 )
+    {
+
+    }
+
    float TimelineStats::canvasHeight() const
    {
-      return 1000.0f;
+      return ( std::abs( _minRange ) + std::abs( _maxRange ) ) * _zoomFactor;
    }
 
    std::vector< TimelineMessage > TimelineStats::draw( const TimelineDrawInfo& tinfo )
    {
       std::vector< TimelineMessage > messages;
+
+      const double valuePerPxl = _zoomFactor;
+      double visibleMax = _maxRange - tinfo.timeline.scrollAmount;
+
+      const float relativeZero = tinfo.timeline.canvasPosY + visibleMax;
+
+      ImDrawList* drawList = ImGui::GetWindowDrawList();
+      drawList->AddLine(ImVec2(0, relativeZero), ImVec2(3000, relativeZero), 0xFFFFFFFF, 0.4f);
 
       const auto globalStartTime = tinfo.timeline.globalStartTime;
 
@@ -30,12 +56,9 @@ namespace hop
       auto it1 = std::lower_bound( _statEvents.begin(), _statEvents.end(), firstEv, cmp );
       auto it2 = std::upper_bound( _statEvents.begin(), _statEvents.end(), lastEv, cmp );
 
-      if( it2 != _statEvents.end() ) ++it2;
-
       if( it1 == it2 ) return messages; // Nothing to draw here
 
       const float windowWidthPxl = ImGui::GetWindowWidth();
-      ImDrawList* drawList = ImGui::GetWindowDrawList();
       for( ; it1 != it2; ++it1 )
       {
          const TimeStamp localTime = it1->time - globalStartTime;
@@ -43,7 +66,8 @@ namespace hop
             windowWidthPxl,
             tinfo.timeline.duration,
             localTime - tinfo.timeline.relativeStartTime );
-         drawList->AddCircle( ImVec2(posPxlX, 350.0f), 5.0f, 0XFF0000FF );
+         double value = valueAsDbl( *it1 );
+         drawList->AddCircle( ImVec2(posPxlX, relativeZero - value), 5.0f, 0XFF0000FF );
       }
 
       return messages;

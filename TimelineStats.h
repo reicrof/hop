@@ -14,11 +14,15 @@ namespace hop
    class TimelineStats
    {
    public:
+      TimelineStats();
       float canvasHeight() const;
       std::vector< TimelineMessage > draw( const TimelineDrawInfo& );
       void addStatEvents( const std::vector<StatEvent>& statEvents );
    private:
       std::deque<StatEvent> _statEvents;
+      float _zoomFactor;
+      double _minRange;
+      double _maxRange;
    };
 }
 
