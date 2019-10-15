@@ -14,7 +14,7 @@ namespace hop
    class TimelineStats
    {
    public:
-      std::vector< TimelineMessage > draw( const const TimelineInfo&, const StringDb& );
+      std::vector< TimelineMessage > draw( const TimelineInfo&, const StringDb& );
       void addStatEvents( const std::vector<StatEvent>& statEvents );
    private:
       std::deque<StatEvent> _statEvents;

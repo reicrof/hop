@@ -31,6 +31,7 @@ void drawStatsWindow( const Stats& stats )
    ImGui::Text("String Db size : %s", formatStr);
    ImGui::Text("Traces count : %zu", stats.traceCount);
    ImGui::Text("Current LOD : %d", stats.currentLOD);
+   ImGui::Text("Current Canvas Scroll : %f", stats.canvasScrollAmnt);
 }
 
 }

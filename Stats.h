@@ -18,6 +18,7 @@ namespace hop
       size_t stringDbSize;
       size_t traceCount;
       size_t clientSharedMemSize;
+      float  canvasScrollAmnt;
    };
 
    extern Stats g_stats;

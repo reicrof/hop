@@ -9,7 +9,7 @@
 
 namespace hop
 {
-   std::vector< TimelineMessage > TimelineStats::draw( const const TimelineInfo& tinfo, const StringDb& strDb )
+   std::vector< TimelineMessage > TimelineStats::draw( const TimelineInfo& tinfo, const StringDb& )
    {
       std::vector< TimelineMessage > messages;
 

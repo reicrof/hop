@@ -9,6 +9,7 @@
 #include "Options.h"
 #include "RendererGL.h"
 #include "Utils.h"
+#include "Stats.h"
 #include <SDL_keycode.h>
 
 #include <cassert>
@@ -606,6 +607,9 @@ void hop::Profiler::draw( float drawPosX, float drawPosY, float canvasWidth, flo
 
    handleHotkey();
    handleMouse();
+
+   // Add scroll to debug window
+   hop::g_stats.canvasScrollAmnt = _timeline.verticalPosPxl();
 
    ImGui::EndChild();  //"Timeline"
 }
