@@ -301,26 +301,42 @@ static void drawLabels(
 }
 
 // Fct pointer to get entry name
-typedef const char* (*EntryNameFct)(const DrawData& dd, size_t ddEntryIdx, const hop::StringDb& strDb);
+typedef int (*EntryNameFct)(const DrawData& dd, size_t ddEntryIdx, const hop::StringDb& strDb, uint32_t arrSz, char* arr);
+
+static int buildTraceLabelWithTime( const char* labelName, uint64_t duration, bool asCycles, uint32_t arrSz, char* arr)
+{
+   char fmtTime[32];
+   hop::formatCyclesDurationToDisplay( duration, fmtTime, sizeof( fmtTime ), false );
+
+   return snprintf( arr, arrSz, "%s (%s)", labelName, fmtTime );
+}
 
 // Get entry name for non-loded traces
-static const char*
-getTraceLabel( const DrawData& dd, size_t entryIndex, const hop::StringDb& strDb )
+static int
+getTraceLabel( const DrawData& dd, size_t entryIndex, const hop::StringDb& strDb, uint32_t arrSz, char* arr )
 {
-   size_t idx = dd.entries[entryIndex].traceIndex;
-   return strDb.getString( dd.entryData.tData->fctNameIds[idx] );
+   const DrawData::Entry& ddEntry = dd.entries[entryIndex];
+   const size_t idx = ddEntry.traceIndex;
+   const char* entryName = strDb.getString( dd.entryData.tData->fctNameIds[idx] );
+ 
+   return buildTraceLabelWithTime( entryName,  ddEntry.duration, false, arrSz, arr );
 }
 
-static const char*
-getLockWaitLabel( const DrawData&, size_t, const hop::StringDb& )
+static int
+getLockWaitLabel( const DrawData& dd, size_t entryIndex, const hop::StringDb&, uint32_t arrSz, char* arr )
 {
-   return "Waiting lock...";
+   static constexpr char* waitLockTxt = "Waiting lock...";
+   const DrawData::Entry& ddEntry = dd.entries[entryIndex];
+   const size_t idx = ddEntry.traceIndex;
+
+   return buildTraceLabelWithTime( waitLockTxt,  ddEntry.duration, false, arrSz, arr );
 }
 
-static const char*
-getEmptyLabel( const DrawData&, size_t, const hop::StringDb& )
+static int
+getEmptyLabel( const DrawData&, size_t, const hop::StringDb&, uint32_t arrSz, char* arr )
 {
-   return "";
+   arr[0] = '\0';
+   return 0;
 }
 
 // Returns the index of the hovered trace, otherwise returns INVALID_IDX
@@ -328,9 +344,10 @@ static size_t
 drawEntries( const DrawData& dd, const hop::StringDb& strDb, EntryNameFct getEntryName )
 {
    size_t hoveredIdx = hop::INVALID_IDX;
+   char entryName[256] = {};
    for( size_t i = 0; i < dd.entries.size(); ++i )
    {
-      const char* entryName = getEntryName( dd, i, strDb );
+      getEntryName( dd, i, strDb, sizeof(entryName), entryName );
 
       const DrawData::Entry& t = dd.entries[i];
       ImGui::SetCursorScreenPos( t.posPxl );
@@ -353,20 +370,14 @@ static void drawHoveredEntryPopup(
     bool drawAsCycles )
 {
    char strBuffer[512];
-   char fmtTime[32];
-   const char* entryName = getEntryName( dd, ddEntryIdx, strDb );
-   int charWritten = snprintf( strBuffer, sizeof( strBuffer ), "%s ", entryName );
+   const int charWritten = getEntryName( dd, ddEntryIdx, strDb, sizeof( strBuffer ), strBuffer );
 
-   const DrawData::Entry& ddEntry = dd.entries[ddEntryIdx];
-   size_t entryIndex = ddEntry.traceIndex;
-   hop::formatCyclesDurationToDisplay(
-       ddEntry.duration, fmtTime, sizeof( fmtTime ), drawAsCycles );
+   const size_t entryIndex = dd.entries[ddEntryIdx].traceIndex;
 
    snprintf(
        strBuffer + charWritten,
        std::max( 0, (int)sizeof( strBuffer ) - charWritten ),
-       " (%s)\n   %s:%d ",
-       fmtTime,
+       "\n   %s:%d ",
        strDb.getString( dd.entryData.tData->fileNameIds[entryIndex] ),
        dd.entryData.tData->lineNbs[entryIndex] );
 
@@ -854,6 +865,10 @@ void TimelineTracks::drawTraces(
 
    const DrawData* hoveredDrawData = nullptr;
    size_t hoveredIdx = hop::INVALID_IDX;
+
+   // Draw trace text left-aligned
+   ImGui::PushStyleVar(ImGuiStyleVar_ButtonTextAlign, ImVec2( 0.0f, 0.5f ) );
+
    HOP_PROF_SPLIT( "Drawing Traces" );
    for ( size_t zoneId = 0; zoneId < lodTracesToDraw.size(); ++zoneId )
    {
@@ -876,6 +891,7 @@ void TimelineTracks::drawTraces(
       ImGui::PopStyleColor(3);
       ImGui::PopStyleVar();
    }
+   ImGui::PopStyleVar(); // // Pop left-aligned
 
    if( hoveredIdx != hop::INVALID_IDX )
    {
@@ -1048,6 +1064,7 @@ void TimelineTracks::drawLockWaits(
    ImGui::PushStyleColor(ImGuiCol_ButtonHovered, zoneColors[HOP_MAX_ZONE_COLORS] );
    ImGui::PushStyleColor(ImGuiCol_ButtonActive, zoneColors[HOP_MAX_ZONE_COLORS] );
    ImGui::PushStyleVar(ImGuiStyleVar_Alpha, enabledZone[HOP_MAX_ZONE_COLORS] ? 1.0f : disabledZoneOpacity );
+   ImGui::PushStyleVar(ImGuiStyleVar_ButtonTextAlign, ImVec2( 0.0f, 0.5f ) ); // Draw trace text left-aligned
 
    // Draw the lod lock waits
    drawEntries( lodTracesToDraw, drawInfo.strDb, getEmptyLabel );
@@ -1090,7 +1107,7 @@ void TimelineTracks::drawLockWaits(
    }
 
    ImGui::PopStyleColor(3);
-   ImGui::PopStyleVar();
+   ImGui::PopStyleVar(2);
 
    const auto drawEnd = std::chrono::system_clock::now();
    hop::g_stats.lockwaitsDrawingTimeMs +=

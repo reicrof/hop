@@ -504,7 +504,7 @@ void Viewer::draw( uint32_t windowWidth, uint32_t windowHeight )
    if ( _selectedTab >= 0 )
    {
       ImVec2 curPos = ImGui::GetCursorPos();
-      _profilers[_selectedTab]->draw( curPos.x + 5.0f, curPos.y, windowWidth - 5.0f, windowHeight );
+      _profilers[_selectedTab]->draw( curPos.x, curPos.y, windowWidth - 5.0f, windowHeight );
    }
 
    ImGui::End();  // Hop Viewer Window
