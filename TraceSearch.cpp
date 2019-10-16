@@ -1,5 +1,6 @@
 #include "TraceSearch.h"
 #include "StringDb.h"
+#include "TimelineInfo.h"
 #include "TimelineTrack.h"
 #include "Utils.h"
 #include "Stats.h"

@@ -451,20 +451,15 @@ static void addEntryToHighlight( hop::TimelineTrack& track, const DrawData& dd, 
        entry.posPxl[0], entry.posPxl[1], entry.lengthPxl, 0xFFFFFF} );
 }
 
-static hop::TimelineMessage createZoomOnEntryTimelineMsg(
+static void addZoomOnEntryTimelineMsg(
     const DrawData::Entry& ddEntry,
     const hop::Entries& entries,
-    int64_t globalStartTime )
+    int64_t globalStartTime,
+    hop::TimelineMsgArray& outMsg )
 {
    const hop::TimeStamp startTime =
        entries.ends[ddEntry.traceIndex] - entries.deltas[ddEntry.traceIndex] - globalStartTime;
-   hop::TimelineMessage msg;
-   msg.type = hop::TimelineMessageType::FRAME_TO_TIME;
-   msg.frameToTime.time = startTime;
-   msg.frameToTime.duration = ddEntry.duration;
-   msg.frameToTime.pushNavState = true;
-
-   return msg;
+   outMsg.addFrameTimeMsg( startTime, ddEntry.duration, true /*push nav*/, false /*abs time*/ );
 }
 
 namespace hop
@@ -667,13 +662,10 @@ void TimelineTracks::update( float globalTimeMs, TimeDuration timelineDuration )
    TimelineTrack::PADDED_TRACE_SIZE = TimelineTrack::TRACE_HEIGHT + TimelineTrack::TRACE_VERTICAL_PADDING;
 }
 
-std::vector< TimelineMessage > TimelineTracks::draw( const TimelineDrawInfo& info )
+void TimelineTracks::draw( const TimelineDrawInfo& info, TimelineMsgArray& outMessages )
 {
-   std::vector< TimelineMessage > timelineActions;
-   timelineActions.reserve( 4 );
-
-   drawTraceDetailsWindow( info, timelineActions );
-   drawSearchWindow( info, timelineActions );
+   drawTraceDetailsWindow( info, outMessages );
+   drawSearchWindow( info, outMessages );
    drawTraceStats( _traceStats, info.strDb, info.timeline.useCycles );
 
    ImGui::SetCursorScreenPos( ImVec2( info.timeline.canvasPosX, info.timeline.canvasPosY ) );
@@ -751,8 +743,8 @@ std::vector< TimelineMessage > TimelineTracks::draw( const TimelineDrawInfo& inf
                 true );
 
             // Draw the lock waits (before traces so that they are not hiding them)
-            drawLockWaits( i, curDrawPos.x, curDrawPos.y, info, timelineActions );
-            drawTraces( i, curDrawPos.x, curDrawPos.y, info, timelineActions );
+            drawLockWaits( i, curDrawPos.x, curDrawPos.y, info, outMessages );
+            drawTraces( i, curDrawPos.x, curDrawPos.y, info, outMessages );
 
             drawHighlightedTraces(
                 _tracks[i]._highlightsDrawData,
@@ -769,8 +761,6 @@ std::vector< TimelineMessage > TimelineTracks::draw( const TimelineDrawInfo& inf
    }
 
    drawContextMenu( info );
-
-   return timelineActions;
 }
 
 float TimelineTracks::canvasHeight() const
@@ -806,7 +796,7 @@ void TimelineTracks::drawTraces(
     const float posX,
     const float posY,
     const TimelineDrawInfo& drawInfo,
-    std::vector< TimelineMessage >& timelineMsg )
+    TimelineMsgArray& timelineMsg )
 {
    const TimelineTrack& data = _tracks[ threadIndex ];
 
@@ -907,8 +897,7 @@ void TimelineTracks::drawTraces(
       const DrawData::Entry& ddEntry = hoveredDrawData->entries[hoveredIdx];
       if( leftMouseDblClicked )
       {
-         timelineMsg.emplace_back(
-             createZoomOnEntryTimelineMsg( ddEntry, data._traces.entries, globalStartTime ) );
+         addZoomOnEntryTimelineMsg( ddEntry, data._traces.entries, globalStartTime, timelineMsg );
       }
       else if( rightMouseClicked && !drawInfo.timeline.mouseDragging )
       {
@@ -1018,7 +1007,7 @@ void TimelineTracks::drawLockWaits(
     const float posX,
     const float posY,
     const TimelineDrawInfo& drawInfo,
-    std::vector< TimelineMessage >& timelineMsg )
+    TimelineMsgArray& timelineMsg )
 {
    const LockWaitData& lockWaits =_tracks[ threadIndex ]._lockWaits;
    if ( lockWaits.entries.ends.empty() ) return;
@@ -1091,8 +1080,7 @@ void TimelineTracks::drawLockWaits(
       const bool leftMouseDblClicked = ImGui::IsMouseDoubleClicked( 0 );
       if( leftMouseDblClicked )
       {
-         timelineMsg.emplace_back(
-             createZoomOnEntryTimelineMsg( ddEntry, lockWaits.entries, globalStartTime ) );
+         addZoomOnEntryTimelineMsg( ddEntry, lockWaits.entries, globalStartTime, timelineMsg );
       }
       else if( rightMouseClicked && !drawInfo.timeline.mouseDragging )
       {
@@ -1112,9 +1100,7 @@ void TimelineTracks::drawLockWaits(
        std::chrono::duration<double, std::milli>( ( drawEnd - drawStart ) ).count();
 }
 
-void TimelineTracks::drawSearchWindow(
-    const TimelineDrawInfo& di,
-    std::vector<TimelineMessage>& timelineMsg )
+void TimelineTracks::drawSearchWindow( const TimelineDrawInfo& di, TimelineMsgArray& timelineMsg )
 {
    HOP_PROF_FUNC();
 
@@ -1136,15 +1122,8 @@ void TimelineTracks::drawSearchWindow(
                                    ( 3 * TimelineTrack::PADDED_TRACE_SIZE );
 
       // Create the timeline messages ( frame horizontally and vertically )
-      TimelineMessage msg[2];
-      msg[0].type = TimelineMessageType::FRAME_TO_TIME;
-      msg[0].frameToTime.time = startTime;
-      msg[0].frameToTime.duration = delta;
-      msg[0].frameToTime.pushNavState = true;
-      msg[1].type = TimelineMessageType::MOVE_VERTICAL_POS_PXL;
-      msg[1].verticalPos.posPxl = verticalPosPxl;
-
-      timelineMsg.insert( timelineMsg.end(), std::begin( msg ), std::end( msg ) );
+      timelineMsg.addFrameTimeMsg( startTime, delta, true /*push nav*/, false /*abs time*/ );
+      timelineMsg.addMoveVerticalPositionMsg( verticalPosPxl );
    }
 
    if ( selection.hoveredTraceIdx != (size_t)-1 && selection.hoveredThreadIdx != (uint32_t)-1 )
@@ -1153,7 +1132,7 @@ void TimelineTracks::drawSearchWindow(
    }
 }
 
-void TimelineTracks::drawTraceDetailsWindow( const TimelineDrawInfo& info, std::vector< TimelineMessage >& timelineMsg )
+void TimelineTracks::drawTraceDetailsWindow( const TimelineDrawInfo& info, TimelineMsgArray& timelineMsg )
 {
    const TraceDetailDrawResult traceDetailRes =
        drawTraceDetails( _traceDetails, _tracks, info.strDb, info.timeline.useCycles );
@@ -1177,15 +1156,8 @@ void TimelineTracks::drawTraceDetailsWindow( const TimelineDrawInfo& info, std::
                                    ( 3 * TimelineTrack::PADDED_TRACE_SIZE );
 
       // Create the timeline messages ( frame horizontally and vertically )
-      TimelineMessage msg[2];
-      msg[0].type = TimelineMessageType::FRAME_TO_ABSOLUTE_TIME;
-      msg[0].frameToTime.time = minTime;
-      msg[0].frameToTime.duration = maxTime - minTime;
-      msg[0].frameToTime.pushNavState = true;
-      msg[1].type = TimelineMessageType::MOVE_VERTICAL_POS_PXL;
-      msg[1].verticalPos.posPxl = verticalPosPxl;
-
-      timelineMsg.insert( timelineMsg.end(), std::begin( msg ), std::end( msg ) );
+      timelineMsg.addFrameTimeMsg( minTime, maxTime - minTime, true, true /*abs time*/ );
+      timelineMsg.addMoveVerticalPositionMsg( verticalPosPxl );
    }
 
    for( const auto& t : traceDetailRes.hoveredTraceIds )

@@ -18,6 +18,7 @@ static double valueAsDbl( hop::StatEvent ev )
     case hop::STAT_EVENT_FLOAT:
         return ev.value.float_;
     }
+    return 0.0;
 }
 
 namespace hop
@@ -32,13 +33,9 @@ namespace hop
       return ( std::abs( _minRange ) + std::abs( _maxRange ) ) * _zoomFactor;
    }
 
-   std::vector< TimelineMessage > TimelineStats::draw( const TimelineDrawInfo& tinfo )
+   void TimelineStats::draw( const TimelineDrawInfo& tinfo, TimelineMsgArray& /*outMsg*/ )
    {
-      std::vector< TimelineMessage > messages;
-
-      const double valuePerPxl = _zoomFactor;
-      double visibleMax = _maxRange - tinfo.timeline.scrollAmount;
-
+      const double visibleMax = _maxRange - tinfo.timeline.scrollAmount;
       const float relativeZero = tinfo.timeline.canvasPosY + visibleMax;
 
       ImDrawList* drawList = ImGui::GetWindowDrawList();
@@ -56,7 +53,7 @@ namespace hop
       auto it1 = std::lower_bound( _statEvents.begin(), _statEvents.end(), firstEv, cmp );
       auto it2 = std::upper_bound( _statEvents.begin(), _statEvents.end(), lastEv, cmp );
 
-      if( it1 == it2 ) return messages; // Nothing to draw here
+      if( it1 == it2 ) return; // Nothing to draw here
 
       const float windowWidthPxl = ImGui::GetWindowWidth();
       for( ; it1 != it2; ++it1 )
@@ -69,8 +66,6 @@ namespace hop
          double value = valueAsDbl( *it1 );
          drawList->AddCircle( ImVec2(posPxlX, relativeZero - value), 5.0f, 0XFF0000FF );
       }
-
-      return messages;
    }
 
    void TimelineStats::addStatEvents( const std::vector<StatEvent>& statEvents )

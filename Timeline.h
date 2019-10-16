@@ -27,7 +27,7 @@ class Timeline
    };
 
    void update( float deltaTimeMs ) noexcept;
-   void draw();
+   void draw( float posX, float posY );
    void clear();
    void beginDrawCanvas( float canvasHeightPxl );
    void endDrawCanvas();
@@ -36,7 +36,7 @@ class Timeline
 
    bool handleMouse( float posX, float posY, bool lmPressed, bool rmPressed, float wheel );
    bool handleHotkey();
-   void handleDeferredActions( const std::vector< TimelineMessage >& msg );
+   void handleDeferredActions( const TimelineMsgArray& msg );
 
 
    /*

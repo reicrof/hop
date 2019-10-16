@@ -5,7 +5,6 @@
 #include "TraceData.h"
 #include "TraceSearch.h"
 #include "TraceDetail.h"
-#include "TimelineInfo.h"
 
 #include <tuple>
 #include <vector>
@@ -13,6 +12,7 @@
 
 namespace hop
 {
+class TimelineMsgArray;
 
 struct TimelineTrack
 {
@@ -72,7 +72,7 @@ class TimelineTracks
    bool handleMouse( float posX, float posY, bool lmClicked, bool rmClicked, float wheel );
    bool handleHotkey();
    void update( float globalTimeMs, TimeDuration timelineDuration );
-   std::vector< TimelineMessage > draw( const TimelineDrawInfo& info );
+   void draw( const TimelineDrawInfo& info, TimelineMsgArray& outMessages );
    void clear();
    void resizeAllTracksToFit();
    void setAllTracksCollapsed( bool collapsed );
@@ -91,15 +91,15 @@ class TimelineTracks
        const float posX,
        const float posY,
        const TimelineDrawInfo& drawInfo,
-       std::vector< TimelineMessage >& timelineMsg );
+       TimelineMsgArray& timelineMsg );
    void drawLockWaits(
        const uint32_t threadIndex,
        const float posX,
        const float posY,
        const TimelineDrawInfo& drawInfo,
-       std::vector<TimelineMessage>& timelineMsg );
-   void drawSearchWindow( const TimelineDrawInfo& di, std::vector< TimelineMessage >& timelineMsg );
-   void drawTraceDetailsWindow( const TimelineDrawInfo& di, std::vector< TimelineMessage >& timelineMsg );
+       TimelineMsgArray& timelineMsg );
+   void drawSearchWindow( const TimelineDrawInfo& di, TimelineMsgArray& timelineMsg );
+   void drawTraceDetailsWindow( const TimelineDrawInfo& di, TimelineMsgArray& timelineMsg );
    void drawContextMenu( const TimelineDrawInfo& info );
    std::vector<LockOwnerInfo> highlightLockOwner(
        const uint32_t threadIndex,

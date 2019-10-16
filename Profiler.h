@@ -30,7 +30,8 @@ public:
    enum class ViewType
    {
       PROFILER,
-      STATS
+      STATS,
+      COUNT
    };
 
    Profiler();
@@ -39,6 +40,9 @@ public:
    ProfilerStats stats() const;
    bool setSource( SourceType type, int processId, const char* str );
    SourceType sourceType() const;
+   bool recording() const;
+   void setRecording( bool recording );
+
    void update( float deltaTimeMs, float globalTimeMs );
    void draw( float drawPosX, float drawPosY, float windowWidth, float windowHeight );
    void fetchClientData();
@@ -51,12 +55,12 @@ public:
    void addThreadName( StrPtr_t name, uint32_t threadIndex );
    void handleHotkey();
    void handleMouse();
-   void setRecording( bool recording );
    void clear();
 
    bool saveToFile( const char* path );
 
 private:
+   void drawToolbar( float drawPosX, float drawPosY, float windowWidth, float windowHeight );
    bool openFile( const char* path );
    bool setProcess( int processId, const char* process );
 
@@ -69,12 +73,13 @@ private:
    TimelineTracks _tracks;
    TimelineStats _stats;
 
-   bool _recording{ false };
-   SourceType _srcType;
    ViewType _viewType;
+   float _viewsVerticalPos[(int)ViewType::COUNT];
 
    Server _server;
    Server::PendingData _serverPendingData;
+   SourceType _srcType;
+   bool _recording{ false };
 };
 
 struct ProfilerStats

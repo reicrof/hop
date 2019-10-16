@@ -175,16 +175,15 @@ void Timeline::update( float deltaTimeMs ) noexcept
    }
 }
 
-void Timeline::draw()
+void Timeline::draw( float posX, float posY )
 {
    HOP_PROF_FUNC();
 
-   const auto startDrawPos = ImGui::GetCursorScreenPos();
-   _timelineDrawPosition[0] = startDrawPos.x;
-   _timelineDrawPosition[1] = startDrawPos.y;
+   _timelineDrawPosition[0] = posX;
+   _timelineDrawPosition[1] = posY;
 
    // Draw the time ruler at the top of the window
-   drawTimeline(startDrawPos.x, startDrawPos.y + 5);
+   drawTimeline( posX, posY );
 
    // Save the position once the ruler is drawn. This will be the start of the
    // canvas draw position
@@ -557,10 +556,11 @@ void Timeline::handleMouseDrag( float mouseInCanvasX, float /*mouseInCanvasY*/ )
    }
 }
 
-void Timeline::handleDeferredActions( const std::vector< TimelineMessage >& msgs )
+void Timeline::handleDeferredActions( const TimelineMsgArray& messages )
 {
-   for( const auto& m : msgs )
+   for( unsigned i = 0; i < messages.size(); ++i )
    {
+      const TimelineMessage& m = messages[i];
       switch( m.type )
       {
          case TimelineMessageType::FRAME_TO_TIME:
@@ -571,6 +571,9 @@ void Timeline::handleDeferredActions( const std::vector< TimelineMessage >& msgs
             break;
          case TimelineMessageType::MOVE_VERTICAL_POS_PXL:
             moveVerticalPositionPxl( m.verticalPos.posPxl );
+            break;
+         case TimelineMessageType::MOVE_TO_PRESENT_TIME:
+            moveToPresentTime();
             break;
       }
    }

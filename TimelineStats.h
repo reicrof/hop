@@ -16,7 +16,7 @@ namespace hop
    public:
       TimelineStats();
       float canvasHeight() const;
-      std::vector< TimelineMessage > draw( const TimelineDrawInfo& );
+      void draw( const TimelineDrawInfo&, TimelineMsgArray& outMessages );
       void addStatEvents( const std::vector<StatEvent>& statEvents );
    private:
       std::deque<StatEvent> _statEvents;
