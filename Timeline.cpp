@@ -573,7 +573,7 @@ void Timeline::handleDeferredActions( const TimelineMsgArray& messages )
             moveVerticalPositionPxl( m.verticalPos.posPxl );
             break;
          case TimelineMessageType::MOVE_TO_PRESENT_TIME:
-            moveToPresentTime();
+            moveToPresentTime( ANIMATION_TYPE_NONE );
             break;
       }
    }
