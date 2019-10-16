@@ -217,7 +217,7 @@ static bool drawViewTypeButton( const ImVec2& drawPos, hop::Profiler::ViewType v
    if ( hovering )
    {
       ImGui::BeginTooltip();
-      ImGui::Text( tooltip );
+      ImGui::Text( "%s", tooltip );
       ImGui::EndTooltip();
    }
 

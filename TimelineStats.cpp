@@ -6,6 +6,7 @@
 #include "imgui/imgui.h"
 
 #include <algorithm>
+#include <cmath>
 
 static double valueAsDbl( hop::StatEvent ev )
 {
@@ -30,7 +31,7 @@ namespace hop
 
    float TimelineStats::canvasHeight() const
    {
-      return ( std::abs( _minRange ) + std::abs( _maxRange ) ) * _zoomFactor;
+      return ( fabs( _minRange ) + fabs( _maxRange ) ) * _zoomFactor;
    }
 
    void TimelineStats::draw( const TimelineDrawInfo& tinfo, TimelineMsgArray& /*outMsg*/ )
@@ -47,8 +48,8 @@ namespace hop
       const TimeStamp firstTraceAbsoluteTime = globalStartTime + tinfo.timeline.relativeStartTime;
       const TimeStamp lastTraceAbsoluteTime = firstTraceAbsoluteTime + tinfo.timeline.duration;
 
-      StatEvent firstEv = { firstTraceAbsoluteTime, 0, 0, STAT_EVENT_INT64 };
-      StatEvent lastEv = { lastTraceAbsoluteTime, 0, 0, STAT_EVENT_INT64 };
+      StatEvent firstEv = { firstTraceAbsoluteTime, 0, {0}, STAT_EVENT_INT64 };
+      StatEvent lastEv = { lastTraceAbsoluteTime, 0, {0}, STAT_EVENT_INT64 };
       auto cmp = []( const StatEvent& lhs, const StatEvent& rhs) { return lhs.time < rhs.time; };
       auto it1 = std::lower_bound( _statEvents.begin(), _statEvents.end(), firstEv, cmp );
       auto it2 = std::upper_bound( _statEvents.begin(), _statEvents.end(), lastEv, cmp );
