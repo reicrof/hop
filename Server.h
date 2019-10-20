@@ -33,7 +33,8 @@ class Server
        std::unordered_map< uint32_t, LockWaitData > lockWaitsPerThread;
        std::unordered_map< uint32_t, std::vector<UnlockEvent> > unlockEventsPerThread;
        std::unordered_map< uint32_t, std::vector<CoreEvent> > coreEventsPerThread;
-       std::unordered_map< uint32_t, std::vector<StatEvent> > statEventsPerThread;
+       std::unordered_map< uint32_t, std::vector<StatEvent> > statEventsInt64PerThread;
+       std::unordered_map< uint32_t, std::vector<StatEvent> > statEventsFloat64PerThread;
 
        std::vector< std::pair< uint32_t, StrPtr_t > > threadNames;
 

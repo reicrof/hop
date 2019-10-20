@@ -8,20 +8,6 @@
 #include <algorithm>
 #include <cmath>
 
-static double valueAsDbl( hop::StatEvent ev )
-{
-    switch( ev.valueType )
-    {
-    case hop::STAT_EVENT_INT64:
-        return ev.value.int64_;
-    case hop::STAT_EVENT_UINT64:
-        return ev.value.uint64_;
-    case hop::STAT_EVENT_FLOAT:
-        return ev.value.float_;
-    }
-    return 0.0;
-}
-
 namespace hop
 {
     TimelineStats::TimelineStats() : _zoomFactor( 1.0f ), _minRange( -500 ), _maxRange( 500 )
@@ -48,11 +34,11 @@ namespace hop
       const TimeStamp firstTraceAbsoluteTime = globalStartTime + tinfo.timeline.relativeStartTime;
       const TimeStamp lastTraceAbsoluteTime = firstTraceAbsoluteTime + tinfo.timeline.duration;
 
-      StatEvent firstEv = { firstTraceAbsoluteTime, 0, {0}, STAT_EVENT_INT64 };
-      StatEvent lastEv = { lastTraceAbsoluteTime, 0, {0}, STAT_EVENT_INT64 };
+      StatEvent firstEv = { firstTraceAbsoluteTime, 0, {0} };
+      StatEvent lastEv = { lastTraceAbsoluteTime, 0, {0} };
       auto cmp = []( const StatEvent& lhs, const StatEvent& rhs) { return lhs.time < rhs.time; };
-      auto it1 = std::lower_bound( _statEvents.begin(), _statEvents.end(), firstEv, cmp );
-      auto it2 = std::upper_bound( _statEvents.begin(), _statEvents.end(), lastEv, cmp );
+      auto it1 = std::lower_bound( _statEventsInt64.begin(), _statEventsInt64.end(), firstEv, cmp );
+      auto it2 = std::upper_bound( _statEventsInt64.begin(), _statEventsInt64.end(), lastEv, cmp );
 
       if( it1 == it2 ) return; // Nothing to draw here
 
@@ -64,13 +50,17 @@ namespace hop
             windowWidthPxl,
             tinfo.timeline.duration,
             localTime - tinfo.timeline.relativeStartTime );
-         double value = valueAsDbl( *it1 );
-         drawList->AddCircle( ImVec2(posPxlX, relativeZero - value), 5.0f, 0XFF0000FF );
+         drawList->AddCircle( ImVec2(posPxlX, relativeZero - it1->value.valueInt64), 5.0f, 0XFF0000FF );
       }
    }
 
-   void TimelineStats::addStatEvents( const std::vector<StatEvent>& statEvents )
+   void TimelineStats::addStatEventsInt64( const std::vector<StatEvent>& statEvents )
    {
-      _statEvents.insert( _statEvents.end(), statEvents.begin(), statEvents.end() );
+      _statEventsInt64.insert( _statEventsInt64.end(), statEvents.begin(), statEvents.end() );
+   }
+
+   void TimelineStats::addStatEventsFloat64( const std::vector<StatEvent>& statEvents )
+   {
+      _statEventsFloat64.insert( _statEventsFloat64.end(), statEvents.begin(), statEvents.end() );
    }
 }

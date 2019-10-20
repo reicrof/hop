@@ -51,7 +51,8 @@ public:
    void addLockWaits( const LockWaitData& lockWaits, uint32_t threadIndex);
    void addUnlockEvents(const std::vector<UnlockEvent>& unlockEvents, uint32_t threadIndex);
    void addCoreEvents( const std::vector<CoreEvent>& coreEvents, uint32_t threadIndex );
-   void addStatEvents( const std::vector<StatEvent>& statEvents, uint32_t threadIndex );
+   void addStatEventsInt64( const std::vector<StatEvent>& statEvents, uint32_t threadIndex );
+   void addStatEventsFloat64( const std::vector<StatEvent>& statEvents, uint32_t threadIndex );
    void addThreadName( StrPtr_t name, uint32_t threadIndex );
    void handleHotkey();
    void handleMouse();

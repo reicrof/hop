@@ -120,8 +120,7 @@ enum HopZoneColor
 #define HOP_SET_THREAD_NAME( x ) hop::ClientManager::SetThreadName( ( x ) )
 
 #define HOP_STATS_INT64( name, value )  hop::ClientManager::StatsInt64(  ( name ), ( value ) )
-#define HOP_STATS_UINT64( name, value ) hop::ClientManager::StatsUint64( ( name ), ( value ) )
-#define HOP_STATS_FLOAT( name, value )  hop::ClientManager::StatsFloat(  ( name ), ( value ) )
+#define HOP_STATS_FLOAT64( name, value )  hop::ClientManager::StatsFloat64(  ( name ), ( value ) )
 
 ///////////////////////////////////////////////////////////////
 /////     EVERYTHING AFTER THIS IS IMPL DETAILS        ////////
@@ -245,7 +244,8 @@ enum class MsgType : uint32_t
    PROFILER_UNLOCK_EVENT,
    PROFILER_HEARTBEAT,
    PROFILER_CORE_EVENT,
-   STATS_EVENT,
+   STATS_EVENT_INT64,
+   STATS_EVENT_FLOAT64,
    INVALID_MESSAGE,
 };
 
@@ -303,31 +303,21 @@ struct CoreEvent
    TimeStamp start, end;
    Core_t core;
 };
-
-enum StatEventValueType
-{
-   STAT_EVENT_INT64,
-   STAT_EVENT_UINT64,
-   STAT_EVENT_FLOAT,
-};
-
-HOP_CONSTEXPR uint32_t EXPECTED_STAT_EVENT_SIZE = 32;
 union StatEventValue
 {
-   int64_t  int64_;
-   uint64_t uint64_;
-   float    float_;
+   int64_t valueInt64;
+   double valueFloat64;
 };
+HOP_CONSTEXPR uint32_t EXPECTED_STAT_EVENT_SIZE = 24;
 struct StatEvent
 {
    TimeStamp time;
    StrPtr_t eventName; // Index into string array for the event name
    StatEventValue value;
-   StatEventValueType valueType;
 };
 HOP_STATIC_ASSERT(
     sizeof( StatEvent ) == EXPECTED_STAT_EVENT_SIZE,
-    "Stat Event layout has changed unexpectedly" );
+    "Stat Event Float 64 layout has changed unexpectedly" );
 
 class Client;
 class SharedMemory;
@@ -351,9 +341,8 @@ class HOP_API ClientManager
    static void SetThreadName( const char* name ) HOP_NOEXCEPT;
    static ZoneId_t PushNewZone( ZoneId_t newZone );
 
-   static void StatsUint64( const char* name, uint64_t value ) HOP_NOEXCEPT;
    static void StatsInt64( const char* name, int64_t value ) HOP_NOEXCEPT;
-   static void StatsFloat( const char* name, float value ) HOP_NOEXCEPT;
+   static void StatsFloat64( const char* name, double value ) HOP_NOEXCEPT;
 
    static bool HasConnectedConsumer() HOP_NOEXCEPT;
    static bool HasListeningConsumer() HOP_NOEXCEPT;
@@ -1295,25 +1284,18 @@ class Client
       }
    }
 
-   void statsInt64( StrPtr_t name, int64_t value )
+   void statsInt64( StrPtr_t name, int64_t value ) HOP_NOEXCEPT
    {
-      StatEvent event{ getTimeStamp(), name, 0, STAT_EVENT_INT64 };
-      event.value.int64_ = value;
-      _statEvents.push_back( event );
+       StatEventValue unionVal;
+       unionVal.valueInt64 = value;
+      _statEventsInt64.push_back( StatEvent{ getTimeStamp(), name, unionVal } );
    }
 
-   void statsUint64( StrPtr_t name, uint64_t value )
+   void statsFloat64( StrPtr_t name, double value ) HOP_NOEXCEPT
    {
-      StatEvent event{ getTimeStamp(), name, 0, STAT_EVENT_UINT64 };
-      event.value.uint64_ = value;
-      _statEvents.push_back( event );
-   }
-
-   void statsFloat( StrPtr_t name, float value )
-   {
-      StatEvent event{ getTimeStamp(), name, 0, STAT_EVENT_FLOAT };
-      event.value.float_ = value;
-      _statEvents.push_back( event );
+       StatEventValue unionVal;
+       unionVal.valueFloat64 = value;
+      _statEventsFloat64.push_back( StatEvent{ getTimeStamp(), name, unionVal } );
    }
 
    StrPtr_t addDynamicStringToDb( const char* dynStr )
@@ -1393,7 +1375,8 @@ class Client
       _cores.clear();
       _lockWaits.clear();
       _unlockEvents.clear();
-      _statEvents.clear();
+      _statEventsInt64.clear();
+      _statEventsFloat64.clear();
    }
 
    uint8_t* acquireSharedChunk( ringbuf_t* ringbuf, size_t size )
@@ -1408,6 +1391,12 @@ class Client
          {
             data = &ClientManager::sharedMemory().data()[offset];
          }
+      }
+
+      if( !data )
+      {
+         fprintf( stderr, "HOP - Failed to acquire enough shared memory. Consider increasing"
+                          "shared memory size if you see this message more than once\n" );
       }
 
       return data;
@@ -1428,9 +1417,13 @@ class Client
       }
 
       // Add all strings coming from the stats event to the database
-      for( uint32_t i = 0; i < _statEvents.size(); ++i )
+      for( uint32_t i = 0; i < _statEventsFloat64.size(); ++i )
       {
-         addStringToDb( _statEvents[i].eventName );
+         addStringToDb( _statEventsFloat64[i].eventName );
+      }
+      for( uint32_t i = 0; i < _statEventsInt64.size(); ++i )
+      {
+         addStringToDb( _statEventsInt64[i].eventName );
       }
 
       const uint32_t stringDataSize = static_cast<uint32_t>( _stringData.size() );
@@ -1438,19 +1431,11 @@ class Client
       const uint32_t stringToSendSize = stringDataSize - _sentStringDataSize;
       const size_t msgSize            = sizeof( MsgInfo ) + stringToSendSize;
 
+      bool success = false;
       ringbuf_t* ringbuf = ClientManager::sharedMemory().ringbuffer();
-      uint8_t* bufferPtr = acquireSharedChunk( ringbuf, msgSize );
-
-      if( !bufferPtr )
+      if( uint8_t* bufferPtr = acquireSharedChunk( ringbuf, msgSize ) )
       {
-         printf(
-             "HOP - String to send are bigger than shared memory size. Consider"
-             " increasing shared memory size \n" );
-         return false;
-      }
-
-      // Fill the buffer with the string data
-      {
+         // Fill the buffer with the string data
          // The data layout is as follow:
          // =========================================================
          // msgInfo     = Profiler specific infos  - Information about the message sent
@@ -1463,15 +1448,16 @@ class Client
          char* stringData = reinterpret_cast<char*>( bufferPtr + sizeof( MsgInfo ) );
          const auto itFrom = _stringData.begin() + _sentStringDataSize;
          std::copy( itFrom, itFrom + stringToSendSize, stringData );
+
+         ringbuf_produce( ringbuf, _worker );
+         ClientManager::sharedMemory().signalSemaphore();
+
+         // Update sent array size
+         _sentStringDataSize = stringDataSize;
+         success = true;
       }
 
-      ringbuf_produce( ringbuf, _worker );
-      ClientManager::sharedMemory().signalSemaphore();
-
-      // Update sent array size
-      _sentStringDataSize = stringDataSize;
-
-      return true;
+      return success;
    }
 
    bool sendTraces( TimeStamp timeStamp )
@@ -1479,32 +1465,25 @@ class Client
       // Get size of profiling traces message
       const size_t profilerMsgSize = sizeof( MsgInfo ) + traceDataSize( &_traces );
 
+      bool success = false;
       ringbuf_t* ringbuf = ClientManager::sharedMemory().ringbuffer();
-      uint8_t* bufferPtr = acquireSharedChunk( ringbuf, profilerMsgSize );
-      if( !bufferPtr )
+      if( uint8_t* bufferPtr = acquireSharedChunk( ringbuf, profilerMsgSize ) )
       {
-         printf(
-             "HOP - Failed to acquire enough shared memory. Consider increasing"
-             "shared memory size if you see this message more than once\n" );
-         _traces.count = 0;
-         return false;
-      }
-
-      // Fill the buffer with the profiling trace message
-      {
+         // Fill the buffer with the profiling trace message
          MsgInfo* tracesInfo = reinterpret_cast<MsgInfo*>( bufferPtr );
          fillMsgInfoHeader( tracesInfo, MsgType::PROFILER_TRACE, timeStamp, _traces.count );
          // Copy trace information into buffer to send
          void* outBuffer = (void*)( bufferPtr + sizeof( MsgInfo ) );
          copyTracesTo( &_traces, outBuffer );
-      }
 
-      ringbuf_produce( ringbuf, _worker );
-      ClientManager::sharedMemory().signalSemaphore();
+         ringbuf_produce( ringbuf, _worker );
+         ClientManager::sharedMemory().signalSemaphore();
+         success = true;
+      }
 
       _traces.count = 0;
 
-      return true;
+      return success;
    }
 
    bool sendCores( TimeStamp timeStamp )
@@ -1513,32 +1492,25 @@ class Client
 
       const size_t coreMsgSize = sizeof( MsgInfo ) + _cores.size() * sizeof( CoreEvent );
 
+      bool success = false;
       ringbuf_t* ringbuf = ClientManager::sharedMemory().ringbuffer();
-      uint8_t* bufferPtr = acquireSharedChunk( ringbuf, coreMsgSize );
-      if( !bufferPtr )
-      {
-         printf(
-             "HOP - Failed to acquire enough shared memory. Consider increasing shared memory "
-             "size\n" );
-         _cores.clear();
-         return false;
-      }
-
-      // Fill the buffer with the core event message
+      if( uint8_t* bufferPtr = acquireSharedChunk( ringbuf, coreMsgSize ) )
       {
          MsgInfo* coreInfo = reinterpret_cast<MsgInfo*>( bufferPtr );
          fillMsgInfoHeader( coreInfo, MsgType::PROFILER_CORE_EVENT, timeStamp, _cores.size() );
          bufferPtr += sizeof( MsgInfo );
          memcpy( bufferPtr, _cores.data(), _cores.size() * sizeof( CoreEvent ) );
+
+         ringbuf_produce( ringbuf, _worker );
+         ClientManager::sharedMemory().signalSemaphore();
+
+         success = true;
       }
 
-      ringbuf_produce( ringbuf, _worker );
-      ClientManager::sharedMemory().signalSemaphore();
-
+      // Fill the buffer with the core event message
       const auto lastEntry = _cores.back();
       _cores.clear();
       _cores.emplace_back( lastEntry );
-
       return true;
    }
 
@@ -1548,31 +1520,25 @@ class Client
 
       const size_t lockMsgSize = sizeof( MsgInfo ) + _lockWaits.size() * sizeof( LockWait );
 
+      bool success = false;
       ringbuf_t* ringbuf = ClientManager::sharedMemory().ringbuffer();
-      uint8_t* bufferPtr = acquireSharedChunk( ringbuf, lockMsgSize );
-      if( !bufferPtr )
+      if( uint8_t* bufferPtr = acquireSharedChunk( ringbuf, lockMsgSize ) )
       {
-         printf(
-             "HOP - Failed to acquire enough shared memory. Consider increasing shared memory "
-             "size\n" );
-         _lockWaits.clear();
-         return false;
-      }
+          // Fill the buffer with the lock message
+         {
+            MsgInfo* lwInfo     = reinterpret_cast<MsgInfo*>( bufferPtr );
+            fillMsgInfoHeader( lwInfo, MsgType::PROFILER_WAIT_LOCK, timeStamp, _lockWaits.size() );
+            bufferPtr += sizeof( MsgInfo );
+            memcpy( bufferPtr, _lockWaits.data(), _lockWaits.size() * sizeof( LockWait ) );
+         }
 
-      // Fill the buffer with the lock message
-      {
-         MsgInfo* lwInfo     = reinterpret_cast<MsgInfo*>( bufferPtr );
-         fillMsgInfoHeader( lwInfo, MsgType::PROFILER_WAIT_LOCK, timeStamp, _lockWaits.size() );
-         bufferPtr += sizeof( MsgInfo );
-         memcpy( bufferPtr, _lockWaits.data(), _lockWaits.size() * sizeof( LockWait ) );
+         ringbuf_produce( ringbuf, _worker );
+         ClientManager::sharedMemory().signalSemaphore();
+         success = true;
       }
-
-      ringbuf_produce( ringbuf, _worker );
-      ClientManager::sharedMemory().signalSemaphore();
 
       _lockWaits.clear();
-
-      return true;
+      return success;
    }
 
    bool sendUnlockEvents( TimeStamp timeStamp )
@@ -1582,65 +1548,72 @@ class Client
       const size_t unlocksMsgSize =
           sizeof( MsgInfo ) + _unlockEvents.size() * sizeof( UnlockEvent );
 
+      bool success = false;
       ringbuf_t* ringbuf = ClientManager::sharedMemory().ringbuffer();
-      uint8_t* bufferPtr = acquireSharedChunk( ringbuf, unlocksMsgSize );
-      if( !bufferPtr )
+      if( uint8_t* bufferPtr = acquireSharedChunk( ringbuf, unlocksMsgSize ) )
       {
-         printf(
-             "HOP - Failed to acquire enough shared memory. Consider increasing shared memory "
-             "size\n" );
-         _unlockEvents.clear();
-         return false;
-      }
+         // Fill the buffer with the lock message
+         {
+            MsgInfo* uInfo     = reinterpret_cast<MsgInfo*>( bufferPtr );
+            fillMsgInfoHeader( uInfo, MsgType::PROFILER_UNLOCK_EVENT, timeStamp, _unlockEvents.size() );
+            bufferPtr += sizeof( MsgInfo );
+            memcpy( bufferPtr, _unlockEvents.data(), _unlockEvents.size() * sizeof( UnlockEvent ) );
+         }
 
-      // Fill the buffer with the lock message
-      {
-         MsgInfo* uInfo     = reinterpret_cast<MsgInfo*>( bufferPtr );
-         fillMsgInfoHeader( uInfo, MsgType::PROFILER_UNLOCK_EVENT, timeStamp, _unlockEvents.size() );
-         bufferPtr += sizeof( MsgInfo );
-         memcpy( bufferPtr, _unlockEvents.data(), _unlockEvents.size() * sizeof( UnlockEvent ) );
+         ringbuf_produce( ringbuf, _worker );
+         ClientManager::sharedMemory().signalSemaphore();
+         success = true;
       }
-
-      ringbuf_produce( ringbuf, _worker );
-      ClientManager::sharedMemory().signalSemaphore();
 
       _unlockEvents.clear();
+      return true;
+   }
+
+   bool sendStatEvent( TimeStamp timeStamp, const std::vector<StatEvent>& events, MsgType type )
+   {
+      if( events.empty() ) return false;
+
+      const size_t statMsgSize = sizeof( MsgInfo ) + events.size() * sizeof( StatEvent );
+
+      bool success = false;
+      ringbuf_t* ringbuf = ClientManager::sharedMemory().ringbuffer();
+      if( uint8_t* bufferPtr = acquireSharedChunk( ringbuf, statMsgSize ) )
+      {
+         // Fill the buffer with stats message
+         {
+            MsgInfo* sinfo     = reinterpret_cast<MsgInfo*>( bufferPtr );
+            fillMsgInfoHeader( sinfo, type, timeStamp, events.size() );
+            bufferPtr += sizeof( MsgInfo );
+            memcpy( bufferPtr, events.data(), events.size() * sizeof( StatEvent ) );
+         }
+
+         ringbuf_produce( ringbuf, _worker );
+         ClientManager::sharedMemory().signalSemaphore();
+         bool success = true;
+      }
 
       return true;
    }
 
    bool sendStatsEvent( TimeStamp timeStamp )
    {
-      if( _statEvents.empty() ) return false;
+      bool success = false;
 
-      const size_t uint64StatMsgSize =
-          sizeof( MsgInfo ) + _statEvents.size() * sizeof( StatEvent );
-
-      ringbuf_t* ringbuf = ClientManager::sharedMemory().ringbuffer();
-      uint8_t* bufferPtr = acquireSharedChunk( ringbuf, uint64StatMsgSize );
-      if( !bufferPtr )
+      // Float 64 events
+      if( !_statEventsFloat64.empty() )
       {
-         printf(
-             "HOP - Failed to acquire enough shared memory. Consider increasing shared memory "
-             "size\n" );
-         _statEvents.clear();
-         return false;
+         success |= sendStatEvent( timeStamp, _statEventsFloat64, MsgType::STATS_EVENT_FLOAT64 );
+         _statEventsFloat64.clear();
       }
 
-      // Fill the buffer with stats message
+      // Int 64 events
+      if( !_statEventsInt64.empty() )
       {
-         MsgInfo* sinfo     = reinterpret_cast<MsgInfo*>( bufferPtr );
-         fillMsgInfoHeader( sinfo, MsgType::STATS_EVENT, timeStamp, _statEvents.size() );
-         bufferPtr += sizeof( MsgInfo );
-         memcpy( bufferPtr, _statEvents.data(), _statEvents.size() * sizeof( StatEvent ) );
+         success |= sendStatEvent( timeStamp, _statEventsInt64, MsgType::STATS_EVENT_INT64 );
+         _statEventsInt64.clear();
       }
 
-      ringbuf_produce( ringbuf, _worker );
-      ClientManager::sharedMemory().signalSemaphore();
-
-      _statEvents.clear();
-
-      return true;
+      return success;
    }
 
    bool sendHeartbeat( TimeStamp timeStamp )
@@ -1649,27 +1622,23 @@ class Client
 
       const size_t heartbeatSize = sizeof( MsgInfo );
 
+      bool success = false;
       ringbuf_t* ringbuf = ClientManager::sharedMemory().ringbuffer();
-      uint8_t* bufferPtr = acquireSharedChunk( ringbuf, heartbeatSize );
-      if( !bufferPtr )
+      if( uint8_t* bufferPtr = acquireSharedChunk( ringbuf, heartbeatSize ) )
       {
-         printf(
-             "HOP - Failed to acquire enough shared memory. Consider increasing shared memory "
-             "size\n" );
-         return false;
+         // Fill the buffer with the lock message
+         {
+            MsgInfo* hbInfo     = reinterpret_cast<MsgInfo*>( bufferPtr );
+            fillMsgInfoHeader( hbInfo, MsgType::PROFILER_HEARTBEAT, timeStamp, 0 );
+            bufferPtr += sizeof( MsgInfo );
+         }
+
+         ringbuf_produce( ringbuf, _worker );
+         ClientManager::sharedMemory().signalSemaphore();
+         success = true;
       }
 
-      // Fill the buffer with the lock message
-      {
-         MsgInfo* hbInfo     = reinterpret_cast<MsgInfo*>( bufferPtr );
-         fillMsgInfoHeader( hbInfo, MsgType::PROFILER_HEARTBEAT, timeStamp, 0 );
-         bufferPtr += sizeof( MsgInfo );
-      }
-
-      ringbuf_produce( ringbuf, _worker );
-      ClientManager::sharedMemory().signalSemaphore();
-
-      return true;
+      return success;
    }
 
    void flushToConsumer()
@@ -1714,7 +1683,8 @@ class Client
    std::vector<CoreEvent> _cores;
    std::vector<LockWait> _lockWaits;
    std::vector<UnlockEvent> _unlockEvents;
-   std::vector<StatEvent> _statEvents;
+   std::vector<StatEvent> _statEventsFloat64;
+   std::vector<StatEvent> _statEventsInt64;
    std::unordered_set<StrPtr_t> _stringPtr;
    std::vector<char> _stringData;
    TimeStamp _clientResetTimeStamp{0};
@@ -1853,20 +1823,12 @@ void ClientManager::StatsInt64( const char* name, int64_t value ) HOP_NOEXCEPT
    client->statsInt64( reinterpret_cast<StrPtr_t>( name ), value );
 }
 
-void ClientManager::StatsUint64( const char* name, uint64_t value ) HOP_NOEXCEPT
+void ClientManager::StatsFloat64( const char* name, double value ) HOP_NOEXCEPT
 {
    auto client = ClientManager::Get();
    if( unlikely( !client ) ) return;
 
-   client->statsUint64( reinterpret_cast<StrPtr_t>( name ), value );
-}
-
-void ClientManager::StatsFloat( const char* name, float value ) HOP_NOEXCEPT
-{
-   auto client = ClientManager::Get();
-   if( unlikely( !client ) ) return;
-
-   client->statsFloat( reinterpret_cast<StrPtr_t>( name ), value );
+   client->statsFloat64( reinterpret_cast<StrPtr_t>( name ), value );
 }
 
 ZoneId_t ClientManager::PushNewZone( ZoneId_t newZone )

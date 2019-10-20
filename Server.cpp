@@ -412,7 +412,8 @@ size_t Server::handleNewMessage( uint8_t* data, size_t maxSize, TimeStamp minTim
          coreEvents.insert( coreEvents.end(), coreEventsPtr, coreEventsPtr + newCount );
          return ( size_t )( bufPtr - data );
       }
-      case MsgType::STATS_EVENT:
+      case MsgType::STATS_EVENT_INT64:
+      case MsgType::STATS_EVENT_FLOAT64:
       {
          const uint32_t eventCount = msgInfo->count;
          const StatEvent* statEventsPtr = (StatEvent*)bufPtr;
@@ -421,7 +422,9 @@ size_t Server::handleNewMessage( uint8_t* data, size_t maxSize, TimeStamp minTim
          assert( ( size_t )( bufPtr - data ) <= maxSize );
 
          std::lock_guard<hop::Mutex> guard( _sharedPendingDataMutex );
-         auto& statEvents = _sharedPendingData.statEventsPerThread[threadIndex];
+         auto& statEvents = msgType == MsgType::STATS_EVENT_INT64 ?
+            _sharedPendingData.statEventsInt64PerThread[threadIndex] :
+            _sharedPendingData.statEventsFloat64PerThread[threadIndex];
          statEvents.insert( statEvents.end(), statEventsPtr, statEventsPtr + eventCount );
          return ( size_t )( bufPtr - data );
       }
@@ -504,7 +507,12 @@ void Server::PendingData::clear()
       coreEvents.second.clear();
    }
 
-   for( auto& statEvents : statEventsPerThread )
+   for( auto& statEvents : statEventsInt64PerThread )
+   {
+      statEvents.second.clear();
+   }
+
+   for( auto& statEvents : statEventsFloat64PerThread )
    {
       statEvents.second.clear();
    }
@@ -521,7 +529,8 @@ void Server::PendingData::swap( PendingData& rhs )
    swap( lockWaitsPerThread, rhs.lockWaitsPerThread );
    swap( unlockEventsPerThread, rhs.unlockEventsPerThread );
    swap( coreEventsPerThread, rhs.coreEventsPerThread );
-   swap( statEventsPerThread, rhs.statEventsPerThread );
+   swap( statEventsInt64PerThread, rhs.statEventsInt64PerThread );
+   swap( statEventsFloat64PerThread, rhs.statEventsFloat64PerThread );
    swap( threadNames, rhs.threadNames );
 }
 

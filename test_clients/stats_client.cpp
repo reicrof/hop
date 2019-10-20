@@ -24,8 +24,7 @@ void sleepSome( std::chrono::microseconds sleepTime )
    thread_local float    floatValue = 0.5f;
 
    HOP_STATS_INT64( "Int Value", ++int64value );
-   HOP_STATS_UINT64( "Uint Value", ++uint64value );
-   HOP_STATS_FLOAT( "Float Value", ++floatValue );
+   HOP_STATS_FLOAT64( "Float Value", ++floatValue );
 
    std::this_thread::sleep_for( sleepTime );
 }

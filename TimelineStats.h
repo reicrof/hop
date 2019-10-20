@@ -17,9 +17,11 @@ namespace hop
       TimelineStats();
       float canvasHeight() const;
       void draw( const TimelineDrawInfo&, TimelineMsgArray& outMessages );
-      void addStatEvents( const std::vector<StatEvent>& statEvents );
+      void addStatEventsInt64( const std::vector<StatEvent>& statEvents );
+      void addStatEventsFloat64( const std::vector<StatEvent>& statEvents );
    private:
-      std::deque<StatEvent> _statEvents;
+      std::deque<StatEvent> _statEventsInt64;
+      std::deque<StatEvent> _statEventsFloat64;
       float _zoomFactor;
       double _minRange;
       double _maxRange;
