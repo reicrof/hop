@@ -134,6 +134,7 @@ void Timeline::update( float deltaTimeMs ) noexcept
       case ANIMATION_TYPE_NONE:
          _timelineStart = _animationState.targetTimelineStart;
          _duration = _animationState.targetTimelineRange;
+         _verticalPosPxl = _animationState.targetVerticalPosPxl;
          break;
       case ANIMATION_TYPE_NORMAL:
       case ANIMATION_TYPE_FAST:

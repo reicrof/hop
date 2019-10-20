@@ -478,6 +478,7 @@ void Viewer::draw( uint32_t windowWidth, uint32_t windowHeight )
 
    static uint64_t frameRendered = 0;
    HOP_STATS_INT64( "Frame Rendered", ++frameRendered );
+   HOP_STATS_INT64( "test 0", 0 );
 
    renderer::setViewport( 0, 0, windowWidth, windowHeight );
    renderer::clearColorBuffer();
