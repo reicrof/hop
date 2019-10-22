@@ -22,8 +22,8 @@ namespace hop
    private:
       std::deque<StatEvent> _statEventsInt64;
       std::deque<StatEvent> _statEventsFloat64;
-      int64_t _minMaxValueInt64[4]; // [0] = min, [1] = max, [2] = last min, [3] = last max
-      double _minMaxValueDbl[4];    // [0] = min, [1] = max, [2] = last min, [3] = last max
+      int64_t _minMaxValueInt64[2];
+      double _minMaxValueDbl[2];
       float _zoomFactor;
    };
 }

@@ -107,13 +107,25 @@ class Timeline
    friend size_t deserialize( const char* data, Timeline& timeline );
 
   private:
-   struct AnimationState
+   template< typename T >
+   struct AnimationData
    {
-      int64_t targetTimelineStart{0};
-      TimeDuration targetTimelineRange{5000000000};
-      float targetVerticalPosPxl{0.0f};
-      float highlightPercent{0.0f};
+      T value{0};
       AnimationType type{ANIMATION_TYPE_NONE};
+   };
+
+   struct AnimationStates
+   {
+      AnimationData<int64_t> targetTimelineStart;
+      AnimationData<TimeDuration> targetTimelineRange{ 5000000000 };
+      AnimationData<float> targetVerticalPosPxl;
+
+      void setAnimationType( AnimationType type )
+      {
+         targetTimelineStart.type = type;
+         targetTimelineRange.type = type;
+         targetVerticalPosPxl.type = type;
+      }
    } _animationState;
 
    struct Bookmarks
@@ -150,7 +162,7 @@ class Timeline
    int64_t _rangeZoomCycles[2] = {};
    int64_t _rangeSelectTimeStamp[2] = {};
 
-   std::vector< AnimationState > _undoPositionStates, _redoPositionStates;
+   std::vector< AnimationStates > _undoPositionStates, _redoPositionStates;
 
 };
 }

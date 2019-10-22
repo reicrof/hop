@@ -124,56 +124,62 @@ static void drawRangeSelection( float fromPxl, float toPxl, float heightPos, con
    drawList->AddText( textPos, ImColor(255,255,255), durationText );
 }
 
+template <typename T>
+static T updateAnimationState(
+    float deltaTimeMs,
+    T value,
+    T targetValue,
+    T treshold,
+    hop::Timeline::AnimationType animType )
+{
+   switch( animType )
+   {
+      case hop::Timeline::ANIMATION_TYPE_NORMAL:
+      case hop::Timeline::ANIMATION_TYPE_FAST:
+      {
+         float speedFactor = animType == hop::Timeline::ANIMATION_TYPE_NORMAL ? 100.0f / deltaTimeMs
+                                                                              : 90.0f / deltaTimeMs;
+         speedFactor = std::max( speedFactor, 1.0f );
+
+         const int64_t timelineStartDelta = targetValue - value;
+         if( std::abs( timelineStartDelta ) < treshold )
+         {
+            return targetValue;
+         }
+         else
+         {
+            return value + ( timelineStartDelta / speedFactor );
+         }
+      }
+      default: // Fallthrough
+      case hop::Timeline::ANIMATION_TYPE_NONE:
+         return targetValue;
+   }
+}
+
 namespace hop
 {
 
 void Timeline::update( float deltaTimeMs ) noexcept
 {
-   switch ( _animationState.type )
-   {
-      case ANIMATION_TYPE_NONE:
-         _timelineStart = _animationState.targetTimelineStart;
-         _duration = _animationState.targetTimelineRange;
-         _verticalPosPxl = _animationState.targetVerticalPosPxl;
-         break;
-      case ANIMATION_TYPE_NORMAL:
-      case ANIMATION_TYPE_FAST:
-      {
-         int64_t speedFactor = _animationState.type == ANIMATION_TYPE_NORMAL ? 100 / deltaTimeMs : 90 / deltaTimeMs;
-         speedFactor = std::max( speedFactor, (int64_t)1 );
-
-         const int64_t timelineStartDelta = _animationState.targetTimelineStart - _timelineStart;
-         if ( std::abs( timelineStartDelta ) < 10 )
-         {
-            _timelineStart = _animationState.targetTimelineStart;
-         }
-         else
-         {
-            _timelineStart += timelineStartDelta / speedFactor;
-         }
-
-         const int64_t timelineDurationDelta = _animationState.targetTimelineRange - _duration;
-         if ( std::abs( timelineDurationDelta ) < 10 )
-         {
-            _duration = _animationState.targetTimelineRange;
-         }
-         else
-         {
-            _duration += timelineDurationDelta / speedFactor;
-         }
-
-         const float verticalDelta = _animationState.targetVerticalPosPxl - _verticalPosPxl;
-         if ( std::abs( verticalDelta ) < 0.01f )
-         {
-            _verticalPosPxl = _animationState.targetVerticalPosPxl;
-         }
-         else
-         {
-            _verticalPosPxl += verticalDelta * 0.1;
-         }
-         break;
-      }
-   }
+   _timelineStart = updateAnimationState(
+       deltaTimeMs,
+       _timelineStart,
+       static_cast<decltype( _timelineStart )>(_animationState.targetTimelineStart.value),
+       static_cast<decltype( _timelineStart )>( 10 ),
+       _animationState.targetTimelineStart.type );
+   _duration = updateAnimationState(
+       deltaTimeMs,
+       _duration,
+       static_cast<decltype(_duration)>(_animationState.targetTimelineRange.value),
+       static_cast<decltype(_duration)>( 10 ),
+       _animationState.targetTimelineRange.type );
+   _verticalPosPxl = updateAnimationState(
+       deltaTimeMs,
+       _verticalPosPxl,
+       static_cast<decltype(_verticalPosPxl)>(_animationState.targetVerticalPosPxl.value),
+       static_cast<decltype(_verticalPosPxl)>( 0.001 ),
+       _animationState.targetVerticalPosPxl.type );
 }
 
 void Timeline::draw( float posX, float posY )
@@ -660,8 +666,8 @@ float Timeline::canvasPosYWithScroll() const noexcept
 
 void Timeline::setStartTime( int64_t time, AnimationType animType ) noexcept
 {
-   _animationState.targetTimelineStart = time;
-   _animationState.type = animType;
+   _animationState.targetTimelineStart.value = time;
+   _animationState.targetTimelineStart.type = animType;
    if( animType == ANIMATION_TYPE_NONE )
    {
       // We need to update it immediately as subsequent call might need it updated
@@ -673,8 +679,8 @@ void Timeline::setStartTime( int64_t time, AnimationType animType ) noexcept
 void Timeline::moveVerticalPositionPxl( float positionPxl, AnimationType animType )
 {
    const float clampedPos = hop::clamp( positionPxl, 0.0f, maxVerticalPosPxl() );
-   _animationState.targetVerticalPosPxl = clampedPos;
-   _animationState.type = animType;
+   _animationState.targetVerticalPosPxl.value = clampedPos;
+   _animationState.targetVerticalPosPxl.type = animType;
    if (animType == ANIMATION_TYPE_NONE)
    {
       _verticalPosPxl = clampedPos;
@@ -717,13 +723,13 @@ void Timeline::frameToAbsoluteTime( TimeStamp time, TimeDuration duration, bool 
 
 void Timeline::setZoom( TimeDuration timelineDuration, AnimationType animType )
 {
-   _animationState.targetTimelineRange = hop::clamp( timelineDuration, MIN_CYCLES_TO_DISPLAY, MAX_CYCLES_TO_DISPLAY );
-   _animationState.type = animType;
+   _animationState.targetTimelineRange.value = hop::clamp( timelineDuration, MIN_CYCLES_TO_DISPLAY, MAX_CYCLES_TO_DISPLAY );
+   _animationState.targetTimelineRange.type = animType;
    if( animType == ANIMATION_TYPE_NONE )
    {
       // We need to update it immediately as subsequent call might need it updated
       // before the next update
-      _duration = _animationState.targetTimelineRange;
+      _duration = _animationState.targetTimelineRange.value;
    }
 }
 
@@ -781,9 +787,8 @@ void Timeline::previousBookmark() noexcept
 void Timeline::pushNavigationState() noexcept
 {
    _redoPositionStates.clear();
-   AnimationState animState = _animationState;
-   animState.highlightPercent = 0.0f;
-   animState.type = ANIMATION_TYPE_FAST;
+   AnimationStates animState = _animationState;
+   _animationState.setAnimationType( ANIMATION_TYPE_FAST );
    _undoPositionStates.push_back( animState );
 }
 
@@ -796,7 +801,7 @@ void Timeline::undoNavigation() noexcept
       _animationState.targetTimelineStart = state.targetTimelineStart;
       _animationState.targetTimelineRange = state.targetTimelineRange;
       _animationState.targetVerticalPosPxl = state.targetVerticalPosPxl;
-      _animationState.type = ANIMATION_TYPE_FAST;
+      _animationState.setAnimationType( ANIMATION_TYPE_FAST );
       _undoPositionStates.pop_back();
    }
 }
@@ -810,7 +815,7 @@ void Timeline::redoNavigation() noexcept
       _animationState.targetTimelineStart = state.targetTimelineStart;
       _animationState.targetTimelineRange = state.targetTimelineRange;
       _animationState.targetVerticalPosPxl = state.targetVerticalPosPxl;
-      _animationState.type = ANIMATION_TYPE_FAST;
+      _animationState.setAnimationType( ANIMATION_TYPE_FAST );
       _redoPositionStates.pop_back();
    }
 }

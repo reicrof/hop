@@ -8,6 +8,7 @@
 #include <algorithm>
 #include <cmath>
 
+static constexpr float STAT_CANVAS_HALF_SIZE   = 5000000.0f;
 static constexpr float STAT_CANVAS_TOP_PADDING = 20.0f;
 
 static bool StatEventCompareTime( const hop::StatEvent& lhs, const hop::StatEvent& rhs)
@@ -27,28 +28,22 @@ namespace hop
 {
     TimelineStats::TimelineStats() : _zoomFactor(1.0f)
     {
-        _minMaxValueInt64[0]   = _minMaxValueInt64[2]  = 0;
-        _minMaxValueDbl[0]     = _minMaxValueDbl[2]    = 0.0;
-        _minMaxValueInt64[1]   = _minMaxValueInt64[3]  = 800;
-        _minMaxValueDbl[1]     = _minMaxValueDbl[3]    = 800.0;
+       _minMaxValueInt64[0] = _minMaxValueInt64[1] = 0;
+       _minMaxValueDbl[0]   = _minMaxValueDbl[1]   = 0.0;
     }
 
    float TimelineStats::canvasHeight() const
    {
-      const int64_t minValue = std::min( _minMaxValueInt64[0], (int64_t)std::ceil( _minMaxValueDbl[0] ) );
-      const int64_t maxValue = std::max( _minMaxValueInt64[1], (int64_t)std::ceil( _minMaxValueDbl[1] ) );
-      return ( llabs( minValue ) + llabs( maxValue ) ) * _zoomFactor;
+      return STAT_CANVAS_HALF_SIZE * 2.0f;
    }
 
    void TimelineStats::draw( const TimelineDrawInfo& tinfo, TimelineMsgArray& outMsg )
    {
-      const double lastMaxValue = std::max( (double)_minMaxValueInt64[3], _minMaxValueDbl[3] );
-      const double maxValue = std::max( (double)_minMaxValueInt64[1], _minMaxValueDbl[1] );
-      const double visibleMax = maxValue - tinfo.timeline.scrollAmount + STAT_CANVAS_TOP_PADDING;
-      const float relativeZero = tinfo.timeline.canvasPosY + visibleMax;
+      const double visibleMax = canvasHeight() - tinfo.timeline.scrollAmount + STAT_CANVAS_TOP_PADDING;
+      const float relativeZeroPxlPos = tinfo.timeline.canvasPosY + visibleMax;
 
       ImDrawList* drawList = ImGui::GetWindowDrawList();
-      drawList->AddLine(ImVec2(0, relativeZero), ImVec2(3000, relativeZero), 0xFFFFFFFF, 0.4f);
+      drawList->AddLine(ImVec2(0, relativeZeroPxlPos), ImVec2(3000, relativeZeroPxlPos), 0xFFFFFFFF, 0.4f);
 
       const auto globalStartTime = tinfo.timeline.globalStartTime;
 
@@ -71,17 +66,15 @@ namespace hop
             windowWidthPxl,
             tinfo.timeline.duration,
             localTime - tinfo.timeline.relativeStartTime );
-         drawList->AddCircle( ImVec2(posPxlX, relativeZero - it1->value.valueInt64), 5.0f, 0XFF0000FF, 5 );
+         drawList->AddCircle( ImVec2(posPxlX, relativeZeroPxlPos - it1->value.valueInt64), 5.0f, 0XFF0000FF, 5 );
       }
 
-      printf("%f\n", maxValue);
-      outMsg.addMoveVerticalPositionMsg( tinfo.timeline.scrollAmount + (maxValue - lastMaxValue) );
-
-       // Save last min/max
-       _minMaxValueInt64[2] = _minMaxValueInt64[0];
-       _minMaxValueInt64[3] = _minMaxValueInt64[1];
-       _minMaxValueDbl[2] = _minMaxValueDbl[0];
-       _minMaxValueDbl[3] = _minMaxValueDbl[1];
+      static bool first = true;
+      if( first )
+      {
+         outMsg.addMoveVerticalPositionMsg( STAT_CANVAS_HALF_SIZE - 500.0f );
+         first = false;
+      }
    }
 
    void TimelineStats::addStatEventsInt64( const std::vector<StatEvent>& statEvents )
