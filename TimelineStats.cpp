@@ -68,13 +68,6 @@ namespace hop
             localTime - tinfo.timeline.relativeStartTime );
          drawList->AddCircle( ImVec2(posPxlX, relativeZeroPxlPos - it1->value.valueInt64), 5.0f, 0XFF0000FF, 5 );
       }
-
-      static bool first = true;
-      if( first )
-      {
-         outMsg.addMoveVerticalPositionMsg( STAT_CANVAS_HALF_SIZE - 400.0f, false );
-         first = false;
-      }
    }
 
    void TimelineStats::addStatEventsInt64( const std::vector<StatEvent>& statEvents )
@@ -99,5 +92,10 @@ namespace hop
 
       // Copy the data
       _statEventsFloat64.insert( _statEventsFloat64.end(), statEvents.begin(), statEvents.end() );
+   }
+
+   float TimelineStats::originScrollAmount( float windowHeight )
+   {
+      return STAT_CANVAS_HALF_SIZE - windowHeight * 0.33f;
    }
 }

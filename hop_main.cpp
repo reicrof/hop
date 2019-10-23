@@ -72,11 +72,13 @@ static void destroyIcon()
    if ( iconSurface ) SDL_FreeSurface( iconSurface );
 }
 
-static void sdlImGuiInit()
+static void sdlImGuiInit( float windowWidth, float windowHeight )
 {
    ImGui::CreateContext();
 
    ImGuiIO& io = ImGui::GetIO();
+   io.DisplaySize = ImVec2( windowWidth, windowHeight );
+
    io.KeyMap[ImGuiKey_Tab] = SDLK_TAB;  // Keyboard mapping. ImGui will use those indices to peek
                                         // into the io.KeyDown[] array.
    io.KeyMap[ImGuiKey_LeftArrow] = SDL_SCANCODE_LEFT;
@@ -323,8 +325,6 @@ int main( int argc, char* argv[] )
 
    HOP_SET_THREAD_NAME( "Main" );
 
-   sdlImGuiInit();
-
    SDL_GLContext mainContext = SDL_GL_CreateContext( window );
    SDL_GL_SetAttribute( SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_CORE );
    SDL_GL_SetAttribute( SDL_GL_CONTEXT_MAJOR_VERSION, 3 );
@@ -337,6 +337,8 @@ int main( int argc, char* argv[] )
    // Setup the LOD granularity based on screen resolution
    SDL_DisplayMode DM;
    SDL_GetCurrentDisplayMode( 0, &DM );
+
+   sdlImGuiInit( DM.w, DM.h );
 
    hop::Viewer viewer( DM.w, DM.h );
 

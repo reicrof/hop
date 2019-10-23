@@ -277,6 +277,10 @@ Profiler::Profiler() : _viewType( ViewType::PROFILER ), _srcType( SourceType::NO
    const int viewTypesCount = (int)ViewType::COUNT;
    for( int i = 0; i < viewTypesCount; ++i )
       _viewsVerticalPos[i] = 0.0f;
+
+   // Init scroll for the stat view
+   const float windowHeight = ImGui::GetIO().DisplaySize.y;
+   _viewsVerticalPos[(int)ViewType::STATS] = TimelineStats::originScrollAmount( windowHeight );
 }
 
 const char* Profiler::nameAndPID( int* processId )
