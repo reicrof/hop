@@ -110,14 +110,14 @@ class Timeline
    template< typename T >
    struct AnimationData
    {
-      T value{0};
+      T value{};
       AnimationType type{ANIMATION_TYPE_NONE};
    };
 
    struct AnimationStates
    {
       AnimationData<int64_t> targetTimelineStart;
-      AnimationData<TimeDuration> targetTimelineRange{ 5000000000 };
+      AnimationData<TimeDuration> targetTimelineRange{ 5000000000, ANIMATION_TYPE_NONE };
       AnimationData<float> targetVerticalPosPxl;
 
       void setAnimationType( AnimationType type )

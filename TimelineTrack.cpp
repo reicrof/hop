@@ -1123,7 +1123,7 @@ void TimelineTracks::drawSearchWindow( const TimelineDrawInfo& di, TimelineMsgAr
 
       // Create the timeline messages ( frame horizontally and vertically )
       timelineMsg.addFrameTimeMsg( startTime, delta, true /*push nav*/, false /*abs time*/ );
-      timelineMsg.addMoveVerticalPositionMsg( verticalPosPxl );
+      timelineMsg.addMoveVerticalPositionMsg( verticalPosPxl, true );
    }
 
    if ( selection.hoveredTraceIdx != (size_t)-1 && selection.hoveredThreadIdx != (uint32_t)-1 )
@@ -1157,7 +1157,7 @@ void TimelineTracks::drawTraceDetailsWindow( const TimelineDrawInfo& info, Timel
 
       // Create the timeline messages ( frame horizontally and vertically )
       timelineMsg.addFrameTimeMsg( minTime, maxTime - minTime, true, true /*abs time*/ );
-      timelineMsg.addMoveVerticalPositionMsg( verticalPosPxl );
+      timelineMsg.addMoveVerticalPositionMsg( verticalPosPxl, true );
    }
 
    for( const auto& t : traceDetailRes.hoveredTraceIds )

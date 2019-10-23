@@ -72,7 +72,7 @@ namespace hop
       static bool first = true;
       if( first )
       {
-         outMsg.addMoveVerticalPositionMsg( STAT_CANVAS_HALF_SIZE - 500.0f );
+         outMsg.addMoveVerticalPositionMsg( STAT_CANVAS_HALF_SIZE - 400.0f, false );
          first = false;
       }
    }

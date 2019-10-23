@@ -579,7 +579,7 @@ void hop::Profiler::draw( float drawPosX, float drawPosY, float canvasWidth, flo
    {
       _viewsVerticalPos[(int)_viewType] = _timeline.verticalPosPxl();
       _viewType           = _viewType == ViewType::PROFILER ? ViewType::STATS : ViewType::PROFILER;
-      tlMsg.addMoveVerticalPositionMsg( _viewsVerticalPos[(int)_viewType] );
+      tlMsg.addMoveVerticalPositionMsg( _viewsVerticalPos[(int)_viewType], false );
    }
 
    ImVec2 statusPos = toolbarDrawPos;

@@ -47,6 +47,7 @@ namespace hop
       struct VerticalPos
       {
          float posPxl;
+         bool withAnimation;
       };
 
       TimelineMessageType type;
@@ -76,12 +77,13 @@ namespace hop
          msg->frameToTime.pushNavState = pushNavState;
       }
 
-      void addMoveVerticalPositionMsg( float posPxl )
+      void addMoveVerticalPositionMsg( float posPxl, bool withAnimation )
       {
          assert( count < MAX_MSG_COUNT );
          TimelineMessage* msg = &messages[count++];
          msg->type = TimelineMessageType::MOVE_VERTICAL_POS_PXL;
          msg->verticalPos.posPxl = posPxl;
+         msg->verticalPos.withAnimation = withAnimation;
       }
 
       void addMoveToPresentTimeMsg()

@@ -137,21 +137,23 @@ static T updateAnimationState(
       case hop::Timeline::ANIMATION_TYPE_NORMAL:
       case hop::Timeline::ANIMATION_TYPE_FAST:
       {
-         float speedFactor = animType == hop::Timeline::ANIMATION_TYPE_NORMAL ? 100.0f / deltaTimeMs
-                                                                              : 90.0f / deltaTimeMs;
-         speedFactor = std::max( speedFactor, 1.0f );
-
-         const int64_t timelineStartDelta = targetValue - value;
-         if( std::abs( timelineStartDelta ) < treshold )
+         T timelineStartDelta = targetValue - value;
+         // Cannot use abs() here because the function does not exist for unsigned types
+         if( timelineStartDelta < 0 ) timelineStartDelta *= -1;
+         if ( timelineStartDelta < treshold )
          {
             return targetValue;
          }
          else
          {
+            float speedFactor = animType == hop::Timeline::ANIMATION_TYPE_NORMAL
+                                    ? 100.0f / deltaTimeMs
+                                    : 90.0f / deltaTimeMs;
+            speedFactor = std::max( speedFactor, 1.0f );
             return value + ( timelineStartDelta / speedFactor );
          }
       }
-      default: // Fallthrough
+      default:  // Fallthrough
       case hop::Timeline::ANIMATION_TYPE_NONE:
          return targetValue;
    }
@@ -162,23 +164,23 @@ namespace hop
 
 void Timeline::update( float deltaTimeMs ) noexcept
 {
-   _timelineStart = updateAnimationState(
+   _timelineStart = updateAnimationState<decltype( _timelineStart )>(
        deltaTimeMs,
        _timelineStart,
-       static_cast<decltype( _timelineStart )>(_animationState.targetTimelineStart.value),
-       static_cast<decltype( _timelineStart )>( 10 ),
+       _animationState.targetTimelineStart.value,
+       10,
        _animationState.targetTimelineStart.type );
-   _duration = updateAnimationState(
+   _duration = updateAnimationState<decltype( _duration )>(
        deltaTimeMs,
        _duration,
-       static_cast<decltype(_duration)>(_animationState.targetTimelineRange.value),
-       static_cast<decltype(_duration)>( 10 ),
+       _animationState.targetTimelineRange.value,
+       10,
        _animationState.targetTimelineRange.type );
-   _verticalPosPxl = updateAnimationState(
+   _verticalPosPxl = updateAnimationState<decltype( _verticalPosPxl )>(
        deltaTimeMs,
        _verticalPosPxl,
-       static_cast<decltype(_verticalPosPxl)>(_animationState.targetVerticalPosPxl.value),
-       static_cast<decltype(_verticalPosPxl)>( 0.001 ),
+       _animationState.targetVerticalPosPxl.value,
+       0.001,
        _animationState.targetVerticalPosPxl.type );
 }
 
@@ -577,7 +579,9 @@ void Timeline::handleDeferredActions( const TimelineMsgArray& messages )
             frameToAbsoluteTime( m.frameToTime.time, m.frameToTime.duration, m.frameToTime.pushNavState );
             break;
          case TimelineMessageType::MOVE_VERTICAL_POS_PXL:
-            moveVerticalPositionPxl( m.verticalPos.posPxl );
+            moveVerticalPositionPxl(
+                m.verticalPos.posPxl,
+                m.verticalPos.withAnimation ? ANIMATION_TYPE_NORMAL : ANIMATION_TYPE_NONE );
             break;
          case TimelineMessageType::MOVE_TO_PRESENT_TIME:
             moveToPresentTime( ANIMATION_TYPE_NONE );

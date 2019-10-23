@@ -476,7 +476,7 @@ void Viewer::draw( uint32_t windowWidth, uint32_t windowHeight )
 {
    const auto drawStart = std::chrono::system_clock::now();
 
-   static uint64_t frameRendered = 0;
+   static int64_t frameRendered = -50;
    HOP_STATS_INT64( "Frame Rendered", ++frameRendered );
    HOP_STATS_INT64( "test 0", 0 );
 

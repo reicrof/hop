@@ -20,7 +20,6 @@ void sleepSome( std::chrono::microseconds sleepTime )
    HOP_SET_THREAD_NAME( name );
 
    thread_local int64_t  int64value = -250;
-   thread_local uint64_t uint64value = 250;
    thread_local float    floatValue = 0.5f;
 
    HOP_STATS_INT64( "Int Value", ++int64value );
