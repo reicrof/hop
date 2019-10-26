@@ -139,8 +139,8 @@ static T updateAnimationState(
       {
          T timelineStartDelta = targetValue - value;
          // Cannot use abs() here because the function does not exist for unsigned types
-         if( timelineStartDelta < 0 ) timelineStartDelta *= -1;
-         if ( timelineStartDelta < treshold )
+         T absDelta = timelineStartDelta < 0 ? timelineStartDelta * -1 : timelineStartDelta;
+         if ( absDelta < treshold )
          {
             return targetValue;
          }
@@ -170,7 +170,7 @@ void Timeline::update( float deltaTimeMs ) noexcept
        _animationState.targetTimelineStart.value,
        10,
        _animationState.targetTimelineStart.type );
-   _duration = updateAnimationState<decltype( _duration )>(
+   _duration = updateAnimationState<int64_t>(
        deltaTimeMs,
        _duration,
        _animationState.targetTimelineRange.value,

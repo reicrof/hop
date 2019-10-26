@@ -9,7 +9,6 @@
 #include <cmath>
 
 static constexpr float STAT_CANVAS_HALF_SIZE   = 5000000.0f;
-static constexpr float STAT_CANVAS_TOP_PADDING = 20.0f;
 
 static bool StatEventCompareTime( const hop::StatEvent& lhs, const hop::StatEvent& rhs)
 {
@@ -22,6 +21,31 @@ static bool StatEventCompareValueInt64( const hop::StatEvent& lhs, const hop::St
 static bool StatEventCompareValueFloat64( const hop::StatEvent& lhs, const hop::StatEvent& rhs)
 {
     return lhs.value.valueFloat64 < rhs.value.valueFloat64;
+}
+
+static float valueToPxlPosition( const hop::TimelineInfo& tinfo, double value )
+{
+    return STAT_CANVAS_HALF_SIZE + tinfo.canvasPosY - value;
+}
+
+static void drawValueGrid( ImDrawList* drawList, const hop::TimelineInfo& tinfo, float windowHeight, int64_t gridSize, unsigned color, float size )
+{
+   const int64_t maxVisibleValue = std::ceil(STAT_CANVAS_HALF_SIZE - tinfo.scrollAmount);
+   const int64_t minVisibleValue = std::floor(maxVisibleValue - windowHeight);
+   const int64_t maxMult = maxVisibleValue - (maxVisibleValue % gridSize);
+
+   for( int64_t i = maxMult; i > minVisibleValue; i -= gridSize )
+   {
+      const float linePos = valueToPxlPosition(tinfo, i);
+      drawList->AddLine(ImVec2(0, linePos), ImVec2(3000, linePos), color, size);
+   }
+}
+
+static float drawOrigin( ImDrawList* drawList, const hop::TimelineInfo& tinfo )
+{
+   const float zeroPxlPos = valueToPxlPosition(tinfo, 0);
+   drawList->AddLine(ImVec2(0, zeroPxlPos), ImVec2(3000, zeroPxlPos), 0xFFFFFFFF, 0.4f);
+   return zeroPxlPos;
 }
 
 namespace hop
@@ -39,14 +63,14 @@ namespace hop
 
    void TimelineStats::draw( const TimelineDrawInfo& tinfo, TimelineMsgArray& outMsg )
    {
-      const double visibleMax = canvasHeight() - tinfo.timeline.scrollAmount + STAT_CANVAS_TOP_PADDING;
-      const float relativeZeroPxlPos = tinfo.timeline.canvasPosY + visibleMax;
-
+      const float windowHeight = ImGui::GetWindowHeight();
       ImDrawList* drawList = ImGui::GetWindowDrawList();
-      drawList->AddLine(ImVec2(0, relativeZeroPxlPos), ImVec2(3000, relativeZeroPxlPos), 0xFFFFFFFF, 0.4f);
+
+      drawValueGrid( drawList, tinfo.timeline, windowHeight, 50, 0xFF999999, 0.2f );
+      drawValueGrid( drawList, tinfo.timeline, windowHeight, 500, 0xFFCCCCCC, 0.4f );
+      const float originPxlPos = drawOrigin( drawList, tinfo.timeline );
 
       const auto globalStartTime = tinfo.timeline.globalStartTime;
-
       // The time range to draw in absolute time
       const TimeStamp firstTraceAbsoluteTime = globalStartTime + tinfo.timeline.relativeStartTime;
       const TimeStamp lastTraceAbsoluteTime = firstTraceAbsoluteTime + tinfo.timeline.duration;
@@ -66,7 +90,7 @@ namespace hop
             windowWidthPxl,
             tinfo.timeline.duration,
             localTime - tinfo.timeline.relativeStartTime );
-         drawList->AddCircle( ImVec2(posPxlX, relativeZeroPxlPos - it1->value.valueInt64), 5.0f, 0XFF0000FF, 5 );
+         drawList->AddCircle( ImVec2(posPxlX, originPxlPos - it1->value.valueInt64), 5.0f, 0XFF0000FF, 5 );
       }
    }
 
