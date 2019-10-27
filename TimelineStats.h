@@ -26,7 +26,8 @@ namespace hop
       std::deque<StatEvent> _statEventsFloat64;
       int64_t _minMaxValueInt64[2];
       double _minMaxValueDbl[2];
-      float _zoomFactor;
+      float _zoomFactor;         // Value per pxl
+      double _valueSteps;        // Grid step size
    };
 }
 
