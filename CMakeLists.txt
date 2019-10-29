@@ -39,28 +39,41 @@ if(SAN)
 endif()
 
 #####################
-### Main executable
+### HOP common src
 #####################
 if(UNIX)
    set( viewer_platform_src "platform/Platform_Unix.cpp" )
 else()
    set( viewer_platform_src "platform/Platform_Windows.cpp" )
 endif()
-
+file( GLOB common_src "common/*.cpp" )
+set( common_src ${common_src} ${viewer_platform_src} )
 add_definitions( -DHOP_ENABLED )
-file(GLOB hop_viewer_src
+
+#####################
+### HOP GUI
+#####################
+file(GLOB hop_gui_src
     "*.h"
     "*.cpp"
     "*.c"
     "imgui/*.h"
     "imgui/*.cpp"
 )
-add_executable(hop ${hop_viewer_src} ${viewer_platform_src})
+
+add_executable(hop ${common_src} ${hop_gui_src} "front_ends/hopGUI.cpp" )
 
 set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -DHOP_DEBUG")
 
 target_include_directories( hop SYSTEM PRIVATE ${ROOT_DIR} ${OPENGL_INCLUDE_DIRS} ${SDL2_INCLUDE_DIR} )
 target_link_libraries( hop PUBLIC -lpthread ${HOP_LIBRT_FLAG} ${HOP_WINDOWS_LIB} ${OPENGL_LIBRARIES} ${SDL2_LIBRARY} -ldl )
+
+#####################
+### HOP CLI
+#####################
+add_executable( hopcli front_ends/hopCLI.cpp  ${common_src} )
+target_include_directories( hopcli SYSTEM PRIVATE ${ROOT_DIR} )
+target_link_libraries( hopcli PUBLIC -lpthread ${HOP_LIBRT_FLAG} -ldl )
 
 #####################
 ### Test clients
@@ -70,8 +83,5 @@ add_subdirectory(test_clients)
 #####################
 ### Test executables
 #####################
-
 enable_testing ()
 add_subdirectory (tests)
-
-#windows build : cmake -G "Visual Studio 15 2017 Win64" -DSDL2_INCLUDE_DIR:STRING=C:\\Users\\XXXX\\source\\repos\\SDL2\\include -DSDL2_LIBRARY:STRING=C:\\Users\\XXXX\\source\\repos\\SDL2\\lib\\x64\\SDL2.lib .. 

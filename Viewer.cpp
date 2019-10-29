@@ -7,7 +7,7 @@
 #include "Options.h"
 #include "RendererGL.h"
 #include "Stats.h"
-#include "Utils.h"
+#include "common/Utils.h"
 
 #include "platform/Platform.h"
 

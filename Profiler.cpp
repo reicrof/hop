@@ -1,14 +1,13 @@
 #include "Profiler.h"
 #include "imgui/imgui.h"
 #include "Lod.h"
-#include "Utils.h"
+#include "common/Utils.h"
 #include "TraceDetail.h"
 #include "TraceData.h"
 #include "ModalWindow.h"
 #include "miniz.h"
 #include "Options.h"
 #include "RendererGL.h"
-#include "Utils.h"
 #include <SDL_keycode.h>
 
 #include <cassert>
