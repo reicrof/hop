@@ -1,6 +1,8 @@
 #ifndef PROFILER_H_
 #define PROFILER_H_
 
+#include <Hop.h>
+
 namespace hop
 {
 
@@ -14,11 +16,10 @@ class Profiler
       SRC_TYPE_PROCESS,
    };
 
-   Profiler();
+   Profiler( SourceType type, int processId, const char* str );
    ~Profiler();
    const char* nameAndPID( int* processId = nullptr );
    ProfilerStats stats() const;
-   bool setSource( SourceType type, int processId, const char* str );
    SourceType sourceType() const;
    void fetchClientData();
    void addStringData( const std::vector< char >& stringData );
@@ -44,6 +45,9 @@ private:
 
    Server _server;
    Server::PendingData _serverPendingData;
+
+   TimeStamp _earliestTimeStamp;
+   TimeStamp _latestTimeStamp;
 };
 
 }  // PROFILER_H_
