@@ -16,34 +16,14 @@ namespace hop
 
 struct TimelineTrack
 {
-   TraceData _traces;
-   LockWaitData _lockWaits;
-   CoreEventData _coreEvents;
-   StrPtr_t _trackName{0};
-};
-
-size_t serializedSize( const TimelineTrack& ti );
-size_t serialize( const TimelineTrack& ti, char* );
-size_t deserialize( const char* data, TimelineTrack& ti );
-
-struct TimelineTrack
-{
    static float TRACE_HEIGHT;
    static float TRACE_VERTICAL_PADDING;
    static float PADDED_TRACE_SIZE;
 
-   void setTrackName( StrPtr_t name ) noexcept;
-   StrPtr_t trackName() const noexcept;
-   void addTraces( const TraceData& traces );
-   void addLockWaits( const LockWaitData& lockWaits );
-   void addUnlockEvents(const std::vector<UnlockEvent>& unlockEvents);
-   void addCoreEvents( const std::vector<CoreEvent>& coreEvents );
-   Depth_t maxDepth() const noexcept;
    bool hidden() const noexcept;
    float height() const noexcept;
    float heightWithThreadLabel() const noexcept;
    void setTrackHeight( float height );
-   bool empty() const;
 
    std::unordered_map< void*, std::vector< TimeStamp > > _lockWaitsPerMutex;
 
@@ -89,7 +69,6 @@ class TimelineTracks
    void setAllTracksCollapsed( bool collapsed );
    float totalHeight() const;
    int lodLevel() const;
-   
 
    // Vector overloads
    TimelineTrack& operator[]( size_t index );

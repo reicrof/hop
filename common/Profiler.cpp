@@ -1,5 +1,8 @@
 #include "Profiler.h"
 
+#include <algorithm>
+#include <cassert>
+
 namespace hop
 {
 Profiler::Profiler( SourceType type, int processId, const char* str )
@@ -19,10 +22,15 @@ const char* Profiler::nameAndPID( int* processId )
 
 Profiler::SourceType Profiler::sourceType() const { return _srcType; }
 
+void Profiler::setRecording( bool recording )
+{
+   _recording = recording;
+   _server.setRecording( recording );
+}
+
 ProfilerStats Profiler::stats() const
 {
    ProfilerStats stats = {};
-   stats.lodLevel = _tracks.lodLevel();
    stats.strDbSize = _strDb.sizeInBytes();
    stats.clientSharedMemSize = _server.sharedMemorySize();
    for ( size_t i = 0; i < _tracks.size(); ++i )
@@ -83,6 +91,7 @@ void Profiler::addTraces( const TraceData& traces, uint32_t threadIndex )
    // Add new thread as they come
    if ( threadIndex >= _tracks.size() )
    {
+      static_assert( std::is_move_constructible<TimelineTrack>(), "TimelineTrack is not move assignable" );
       _tracks.resize( threadIndex + 1 );
    }
 
@@ -106,5 +115,76 @@ void Profiler::addTraces( const TraceData& traces, uint32_t threadIndex )
 
    _tracks[threadIndex].addTraces( traces );
 }
+
+void Profiler::addStringData( const std::vector<char>& strData )
+{
+   HOP_PROF_FUNC();
+   // We should read the string data even when not recording since the string data
+   // is sent only once (the first time a function is used)
+   if ( !strData.empty() )
+   {
+      _strDb.addStringData( strData );
+   }
+}
+
+void Profiler::addLockWaits( const LockWaitData& lockWaits, uint32_t threadIndex )
+{
+   HOP_PROF_FUNC();
+   // Check if new thread
+   if ( threadIndex >= _tracks.size() )
+   {
+      _tracks.resize( threadIndex + 1 );
+   }
+
+   if ( !lockWaits.entries.ends.empty() )
+   {
+      _tracks[threadIndex].addLockWaits( lockWaits );
+   }
+}
+
+void Profiler::addUnlockEvents( const std::vector<UnlockEvent>& unlockEvents, uint32_t threadIndex )
+{
+   HOP_PROF_FUNC();
+   // Check if new thread
+   if ( threadIndex >= _tracks.size() )
+   {
+      _tracks.resize( threadIndex + 1 );
+   }
+
+   if ( !unlockEvents.empty() )
+   {
+      _tracks[threadIndex].addUnlockEvents( unlockEvents );
+   }
+}
+
+void Profiler::addCoreEvents( const std::vector<CoreEvent>& coreEvents, uint32_t threadIndex )
+{
+   HOP_PROF_FUNC();
+   // Check if new thread
+   if ( threadIndex >= _tracks.size() )
+   {
+      _tracks.resize( threadIndex + 1 );
+   }
+
+   if ( !coreEvents.empty() )
+   {
+      _tracks[threadIndex].addCoreEvents( coreEvents );
+   }
+}
+
+void Profiler::addThreadName( StrPtr_t name, uint32_t threadIndex )
+{
+   // Check if new thread
+   if ( threadIndex >= _tracks.size() )
+   {
+      _tracks.resize( threadIndex + 1 );
+   }
+
+   assert( name != 0 );  // should not be empty name
+
+   _tracks[threadIndex].setTrackName( name );
+}
+
+Profiler::~Profiler() { _server.stop(); }
 
 }  // namespace hop

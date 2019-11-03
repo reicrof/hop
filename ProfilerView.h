@@ -41,13 +41,6 @@ private:
    Profiler _profiler;
 };
 
-struct ProfilerStats
-{
-   size_t strDbSize;
-   size_t traceCount;
-   size_t clientSharedMemSize;
-   int lodLevel;
-};
 
 } // namespace hop
 

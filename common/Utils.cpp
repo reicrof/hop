@@ -118,7 +118,6 @@ int formatCyclesTimepointToDisplay(
    }
 }
 
-
 void formatSizeInBytesToDisplay( size_t sizeInBytes, char* str, size_t strSize )
 {
    if (sizeInBytes < 1000)
@@ -137,6 +136,46 @@ void formatSizeInBytesToDisplay( size_t sizeInBytes, char* str, size_t strSize )
    {
       snprintf(str, strSize, "%.3f GB",  sizeInBytes / 1000000000.0f);
    }
+}
+
+static bool noCaseCmp( char lhs, char rhs )
+{
+   return std::toupper( lhs ) == std::toupper( rhs );
+}
+
+int findSubstrNoCase(
+    const char* haystack,
+    uint32_t haystackSize,
+    const char* needle,
+    uint32_t needleSize )
+{
+   const auto it =
+       std::search( haystack, haystack + haystackSize, needle, needle + needleSize, noCaseCmp );
+   if( it != haystack + haystackSize )
+   {
+      return it - haystack;
+   }
+   else
+   {
+      return -1;  // not found
+   }
+}
+
+static bool isNumber( const char* str )
+{
+   const size_t length = strlen( str );
+   return std::all_of( str, str + length, ::isdigit );
+}
+
+int getPIDFromString( const char* str )
+{
+   int pid = -1;
+   if( isNumber( str ) )
+   {
+      pid = strtol( str, nullptr, 10 );
+   }
+
+   return pid;
 }
 
 } // namespace hop

@@ -1,14 +1,26 @@
 #ifndef PROFILER_H_
 #define PROFILER_H_
 
-#include <Hop.h>
+#include "Server.h"
+#include "StringDb.h"
+#include "TimelineTrack.h"
+
+#include <string>
 
 namespace hop
 {
 
+struct ProfilerStats
+{
+   size_t strDbSize;
+   size_t traceCount;
+   size_t clientSharedMemSize;
+};
+
 class Profiler
 {
    friend class ProfilerView;
+public:
    enum SourceType
    {
       SRC_TYPE_NONE,
@@ -21,6 +33,7 @@ class Profiler
    const char* nameAndPID( int* processId = nullptr );
    ProfilerStats stats() const;
    SourceType sourceType() const;
+   void setRecording( bool recording );
    void fetchClientData();
    void addStringData( const std::vector< char >& stringData );
    void addTraces( const TraceData& traces, uint32_t threadIndex );
@@ -38,7 +51,7 @@ private:
 
    std::string _name;
    int _pid;
-   TimelineTracks _tracks;
+   std::vector<TimelineTrack> _tracks;
    StringDb _strDb;
    bool _recording{ false };
    SourceType _srcType;

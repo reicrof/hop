@@ -2,12 +2,22 @@
 #define TIMELINE_TRACK_H_
 
 #include "Hop.h"
+#include "TraceData.h"
 
 namespace hop
 {
 
 struct TimelineTrack
 {
+   void setTrackName( StrPtr_t name ) noexcept;
+   StrPtr_t trackName() const noexcept;
+   void addTraces( const TraceData& traces );
+   void addLockWaits( const LockWaitData& lockWaits );
+   void addUnlockEvents(const std::vector<UnlockEvent>& unlockEvents);
+   void addCoreEvents( const std::vector<CoreEvent>& coreEvents );
+   Depth_t maxDepth() const noexcept;
+   bool empty() const;
+
    TraceData _traces;
    LockWaitData _lockWaits;
    CoreEventData _coreEvents;

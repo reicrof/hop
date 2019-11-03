@@ -1,12 +1,13 @@
 #define HOP_IMPLEMENTATION
 #include <Hop.h>
 #include "platform/Platform.h"
-//#include "Viewer.h"
+#include "common/Profiler.h"
 #include "common/Utils.h"
 #undef main
 
 #include "miniz.h"
 
+#include <memory>
 #include <signal.h>
 #include <string>
 
@@ -78,6 +79,18 @@ static void printUsage()
        "Usage : hop [OPTION] <process name>\n\n OPTIONS:\n\t-e Launch specified executable and "
        "start recording\n\t-v Display version info and exit\n\t-h Show usage\n" );
    exit( 0 );
+}
+
+static std::unique_ptr<hop::Profiler> createProfiler( const char* processName )
+{
+   using namespace hop;
+   const int pid = getPIDFromString( processName );
+   const hop::ProcessInfo procInfo = pid != -1 ? hop::getProcessInfoFromPID( pid )
+                                               : hop::getProcessInfoFromProcessName( processName );
+
+   auto profiler = std::make_unique<hop::Profiler>( Profiler::SRC_TYPE_PROCESS, procInfo.pid, processName );
+   profiler->setRecording( true );
+   return profiler;
 }
 
 struct LaunchOptions
@@ -154,8 +167,7 @@ int main( int argc, char* argv[] )
 
    HOP_SET_THREAD_NAME( "Main" );
 
-   //hop::Viewer viewer( DM.w, DM.h );
-
+   std::unique_ptr<hop::Profiler> profiler;
    hop::ProcessID childProcId = 0;
    if ( opts.processName )
    {
@@ -172,23 +184,16 @@ int main( int argc, char* argv[] )
       }
 
       // Add new profiler after having potentially started it.
-      //viewer.addNewProfiler( opts.processName, opts.startExec );
+      profiler = createProfiler( opts.processName );
    }
 
    while ( g_run )
    {
       HOP_PROF( "Main Loop" );
-      const auto frameStart = std::chrono::system_clock::now();
 
-      const auto startFetch = std::chrono::system_clock::now();
-      //viewer.fetchClientsData();
-      const auto endFetch = std::chrono::system_clock::now();
+      profiler->fetchClientData();
 
-      //viewer.onNewFrame( w, h, x, y, lmb, rmb, g_mouseWheel );
-
-      //viewer.draw( w, h );
-
-      const auto frameEnd = std::chrono::system_clock::now();
+      std::this_thread::sleep_for( std::chrono::milliseconds( 5 ) );
    }
 
    // We have launched a child process. Let's close it

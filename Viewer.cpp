@@ -281,23 +281,6 @@ static void updateProfilers(
    }
 }
 
-static bool isNumber( const char* str )
-{
-   const size_t length = strlen( str );
-   return std::all_of( str, str + length, ::isdigit );
-}
-
-static int getPIDFromString( const char* str )
-{
-   int pid = -1;
-   if( isNumber( str ) )
-   {
-      pid = strtol( str, nullptr, 10 );
-   }
-
-   return pid;
-}
-
 static bool profilerAlreadyExist(
     const std::vector<std::unique_ptr<hop::Profiler> >& profilers,
     int pid,

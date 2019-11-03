@@ -45,7 +45,7 @@ void TraceData::append( const TraceData& newTraces )
    lineNbs.insert( lineNbs.end(), newTraces.lineNbs.begin(), newTraces.lineNbs.end() );
    zones.insert( zones.end(), newTraces.zones.begin(), newTraces.zones.end() );
 
-   appendLods( lods, computeLods( newTraces.entries, prevSize ) );
+   //appendLods( lods, computeLods( newTraces.entries, prevSize ) );
 }
 
 void TraceData::clear()
@@ -94,7 +94,7 @@ void LockWaitData::append( const LockWaitData& newLockWaits )
       lockReleases.insert( lockReleases.end(), newLockWaits.lockReleases.begin(), newLockWaits.lockReleases.end() );
    }
 
-   appendLods( lods, computeLods( newLockWaits.entries, prevSize ) );
+   //appendLods( lods, computeLods( newLockWaits.entries, prevSize ) );
 }
 
 void LockWaitData::clear()

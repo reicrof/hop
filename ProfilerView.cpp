@@ -152,76 +152,76 @@ Profiler::Profiler() : _srcType( SRC_TYPE_NONE )
 //    }
 // }
 
-void Profiler::addStringData( const std::vector<char>& strData )
-{
-   HOP_PROF_FUNC();
-   // We should read the string data even when not recording since the string data
-   // is sent only once (the first time a function is used)
-   if ( !strData.empty() )
-   {
-      _strDb.addStringData( strData );
-   }
-}
+// void Profiler::addStringData( const std::vector<char>& strData )
+// {
+//    HOP_PROF_FUNC();
+//    // We should read the string data even when not recording since the string data
+//    // is sent only once (the first time a function is used)
+//    if ( !strData.empty() )
+//    {
+//       _strDb.addStringData( strData );
+//    }
+// }
 
-void Profiler::addLockWaits( const LockWaitData& lockWaits, uint32_t threadIndex )
-{
-   HOP_PROF_FUNC();
-   // Check if new thread
-   if ( threadIndex >= _tracks.size() )
-   {
-      _tracks.resize( threadIndex + 1 );
-   }
+// void Profiler::addLockWaits( const LockWaitData& lockWaits, uint32_t threadIndex )
+// {
+//    HOP_PROF_FUNC();
+//    // Check if new thread
+//    if ( threadIndex >= _tracks.size() )
+//    {
+//       _tracks.resize( threadIndex + 1 );
+//    }
 
-   if ( !lockWaits.entries.ends.empty() )
-   {
-      _tracks[threadIndex].addLockWaits( lockWaits );
-   }
-}
+//    if ( !lockWaits.entries.ends.empty() )
+//    {
+//       _tracks[threadIndex].addLockWaits( lockWaits );
+//    }
+// }
 
-void Profiler::addUnlockEvents( const std::vector<UnlockEvent>& unlockEvents, uint32_t threadIndex )
-{
-   HOP_PROF_FUNC();
-   // Check if new thread
-   if ( threadIndex >= _tracks.size() )
-   {
-      _tracks.resize( threadIndex + 1 );
-   }
+// void Profiler::addUnlockEvents( const std::vector<UnlockEvent>& unlockEvents, uint32_t threadIndex )
+// {
+//    HOP_PROF_FUNC();
+//    // Check if new thread
+//    if ( threadIndex >= _tracks.size() )
+//    {
+//       _tracks.resize( threadIndex + 1 );
+//    }
 
-   if ( !unlockEvents.empty() )
-   {
-      _tracks[threadIndex].addUnlockEvents( unlockEvents );
-   }
-}
+//    if ( !unlockEvents.empty() )
+//    {
+//       _tracks[threadIndex].addUnlockEvents( unlockEvents );
+//    }
+// }
 
-void Profiler::addCoreEvents( const std::vector<CoreEvent>& coreEvents, uint32_t threadIndex )
-{
-   HOP_PROF_FUNC();
-   // Check if new thread
-   if ( threadIndex >= _tracks.size() )
-   {
-      _tracks.resize( threadIndex + 1 );
-   }
+// void Profiler::addCoreEvents( const std::vector<CoreEvent>& coreEvents, uint32_t threadIndex )
+// {
+//    HOP_PROF_FUNC();
+//    // Check if new thread
+//    if ( threadIndex >= _tracks.size() )
+//    {
+//       _tracks.resize( threadIndex + 1 );
+//    }
 
-   if ( !coreEvents.empty() )
-   {
-      _tracks[threadIndex].addCoreEvents( coreEvents );
-   }
-}
+//    if ( !coreEvents.empty() )
+//    {
+//       _tracks[threadIndex].addCoreEvents( coreEvents );
+//    }
+// }
 
-void Profiler::addThreadName( StrPtr_t name, uint32_t threadIndex )
-{
-   // Check if new thread
-   if ( threadIndex >= _tracks.size() )
-   {
-      _tracks.resize( threadIndex + 1 );
-   }
+// void Profiler::addThreadName( StrPtr_t name, uint32_t threadIndex )
+// {
+//    // Check if new thread
+//    if ( threadIndex >= _tracks.size() )
+//    {
+//       _tracks.resize( threadIndex + 1 );
+//    }
 
-   assert( name != 0 );  // should not be empty name
+//    assert( name != 0 );  // should not be empty name
 
-   _tracks[threadIndex].setTrackName( name );
-}
+//    _tracks[threadIndex].setTrackName( name );
+// }
 
-Profiler::~Profiler() { _server.stop(); }
+// Profiler::~Profiler() { _server.stop(); }
 
 }  // end of namespace hop
 
@@ -538,15 +538,15 @@ void hop::Profiler::handleMouse()
    }
 }
 
-void hop::Profiler::setRecording( bool recording )
-{
-   _recording = recording;
-   _server.setRecording( recording );
-   if ( recording )
-   {
-      _timeline.setRealtime( true );
-   }
-}
+// void hop::Profiler::setRecording( bool recording )
+// {
+//    _recording = recording;
+//    _server.setRecording( recording );
+//    if ( recording )
+//    {
+//       _timeline.setRealtime( true );
+//    }
+// }
 
 bool hop::Profiler::saveToFile( const char* savePath )
 {
