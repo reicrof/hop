@@ -12,6 +12,7 @@ Profiler::Profiler( SourceType type, int processId, const char* str )
       _earliestTimeStamp( 0 ),
       _latestTimeStamp( 0 )
 {
+   _server.start( _pid , _name.c_str());
 }
 
 const char* Profiler::nameAndPID( int* processId )

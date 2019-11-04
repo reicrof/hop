@@ -2,6 +2,8 @@
 
 #include "platform/Platform.h"
 
+#include <cstring>
+
 namespace hop
 {
 

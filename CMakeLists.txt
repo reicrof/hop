@@ -48,7 +48,6 @@ else()
 endif()
 file( GLOB common_src "common/*.cpp" )
 set( common_src ${common_src} ${viewer_platform_src} )
-add_definitions( -DHOP_ENABLED )
 
 #####################
 ### HOP GUI
@@ -62,6 +61,7 @@ file(GLOB hop_gui_src
 )
 
 add_executable(hop ${common_src} ${hop_gui_src} "front_ends/hopGUI.cpp" )
+target_compile_definitions( hop PUBLIC HOP_ENABLED )
 
 set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -DHOP_DEBUG")
 
@@ -74,6 +74,7 @@ target_link_libraries( hop PUBLIC -lpthread ${HOP_LIBRT_FLAG} ${HOP_WINDOWS_LIB}
 add_executable( hopcli front_ends/hopCLI.cpp  ${common_src} )
 target_include_directories( hopcli SYSTEM PRIVATE ${ROOT_DIR} )
 target_link_libraries( hopcli PUBLIC -lpthread ${HOP_LIBRT_FLAG} -ldl )
+target_compile_definitions( hopcli PUBLIC HOP_ENABLED )
 
 #####################
 ### Test clients
