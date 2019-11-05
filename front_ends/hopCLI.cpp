@@ -151,21 +151,14 @@ static LaunchOptions parseArgs( int argc, char* argv[] )
    return LaunchOptions{nullptr, nullptr, nullptr, false};
 }
 
-static void printHelp()
-{
-   printf( "'help'   'h' \tShow this help menu\n"
-           "'quit'   'q' \tStop recording, save data and exit\n"
-           "'record' 's' \tStart recording\n"
-           "'stop'   's' \tStop recording\n");
-}
-
 enum CommandType
 {
    CMD_TYPE_INVALID,
    CMD_TYPE_HELP,
    CMD_TYPE_EXIT,
-   CMD_TYPE_START_RECORDING,
-   CMD_TYPE_STOP_RECORDING,
+   CMD_TYPE_BEGIN_RECORDING,
+   CMD_TYPE_END_RECORDING,
+   CMD_TYPE_STATUS
 };
 
 struct Command
@@ -176,25 +169,40 @@ struct Command
 struct StringCommand
 {
    const char* cmdStr;
+   const char* shortCmdStr;
+   const char* description;
    CommandType type;
 };
 
 static constexpr StringCommand stringCmds[] =
 {
-   {"h", CMD_TYPE_HELP},
-   {"help", CMD_TYPE_HELP},
-
-   {"exit", CMD_TYPE_EXIT},
-   {"q", CMD_TYPE_EXIT},
-   {"quit", CMD_TYPE_EXIT},
-
-   {"r", CMD_TYPE_START_RECORDING},
-   {"record", CMD_TYPE_START_RECORDING},
-   {"start", CMD_TYPE_STOP_RECORDING},
-
-   {"s", CMD_TYPE_START_RECORDING},
-   {"stop", CMD_TYPE_START_RECORDING},
+   {"help", "h", "Show this help menu", CMD_TYPE_HELP},
+   {"quit", "q", "Quit profiling, saving data", CMD_TYPE_EXIT},
+   {"begin", "b", "Begin recording", CMD_TYPE_BEGIN_RECORDING},
+   {"end", "e", "End recording", CMD_TYPE_END_RECORDING},
+   {"status", "s", "Show status of the profiling", CMD_TYPE_STATUS},
 };
+
+static void printHelp()
+{
+   const int arraySz = sizeof( stringCmds ) / sizeof( stringCmds[0] );
+   for( int i = 0; i < arraySz; ++i )
+   {
+      printf(
+          "%s\t%s : %s\n",
+          stringCmds[i].cmdStr,
+          stringCmds[i].shortCmdStr,
+          stringCmds[i].description );
+   }
+}
+
+static void printStatus( hop::Profiler* prof )
+{
+   int pid = -1;
+   const char* name = prof->nameAndPID( &pid );
+   const char* recordState = prof->recording() ? "Recording" : "Not Recording";
+   printf("%s (%d) - [%s] \n", name, pid, recordState );
+}
 
 std::mutex commandsMutex;
 std::vector< Command > g_commands;
@@ -257,11 +265,14 @@ static bool processCommands( hop::Profiler* prof )
       case CMD_TYPE_HELP:
          printHelp();
          break;
-      case CMD_TYPE_START_RECORDING:
+      case CMD_TYPE_BEGIN_RECORDING:
          prof->setRecording( true );
          break;
-      case CMD_TYPE_STOP_RECORDING:
+      case CMD_TYPE_END_RECORDING:
          prof->setRecording( false );
+         break;
+      case CMD_TYPE_STATUS:
+         printStatus( prof );
          break;
       default:
          assert( !"Invalid command" );
@@ -274,7 +285,7 @@ static bool processCommands( hop::Profiler* prof )
 
 static void showPrompt()
 {
-   printf( "> " );
+   printf( "\n> " );
 }
 
 int main( int argc, char* argv[] )

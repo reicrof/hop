@@ -29,6 +29,11 @@ void Profiler::setRecording( bool recording )
    _server.setRecording( recording );
 }
 
+bool Profiler::recording() const
+{
+   return _recording;
+}
+
 ProfilerStats Profiler::stats() const
 {
    ProfilerStats stats = {};

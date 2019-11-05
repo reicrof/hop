@@ -33,6 +33,7 @@ public:
    const char* nameAndPID( int* processId = nullptr );
    ProfilerStats stats() const;
    SourceType sourceType() const;
+   bool recording() const;
    void setRecording( bool recording );
    void fetchClientData();
    void addStringData( const std::vector< char >& stringData );
