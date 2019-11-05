@@ -7,9 +7,12 @@
 
 #include "miniz.h"
 
+#include <iostream>
 #include <memory>
+#include <mutex>
 #include <signal.h>
 #include <string>
+#include <thread>
 
 #ifndef _MSC_VER
 #include <sys/wait.h>
@@ -148,6 +151,132 @@ static LaunchOptions parseArgs( int argc, char* argv[] )
    return LaunchOptions{nullptr, nullptr, nullptr, false};
 }
 
+static void printHelp()
+{
+   printf( "'help'   'h' \tShow this help menu\n"
+           "'quit'   'q' \tStop recording, save data and exit\n"
+           "'record' 's' \tStart recording\n"
+           "'stop'   's' \tStop recording\n");
+}
+
+enum CommandType
+{
+   CMD_TYPE_INVALID,
+   CMD_TYPE_HELP,
+   CMD_TYPE_EXIT,
+   CMD_TYPE_START_RECORDING,
+   CMD_TYPE_STOP_RECORDING,
+};
+
+struct Command
+{
+   CommandType type;
+};
+
+struct StringCommand
+{
+   const char* cmdStr;
+   CommandType type;
+};
+
+static constexpr StringCommand stringCmds[] =
+{
+   {"h", CMD_TYPE_HELP},
+   {"help", CMD_TYPE_HELP},
+
+   {"exit", CMD_TYPE_EXIT},
+   {"q", CMD_TYPE_EXIT},
+   {"quit", CMD_TYPE_EXIT},
+
+   {"r", CMD_TYPE_START_RECORDING},
+   {"record", CMD_TYPE_START_RECORDING},
+   {"start", CMD_TYPE_STOP_RECORDING},
+
+   {"s", CMD_TYPE_START_RECORDING},
+   {"stop", CMD_TYPE_START_RECORDING},
+};
+
+std::mutex commandsMutex;
+std::vector< Command > g_commands;
+static Command parseCmdLine( std::string cmdline )
+{
+   Command cmd;
+   cmd.type = CMD_TYPE_INVALID;
+
+   const size_t end = std::string::npos;
+
+   std::transform( cmdline.begin(), cmdline.end(), cmdline.begin(), ::tolower );
+   for( auto it = std::begin( stringCmds ); it != std::end( stringCmds ); ++it )
+   {
+      if( strcmp( it->cmdStr, cmdline.c_str() ) == 0 )
+      {
+         cmd.type = it->type;
+         break;
+      }
+   }
+
+   return cmd;
+}
+
+static void interpretCmdline()
+{
+   std::string cmdline;
+   while( g_run )
+   {
+      std::getline( std::cin, cmdline );
+
+      const Command cmd = parseCmdLine( cmdline );
+      if( cmd.type != CMD_TYPE_INVALID )
+      {
+         std::lock_guard<std::mutex> g( commandsMutex );
+         g_commands.push_back( cmd );
+      }
+      else
+      {
+         printf( "Unknown command. Use 'help' to list available commands\n" );
+      }
+
+      std::cin.clear();
+   }
+}
+
+static bool processCommands()
+{
+   std::vector< Command > localCmds;
+   {
+   std::lock_guard<std::mutex> g( commandsMutex );
+   localCmds = std::move( g_commands );
+   g_commands.clear();
+   }
+
+   for( const auto& cmd : localCmds )
+   {
+      switch (cmd.type)
+      {
+      case CMD_TYPE_EXIT:
+         g_run = false;
+         break;
+      case CMD_TYPE_HELP:
+         printHelp();
+         break;
+      case CMD_TYPE_START_RECORDING:
+         break;
+      case CMD_TYPE_STOP_RECORDING:
+         break;
+      default:
+         assert( !"Invalid command" );
+         break;
+      }
+   }
+
+   return localCmds.size();
+}
+
+static void showPrompt()
+{
+   printf( "> " );
+}
+
 int main( int argc, char* argv[] )
 {
    const LaunchOptions opts = parseArgs( argc, argv );
@@ -187,11 +316,24 @@ int main( int argc, char* argv[] )
       profiler = createProfiler( opts.processName );
    }
 
+   // Start the command line interpreter
+   g_commands.reserve( 32 );
+   std::thread interpreter( interpretCmdline );
+   interpreter.detach();
+
+   showPrompt();
    while ( g_run )
    {
       HOP_PROF( "Main Loop" );
 
+      if( showPrompt )
+
       profiler->fetchClientData();
+
+      if( processCommands() )
+      {
+         showPrompt();
+      }
 
       std::this_thread::sleep_for( std::chrono::milliseconds( 5 ) );
    }
@@ -201,4 +343,6 @@ int main( int argc, char* argv[] )
    {
       terminateProcess( childProcId );
    }
+
+   // The interpreter thread will leak. This is a small cost to pay to have simple dumb portable code.
 }
