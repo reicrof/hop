@@ -183,6 +183,11 @@ static constexpr StringCommand stringCmds[] =
    {"status", "s", "Show status of the profiling", CMD_TYPE_STATUS},
 };
 
+static void printUsage( const char* progname )
+{
+   printf("Missing argument.\nExample usage : %s [client_exec]\n", progname );
+}
+
 static void printHelp()
 {
    const int arraySz = sizeof( stringCmds ) / sizeof( stringCmds[0] );
@@ -204,6 +209,11 @@ static void printStatus( hop::Profiler* prof )
    printf("%s (%d) - [%s] \n", name, pid, recordState );
 }
 
+static void printInvalidCmd()
+{
+   printf( "Unknown command. Use 'help' to list available commands\n" );
+}
+
 std::mutex commandsMutex;
 std::vector< Command > g_commands;
 static Command parseCmdLine( std::string cmdline )
@@ -212,9 +222,11 @@ static Command parseCmdLine( std::string cmdline )
    cmd.type = CMD_TYPE_INVALID;
 
    std::transform( cmdline.begin(), cmdline.end(), cmdline.begin(), ::tolower );
+   const char* lowerCmdLine = cmdline.c_str();
    for( auto it = std::begin( stringCmds ); it != std::end( stringCmds ); ++it )
    {
-      if( strcmp( it->cmdStr, cmdline.c_str() ) == 0 )
+      if( strcmp( it->shortCmdStr, lowerCmdLine ) == 0 ||
+          strcmp( it->cmdStr, lowerCmdLine ) == 0 )
       {
          cmd.type = it->type;
          break;
@@ -232,17 +244,8 @@ static void interpretCmdline()
       std::getline( std::cin, cmdline );
 
       const Command cmd = parseCmdLine( cmdline );
-      if( cmd.type != CMD_TYPE_INVALID )
-      {
-         std::lock_guard<std::mutex> g( commandsMutex );
-         g_commands.push_back( cmd );
-      }
-      else
-      {
-         printf( "Unknown command. Use 'help' to list available commands\n" );
-      }
-
-      std::cin.clear();
+      std::lock_guard<std::mutex> g( commandsMutex );
+      g_commands.push_back( cmd );
    }
 }
 
@@ -274,8 +277,10 @@ static bool processCommands( hop::Profiler* prof )
       case CMD_TYPE_STATUS:
          printStatus( prof );
          break;
+      case CMD_TYPE_INVALID:
+         printInvalidCmd();
+         break;
       default:
-         assert( !"Invalid command" );
          break;
       }
    }
@@ -285,7 +290,8 @@ static bool processCommands( hop::Profiler* prof )
 
 static void showPrompt()
 {
-   printf( "\n> " );
+   printf( ">>> " );
+   fflush( stdout );
 }
 
 int main( int argc, char* argv[] )
@@ -298,6 +304,12 @@ int main( int argc, char* argv[] )
 #ifndef _MSC_VER
    signal( SIGCHLD, SIG_IGN );
 #endif
+
+   if( argc < 2 )
+   {
+      printUsage( argv[0] );
+      exit(-1);
+   }
 
    // Confirm the platform can use HOP
    if ( !verifyPlatform() )
