@@ -203,8 +203,6 @@ static Command parseCmdLine( std::string cmdline )
    Command cmd;
    cmd.type = CMD_TYPE_INVALID;
 
-   const size_t end = std::string::npos;
-
    std::transform( cmdline.begin(), cmdline.end(), cmdline.begin(), ::tolower );
    for( auto it = std::begin( stringCmds ); it != std::end( stringCmds ); ++it )
    {
@@ -240,7 +238,7 @@ static void interpretCmdline()
    }
 }
 
-static bool processCommands()
+static bool processCommands( hop::Profiler* prof )
 {
    std::vector< Command > localCmds;
    {
@@ -260,8 +258,10 @@ static bool processCommands()
          printHelp();
          break;
       case CMD_TYPE_START_RECORDING:
+         prof->setRecording( true );
          break;
       case CMD_TYPE_STOP_RECORDING:
+         prof->setRecording( false );
          break;
       default:
          assert( !"Invalid command" );
@@ -326,11 +326,8 @@ int main( int argc, char* argv[] )
    {
       HOP_PROF( "Main Loop" );
 
-      if( showPrompt )
-
       profiler->fetchClientData();
-
-      if( processCommands() )
+      if( processCommands( profiler.get() ) )
       {
          showPrompt();
       }
