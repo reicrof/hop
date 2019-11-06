@@ -173,7 +173,8 @@ enum CommandType
    CMD_TYPE_EXIT,
    CMD_TYPE_BEGIN_RECORDING,
    CMD_TYPE_END_RECORDING,
-   CMD_TYPE_STATUS
+   CMD_TYPE_STATUS,
+   CMD_TYPE_CLEAR
 };
 
 struct Command
@@ -196,6 +197,7 @@ static constexpr StringCommand stringCmds[] =
    {"begin", "b", "Begin recording", CMD_TYPE_BEGIN_RECORDING},
    {"end", "e", "End recording", CMD_TYPE_END_RECORDING},
    {"status", "s", "Show status of the profiling", CMD_TYPE_STATUS},
+   {"clear", "c", "Clear collected traces and stop recording", CMD_TYPE_CLEAR},
 };
 
 static void printUsage( const char* progname )
@@ -311,6 +313,10 @@ static bool processCommands( hop::Profiler* prof )
          printInvalidCmd();
          break;
       case CMD_TYPE_EMTPY:
+         shouldPrintStatus = true;
+         break;
+      case CMD_TYPE_CLEAR:
+         prof->clear();
          shouldPrintStatus = true;
          break;
       default:

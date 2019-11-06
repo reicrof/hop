@@ -6,9 +6,9 @@
 namespace hop
 {
 Profiler::Profiler( SourceType type, int processId, const char* str )
-    : _srcType( type ),
+    : _name( str ),
       _pid( processId ),
-      _name( str ),
+      _srcType( type ),
       _earliestTimeStamp( 0 ),
       _latestTimeStamp( 0 )
 {
@@ -189,6 +189,14 @@ void Profiler::addThreadName( StrPtr_t name, uint32_t threadIndex )
    assert( name != 0 );  // should not be empty name
 
    _tracks[threadIndex].setTrackName( name );
+}
+
+void Profiler::clear()
+{
+   _server.clear();
+   _strDb.clear();
+   _tracks.clear();
+   _recording = false;
 }
 
 Profiler::~Profiler() { _server.stop(); }

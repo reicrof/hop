@@ -676,11 +676,11 @@ bool hop::Profiler::openFile( const char* path )
    return false;
 }
 
-void hop::Profiler::clear()
-{
-   _server.clear();
-   _strDb.clear();
-   _tracks.clear();
-   _timeline.clear();
-   _recording = false;
-}
+// void hop::Profiler::clear()
+// {
+//    _server.clear();
+//    _strDb.clear();
+//    _tracks.clear();
+//    _timeline.clear();
+//    _recording = false;
+// }
