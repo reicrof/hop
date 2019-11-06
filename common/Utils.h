@@ -82,26 +82,6 @@ inline int64_t cyclesToNanos( int64_t cycles )
    return llround(nanos * cpuFreqGhz);
 }
 
-inline uint32_t addColorWithClamping( uint32_t c1, uint32_t c2 )
-{
-   unsigned char r = clamp( ((c1 >> 0) & 0xFF) + ((c2 >> 0) & 0xFF), 0u, 255u );
-   unsigned char g = clamp( ((c1 >> 8) & 0xFF) + ((c2 >> 8) & 0xFF), 0u, 255u );
-   unsigned char b = clamp( ((c1 >> 16) & 0xFF) + ((c2 >> 16) & 0xFF), 0u, 255u );
-   unsigned char a = clamp( ((c1 >> 24) & 0xFF) + ((c2 >> 24) & 0xFF), 0u, 255u );
-
-   return ( r | (g<<8) | (b<<16) | (a<<24) );
-}
-
-inline uint32_t subColorWithClamping( uint32_t c1, uint32_t c2 )
-{
-   unsigned char r = clamp( ((c1 >> 0) & 0xFF) - ((c2 >> 0) & 0xFF), 0u, 255u );
-   unsigned char g = clamp( ((c1 >> 8) & 0xFF) - ((c2 >> 8) & 0xFF), 0u, 255u );
-   unsigned char b = clamp( ((c1 >> 16) & 0xFF) - ((c2 >> 16) & 0xFF), 0u, 255u );
-   unsigned char a = clamp( ((c1 >> 24) & 0xFF) - ((c2 >> 24) & 0xFF), 0u, 255u );
-
-   return ( r | (g<<8) | (b<<16) | (a<<24) );
-}
-
 inline bool ptInRect( float ptx, float pty, float ax, float ay, float bx, float by )
 {
    if( ptx < ax || ptx > bx ) return false;

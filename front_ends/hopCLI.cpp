@@ -20,6 +20,20 @@
 
 bool g_run = true;
 
+static const std::string WHITESPACES = " \n\r\t\f\v";
+
+std::string lefttrim(const std::string& s)
+{
+	size_t last = s.find_first_not_of( WHITESPACES );
+	return ( last == std::string::npos ) ? "" : s.substr( last );
+}
+
+static std::string righttrim( const std::string& s )
+{
+	size_t first = s.find_last_not_of( WHITESPACES );
+	return ( first == std::string::npos ) ? "" : s.substr(0, first + 1);
+}
+
 static void terminateCallback( int sig )
 {
    signal( sig, SIG_IGN );
@@ -153,6 +167,7 @@ static LaunchOptions parseArgs( int argc, char* argv[] )
 
 enum CommandType
 {
+   CMD_TYPE_EMTPY,
    CMD_TYPE_INVALID,
    CMD_TYPE_HELP,
    CMD_TYPE_EXIT,
@@ -188,6 +203,11 @@ static void printUsage( const char* progname )
    printf("Missing argument.\nExample usage : %s [client_exec]\n", progname );
 }
 
+static void printInvalidCmd()
+{
+   printf( "Unknown command. Use 'help' to list available commands\n" );
+}
+
 static void printHelp()
 {
    const int arraySz = sizeof( stringCmds ) / sizeof( stringCmds[0] );
@@ -206,23 +226,30 @@ static void printStatus( hop::Profiler* prof )
    int pid = -1;
    const char* name = prof->nameAndPID( &pid );
    const char* recordState = prof->recording() ? "Recording" : "Not Recording";
-   printf("%s (%d) - [%s] \n", name, pid, recordState );
-}
-
-static void printInvalidCmd()
-{
-   printf( "Unknown command. Use 'help' to list available commands\n" );
+   const hop::ProfilerStats stats = prof->stats();
+   printf("%s (%d) - [%s] \n\tTraces Count : %zu\n", name, pid, recordState, stats.traceCount );
 }
 
 std::mutex commandsMutex;
 std::vector< Command > g_commands;
 static Command parseCmdLine( std::string cmdline )
 {
-   Command cmd;
-   cmd.type = CMD_TYPE_INVALID;
-
    std::transform( cmdline.begin(), cmdline.end(), cmdline.begin(), ::tolower );
+   cmdline = lefttrim( cmdline );
+   cmdline = righttrim( cmdline );
    const char* lowerCmdLine = cmdline.c_str();
+
+   Command cmd;
+
+   // Return empty command
+   if (cmdline.empty())
+   {
+      cmd.type = CMD_TYPE_EMTPY;
+      return cmd;
+   }
+
+   // Otherwise assume it is invalid for now
+   cmd.type = CMD_TYPE_INVALID;
    for( auto it = std::begin( stringCmds ); it != std::end( stringCmds ); ++it )
    {
       if( strcmp( it->shortCmdStr, lowerCmdLine ) == 0 ||
@@ -258,6 +285,7 @@ static bool processCommands( hop::Profiler* prof )
    g_commands.clear();
    }
 
+   bool shouldPrintStatus = false;
    for( const auto& cmd : localCmds )
    {
       switch (cmd.type)
@@ -270,20 +298,28 @@ static bool processCommands( hop::Profiler* prof )
          break;
       case CMD_TYPE_BEGIN_RECORDING:
          prof->setRecording( true );
+         shouldPrintStatus = true;
          break;
       case CMD_TYPE_END_RECORDING:
          prof->setRecording( false );
+         shouldPrintStatus = true;
          break;
       case CMD_TYPE_STATUS:
-         printStatus( prof );
+         shouldPrintStatus = true;
          break;
       case CMD_TYPE_INVALID:
          printInvalidCmd();
+         break;
+      case CMD_TYPE_EMTPY:
+         shouldPrintStatus = true;
          break;
       default:
          break;
       }
    }
+
+   if( shouldPrintStatus )
+      printStatus( prof );
 
    return localCmds.size();
 }
