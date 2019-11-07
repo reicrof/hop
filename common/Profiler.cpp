@@ -1,7 +1,11 @@
 #include "Profiler.h"
 
+#include "miniz.h"
+
 #include <algorithm>
 #include <cassert>
+#include <fstream>
+#include <numeric> // accumulate
 
 namespace hop
 {
@@ -189,6 +193,61 @@ void Profiler::addThreadName( StrPtr_t name, uint32_t threadIndex )
    assert( name != 0 );  // should not be empty name
 
    _tracks[threadIndex].setTrackName( name );
+}
+
+const uint32_t MAGIC_NUMBER = 1095780676;  // "DIPA"
+struct SaveFileHeader
+{
+   uint32_t magicNumber;
+   uint32_t version;
+   size_t uncompressedSize;
+   uint32_t strDbSize;
+   uint32_t threadCount;
+};
+
+bool hop::Profiler::saveToFile( const char* savePath )
+{
+   setRecording( false );
+   // Compute the size of the serialized data
+   const size_t dbSerializedSize       = serializedSize( _strDb );
+   std::vector<size_t> timelineTrackSerializedSize( _tracks.size() );
+   for( size_t i = 0; i < _tracks.size(); ++i )
+   {
+      timelineTrackSerializedSize[i] = serializedSize( _tracks[i] );
+   }
+
+   const size_t totalSerializedSize =
+       std::accumulate(
+           timelineTrackSerializedSize.begin(), timelineTrackSerializedSize.end(), size_t{0} ) + dbSerializedSize;
+
+   std::vector<char> data( totalSerializedSize );
+
+   size_t index = serialize( _strDb, &data[0] );
+   for( size_t i = 0; i < _tracks.size(); ++i )
+   {
+      index += serialize( _tracks[i], &data[index] );
+   }
+
+   mz_ulong compressedSize = compressBound( totalSerializedSize );
+   std::vector<char> compressedData( compressedSize );
+   int compressionStatus = compress(
+       (unsigned char*)compressedData.data(),
+       &compressedSize,
+       (const unsigned char*)&data[0],
+       totalSerializedSize );
+   if( compressionStatus != Z_OK )
+   {
+      //displayModalWindow( "Compression failed. File not saved!", MODAL_TYPE_ERROR );
+      return false;
+   }
+
+   std::ofstream of( savePath, std::ofstream::binary );
+   SaveFileHeader header = {
+       MAGIC_NUMBER, 1, totalSerializedSize, (uint32_t)dbSerializedSize, (uint32_t)_tracks.size()};
+   of.write( (const char*)&header, sizeof( header ) );
+   of.write( &compressedData[0], compressedSize );
+
+   return true;
 }
 
 void Profiler::clear()

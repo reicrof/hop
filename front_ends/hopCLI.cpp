@@ -5,8 +5,6 @@
 #include "common/Utils.h"
 #undef main
 
-#include "miniz.h"
-
 #include <iostream>
 #include <memory>
 #include <mutex>
@@ -90,11 +88,12 @@ static bool verifyPlatform()
    return true;
 }
 
-static void printUsage()
+static void printUsage( const char* progname )
 {
    printf(
-       "Usage : hop [OPTION] <process name>\n\n OPTIONS:\n\t-e Launch specified executable and "
-       "start recording\n\t-v Display version info and exit\n\t-h Show usage\n" );
+       "Usage : %s -o [output_path] <process name>\n\n OPTIONS:\n\t-o output path for saved "
+       "file\n\t-v Display version info and exit\n\t-h Show usage\n",
+       progname );
    exit( 0 );
 }
 
@@ -114,55 +113,74 @@ struct LaunchOptions
 {
    const char* fullProcessPath;
    const char* processName;
+   const char* saveFilePath;
    char** args;
    bool startExec;
 };
 
-static LaunchOptions createLaunchOptions( char* fullProcessPath, char** argv, bool startExec )
+static void setExecInfo( LaunchOptions& lo, char* fullProcessPath, char** argv, bool startExec )
 {
-   LaunchOptions opts = {fullProcessPath, fullProcessPath, argv, startExec};
+   lo.fullProcessPath = fullProcessPath;
+   lo.processName     = fullProcessPath;
+   lo.args            = argv;
+   lo.startExec       = startExec;
+
    std::string fullPathStr( fullProcessPath );
    size_t lastSeparator = fullPathStr.find_last_of( "/\\" );
    if ( lastSeparator != std::string::npos )
    {
-      opts.processName = &fullProcessPath[++lastSeparator];
+      lo.processName = &fullProcessPath[++lastSeparator];
    }
-
-   return opts;
 }
 
 static LaunchOptions parseArgs( int argc, char* argv[] )
 {
-   if ( argc > 1 )
+   LaunchOptions lo{nullptr, nullptr, nullptr, nullptr, false};
+
+   // Invalid argument count
+   if ( argc == 1 )
+      return lo;
+
+   int i = 0; // Skip first arguments since it is not relevent
+   while( argv[++i] )
    {
-      if ( argv[1][0] == '-' )
+      if( argv[i][0] == '-' )
       {
-         switch ( argv[1][1] )
+         switch( argv[i][1] )
          {
+            default:
+               break;
             case 'v':
                printf( "hop version %.2f \n", HOP_VERSION );
                exit( 0 );
-               break;
             case 'h':
-               printUsage();
+               printUsage( argv[0] );
                exit( 0 );
-            case 'e':
-               if ( argc > 2 )
+            case 'o' :
+               if( !argv[++i] )
                {
-                  return createLaunchOptions( argv[2], &argv[2], true );
+                  fprintf( stderr, "Missing output file name\n" );
+                  exit( -1 );
                }
-               // Fallthrough
-            default:
-               fprintf( stderr, "Invalid arguments\n" );
+               lo.saveFilePath = argv[i];
                break;
+            case 'e':
+               if( !argv[++i] )
+               {
+                  fprintf( stderr, "Missing executable name\n" );
+                  exit( -1 );
+               }
+               setExecInfo( lo, argv[i], &argv[i], true );
+               return lo;
          }
       }
       else
       {
-         return createLaunchOptions( argv[1], &argv[1], false );
+         setExecInfo( lo, argv[i], &argv[i], false );
+         return lo;
       }
    }
-   return LaunchOptions{nullptr, nullptr, nullptr, false};
+   return lo;
 }
 
 enum CommandType
@@ -200,11 +218,6 @@ static constexpr StringCommand stringCmds[] =
    {"clear", "c", "Clear collected traces and stop recording", CMD_TYPE_CLEAR},
 };
 
-static void printUsage( const char* progname )
-{
-   printf("Missing argument.\nExample usage : %s [client_exec]\n", progname );
-}
-
 static void printInvalidCmd()
 {
    printf( "Unknown command. Use 'help' to list available commands\n" );
@@ -227,7 +240,7 @@ static void printStatus( hop::Profiler* prof )
 {
    int pid = -1;
    const char* name = prof->nameAndPID( &pid );
-   const char* recordState = prof->recording() ? "Recording" : "Not Recording";
+   const char* recordState = prof->recording() && pid != -1 ? "Recording" : "Not Recording";
    const hop::ProfilerStats stats = prof->stats();
    printf("%s (%d) - [%s] \n\tTraces Count : %zu\n", name, pid, recordState, stats.traceCount );
 }
@@ -338,15 +351,6 @@ static void showPrompt()
 
 int main( int argc, char* argv[] )
 {
-   const LaunchOptions opts = parseArgs( argc, argv );
-
-   // Setup signal handlers
-   signal( SIGINT, terminateCallback );
-   signal( SIGTERM, terminateCallback );
-#ifndef _MSC_VER
-   signal( SIGCHLD, SIG_IGN );
-#endif
-
    if( argc < 2 )
    {
       printUsage( argv[0] );
@@ -358,6 +362,20 @@ int main( int argc, char* argv[] )
    {
       return -2;
    }
+
+   const LaunchOptions opts = parseArgs( argc, argv );
+   if( !opts.saveFilePath )
+   {
+      fprintf( stderr, "No output save path specified.\n" );
+      return -1;
+   }
+
+   // Setup signal handlers
+   signal( SIGINT, terminateCallback );
+   signal( SIGTERM, terminateCallback );
+#ifndef _MSC_VER
+   signal( SIGCHLD, SIG_IGN );
+#endif
 
    HOP_SET_THREAD_NAME( "Main" );
 
@@ -399,6 +417,10 @@ int main( int argc, char* argv[] )
 
       std::this_thread::sleep_for( std::chrono::milliseconds( 5 ) );
    }
+
+   assert( opts.saveFilePath );
+
+   profiler->saveToFile( opts.saveFilePath );
 
    // We have launched a child process. Let's close it
    if ( opts.startExec )

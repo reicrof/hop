@@ -46,7 +46,7 @@ if(UNIX)
 else()
    set( viewer_platform_src "platform/Platform_Windows.cpp" )
 endif()
-file( GLOB common_src "common/*.cpp" )
+file( GLOB common_src "common/*.cpp" "common/*.c" )
 set( common_src ${common_src} ${viewer_platform_src} )
 
 #####################

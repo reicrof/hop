@@ -5,7 +5,6 @@
 #include "TraceDetail.h"
 #include "TraceData.h"
 #include "ModalWindow.h"
-#include "miniz.h"
 #include "Options.h"
 #include "RendererGL.h"
 #include <SDL_keycode.h>
@@ -16,23 +15,12 @@
 #include <string>
 #include <vector>
 #include <algorithm>
-#include <numeric>
 #include <stdio.h>
-#include <fstream>
 
 extern bool g_run;
 
 namespace
 {
-const uint32_t MAGIC_NUMBER = 1095780676;  // "DIPA"
-struct SaveFileHeader
-{
-   uint32_t magicNumber;
-   uint32_t version;
-   size_t uncompressedSize;
-   uint32_t strDbSize;
-   uint32_t threadCount;
-};
 
 void displayBackgroundHelpMsg( uint32_t windowWidth, uint32_t windowHeight )
 {
@@ -548,66 +536,66 @@ void hop::Profiler::handleMouse()
 //    }
 // }
 
-bool hop::Profiler::saveToFile( const char* savePath )
-{
-   displayModalWindow( "Saving...", MODAL_TYPE_NO_CLOSE );
-   setRecording( false );
-   std::string path( savePath );
-   std::thread t( [this, path]() {
-      // Compute the size of the serialized data
-      const size_t dbSerializedSize = serializedSize( _strDb );
-      const size_t timelineSerializedSize = serializedSize( _timeline );
-      std::vector<size_t> timelineTrackSerializedSize( _tracks.size() );
-      for ( size_t i = 0; i < _tracks.size(); ++i )
-      {
-         timelineTrackSerializedSize[i] = serializedSize( _tracks[i] );
-      }
+// bool hop::Profiler::saveToFile( const char* savePath )
+// {
+//    displayModalWindow( "Saving...", MODAL_TYPE_NO_CLOSE );
+//    setRecording( false );
+//    std::string path( savePath );
+//    std::thread t( [this, path]() {
+//       // Compute the size of the serialized data
+//       const size_t dbSerializedSize = serializedSize( _strDb );
+//       const size_t timelineSerializedSize = serializedSize( _timeline );
+//       std::vector<size_t> timelineTrackSerializedSize( _tracks.size() );
+//       for ( size_t i = 0; i < _tracks.size(); ++i )
+//       {
+//          timelineTrackSerializedSize[i] = serializedSize( _tracks[i] );
+//       }
 
-      const size_t totalSerializedSize =
-          std::accumulate(
-              timelineTrackSerializedSize.begin(), timelineTrackSerializedSize.end(), size_t{0} ) +
-          timelineSerializedSize + dbSerializedSize;
+//       const size_t totalSerializedSize =
+//           std::accumulate(
+//               timelineTrackSerializedSize.begin(), timelineTrackSerializedSize.end(), size_t{0} ) +
+//           timelineSerializedSize + dbSerializedSize;
 
-      std::vector<char> data( totalSerializedSize );
+//       std::vector<char> data( totalSerializedSize );
 
-      size_t index = serialize( _strDb, &data[0] );
-      index += serialize( _timeline, &data[index] );
-      for ( size_t i = 0; i < _tracks.size(); ++i )
-      {
-         index += serialize( _tracks[i], &data[index] );
-      }
+//       size_t index = serialize( _strDb, &data[0] );
+//       index += serialize( _timeline, &data[index] );
+//       for ( size_t i = 0; i < _tracks.size(); ++i )
+//       {
+//          index += serialize( _tracks[i], &data[index] );
+//       }
 
-      mz_ulong compressedSize = compressBound( totalSerializedSize );
-      std::vector<char> compressedData( compressedSize );
-      int compressionStatus = compress(
-          (unsigned char*)compressedData.data(),
-          &compressedSize,
-          (const unsigned char*)&data[0],
-          totalSerializedSize );
-      if ( compressionStatus != Z_OK )
-      {
-         closeModalWindow();
-         displayModalWindow( "Compression failed. File not saved!", MODAL_TYPE_ERROR );
-         return false;
-      }
+//       mz_ulong compressedSize = compressBound( totalSerializedSize );
+//       std::vector<char> compressedData( compressedSize );
+//       int compressionStatus = compress(
+//           (unsigned char*)compressedData.data(),
+//           &compressedSize,
+//           (const unsigned char*)&data[0],
+//           totalSerializedSize );
+//       if ( compressionStatus != Z_OK )
+//       {
+//          closeModalWindow();
+//          displayModalWindow( "Compression failed. File not saved!", MODAL_TYPE_ERROR );
+//          return false;
+//       }
 
-      std::ofstream of( path, std::ofstream::binary );
-      SaveFileHeader header = {MAGIC_NUMBER,
-                               1,
-                               totalSerializedSize,
-                               (uint32_t)dbSerializedSize,
-                               (uint32_t)_tracks.size()};
-      of.write( (const char*)&header, sizeof( header ) );
-      of.write( &compressedData[0], compressedSize );
+//       std::ofstream of( path, std::ofstream::binary );
+//       SaveFileHeader header = {MAGIC_NUMBER,
+//                                1,
+//                                totalSerializedSize,
+//                                (uint32_t)dbSerializedSize,
+//                                (uint32_t)_tracks.size()};
+//       of.write( (const char*)&header, sizeof( header ) );
+//       of.write( &compressedData[0], compressedSize );
 
-      closeModalWindow();
-      return true;
-   } );
+//       closeModalWindow();
+//       return true;
+//    } );
 
-   t.detach();
+//    t.detach();
 
-   return true;
-}
+//    return true;
+// }
 
 bool hop::Profiler::setProcess( int processId, const char* process )
 {
