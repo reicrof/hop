@@ -1,8 +1,9 @@
 #define HOP_IMPLEMENTATION
 #include <Hop.h>
-#include "platform/Platform.h"
+#include "common/Startup.h"
 #include "common/Profiler.h"
 #include "common/Utils.h"
+#include "platform/Platform.h"
 #undef main
 
 #include <iostream>
@@ -38,66 +39,7 @@ static void terminateCallback( int sig )
    g_run = false;
 }
 
-static bool processAlive( hop::ProcessID id )
-{
-#if defined( _MSC_VER )
-   DWORD exitCode;
-   GetExitCodeProcess( (HANDLE)id, &exitCode );
-   return exitCode == STILL_ACTIVE;
-#else
-   return kill( id, 0 ) == 0;
-#endif
-}
-
-static void terminateProcess( hop::ProcessID id )
-{
-#if defined( _MSC_VER )
-   TerminateProcess( (HANDLE)id, 0 );
-   WaitForSingleObject( (HANDLE)id, INFINITE );
-   CloseHandle( (HANDLE)id );
-#else
-   if ( processAlive( id ) )
-   {
-      kill( id, SIGINT );
-      int status, wpid;
-      do
-      {
-         wpid = wait( &status );
-      }
-      while ( wpid > 0 );
-   }
-#endif
-}
-
-static bool verifyPlatform()
-{
-   if ( !hop::supportsRDTSCP() )
-   {
-      printf(
-          "This platform does not seem to support RDTSCP. Hop will not be "
-          "able to work properly.\n" );
-      return false;
-   }
-
-   if ( !hop::supportsConstantTSC() )
-   {
-      printf(
-          "This platform does not seem to support Invariant TSC. Hop will be "
-          "able to run, but no precision on the measurement are guaranteed.\n" );
-   }
-   return true;
-}
-
-static void printUsage( const char* progname )
-{
-   printf(
-       "Usage : %s -o [output_path] <process name>\n\n OPTIONS:\n\t-o output path for saved "
-       "file\n\t-v Display version info and exit\n\t-h Show usage\n",
-       progname );
-   exit( 0 );
-}
-
-static std::unique_ptr<hop::Profiler> createProfiler( const char* processName )
+static std::unique_ptr<hop::Profiler> createProfiler( const char* processName, bool startRecording )
 {
    using namespace hop;
    const int pid = getPIDFromString( processName );
@@ -105,82 +47,9 @@ static std::unique_ptr<hop::Profiler> createProfiler( const char* processName )
                                                : hop::getProcessInfoFromProcessName( processName );
 
    auto profiler = std::make_unique<hop::Profiler>( Profiler::SRC_TYPE_PROCESS, procInfo.pid, processName );
-   profiler->setRecording( true );
+   if( startRecording )
+      profiler->setRecording( true );
    return profiler;
-}
-
-struct LaunchOptions
-{
-   const char* fullProcessPath;
-   const char* processName;
-   const char* saveFilePath;
-   char** args;
-   bool startExec;
-};
-
-static void setExecInfo( LaunchOptions& lo, char* fullProcessPath, char** argv, bool startExec )
-{
-   lo.fullProcessPath = fullProcessPath;
-   lo.processName     = fullProcessPath;
-   lo.args            = argv;
-   lo.startExec       = startExec;
-
-   std::string fullPathStr( fullProcessPath );
-   size_t lastSeparator = fullPathStr.find_last_of( "/\\" );
-   if ( lastSeparator != std::string::npos )
-   {
-      lo.processName = &fullProcessPath[++lastSeparator];
-   }
-}
-
-static LaunchOptions parseArgs( int argc, char* argv[] )
-{
-   LaunchOptions lo{nullptr, nullptr, nullptr, nullptr, false};
-
-   // Invalid argument count
-   if ( argc == 1 )
-      return lo;
-
-   int i = 0; // Skip first arguments since it is not relevent
-   while( argv[++i] )
-   {
-      if( argv[i][0] == '-' )
-      {
-         switch( argv[i][1] )
-         {
-            default:
-               break;
-            case 'v':
-               printf( "hop version %.2f \n", HOP_VERSION );
-               exit( 0 );
-            case 'h':
-               printUsage( argv[0] );
-               exit( 0 );
-            case 'o' :
-               if( !argv[++i] )
-               {
-                  fprintf( stderr, "Missing output file name\n" );
-                  exit( -1 );
-               }
-               lo.saveFilePath = argv[i];
-               break;
-            case 'e':
-               if( !argv[++i] )
-               {
-                  fprintf( stderr, "Missing executable name\n" );
-                  exit( -1 );
-               }
-               setExecInfo( lo, argv[i], &argv[i], true );
-               return lo;
-         }
-      }
-      else
-      {
-         setExecInfo( lo, argv[i], &argv[i], false );
-         return lo;
-      }
-   }
-   return lo;
 }
 
 enum CommandType
@@ -353,17 +222,17 @@ int main( int argc, char* argv[] )
 {
    if( argc < 2 )
    {
-      printUsage( argv[0] );
+      hop::printUsage( argv[0] );
       exit(-1);
    }
 
    // Confirm the platform can use HOP
-   if ( !verifyPlatform() )
+   if ( !hop::verifyPlatform() )
    {
       return -2;
    }
 
-   const LaunchOptions opts = parseArgs( argc, argv );
+   const hop::LaunchOptions opts = hop::parseArgs( argc, argv );
    if( !opts.saveFilePath )
    {
       fprintf( stderr, "No output save path specified.\n" );
@@ -396,7 +265,7 @@ int main( int argc, char* argv[] )
       }
 
       // Add new profiler after having potentially started it.
-      profiler = createProfiler( opts.processName );
+      profiler = createProfiler( opts.processName, opts.startExec );
    }
 
    // Start the command line interpreter
@@ -425,7 +294,7 @@ int main( int argc, char* argv[] )
    // We have launched a child process. Let's close it
    if ( opts.startExec )
    {
-      terminateProcess( childProcId );
+      hop::terminateProcess( childProcId );
    }
 
    // The interpreter thread will leak. This is a small cost to pay to have simple dumb portable code.

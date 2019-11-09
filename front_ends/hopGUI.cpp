@@ -2,6 +2,7 @@
 #include <Hop.h>
 #include "Stats.h"
 #include "common/Utils.h"
+#include "common/Startup.h"
 #include "platform/Platform.h"
 #include "imgui/imgui.h"
 #include "Options.h"
@@ -202,32 +203,6 @@ static void terminateProcess( hop::ProcessID id )
 #endif
 }
 
-static bool verifyPlatform()
-{
-   if ( !hop::supportsRDTSCP() )
-   {
-      printf(
-          "This platform does not seem to support RDTSCP. Hop will not be "
-          "able to work properly.\n" );
-      return false;
-   }
-
-   if ( !hop::supportsConstantTSC() )
-   {
-      printf(
-          "This platform does not seem to support Invariant TSC. Hop will be "
-          "able to run, but no precision on the measurement are guaranteed.\n" );
-   }
-   return true;
-}
-
-static void printUsage()
-{
-   printf(
-       "Usage : hop [OPTION] <process name>\n\n OPTIONS:\n\t-e Launch specified executable and "
-       "start recording\n\t-v Display version info and exit\n\t-h Show usage\n" );
-   exit( 0 );
-}
 
 struct LaunchOptions
 {

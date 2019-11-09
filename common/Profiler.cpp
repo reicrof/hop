@@ -19,7 +19,7 @@ Profiler::Profiler( SourceType type, int processId, const char* str )
    _server.start( _pid , _name.c_str());
 }
 
-const char* Profiler::nameAndPID( int* processId )
+const char* Profiler::nameAndPID( int* processId ) const
 {
    if( processId ) *processId = _pid;
    return _name.c_str();
@@ -237,7 +237,7 @@ bool hop::Profiler::saveToFile( const char* savePath )
        totalSerializedSize );
    if( compressionStatus != Z_OK )
    {
-      //displayModalWindow( "Compression failed. File not saved!", MODAL_TYPE_ERROR );
+      fprintf( stderr, "Compression failed. File not saved!" );
       return false;
    }
 

@@ -20,6 +20,9 @@ ProcessInfo getProcessInfoFromProcessName( const char* name );
 
 ProcessID startChildProcess( const char* path, char** args );
 
+bool processAlive( hop::ProcessID id );
+void terminateProcess( hop::ProcessID id );
+
 }  // namespace hop
 
 #endif

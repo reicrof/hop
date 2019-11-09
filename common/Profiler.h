@@ -30,7 +30,7 @@ public:
 
    Profiler( SourceType type, int processId, const char* str );
    ~Profiler();
-   const char* nameAndPID( int* processId = nullptr );
+   const char* nameAndPID( int* processId = nullptr ) const;
    ProfilerStats stats() const;
    SourceType sourceType() const;
    bool recording() const;

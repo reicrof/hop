@@ -2,6 +2,7 @@
 
 #include "Cursor.h"
 #include "Profiler.h"
+#include "ProfilerView.h"
 #include "Lod.h"
 #include "ModalWindow.h"
 #include "Options.h"
@@ -51,9 +52,9 @@ static void drawMenuBar( hop::Viewer* v )
          }
          if( ImGui::MenuItem( menuSaveAsHop, NULL, false, profIdx >= 0 ) )
          {
-            hop::Profiler* prof = v->getProfiler( profIdx );
-            hop::displayStringInputModalWindow(
-                menuSaveAsHop, [=]( const char* path ) { prof->saveToFile( path ); } );
+            // hop::Profiler* prof = v->getProfiler( profIdx );
+            // hop::displayStringInputModalWindow(
+            //     menuSaveAsHop, [=]( const char* path ) { prof->saveToFile( path ); } );
          }
          if( ImGui::MenuItem( menuOpenHopFile, NULL ) )
          {
@@ -100,10 +101,10 @@ static void drawMenuBar( hop::Viewer* v )
    }
 }
 
-static int displayableProfilerName( hop::Profiler* prof, char* outName, uint32_t size )
+static int displayableProfilerName( const hop::ProfilerView* prof, char* outName, uint32_t size )
 {
    int pid;
-   const char* profName = prof->nameAndPID( &pid );
+   const char* profName = prof->data().nameAndPID( &pid );
    if( !profName )
    {
       return snprintf( outName, size, "%s", "<No Target Process>" );
@@ -255,17 +256,18 @@ static int drawTabs( hop::Viewer& viewer, int selectedTab )
    return newTabSelection;
 }
 
-static void updateOptions( const hop::Profiler* selectedProf, hop::Stats& stats )
+static void updateOptions( const hop::ProfilerView* selectedProf, hop::Stats& stats )
 {
-   const hop::ProfilerStats profStats = selectedProf->stats();
-   stats.currentLOD = profStats.lodLevel;
+   const hop::Profiler& profData = selectedProf->data();
+   const hop::ProfilerStats profStats = profData.stats();
+   stats.currentLOD = selectedProf->lodLevel();
    stats.stringDbSize = profStats.strDbSize;
    stats.traceCount = profStats.traceCount;
    stats.clientSharedMemSize = profStats.clientSharedMemSize;
 }
 
 static void updateProfilers(
-    std::vector<std::unique_ptr<hop::Profiler> >& profilers,
+    std::vector<std::unique_ptr<hop::ProfilerView> >& profilers,
     int selectedTab )
 {
    const float dtTimeMs = ImGui::GetIO().DeltaTime * 1000;
@@ -282,7 +284,7 @@ static void updateProfilers(
 }
 
 static bool profilerAlreadyExist(
-    const std::vector<std::unique_ptr<hop::Profiler> >& profilers,
+    const std::vector<std::unique_ptr<hop::ProfilerView> >& profilers,
     int pid,
     const char* processName )
 {
@@ -291,9 +293,9 @@ static bool profilerAlreadyExist(
    {
       alreadyExist =
           std::find_if(
-              profilers.begin(), profilers.end(), [pid]( const std::unique_ptr<hop::Profiler>& p ) {
+              profilers.begin(), profilers.end(), [pid]( const std::unique_ptr<hop::ProfilerView>& pv ) {
                  int curPid;
-                 p->nameAndPID( &curPid );
+                 pv->data().nameAndPID( &curPid );
                  return curPid == pid;
               } ) != profilers.end();
    }
@@ -302,8 +304,8 @@ static bool profilerAlreadyExist(
       alreadyExist = std::find_if(
                          profilers.begin(),
                          profilers.end(),
-                         [processName]( const std::unique_ptr<hop::Profiler>& p ) {
-                            return strcmp( p->nameAndPID(), processName ) == 0;
+                         [processName]( const std::unique_ptr<hop::ProfilerView>& pv ) {
+                            return strcmp( pv->data().nameAndPID(), processName ) == 0;
                          } ) != profilers.end();
    }
 
@@ -334,26 +336,25 @@ int Viewer::addNewProfiler( const char* processName, bool startRecording )
    const hop::ProcessInfo procInfo = pid != -1 ? hop::getProcessInfoFromPID( pid )
                                                : hop::getProcessInfoFromProcessName( processName );
 
-   _profilers.emplace_back( new hop::Profiler() );
-   _profilers.back()->setSource( Profiler::SRC_TYPE_PROCESS, procInfo.pid, processName );
+   _profilers.emplace_back( new hop::Profiler( Profiler::SRC_TYPE_PROCESS, procInfo.pid, processName ) );
    _profilers.back()->setRecording( startRecording );
    _selectedTab = _profilers.size() - 1;
    return _selectedTab;
 }
 
-void Viewer::openProfilerFile( const char* filePath )
+void Viewer::openProfilerFile( const char* /*filePath*/ )
 {
    assert( !_pendingProfilerLoad.valid() );
 
-   std::string strPath = filePath;
-   _pendingProfilerLoad = std::async(
-       std::launch::async,
-       []( std::string path ) {
-          Profiler* prof = new hop::Profiler();
-          prof->setSource( Profiler::SRC_TYPE_FILE, -1, path.c_str() );
-          return prof;
-       },
-       strPath );
+   //std::string strPath = filePath;
+   // _pendingProfilerLoad = std::async(
+   //     std::launch::async,
+   //     []( std::string path ) {
+   //        Profiler* prof = new hop::Profiler();
+   //        prof->setSource( Profiler::SRC_TYPE_FILE, -1, path.c_str() );
+   //        return prof;
+   //     },
+   //     strPath );
 }
 
 int Viewer::removeProfiler( int index )
@@ -376,7 +377,7 @@ int Viewer::profilerCount() const { return _profilers.size(); }
 
 int Viewer::activeProfilerIndex() const { return _selectedTab; }
 
-Profiler* Viewer::getProfiler( int index )
+const ProfilerView* Viewer::getProfiler( int index ) const
 {
    assert( index >= 0 && index < (int)_profilers.size() );
    return _profilers[index].get();
@@ -384,24 +385,19 @@ Profiler* Viewer::getProfiler( int index )
 
 void Viewer::fetchClientsData()
 {
-   for ( auto& p : _profilers )
-   {
-      p->fetchClientData();
-   }
-
-   if ( _pendingProfilerLoad.valid() )
-   {
-      const auto waitRes = _pendingProfilerLoad.wait_for( std::chrono::microseconds( 200 ) );
-      if ( waitRes == std::future_status::ready )
-      {
-         std::unique_ptr<Profiler> loadedProf( _pendingProfilerLoad.get() );
-         if ( strlen( loadedProf->nameAndPID() ) > 0 )
-         {
-            _profilers.emplace_back( std::move(loadedProf) );
-            _selectedTab = _profilers.size() - 1;
-         }
-      }
-   }
+   // if ( _pendingProfilerLoad.valid() )
+   // {
+   //    const auto waitRes = _pendingProfilerLoad.wait_for( std::chrono::microseconds( 200 ) );
+   //    if ( waitRes == std::future_status::ready )
+   //    {
+   //       std::unique_ptr<Profiler> loadedProf( _pendingProfilerLoad.get() );
+   //       if ( strlen( loadedProf->nameAndPID() ) > 0 )
+   //       {
+   //          _profilers.emplace_back( std::move(loadedProf) );
+   //          _selectedTab = _profilers.size() - 1;
+   //       }
+   //    }
+   // }
 }
 
 void Viewer::onNewFrame(
@@ -493,6 +489,7 @@ void Viewer::draw( uint32_t windowWidth, uint32_t windowHeight )
    ImGui::End();  // Hop Viewer Window
 
    handleHotkey();
+   handleMouse();
 
    // Render modal window, if any
    if ( modalWindowShowing() )
@@ -545,6 +542,26 @@ bool Viewer::handleHotkey()
    }
 
    return false;
+}
+
+bool Viewer::handleMouse()
+{
+   const auto mousePos = ImGui::GetMousePos();
+   const bool lmb = ImGui::IsMouseDown( 0 );
+   const bool rmb = ImGui::IsMouseDown( 1 );
+   const float wheel = ImGui::GetIO().MouseWheel;
+
+   bool mouseHandled = false;
+   if ( _selectedTab >= 0 )
+   {
+      ImVec2 curPos = ImGui::GetCursorPos();
+      mouseHandled = _profilers[_selectedTab]->handleMouse( mousePos.x, mousePos.y, lmb, rmb, wheel );
+      if( !mouseHandled )
+      {
+         // _timeline->handleMouse
+      }
+   }
+   return mouseHandled;
 }
 
 Viewer::~Viewer()

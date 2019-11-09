@@ -10,68 +10,84 @@
 
 namespace hop
 {
-void cpuid( int reg[4], int fctId ) { __cpuid( reg, fctId ); }
+   void cpuid(int reg[4], int fctId) { __cpuid(reg, fctId); }
 
-ProcessID startChildProcess( const char* path, char** )
-{
-   ProcessID newProcess = 0;
-   STARTUPINFO si         = {0};
-   PROCESS_INFORMATION pi = {0};
-
-   // TODO Fix arguments passing
-   si.cb = sizeof( si );
-   if( !CreateProcess( NULL, (LPSTR)path, NULL, NULL, FALSE, 0, NULL, NULL, &si, &pi ) )
+   ProcessID startChildProcess(const char* path, char**)
    {
-      return (ProcessID)-1;
-   }
-   newProcess = (ProcessID)pi.hProcess;
-   return newProcess;
-}
+      ProcessID newProcess = 0;
+      STARTUPINFO si = { 0 };
+      PROCESS_INFORMATION pi = { 0 };
 
-ProcessInfo getProcessInfoFromPID( ProcessID pid )
-{
-   ProcessInfo info = {};
-
-   HANDLE hProcess = OpenProcess( PROCESS_QUERY_INFORMATION | PROCESS_VM_READ, FALSE, pid );
-   if( NULL != hProcess )
-   {
-      HMODULE hMod;
-      DWORD cbNeeded;
-      if( EnumProcessModules( hProcess, &hMod, sizeof( hMod ), &cbNeeded ) )
+      // TODO Fix arguments passing
+      si.cb = sizeof(si);
+      if (!CreateProcess(NULL, (LPSTR)path, NULL, NULL, FALSE, 0, NULL, NULL, &si, &pi))
       {
-         if( GetModuleBaseName( hProcess, hMod, (LPSTR)info.name, sizeof( info.name ) ) > 0 )
+         return (ProcessID)-1;
+      }
+      newProcess = (ProcessID)pi.hProcess;
+      return newProcess;
+   }
+
+   ProcessInfo getProcessInfoFromPID(ProcessID pid)
+   {
+      ProcessInfo info = {};
+
+      HANDLE hProcess = OpenProcess(PROCESS_QUERY_INFORMATION | PROCESS_VM_READ, FALSE, pid);
+      if (NULL != hProcess)
+      {
+         HMODULE hMod;
+         DWORD cbNeeded;
+         if (EnumProcessModules(hProcess, &hMod, sizeof(hMod), &cbNeeded))
          {
-            info.pid = pid;
+            if (GetModuleBaseName(hProcess, hMod, (LPSTR)info.name, sizeof(info.name)) > 0)
+            {
+               info.pid = pid;
+            }
          }
       }
+
+      return info;
    }
 
-   return info;
-}
+   ProcessInfo getProcessInfoFromProcessName(const char* name)
+   {
+      ProcessInfo info = {};
+      info.pid = -1;
 
-ProcessInfo getProcessInfoFromProcessName( const char* name )
-{
-   ProcessInfo info = {};
-   info.pid = -1;
-
-   HANDLE snapshot = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, NULL);
-   PROCESSENTRY32 entry;
-   entry.dwSize = sizeof(PROCESSENTRY32);
-    if (Process32First(snapshot, &entry) == TRUE)
-    {
-        while (Process32Next(snapshot, &entry) == TRUE)
-        {
+      HANDLE snapshot = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, NULL);
+      PROCESSENTRY32 entry;
+      entry.dwSize = sizeof(PROCESSENTRY32);
+      if (Process32First(snapshot, &entry) == TRUE)
+      {
+         while (Process32Next(snapshot, &entry) == TRUE)
+         {
             if (stricmp(entry.szExeFile, name) == 0)
-            {  
+            {
                info.pid = entry.th32ProcessID;
-               strncpy( info.name, name, sizeof( info.name ) - 1 );
+               strncpy(info.name, name, sizeof(info.name) - 1);
             }
-        }
-    }
+         }
+      }
 
-   CloseHandle(snapshot);
+      CloseHandle(snapshot);
 
-   return info;
-}
+      return info;
+   }
 
-}  // namespace hop
+   bool processAlive(hop::ProcessID id)
+   {
+      DWORD exitCode;
+      GetExitCodeProcess((HANDLE)id, &exitCode);
+      return exitCode == STILL_ACTIVE;
+   }
+
+   void terminateProcess(hop::ProcessID id)
+   {
+      TerminateProcess((HANDLE)id, 0);
+      WaitForSingleObject((HANDLE)id, INFINITE);
+      CloseHandle((HANDLE)id);
+
+
+   }
+
+}// namespace hop

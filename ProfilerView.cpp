@@ -1,4 +1,4 @@
-#include "Profiler.h"
+#include "ProfilerView.h"
 #include "imgui/imgui.h"
 #include "Lod.h"
 #include "common/Utils.h"
@@ -57,162 +57,6 @@ float computeCanvasSize( const hop::TimelineTracks& tracks )
 }
 }  // end of anonymous namespace
 
-namespace hop
-{
-Profiler::Profiler() : _srcType( SRC_TYPE_NONE )
-{
-}
-
-
-// void Profiler::addTraces( const TraceData& traces, uint32_t threadIndex )
-// {
-//    // Ignore empty traces
-//    if ( traces.entries.ends.empty() ) return;
-
-//    // Add new thread as they come
-//    if ( threadIndex >= _tracks.size() )
-//    {
-//       _tracks.resize( threadIndex + 1 );
-//    }
-
-//    // Update the current time
-//    if ( traces.entries.ends.back() > _timeline.globalEndTime() )
-//       _timeline.setGlobalEndTime( traces.entries.ends.back() );
-
-//    // If this is the first traces received from the thread, update the
-//    // start time as it may be earlier.
-//    if ( _tracks[threadIndex]._traces.entries.ends.empty() )
-//    {
-//       // Find the earliest trace
-//       TimeStamp earliestTime = traces.entries.ends[0] - traces.entries.deltas[0];
-//       for ( size_t i = 1; i < traces.entries.ends.size(); ++i )
-//       {
-//          earliestTime = std::min( earliestTime, traces.entries.ends[i] - traces.entries.deltas[i] );
-//       }
-//       // Set the timeline absolute start time to this new value
-//       const auto startTime = _timeline.globalStartTime();
-//       if ( startTime == 0 || earliestTime < startTime )
-//          _timeline.setGlobalStartTime( earliestTime );
-//    }
-
-//    _tracks[threadIndex].addTraces( traces );
-// }
-
-// void Profiler::fetchClientData()
-// {
-//    HOP_PROF_FUNC();
-
-//    _server.getPendingData( _serverPendingData );
-
-//    if ( _recording )
-//    {
-//       HOP_PROF_SPLIT( "Fetching Str Data" );
-
-//       addStringData( _serverPendingData.stringData );
-
-//       HOP_PROF_SPLIT( "Fetching Traces" );
-//       for( const auto& threadTraces : _serverPendingData.tracesPerThread )
-//       {
-//          addTraces( threadTraces.second, threadTraces.first );
-//       }
-//       HOP_PROF_SPLIT( "Fetching Lock Waits" );
-//       for( const auto& lockwaits : _serverPendingData.lockWaitsPerThread )
-//       {
-//          addLockWaits( lockwaits.second, lockwaits.first );
-//       }
-//       HOP_PROF_SPLIT( "Fetching Unlock Events" );
-//       for( const auto& unlockEvents : _serverPendingData.unlockEventsPerThread )
-//       {
-//          addUnlockEvents( unlockEvents.second, unlockEvents.first );
-//       }
-//       HOP_PROF_SPLIT( "Fetching CoreEvents" );
-//       for( const auto& coreEvents : _serverPendingData.coreEventsPerThread )
-//       {
-//          addCoreEvents( coreEvents.second, coreEvents.first );
-//       }
-//    }
-
-//    // We need to get the thread name even when not recording as they are only sent once
-//    for ( size_t i = 0; i < _serverPendingData.threadNames.size(); ++i )
-//    {
-//       addThreadName(
-//           _serverPendingData.threadNames[i].second, _serverPendingData.threadNames[i].first );
-//    }
-// }
-
-// void Profiler::addStringData( const std::vector<char>& strData )
-// {
-//    HOP_PROF_FUNC();
-//    // We should read the string data even when not recording since the string data
-//    // is sent only once (the first time a function is used)
-//    if ( !strData.empty() )
-//    {
-//       _strDb.addStringData( strData );
-//    }
-// }
-
-// void Profiler::addLockWaits( const LockWaitData& lockWaits, uint32_t threadIndex )
-// {
-//    HOP_PROF_FUNC();
-//    // Check if new thread
-//    if ( threadIndex >= _tracks.size() )
-//    {
-//       _tracks.resize( threadIndex + 1 );
-//    }
-
-//    if ( !lockWaits.entries.ends.empty() )
-//    {
-//       _tracks[threadIndex].addLockWaits( lockWaits );
-//    }
-// }
-
-// void Profiler::addUnlockEvents( const std::vector<UnlockEvent>& unlockEvents, uint32_t threadIndex )
-// {
-//    HOP_PROF_FUNC();
-//    // Check if new thread
-//    if ( threadIndex >= _tracks.size() )
-//    {
-//       _tracks.resize( threadIndex + 1 );
-//    }
-
-//    if ( !unlockEvents.empty() )
-//    {
-//       _tracks[threadIndex].addUnlockEvents( unlockEvents );
-//    }
-// }
-
-// void Profiler::addCoreEvents( const std::vector<CoreEvent>& coreEvents, uint32_t threadIndex )
-// {
-//    HOP_PROF_FUNC();
-//    // Check if new thread
-//    if ( threadIndex >= _tracks.size() )
-//    {
-//       _tracks.resize( threadIndex + 1 );
-//    }
-
-//    if ( !coreEvents.empty() )
-//    {
-//       _tracks[threadIndex].addCoreEvents( coreEvents );
-//    }
-// }
-
-// void Profiler::addThreadName( StrPtr_t name, uint32_t threadIndex )
-// {
-//    // Check if new thread
-//    if ( threadIndex >= _tracks.size() )
-//    {
-//       _tracks.resize( threadIndex + 1 );
-//    }
-
-//    assert( name != 0 );  // should not be empty name
-
-//    _tracks[threadIndex].setTrackName( name );
-// }
-
-// Profiler::~Profiler() { _server.stop(); }
-
-}  // end of namespace hop
-
 // static bool drawDispTrace( const hop::DisplayableTraceFrame& frame, size_t& i )
 // {
 //    const auto& trace = frame.traces[i];
@@ -259,18 +103,29 @@ Profiler::Profiler() : _srcType( SRC_TYPE_NONE )
 //    return isOpen;
 // }
 
-void hop::Profiler::update( float deltaTimeMs, float globalTimeMs )
+hop::ProfilerView::ProfilerView( hop::Profiler::SourceType type, int processId, const char* str )
+   : _profiler( type, processId, str )
 {
-   _timeline.update( deltaTimeMs );
-   _tracks.update( globalTimeMs, _timeline.duration() );
-   if( _name.empty() || _pid < 0 )
-   {
-      const char* name = _server.processInfo( &_pid );
-      if( name )
-      {
-         _name = name;
-      }
-   }
+
+}
+
+void hop::ProfilerView::update( float deltaTimeMs, float globalTimeMs )
+{
+   //.update( deltaTimeMs );
+   // _tracks.update( globalTimeMs, /*_timeline.duration()*/ );
+   // if( _name.empty() || _pid < 0 )
+   // {
+   //    const char* name = _server.processInfo( &_pid );
+   //    if( name )
+   //    {
+   //       _name = name;
+   //    }
+   // }
+}
+
+void hop::ProfilerView::setRecording( bool recording )
+{
+   _profiler.setRecording( recording );
 }
 
 static constexpr float TOOLBAR_BUTTON_HEIGHT = 15.0f;
@@ -441,31 +296,28 @@ void hop::Profiler::draw( float drawPosX, float drawPosY, float canvasWidth, flo
    else
    {
       //  Move timeline to the most recent trace if Live mode is on
-      if ( _recording && _timeline.realtime() )
-      {
-         _timeline.moveToPresentTime( Timeline::ANIMATION_TYPE_NONE );
-      }
+      // if ( _recording && _timeline.realtime() )
+      // {
+      //    _timeline.moveToPresentTime( Timeline::ANIMATION_TYPE_NONE );
+      // }
 
       // Draw the timeline ruler
-      _timeline.draw();
+      //_timeline.draw();
 
       // Start the canvas drawing
-      _timeline.beginDrawCanvas( computeCanvasSize( _tracks ) );
+      //_timeline.beginDrawCanvas( computeCanvasSize( _tracks ) );
 
       // Draw the tracks inside the canvaws
       auto timelineActions =
-          _tracks.draw( TimelineTracksDrawInfo{_timeline.constructTimelineInfo(), _strDb} );
+          _tracks.draw( /*TimelineTracksDrawInfo{_timeline.constructTimelineInfo()*/, _strDb} );
 
-      _timeline.drawOverlay();
+      //_timeline.drawOverlay();
 
-      _timeline.endDrawCanvas();
+      //_timeline.endDrawCanvas();
 
       // Handle deferred timeline actions created by the module
-      _timeline.handleDeferredActions( timelineActions );
+      //_timeline.handleDeferredActions( timelineActions );
    }
-
-   handleHotkey();
-   handleMouse();
 
    ImGui::EndChild();  //"Timeline"
 }
@@ -475,35 +327,35 @@ void hop::Profiler::handleHotkey()
    // Let the tracks handle the hotkeys first.
    if ( _tracks.handleHotkey() ) return;
 
-   if ( ImGui::IsKeyReleased( ImGui::GetKeyIndex( ImGuiKey_Home ) ) )
-   {
-      _timeline.moveToStart();
-   }
-   else if ( ImGui::IsKeyReleased( ImGui::GetKeyIndex( ImGuiKey_End ) ) )
-   {
-      _timeline.moveToPresentTime();
-      _timeline.setRealtime( true );
-   }
-   else if ( ImGui::IsKeyReleased( 'r' ) && ImGui::IsRootWindowOrAnyChildFocused() )
-   {
-      setRecording( !_recording );
-   }
-   else if ( ImGui::GetIO().KeyCtrl && ImGui::IsKeyPressed( 'z' ) )
-   {
-      _timeline.undoNavigation();
-   }
-   else if ( ImGui::GetIO().KeyCtrl && ImGui::IsKeyPressed( 'y' ) )
-   {
-      _timeline.redoNavigation();
-   }
-   else if ( ImGui::IsKeyPressed( ImGui::GetKeyIndex( ImGuiKey_LeftArrow ) ) )
-   {
-      _timeline.previousBookmark();
-   }
-   else if ( ImGui::IsKeyPressed( ImGui::GetKeyIndex( ImGuiKey_RightArrow ) ) )
-   {
-      _timeline.nextBookmark();
-   }
+   // if ( ImGui::IsKeyReleased( ImGui::GetKeyIndex( ImGuiKey_Home ) ) )
+   // {
+   //    _timeline.moveToStart();
+   // }
+   // else if ( ImGui::IsKeyReleased( ImGui::GetKeyIndex( ImGuiKey_End ) ) )
+   // {
+   //    _timeline.moveToPresentTime();
+   //    _timeline.setRealtime( true );
+   // }
+   // else if ( ImGui::IsKeyReleased( 'r' ) && ImGui::IsRootWindowOrAnyChildFocused() )
+   // {
+   //    setRecording( !_recording );
+   // }
+   // else if ( ImGui::GetIO().KeyCtrl && ImGui::IsKeyPressed( 'z' ) )
+   // {
+   //    _timeline.undoNavigation();
+   // }
+   // else if ( ImGui::GetIO().KeyCtrl && ImGui::IsKeyPressed( 'y' ) )
+   // {
+   //    _timeline.redoNavigation();
+   // }
+   // else if ( ImGui::IsKeyPressed( ImGui::GetKeyIndex( ImGuiKey_LeftArrow ) ) )
+   // {
+   //    _timeline.previousBookmark();
+   // }
+   // else if ( ImGui::IsKeyPressed( ImGui::GetKeyIndex( ImGuiKey_RightArrow ) ) )
+   // {
+   //    _timeline.nextBookmark();
+   // }
    else if ( ImGui::IsKeyDown( ImGui::GetKeyIndex( ImGuiKey_Delete ) ) && _tracks.size() > 0 )
    {
       if ( ImGui::IsWindowFocused( ImGuiFocusedFlags_RootAndChildWindows ) &&
@@ -513,17 +365,30 @@ void hop::Profiler::handleHotkey()
    }
 }
 
-void hop::Profiler::handleMouse()
+bool hop::ProfilerView::handleMouse( float posX, float posY, bool lmClicked, bool rmClicked, float wheel )
 {
-   const auto mousePos = ImGui::GetMousePos();
-   const bool lmb = ImGui::IsMouseDown( 0 );
-   const bool rmb = ImGui::IsMouseDown( 1 );
-   const float wheel = ImGui::GetIO().MouseWheel;
-   bool mouseHandled = _tracks.handleMouse( mousePos.x, mousePos.y, lmb, rmb, wheel );
-   if ( !mouseHandled )
+    bool handled = false;
+   if ( _draggedTrack > 0 )
    {
-      _timeline.handleMouse( mousePos.x, mousePos.y, lmb, rmb, wheel );
+      // Find the previous track that is visible
+      int i = _draggedTrack - 1;
+      while ( i > 0 && _tracks[i].empty() )
+      {
+         --i;
+      }
+
+      const float trackHeight = ( mousePosY - _tracks[i]._localDrawPos[1] - THREAD_LABEL_HEIGHT );
+      _tracks[i].setTrackHeight( trackHeight );
+
+      handled = true;
    }
+
+   return handled;
+}
+
+const Profiler& hop::ProfilerView::data()
+{
+   return _profiler;
 }
 
 // void hop::Profiler::setRecording( bool recording )
@@ -645,8 +510,8 @@ bool hop::Profiler::openFile( const char* path )
       assert( dbSize == header->strDbSize );
       i += dbSize;
 
-      const size_t timelineSize = deserialize( &uncompressedData[i], _timeline );
-      i += timelineSize;
+      //const size_t timelineSize = deserialize( &uncompressedData[i], _timeline );
+      //i += timelineSize;
 
       std::vector<TimelineTrack> timelineTracks( header->threadCount );
       for ( uint32_t j = 0; j < header->threadCount; ++j )

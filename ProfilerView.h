@@ -1,47 +1,31 @@
-#ifndef PROFILER_H_
-#define PROFILER_H_
+#ifndef PROFILER_VIEW_H_
+#define PROFILER_VIEW_H_
 
-#include "Timeline.h"
+class Profiler;
+
 #include "common/Profiler.h"
-#include "TraceSearch.h"
-#include "StringDb.h"
-
-#include <array>
-#include <chrono>
-#include <string>
-#include <vector>
 
 namespace hop
 {
 
-struct ProfilerStats;
-
 class ProfilerView
 {
 public:
-   enum SourceType
-   {
-      SRC_TYPE_NONE,
-      SRC_TYPE_FILE,
-      SRC_TYPE_PROCESS,
-   };
-
-   Profiler();
-   ~Profiler();
-   ProfilerStats stats() const;
-
+   ProfilerView( Profiler::SourceType type, int processId, const char* str );
    void update( float deltaTimeMs, float globalTimeMs );
    void draw( float drawPosX, float drawPosY, float windowWidth, float windowHeight );
 
    void handleHotkey();
-   void handleMouse();
+   bool handleMouse( float posX, float posY, bool lmClicked, bool rmClicked, float wheel );
 
+   void setRecording( bool recording );
+
+   const int lodLevel() const;
+   const Profiler& data() const;
 private:
-   Timeline _timeline;
    Profiler _profiler;
 };
 
-
 } // namespace hop
 
-#endif  // PROFILER_H_
+#endif  // PROFILER_VIEW_H_

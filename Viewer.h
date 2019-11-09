@@ -17,10 +17,12 @@ class Viewer
    int addNewProfiler( const char* processname, bool startRecording );
    void openProfilerFile( const char* processname );
    int removeProfiler( int index );
-   Profiler* getProfiler( int index );
    int profilerCount() const;
    int activeProfilerIndex() const;
    void fetchClientsData();
+
+  const ProfilerView* getProfiler( int index ) const;
+
    void onNewFrame(
        int width,
        int height,
@@ -32,13 +34,14 @@ class Viewer
    void draw( uint32_t windowWidth, uint32_t windowHeight );
 
    bool handleHotkey();
+   bool handleMouse();
 
   private:
 
-   std::vector<std::unique_ptr<hop::Profiler> > _profilers;
+   std::vector<std::unique_ptr<hop::ProfilerView> > _profilers;
    int _selectedTab;
 
-   std::future< Profiler* > _pendingProfilerLoad;
+   std::future< ProfilerView* > _pendingProfilerLoad;
 
    using ClockType = std::chrono::steady_clock;
    std::chrono::time_point<ClockType> _lastFrameTime;

@@ -87,4 +87,22 @@ ProcessID startChildProcess( const char* path, char** args )
    return newProcess;
 }
 
+bool processAlive( hop::ProcessID id )
+{
+   return kill( id, 0 ) == 0;
+}
+
+void terminateProcess( hop::ProcessID id )
+{
+   if ( processAlive( id ) )
+   {
+      kill( id, SIGINT );
+      int status, wpid;
+      do
+      {
+         wpid = wait( &status );
+      }
+      while ( wpid > 0 );
+   }
+
 } //  namespace hop
