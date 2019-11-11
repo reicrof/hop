@@ -1,8 +1,10 @@
 #include "Platform.h"
 
+#include <signal.h>
 #include <string.h>
 #include <stdlib.h>
 #include <stdio.h>
+#include <sys/wait.h>
 #include <unistd.h>
 
 namespace hop
@@ -96,7 +98,7 @@ void terminateProcess( hop::ProcessID id )
 {
    if ( processAlive( id ) )
    {
-      kill( id, SIGINT );
+      kill( id, SIGTERM );
       int status, wpid;
       do
       {
@@ -104,5 +106,13 @@ void terminateProcess( hop::ProcessID id )
       }
       while ( wpid > 0 );
    }
+}
+
+void setupSignalHandlers( void (*terminateCB)(int) )
+{
+   signal( SIGINT, terminateCB );
+   signal( SIGTERM, terminateCB );
+   signal( SIGCHLD, SIG_IGN );
+}
 
 } //  namespace hop

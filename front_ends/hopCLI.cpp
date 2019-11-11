@@ -6,6 +6,7 @@
 #include "platform/Platform.h"
 #undef main
 
+#include <atomic>
 #include <iostream>
 #include <memory>
 #include <mutex>
@@ -13,11 +14,13 @@
 #include <string>
 #include <thread>
 
-#ifndef _MSC_VER
-#include <sys/wait.h>
-#endif
+std::atomic< bool > g_run{true};
 
-bool g_run = true;
+static void terminateCallback( int sig )
+{
+   signal( sig, SIG_IGN );
+   g_run.store( false );
+}
 
 static const std::string WHITESPACES = " \n\r\t\f\v";
 
@@ -31,12 +34,6 @@ static std::string righttrim( const std::string& s )
 {
 	size_t first = s.find_last_not_of( WHITESPACES );
 	return ( first == std::string::npos ) ? "" : s.substr(0, first + 1);
-}
-
-static void terminateCallback( int sig )
-{
-   signal( sig, SIG_IGN );
-   g_run = false;
 }
 
 static std::unique_ptr<hop::Profiler> createProfiler( const char* processName, bool startRecording )
@@ -150,7 +147,7 @@ static Command parseCmdLine( std::string cmdline )
 static void interpretCmdline()
 {
    std::string cmdline;
-   while( g_run )
+   while( g_run.load() )
    {
       std::getline( std::cin, cmdline );
 
@@ -175,7 +172,7 @@ static bool processCommands( hop::Profiler* prof )
       switch (cmd.type)
       {
       case CMD_TYPE_EXIT:
-         g_run = false;
+         g_run.store( false );
          break;
       case CMD_TYPE_HELP:
          printHelp();
@@ -239,12 +236,7 @@ int main( int argc, char* argv[] )
       return -1;
    }
 
-   // Setup signal handlers
-   signal( SIGINT, terminateCallback );
-   signal( SIGTERM, terminateCallback );
-#ifndef _MSC_VER
-   signal( SIGCHLD, SIG_IGN );
-#endif
+   hop::setupSignalHandlers( terminateCallback );
 
    HOP_SET_THREAD_NAME( "Main" );
 
@@ -274,7 +266,7 @@ int main( int argc, char* argv[] )
    interpreter.detach();
 
    showPrompt();
-   while ( g_run )
+   while ( g_run.load() )
    {
       HOP_PROF( "Main Loop" );
 

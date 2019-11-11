@@ -22,6 +22,7 @@ ProcessID startChildProcess( const char* path, char** args );
 
 bool processAlive( hop::ProcessID id );
 void terminateProcess( hop::ProcessID id );
+void setupSignalHandlers( void (*terminateCB)(int) );
 
 }  // namespace hop
 
