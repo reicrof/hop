@@ -4,6 +4,7 @@
 #include <Windows.h>
 
 #include <intrin.h>
+#include <signal.h>
 #include <Psapi.h>
 #include <TlHelp32.h>
 

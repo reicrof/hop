@@ -16,38 +16,7 @@
 
 std::atomic< bool > g_run{true};
 
-static void terminateCallback( int sig )
-{
-   signal( sig, SIG_IGN );
-   g_run.store( false );
-}
-
 static const std::string WHITESPACES = " \n\r\t\f\v";
-
-std::string lefttrim(const std::string& s)
-{
-	size_t last = s.find_first_not_of( WHITESPACES );
-	return ( last == std::string::npos ) ? "" : s.substr( last );
-}
-
-static std::string righttrim( const std::string& s )
-{
-	size_t first = s.find_last_not_of( WHITESPACES );
-	return ( first == std::string::npos ) ? "" : s.substr(0, first + 1);
-}
-
-static std::unique_ptr<hop::Profiler> createProfiler( const char* processName, bool startRecording )
-{
-   using namespace hop;
-   const int pid = getPIDFromString( processName );
-   const hop::ProcessInfo procInfo = pid != -1 ? hop::getProcessInfoFromPID( pid )
-                                               : hop::getProcessInfoFromProcessName( processName );
-
-   auto profiler = std::make_unique<hop::Profiler>( Profiler::SRC_TYPE_PROCESS, procInfo.pid, processName );
-   if( startRecording )
-      profiler->setRecording( true );
-   return profiler;
-}
 
 enum CommandType
 {
@@ -83,6 +52,54 @@ static constexpr StringCommand stringCmds[] =
    {"status", "s", "Show status of the profiling", CMD_TYPE_STATUS},
    {"clear", "c", "Clear collected traces and stop recording", CMD_TYPE_CLEAR},
 };
+
+static void terminateCallback( int sig )
+{
+   signal( sig, SIG_IGN );
+   g_run.store( false );
+}
+
+static std::string lefttrim(const std::string& s)
+{
+	size_t last = s.find_first_not_of( WHITESPACES );
+	return ( last == std::string::npos ) ? "" : s.substr( last );
+}
+
+static std::string righttrim( const std::string& s )
+{
+	size_t first = s.find_last_not_of( WHITESPACES );
+	return ( first == std::string::npos ) ? "" : s.substr(0, first + 1);
+}
+
+static std::unique_ptr<hop::Profiler> createProfiler( const char* processName, bool startRecording )
+{
+   using namespace hop;
+   const int pid = getPIDFromString( processName );
+   const hop::ProcessInfo procInfo = pid != -1 ? hop::getProcessInfoFromPID( pid )
+                                               : hop::getProcessInfoFromProcessName( processName );
+
+   auto profiler = std::make_unique<hop::Profiler>( Profiler::SRC_TYPE_PROCESS, procInfo.pid, processName );
+   if( startRecording )
+      profiler->setRecording( true );
+   return profiler;
+}
+
+static int validateArguments( const hop::LaunchOptions& opts )
+{
+   if( !opts.processName )
+   {
+      fprintf( stderr, "No process to profile specified.\n" );
+      return -1;
+   }
+
+   if( !opts.saveFilePath )
+   {
+      fprintf( stderr, "No output save path specified.\n" );
+      return -1;
+   }
+
+   return 0;
+}
 
 static void printInvalidCmd()
 {
@@ -220,7 +237,7 @@ int main( int argc, char* argv[] )
    if( argc < 2 )
    {
       hop::printUsage( argv[0] );
-      exit(-1);
+      exit (-1 );
    }
 
    // Confirm the platform can use HOP
@@ -230,10 +247,9 @@ int main( int argc, char* argv[] )
    }
 
    const hop::LaunchOptions opts = hop::parseArgs( argc, argv );
-   if( !opts.saveFilePath )
+   if( const int err = validateArguments(opts) )
    {
-      fprintf( stderr, "No output save path specified.\n" );
-      return -1;
+      exit( err );
    }
 
    hop::setupSignalHandlers( terminateCallback );
@@ -242,23 +258,20 @@ int main( int argc, char* argv[] )
 
    std::unique_ptr<hop::Profiler> profiler;
    hop::ProcessID childProcId = 0;
-   if ( opts.processName )
+   // If we want to launch an executable to profile, now is the time to do it
+   if ( opts.startExec )
    {
-      // If we want to launch an executable to profile, now is the time to do it
-      if ( opts.startExec )
+      // profiler->setRecording( true );
+      childProcId = hop::startChildProcess( opts.fullProcessPath, opts.args );
+      if ( childProcId == (hop::ProcessID)-1 )
       {
-         // profiler->setRecording( true );
-         childProcId = hop::startChildProcess( opts.fullProcessPath, opts.args );
-         if ( childProcId == (hop::ProcessID)-1 )
-         {
-            fprintf( stderr, "Could not launch child process\n" );
-            exit( -1 );
-         }
+         fprintf( stderr, "Could not launch child process\n" );
+         exit( -1 );
       }
-
-      // Add new profiler after having potentially started it.
-      profiler = createProfiler( opts.processName, opts.startExec );
    }
+
+   // Add new profiler after having potentially started it.
+   profiler = createProfiler( opts.processName, opts.startExec );
 
    // Start the command line interpreter
    g_commands.reserve( 32 );
