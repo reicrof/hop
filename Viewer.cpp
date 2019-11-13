@@ -267,6 +267,7 @@ static void updateOptions( const hop::ProfilerView* selectedProf, hop::Stats& st
 }
 
 static void updateProfilers(
+    TimeDuration tlDuration,
     std::vector<std::unique_ptr<hop::ProfilerView> >& profilers,
     int selectedTab )
 {
@@ -274,7 +275,7 @@ static void updateProfilers(
    const float globalTimeMs = ImGui::GetTime() * 1000;
    for ( auto& p : profilers )
    {
-      p->update( dtTimeMs, globalTimeMs );
+      p->update( dtTimeMs, globalTimeMs, tlDuration );
    }
 
    if( hop::g_options.debugWindow && selectedTab >= 0 )
@@ -476,7 +477,7 @@ void Viewer::draw( uint32_t windowWidth, uint32_t windowHeight )
 
    drawMenuBar( this );
 
-   updateProfilers( _profilers, _selectedTab );
+   updateProfilers( _timeline.duration(), _profilers, _selectedTab );
 
    _selectedTab = drawTabs( *this, _selectedTab );
 

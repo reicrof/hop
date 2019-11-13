@@ -1,6 +1,8 @@
 #ifndef VIEWER_H_
 #define VIEWER_H_
 
+#include "Timeline.h"
+
 #include <chrono>
 #include <future>
 #include <memory>
@@ -8,7 +10,7 @@
 
 namespace hop
 {
-class Profiler;
+class ProfilerView;
 class Viewer
 {
   public:
@@ -37,7 +39,7 @@ class Viewer
    bool handleMouse();
 
   private:
-
+   Timeline _timeline;
    std::vector<std::unique_ptr<hop::ProfilerView> > _profilers;
    int _selectedTab;
 

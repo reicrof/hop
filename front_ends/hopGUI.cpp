@@ -1,5 +1,6 @@
 #define HOP_IMPLEMENTATION
 #include <Hop.h>
+#include "common/Startup.h"
 #include "Stats.h"
 #include "common/Utils.h"
 #include "common/Startup.h"
@@ -13,12 +14,8 @@
 #include "hop_icon_data.inline"
 #include "miniz.h"
 
-#include <signal.h>
 #include <string>
 
-#ifndef _MSC_VER
-#include <sys/wait.h>
-#endif
 
 bool g_run = true;
 static float g_mouseWheel = 0.0f;
@@ -26,7 +23,6 @@ static SDL_Surface* iconSurface = nullptr;
 
 static void terminateCallback( int sig )
 {
-   signal( sig, SIG_IGN );
    g_run = false;
 }
 
@@ -172,117 +168,21 @@ static void handleInput()
    }
 }
 
-static bool processAlive( hop::ProcessID id )
-{
-#if defined( _MSC_VER )
-   DWORD exitCode;
-   GetExitCodeProcess( (HANDLE)id, &exitCode );
-   return exitCode == STILL_ACTIVE;
-#else
-   return kill( id, 0 ) == 0;
-#endif
-}
-
-static void terminateProcess( hop::ProcessID id )
-{
-#if defined( _MSC_VER )
-   TerminateProcess( (HANDLE)id, 0 );
-   WaitForSingleObject( (HANDLE)id, INFINITE );
-   CloseHandle( (HANDLE)id );
-#else
-   if ( processAlive( id ) )
-   {
-      kill( id, SIGINT );
-      int status, wpid;
-      do
-      {
-         wpid = wait( &status );
-      }
-      while ( wpid > 0 );
-   }
-#endif
-}
-
-
-struct LaunchOptions
-{
-   const char* fullProcessPath;
-   const char* processName;
-   char** args;
-   bool startExec;
-};
-
-static LaunchOptions createLaunchOptions( char* fullProcessPath, char** argv, bool startExec )
-{
-   LaunchOptions opts = {fullProcessPath, fullProcessPath, argv, startExec};
-   std::string fullPathStr( fullProcessPath );
-   size_t lastSeparator = fullPathStr.find_last_of( "/\\" );
-   if ( lastSeparator != std::string::npos )
-   {
-      opts.processName = &fullProcessPath[++lastSeparator];
-   }
-
-   return opts;
-}
-
-static LaunchOptions parseArgs( int argc, char* argv[] )
-{
-   if ( argc > 1 )
-   {
-      if ( argv[1][0] == '-' )
-      {
-         switch ( argv[1][1] )
-         {
-            case 'v':
-               printf( "hop version %.2f \n", HOP_VERSION );
-               exit( 0 );
-               break;
-            case 'h':
-               printUsage();
-               exit( 0 );
-            case 'e':
-               if ( argc > 2 )
-               {
-                  return createLaunchOptions( argv[2], &argv[2], true );
-               }
-               // Fallthrough
-            default:
-               fprintf( stderr, "Invalid arguments\n" );
-               break;
-         }
-      }
-      else
-      {
-         return createLaunchOptions( argv[1], &argv[1], false );
-      }
-   }
-   return LaunchOptions{nullptr, nullptr, nullptr, false};
-}
-
 int main( int argc, char* argv[] )
 {
-   const LaunchOptions opts = parseArgs( argc, argv );
-
-   // Setup signal handlers
-   signal( SIGINT, terminateCallback );
-   signal( SIGTERM, terminateCallback );
-#ifndef _MSC_VER
-   signal( SIGCHLD, SIG_IGN );
-#endif
-
-   // Confirm the platform can use HOP
-   if ( !verifyPlatform() )
+   // Confirm the platform supports HOP
+   if ( !hop::verifyPlatform() )
    {
       return -2;
    }
+
+   hop::setupSignalHandlers( terminateCallback );
 
    if ( SDL_Init( SDL_INIT_VIDEO ) != 0 )
    {
       fprintf( stderr, "Failed SDL initialization : %s \n", SDL_GetError() );
       return -1;
    }
-
-   hop::loadOptions();
 
    uint32_t createWindowFlags = SDL_WINDOW_OPENGL | SDL_WINDOW_RESIZABLE;
    if ( hop::g_options.startFullScreen ) createWindowFlags |= SDL_WINDOW_MAXIMIZED;
@@ -296,8 +196,6 @@ int main( int argc, char* argv[] )
       return -1;
    }
 
-   HOP_SET_THREAD_NAME( "Main" );
-
    sdlImGuiInit();
 
    SDL_GLContext mainContext = SDL_GL_CreateContext( window );
@@ -307,12 +205,16 @@ int main( int argc, char* argv[] )
    SDL_GL_SetAttribute( SDL_GL_DOUBLEBUFFER, 1 );
    SDL_GL_SetSwapInterval( 1 );
 
+   const hop::LaunchOptions opts = hop::parseArgs( argc, argv );
+   hop::loadOptions();
+
    createIcon( window );
+
+   HOP_SET_THREAD_NAME( "Main" );
 
    // Setup the LOD granularity based on screen resolution
    SDL_DisplayMode DM;
    SDL_GetCurrentDisplayMode( 0, &DM );
-
    hop::Viewer viewer( DM.w, DM.h );
 
    hop::ProcessID childProcId = 0;
@@ -377,7 +279,7 @@ int main( int argc, char* argv[] )
    // We have launched a child process. Let's close it
    if ( opts.startExec )
    {
-      terminateProcess( childProcId );
+      hop::terminateProcess( childProcId );
    }
 
    destroyIcon();

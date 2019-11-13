@@ -30,10 +30,13 @@ public:
 
    Profiler( SourceType type, int processId, const char* str );
    ~Profiler();
+
    const char* nameAndPID( int* processId = nullptr ) const;
    ProfilerStats stats() const;
    SourceType sourceType() const;
    bool recording() const;
+   SharedMemory::ConnectionState connectionState() const;
+
    void setRecording( bool recording );
    void fetchClientData();
    void addStringData( const std::vector< char >& stringData );
@@ -48,7 +51,6 @@ public:
 
 private:
    bool openFile( const char* path );
-   bool setProcess( int processId, const char* process );
 
    std::string _name;
    int _pid;

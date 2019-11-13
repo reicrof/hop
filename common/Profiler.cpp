@@ -38,6 +38,11 @@ bool Profiler::recording() const
    return _recording;
 }
 
+SharedMemory::ConnectionState Profiler::connectionState() const
+{
+   return _server.connectionState();
+}
+
 ProfilerStats Profiler::stats() const
 {
    ProfilerStats stats = {};

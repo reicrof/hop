@@ -1,5 +1,7 @@
 #include "ProfilerView.h"
-#include "imgui/imgui.h"
+#include "Hop.h"
+#include "common/TimelineTrack.h"
+
 #include "Lod.h"
 #include "common/Utils.h"
 #include "TraceDetail.h"
@@ -8,6 +10,8 @@
 #include "Options.h"
 #include "RendererGL.h"
 #include <SDL_keycode.h>
+
+#include "imgui/imgui.h"
 
 #include <cassert>
 #include <cmath>
@@ -19,10 +23,24 @@
 
 extern bool g_run;
 
-namespace
-{
+// Drawing constants
+static constexpr float THREAD_LABEL_HEIGHT = 20.0f;
+static constexpr float MIN_TRACE_LENGTH_PXL = 1.0f;
+static constexpr float MAX_TRACE_HEIGHT = 50.0f;
+static constexpr float MIN_TRACE_HEIGHT = 15.0f;
+static constexpr uint32_t DISABLED_COLOR = 0xFF505050;
+static constexpr uint32_t CORE_LABEL_COLOR = 0xFF333333;
+static constexpr uint32_t CORE_LABEL_BORDER_COLOR = 0xFFAAAAAA;
+static constexpr uint32_t SEPARATOR_COLOR = 0xFF666666;
+static constexpr uint32_t SEPARATOR_HANDLE_COLOR = 0xFFAAAAAA;
+static const char* CTXT_MENU_STR = "Context Menu";
 
-void displayBackgroundHelpMsg( uint32_t windowWidth, uint32_t windowHeight )
+// Static variable mutable from options
+static float TRACE_HEIGHT = 20.0f;
+static float TRACE_VERTICAL_PADDING = 2.0f;
+static float PADDED_TRACE_SIZE = TRACE_HEIGHT + TRACE_VERTICAL_PADDING;
+
+static void displayBackgroundHelpMsg( uint32_t windowWidth, uint32_t windowHeight )
 {
    const char* helpTxt =
        "-------------- Hop --------------\n\n"
@@ -46,16 +64,17 @@ void displayBackgroundHelpMsg( uint32_t windowWidth, uint32_t windowHeight )
        helpTxt );
 }
 
-float computeCanvasSize( const hop::TimelineTracks& tracks )
+static float computeCanvasSize( const std::vector<hop::TrackDrawInfo>& tdi )
 {
-   float tracksHeight = tracks.totalHeight();
-   if ( tracksHeight > 0.0f )
+   float tracksHeight = 0.0f;
+   if( const size_t trackCount = tdi.size() )
    {
-      tracksHeight -= ( ImGui::GetWindowHeight() - tracks[0]._absoluteDrawPos[1] );
+      tracksHeight = tdi[trackCount-1].absoluteDrawPos[1] + tdi[trackCount-1].trackHeight;
+      tracksHeight -= ( ImGui::GetWindowHeight() - tdi[0].absoluteDrawPos[1] );
    }
+
    return tracksHeight;
 }
-}  // end of anonymous namespace
 
 // static bool drawDispTrace( const hop::DisplayableTraceFrame& frame, size_t& i )
 // {
@@ -104,13 +123,26 @@ float computeCanvasSize( const hop::TimelineTracks& tracks )
 // }
 
 hop::ProfilerView::ProfilerView( hop::Profiler::SourceType type, int processId, const char* str )
-   : _profiler( type, processId, str )
+   : _profiler( type, processId, str ), _lodLevel( 0 ), _draggedTrack( -1 ), _highlightValue( 0.0f )
 {
 
 }
 
-void hop::ProfilerView::update( float deltaTimeMs, float globalTimeMs )
+void hop::ProfilerView::update( float /*deltaTimeMs*/, float globalTimeMs, TimeDuration timelineDuration )
 {
+   _highlightValue = (std::sin( 0.007f * globalTimeMs ) * 0.8f + 1.0f) / 2.0f;
+
+   // Update current lod level
+   int lodLvl = 0;
+   while ( lodLvl < LOD_COUNT - 1 && timelineDuration > LOD_NANOS[lodLvl] )
+   {
+      ++lodLvl;
+   }
+   _lodLevel = lodLvl;
+
+   // Update according to options
+   TRACE_HEIGHT = hop::clamp( g_options.traceHeight, MIN_TRACE_HEIGHT, MAX_TRACE_HEIGHT );
+   PADDED_TRACE_SIZE = TRACE_HEIGHT + TRACE_VERTICAL_PADDING;
    //.update( deltaTimeMs );
    // _tracks.update( globalTimeMs, /*_timeline.duration()*/ );
    // if( _name.empty() || _pid < 0 )
@@ -265,20 +297,22 @@ static void drawStatusIcon( const ImVec2& drawPos, hop::SharedMemory::Connection
    }
 }
 
-void hop::Profiler::draw( float drawPosX, float drawPosY, float canvasWidth, float canvasHeight )
+void hop::ProfilerView::draw( float drawPosX, float drawPosY, float canvasWidth, float canvasHeight )
 {
    HOP_PROF_FUNC();
    ImGui::SetCursorPos( ImVec2( drawPosX, drawPosY ) );
 
+   const bool isRecording = _profiler.recording();
    const auto toolbarDrawPos = ImVec2( drawPosX, drawPosY );
-   if ( sourceType() == SRC_TYPE_PROCESS && drawPlayStopButton( toolbarDrawPos, _recording ) )
+   if ( _profiler.sourceType() == Profiler::SRC_TYPE_PROCESS &&
+        drawPlayStopButton( toolbarDrawPos, isRecording ) )
    {
-      setRecording( !_recording );
+      setRecording( !isRecording );
    }
 
    auto deleteTracePos = toolbarDrawPos;
    deleteTracePos.x += ( 2.0f * TOOLBAR_BUTTON_PADDING ) + TOOLBAR_BUTTON_WIDTH;
-   if ( drawDeleteTracesButton( deleteTracePos, _tracks.size() > 0 ) )
+   if ( drawDeleteTracesButton( deleteTracePos, _trackDrawInfos.size() > 0 ) )
    {
       hop::displayModalWindow( "Delete all traces?", hop::MODAL_TYPE_YES_NO, [&]() { clear(); } );
    }
@@ -286,10 +320,10 @@ void hop::Profiler::draw( float drawPosX, float drawPosY, float canvasWidth, flo
    auto statusPos = toolbarDrawPos;
    statusPos.x += canvasWidth - 25.0f;
    statusPos.y += 5.0f;
-   drawStatusIcon( statusPos, _server.connectionState() );
+   drawStatusIcon( statusPos, _profiler.connectionState() );
 
    ImGui::BeginChild( "Timeline" );
-   if ( _tracks.size() == 0 && !_recording )
+   if ( _trackDrawInfos.size() == 0 && !isRecording )
    {
       displayBackgroundHelpMsg( canvasWidth, canvasHeight );
    }
@@ -308,8 +342,8 @@ void hop::Profiler::draw( float drawPosX, float drawPosY, float canvasWidth, flo
       //_timeline.beginDrawCanvas( computeCanvasSize( _tracks ) );
 
       // Draw the tracks inside the canvaws
-      auto timelineActions =
-          _tracks.draw( /*TimelineTracksDrawInfo{_timeline.constructTimelineInfo()*/, _strDb} );
+      // auto timelineActions =
+      //     _tracks.draw( /*TimelineTracksDrawInfo{_timeline.constructTimelineInfo()*/, _strDb} );
 
       //_timeline.drawOverlay();
 
@@ -325,7 +359,7 @@ void hop::Profiler::draw( float drawPosX, float drawPosY, float canvasWidth, flo
 void hop::Profiler::handleHotkey()
 {
    // Let the tracks handle the hotkeys first.
-   if ( _tracks.handleHotkey() ) return;
+   //if ( _tracks.handleHotkey() ) return;
 
    // if ( ImGui::IsKeyReleased( ImGui::GetKeyIndex( ImGuiKey_Home ) ) )
    // {
@@ -356,7 +390,7 @@ void hop::Profiler::handleHotkey()
    // {
    //    _timeline.nextBookmark();
    // }
-   else if ( ImGui::IsKeyDown( ImGui::GetKeyIndex( ImGuiKey_Delete ) ) && _tracks.size() > 0 )
+   else if ( ImGui::IsKeyDown( ImGui::GetKeyIndex( ImGuiKey_Delete ) ) && _trackDrawInfos.size() > 0 )
    {
       if ( ImGui::IsWindowFocused( ImGuiFocusedFlags_RootAndChildWindows ) &&
            !hop::modalWindowShowing() )
@@ -384,6 +418,12 @@ bool hop::ProfilerView::handleMouse( float posX, float posY, bool lmClicked, boo
    }
 
    return handled;
+}
+
+void hop::ProfilerView::clear()
+{
+   _profiler.clear();
+   _trackDrawInfos.clear();
 }
 
 const Profiler& hop::ProfilerView::data()
@@ -462,78 +502,62 @@ const Profiler& hop::ProfilerView::data()
 //    return true;
 // }
 
-bool hop::Profiler::setProcess( int processId, const char* process )
-{
-   _server.stop();
-   _srcType = SRC_TYPE_PROCESS;
-   return _server.start( processId, process );
-}
-
-bool hop::Profiler::openFile( const char* path )
-{
-   std::ifstream input( path, std::ifstream::binary );
-   if ( input.is_open() )
-   {
-      clear();
-
-      displayModalWindow( "Loading...", MODAL_TYPE_NO_CLOSE );
-      std::vector<char> data(
-          ( std::istreambuf_iterator<char>( input ) ), ( std::istreambuf_iterator<char>() ) );
-
-      SaveFileHeader* header = (SaveFileHeader*)&data[0];
-
-      if ( header->magicNumber != MAGIC_NUMBER )
-      {
-         closeModalWindow();
-         displayModalWindow( "Not a valid hop file.", MODAL_TYPE_ERROR );
-         return false;
-      }
-
-      std::vector<char> uncompressedData( header->uncompressedSize );
-      mz_ulong uncompressedSize = uncompressedData.size();
-
-      int uncompressStatus = uncompress(
-          (unsigned char*)uncompressedData.data(),
-          &uncompressedSize,
-          (unsigned char*)&data[sizeof( SaveFileHeader )],
-          data.size() - sizeof( SaveFileHeader ) );
-
-      if ( uncompressStatus != Z_OK )
-      {
-         closeModalWindow();
-         displayModalWindow( "Error uncompressing file. Nothing will be loaded", MODAL_TYPE_ERROR );
-         return false;
-      }
-
-      size_t i = 0;
-      const size_t dbSize = deserialize( &uncompressedData[i], _strDb );
-      assert( dbSize == header->strDbSize );
-      i += dbSize;
-
-      //const size_t timelineSize = deserialize( &uncompressedData[i], _timeline );
-      //i += timelineSize;
-
-      std::vector<TimelineTrack> timelineTracks( header->threadCount );
-      for ( uint32_t j = 0; j < header->threadCount; ++j )
-      {
-         size_t timelineTrackSize = deserialize( &uncompressedData[i], timelineTracks[j] );
-         addTraces( timelineTracks[j]._traces, j );
-         addLockWaits( timelineTracks[j]._lockWaits, j );
-         i += timelineTrackSize;
-      }
-      _srcType = SRC_TYPE_FILE;
-      closeModalWindow();
-      return true;
-   }
-   displayModalWindow( "File not found", MODAL_TYPE_ERROR );
-   return false;
-}
-
-// void hop::Profiler::clear()
+// bool hop::Profiler::openFile( const char* path )
 // {
-//    _server.clear();
-//    _strDb.clear();
-//    _tracks.clear();
-//    _timeline.clear();
-//    _recording = false;
+//    std::ifstream input( path, std::ifstream::binary );
+//    if ( input.is_open() )
+//    {
+//       clear();
+
+//       displayModalWindow( "Loading...", MODAL_TYPE_NO_CLOSE );
+//       std::vector<char> data(
+//           ( std::istreambuf_iterator<char>( input ) ), ( std::istreambuf_iterator<char>() ) );
+
+//       SaveFileHeader* header = (SaveFileHeader*)&data[0];
+
+//       if ( header->magicNumber != MAGIC_NUMBER )
+//       {
+//          closeModalWindow();
+//          displayModalWindow( "Not a valid hop file.", MODAL_TYPE_ERROR );
+//          return false;
+//       }
+
+//       std::vector<char> uncompressedData( header->uncompressedSize );
+//       mz_ulong uncompressedSize = uncompressedData.size();
+
+//       int uncompressStatus = uncompress(
+//           (unsigned char*)uncompressedData.data(),
+//           &uncompressedSize,
+//           (unsigned char*)&data[sizeof( SaveFileHeader )],
+//           data.size() - sizeof( SaveFileHeader ) );
+
+//       if ( uncompressStatus != Z_OK )
+//       {
+//          closeModalWindow();
+//          displayModalWindow( "Error uncompressing file. Nothing will be loaded", MODAL_TYPE_ERROR );
+//          return false;
+//       }
+
+//       size_t i = 0;
+//       const size_t dbSize = deserialize( &uncompressedData[i], _strDb );
+//       assert( dbSize == header->strDbSize );
+//       i += dbSize;
+
+//       //const size_t timelineSize = deserialize( &uncompressedData[i], _timeline );
+//       //i += timelineSize;
+
+//       std::vector<TimelineTrack> timelineTracks( header->threadCount );
+//       for ( uint32_t j = 0; j < header->threadCount; ++j )
+//       {
+//          size_t timelineTrackSize = deserialize( &uncompressedData[i], timelineTracks[j] );
+//          addTraces( timelineTracks[j]._traces, j );
+//          addLockWaits( timelineTracks[j]._lockWaits, j );
+//          i += timelineTrackSize;
+//       }
+//       _srcType = SRC_TYPE_FILE;
+//       closeModalWindow();
+//       return true;
+//    }
+//    displayModalWindow( "File not found", MODAL_TYPE_ERROR );
+//    return false;
 // }

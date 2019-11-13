@@ -10,7 +10,6 @@
 #include <iostream>
 #include <memory>
 #include <mutex>
-#include <signal.h>
 #include <string>
 #include <thread>
 
@@ -55,7 +54,6 @@ static constexpr StringCommand stringCmds[] =
 
 static void terminateCallback( int sig )
 {
-   signal( sig, SIG_IGN );
    g_run.store( false );
 }
 
@@ -234,13 +232,7 @@ static void showPrompt()
 
 int main( int argc, char* argv[] )
 {
-   if( argc < 2 )
-   {
-      hop::printUsage( argv[0] );
-      exit (-1 );
-   }
-
-   // Confirm the platform can use HOP
+   // Confirm the platform supports HOP
    if ( !hop::verifyPlatform() )
    {
       return -2;

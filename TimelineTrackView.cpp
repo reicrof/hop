@@ -16,17 +16,6 @@
 #include <cstring> // memcpy
 #include <thread>
 
-static constexpr float THREAD_LABEL_HEIGHT = 20.0f;
-static constexpr float MIN_TRACE_LENGTH_PXL = 1.0f;
-static constexpr float MAX_TRACE_HEIGHT = 50.0f;
-static constexpr float MIN_TRACE_HEIGHT = 15.0f;
-static constexpr uint32_t DISABLED_COLOR = 0xFF505050;
-static constexpr uint32_t CORE_LABEL_COLOR = 0xFF333333;
-static constexpr uint32_t CORE_LABEL_BORDER_COLOR = 0xFFAAAAAA;
-static constexpr uint32_t SEPARATOR_COLOR = 0xFF666666;
-static constexpr uint32_t SEPARATOR_HANDLE_COLOR = 0xFFAAAAAA;
-
-static const char* CTXT_MENU_STR = "Context Menu";
 
 namespace
 {
@@ -470,10 +459,6 @@ static hop::TimelineMessage createZoomOnEntryTimelineMsg(
 namespace hop
 {
 
-float TimelineTrack::TRACE_HEIGHT = 20.0f;
-float TimelineTrack::TRACE_VERTICAL_PADDING = 2.0f;
-float TimelineTrack::PADDED_TRACE_SIZE = TRACE_HEIGHT + TRACE_VERTICAL_PADDING;
-
 void TimelineTrack::setTrackName( StrPtr_t name ) noexcept
 {
    _trackName = name;
@@ -648,23 +633,6 @@ bool TimelineTracks::handleHotkey()
    }
 
    return false;
-}
-
-void TimelineTracks::update( float globalTimeMs, TimeDuration timelineDuration )
-{
-   // Update the highlight factor
-   _highlightValue = (std::sin( 0.007f * globalTimeMs ) * 0.8f + 1.0f) / 2.0f;
-
-   // Update current lod level
-   _lodLevel = 0;
-   while ( _lodLevel < LOD_COUNT - 1 && timelineDuration > LOD_NANOS[_lodLevel] )
-   {
-      ++_lodLevel;
-   }
-
-   // Update according to options
-   TimelineTrack::TRACE_HEIGHT = hop::clamp( g_options.traceHeight, MIN_TRACE_HEIGHT, MAX_TRACE_HEIGHT );
-   TimelineTrack::PADDED_TRACE_SIZE = TimelineTrack::TRACE_HEIGHT + TimelineTrack::TRACE_VERTICAL_PADDING;
 }
 
 std::vector< TimelineMessage > TimelineTracks::draw( const TimelineTracksDrawInfo& info )
