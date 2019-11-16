@@ -31,7 +31,6 @@ class Timeline
    void clear();
    void beginDrawCanvas( float canvasHeightPxl );
    void endDrawCanvas();
-   void drawOverlay();
    TimelineInfo constructTimelineInfo() const noexcept;
 
    bool handleMouse( float posX, float posY, bool lmPressed, bool rmPressed, float wheel );
@@ -122,6 +121,7 @@ class Timeline
    } _bookmarks;
 
    void drawTimeline( float posX, float posY );
+   void drawOverlay();
    void handleMouseDrag( float mousePosX, float mousePosY );
    void handleMouseWheel( float mousePosX, float mouseWheel );
    void zoomOn( int64_t cycleToZoomOn, float zoomFactor );

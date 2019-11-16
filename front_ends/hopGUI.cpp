@@ -13,8 +13,10 @@
 #include "hop_icon_data.inline"
 #include "common/miniz.h"
 
+#include <chrono>
 #include <string>
 
+using ClockType = std::chrono::steady_clock;
 
 bool g_run = true;
 static float g_mouseWheel = 0.0f;
@@ -235,18 +237,20 @@ int main( int argc, char* argv[] )
       viewer.addNewProfiler( opts.processName, opts.startExec );
    }
 
+   using namespace std::chrono;
+   time_point<ClockType> lastFrameTime = ClockType::now();
    while ( g_run )
    {
       HOP_PROF( "Main Loop" );
-      const auto frameStart = std::chrono::system_clock::now();
+      const auto frameStart = ClockType::now();
 
       handleInput();
 
-      const auto startFetch = std::chrono::system_clock::now();
+      const auto startFetch = ClockType::now();
       viewer.fetchClientsData();
-      const auto endFetch = std::chrono::system_clock::now();
+      const auto endFetch = ClockType::now();
       hop::g_stats.fetchTimeMs =
-          std::chrono::duration<double, std::milli>( ( endFetch - startFetch ) ).count();
+          duration<double, std::milli>( ( endFetch - startFetch ) ).count();
 
       int w, h, x, y;
       SDL_GetWindowSize( window, &w, &h );
@@ -254,23 +258,28 @@ int main( int argc, char* argv[] )
       const bool lmb = buttonState & SDL_BUTTON( SDL_BUTTON_LEFT );
       const bool rmb = buttonState & SDL_BUTTON( SDL_BUTTON_RIGHT );
 
-      viewer.onNewFrame( w, h, x, y, lmb, rmb, g_mouseWheel );
+      // Get delta time for current frame
+      const auto curTime = ClockType::now();
+      const float deltaTime = static_cast<float>(
+         duration_cast<milliseconds>( ( curTime - lastFrameTime ) ).count() );
+      viewer.onNewFrame( deltaTime, w, h, x, y, lmb, rmb, g_mouseWheel );
+
       g_mouseWheel = 0;
+      lastFrameTime = curTime;
 
       viewer.draw( w, h );
 
-      const auto frameEnd = std::chrono::system_clock::now();
+      const auto frameEnd = ClockType::now();
 
       // If we rendered fast, fetch data again instead of stalling on the vsync
-      if ( std::chrono::duration<double, std::milli>( ( frameEnd - frameStart ) ).count() < 10.0 )
+      if ( duration<double, std::milli>( ( frameEnd - frameStart ) ).count() < 10.0 )
       {
          viewer.fetchClientsData();
       }
 
       SDL_GL_SwapWindow( window );
 
-      hop::g_stats.frameTimeMs =
-          std::chrono::duration<double, std::milli>( ( frameEnd - frameStart ) ).count();
+      hop::g_stats.frameTimeMs = duration<double, std::milli>( ( frameEnd - frameStart ) ).count();
    }
 
    hop::saveOptions();

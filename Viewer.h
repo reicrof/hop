@@ -3,7 +3,6 @@
 
 #include "Timeline.h"
 
-#include <chrono>
 #include <future>
 #include <memory>
 #include <vector>
@@ -26,6 +25,7 @@ class Viewer
   const ProfilerView* getProfiler( int index ) const;
 
    void onNewFrame(
+       float deltaMs,
        int width,
        int height,
        int mouseX,
@@ -45,8 +45,6 @@ class Viewer
 
    std::future< ProfilerView* > _pendingProfilerLoad;
 
-   using ClockType = std::chrono::steady_clock;
-   std::chrono::time_point<ClockType> _lastFrameTime;
    bool _vsyncEnabled;
 };
 

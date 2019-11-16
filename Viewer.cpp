@@ -480,7 +480,6 @@ namespace hop
 {
 Viewer::Viewer( uint32_t screenSizeX, uint32_t /*screenSizeY*/ )
     : _selectedTab( -1 ),
-      _lastFrameTime( ClockType::now() ),
       _vsyncEnabled( hop::g_options.vsyncOn )
 {
    hop::setupLODResolution( screenSizeX );
@@ -565,6 +564,7 @@ void Viewer::fetchClientsData()
 }
 
 void Viewer::onNewFrame(
+    float deltaMs,
     int width,
     int height,
     int mouseX,
@@ -579,12 +579,7 @@ void Viewer::onNewFrame(
    io.DisplaySize = ImVec2( (float)width, (float)height );
 
    // Setup time step
-   const auto curTime = ClockType::now();
-   const float deltaTime = static_cast<float>(
-       std::chrono::duration_cast<std::chrono::milliseconds>( ( curTime - _lastFrameTime ) )
-           .count() );
-   io.DeltaTime = std::max( deltaTime * 0.001f, 0.00001f );  // ImGui expect seconds
-   _lastFrameTime = curTime;
+   io.DeltaTime = std::max( deltaMs * 0.001f, 0.00001f );  // ImGui expect seconds
 
    // Mouse position in screen coordinates (set to -1,-1 if no mouse / on another screen, etc.)
    io.MousePos = ImVec2( (float)mouseX, (float)mouseY );
@@ -611,6 +606,10 @@ void Viewer::onNewFrame(
 
    // Reset cursor at start of the frame
    hop::setCursor( hop::CURSOR_ARROW );
+
+   // Update
+   updateProfilers( _timeline.duration(), _profilers, _selectedTab );
+   _timeline.update( deltaMs );
 }
 
 void Viewer::draw( uint32_t windowWidth, uint32_t windowHeight )
@@ -636,9 +635,6 @@ void Viewer::draw( uint32_t windowWidth, uint32_t windowHeight )
    // We only want to remove the padding for the viewer window and not all of its childrens.
    ImGui::PopStyleVar( 2 );
 
-   // Update
-   updateProfilers( _timeline.duration(), _profilers, _selectedTab );
-
    // Then draw
    drawMenuBar( this );
    _selectedTab = drawTabs( ImGui::GetCursorPos(), *this, _selectedTab );
@@ -646,13 +642,13 @@ void Viewer::draw( uint32_t windowWidth, uint32_t windowHeight )
    drawToolbar( ImGui::GetCursorPos(), ImGui::GetWindowWidth(), selectedProf );
 
    _timeline.draw();
+   _timeline.beginDrawCanvas( selectedProf ? selectedProf->canvasHeight() : 0.0f );
    if ( selectedProf )
    {
       const ImVec2 curPos = ImGui::GetCursorPos();
-      _timeline.beginDrawCanvas( selectedProf->canvasHeight() );
       selectedProf->draw( curPos.x, curPos.y, windowWidth - 5.0f, windowHeight );
-      _timeline.endDrawCanvas();
    }
+   _timeline.endDrawCanvas();
    
    handleHotkey();
    handleMouse( selectedProf );

@@ -214,6 +214,8 @@ void Timeline::beginDrawCanvas( float canvasHeightPxl )
 
 void Timeline::endDrawCanvas()
 {
+   drawOverlay();
+
    ImGui::PopClipRect();
    ImGui::EndChild();
 }
@@ -426,27 +428,18 @@ void Timeline::drawTimeline( float posX, float posY )
 bool Timeline::handleMouse( float posX, float posY, bool /*lmPressed*/, bool /*rmPressed*/, float wheel )
 {
    bool handled = false;
-   //if( ImGui::IsWindowHovered() )
-   //{
-      const ImVec2 mousePosInCanvas =
-          ImVec2( posX - _timelineDrawPosition[0], posY - _timelineDrawPosition[1] );
+   const ImVec2 mousePosInCanvas =
+      ImVec2( posX - _timelineDrawPosition[0], posY - _timelineDrawPosition[1] );
 
-      //if ( ImGui::IsWindowHovered( ImGuiHoveredFlags_RectOnly ) )
-      //{
-         handleMouseWheel( mousePosInCanvas.x, wheel );
-         handled = true;
-      //}
+   handleMouseWheel( mousePosInCanvas.x, wheel );
+   handled = true;
 
-      //if ( ImGui::IsRootWindowOrAnyChildFocused() )
-      //{
-         handleMouseDrag( mousePosInCanvas.x, mousePosInCanvas.y );
-         handled = true;
+   handleMouseDrag( mousePosInCanvas.x, mousePosInCanvas.y );
+   handled = true;
 
-         // Handle left mouse click to reset range selection
-         if( ImGui::GetIO().KeyCtrl && ImGui::IsMouseClicked( 0 ) )
-            _rangeSelectTimeStamp[0] = _rangeSelectTimeStamp[1] = 0;
-      //}
-   //}
+   // Handle left mouse click to reset range selection
+   if( ImGui::GetIO().KeyCtrl && ImGui::IsMouseClicked( 0 ) )
+      _rangeSelectTimeStamp[0] = _rangeSelectTimeStamp[1] = 0;
 
    return handled;
 }

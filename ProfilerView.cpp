@@ -221,7 +221,7 @@ void hop::ProfilerView::clear()
 
 const float hop::ProfilerView::canvasHeight() const
 {
-   return 999.0f;
+   return 9999.0f;
 }
 
 const int hop::ProfilerView::lodLevel() const
