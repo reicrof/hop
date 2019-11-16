@@ -143,7 +143,6 @@ class Timeline
    float _verticalPosPxl{0.0f};
    float _timelineHoverPos{-1.0f};
    float _timelineDrawPosition[2] = {};
-   float _canvasDrawPosition[2] = {};
    float _canvasHeight{0.0f};
    DisplayType _displayType{DISPLAY_TIMES};
 

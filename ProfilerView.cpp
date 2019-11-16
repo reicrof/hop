@@ -1,11 +1,11 @@
 #include "ProfilerView.h"
 #include "Hop.h"
 #include "common/TimelineTrack.h"
+#include "common/Utils.h"
+#include "common/TraceData.h"
 
 #include "Lod.h"
-#include "common/Utils.h"
-#include "TraceDetail.h"
-#include "TraceData.h"
+//#include "TraceDetail.h"
 #include "ModalWindow.h"
 #include "Options.h"
 #include "RendererGL.h"
@@ -25,13 +25,11 @@ extern bool g_run;
 
 // Drawing constants
 static constexpr float THREAD_LABEL_HEIGHT = 20.0f;
-static constexpr float MIN_TRACE_LENGTH_PXL = 1.0f;
 static constexpr float MAX_TRACE_HEIGHT = 50.0f;
 static constexpr float MIN_TRACE_HEIGHT = 15.0f;
 static constexpr uint32_t DISABLED_COLOR = 0xFF505050;
 static constexpr uint32_t CORE_LABEL_COLOR = 0xFF333333;
 static constexpr uint32_t CORE_LABEL_BORDER_COLOR = 0xFFAAAAAA;
-static constexpr uint32_t SEPARATOR_COLOR = 0xFF666666;
 static constexpr uint32_t SEPARATOR_HANDLE_COLOR = 0xFFAAAAAA;
 static const char* CTXT_MENU_STR = "Context Menu";
 
@@ -76,52 +74,6 @@ static float computeCanvasSize( const std::vector<hop::TrackDrawInfo>& tdi )
    return tracksHeight;
 }
 
-// static bool drawDispTrace( const hop::DisplayableTraceFrame& frame, size_t& i )
-// {
-//    const auto& trace = frame.traces[i];
-//    if( !trace.flags ) return false;
-
-//    bool isOpen = false;
-//    // bool isOpen = trace.classNameIndex
-//    //                   ? ImGui::TreeNode( trace.classNameIndex, "%s::%s :    %f us",
-//    0trace.name, trace.deltaTime )
-//    //                   : ImGui::TreeNode( trace.fctNameIndex, "%s :    %f us", trace.name,
-//    trace.deltaTime );
-
-//    if( isOpen )
-//    {
-//       ++i;
-//       while( frame.traces[i].flags )
-//       {
-//          drawDispTrace( frame, i );
-//       }
-//       ImGui::TreePop();
-//       ++i;
-//    }
-//    else
-//    {
-//       int lvl = 0;
-//       for ( size_t j = i + 1; j < frame.traces.size(); ++j )
-//       {
-//          if ( frame.traces[j].flags )
-//          {
-//             ++lvl;
-//          }
-//          else
-//          {
-//             --lvl;
-//             if ( lvl < 0 )
-//             {
-//                i = std::min( ++j, frame.traces.size()-1);
-//                break;
-//             }
-//          }
-//       }
-//       assert( i < frame.traces.size() );
-//    }
-//    return isOpen;
-// }
-
 hop::ProfilerView::ProfilerView( hop::Profiler::SourceType type, int processId, const char* str )
    : _profiler( type, processId, str ), _lodLevel( 0 ), _draggedTrack( -1 ), _highlightValue( 0.0f )
 {
@@ -140,9 +92,6 @@ void hop::ProfilerView::update( float /*deltaTimeMs*/, float globalTimeMs, TimeD
    }
    _lodLevel = lodLvl;
 
-   // Update according to options
-   TRACE_HEIGHT = hop::clamp( g_options.traceHeight, MIN_TRACE_HEIGHT, MAX_TRACE_HEIGHT );
-   PADDED_TRACE_SIZE = TRACE_HEIGHT + TRACE_VERTICAL_PADDING;
    //.update( deltaTimeMs );
    // _tracks.update( globalTimeMs, /*_timeline.duration()*/ );
    // if( _name.empty() || _pid < 0 )
@@ -160,170 +109,13 @@ void hop::ProfilerView::setRecording( bool recording )
    _profiler.setRecording( recording );
 }
 
-static constexpr float TOOLBAR_BUTTON_HEIGHT = 15.0f;
-static constexpr float TOOLBAR_BUTTON_WIDTH = 15.0f;
-static constexpr float TOOLBAR_BUTTON_PADDING = 5.0f;
-
-static bool drawPlayStopButton( const ImVec2& drawPos, bool isRecording )
-{
-   HOP_PROF_FUNC();
-   ImDrawList* DrawList = ImGui::GetWindowDrawList();
-
-   const auto& mousePos = ImGui::GetMousePos();
-   const bool hovering = ImGui::IsMouseHoveringWindow() && hop::ptInRect(
-                                                               mousePos.x,
-                                                               mousePos.y,
-                                                               drawPos.x,
-                                                               drawPos.y,
-                                                               drawPos.x + TOOLBAR_BUTTON_WIDTH,
-                                                               drawPos.y + TOOLBAR_BUTTON_HEIGHT );
-
-   if ( isRecording )
-   {
-      DrawList->AddRectFilled(
-          drawPos,
-          ImVec2( drawPos.x + TOOLBAR_BUTTON_WIDTH, drawPos.y + TOOLBAR_BUTTON_HEIGHT ),
-          hovering ? ImColor( 0.9f, 0.0f, 0.0f ) : ImColor( 0.7f, 0.0f, .0f ) );
-      if ( hovering )
-      {
-         ImGui::BeginTooltip();
-         ImGui::Text( "Stop recording traces ('r')" );
-         ImGui::EndTooltip();
-      }
-   }
-   else
-   {
-      ImVec2 pts[] = {
-          drawPos,
-          ImVec2( drawPos.x + TOOLBAR_BUTTON_WIDTH, drawPos.y + ( TOOLBAR_BUTTON_HEIGHT * 0.5 ) ),
-          ImVec2( drawPos.x, drawPos.y + TOOLBAR_BUTTON_WIDTH )};
-      DrawList->AddConvexPolyFilled(
-          pts, 3, hovering ? ImColor( 0.0f, 0.9f, 0.0f ) : ImColor( 0.0f, 0.7f, 0.0f ) );
-
-      if ( hovering )
-      {
-         ImGui::BeginTooltip();
-         ImGui::Text( "Start recording traces ('r')" );
-         ImGui::EndTooltip();
-      }
-   }
-
-   ImGui::SetCursorScreenPos(
-       ImVec2( drawPos.x, drawPos.y + TOOLBAR_BUTTON_HEIGHT + TOOLBAR_BUTTON_PADDING ) );
-
-   return hovering && ImGui::IsMouseClicked( 0 );
-}
-
-static bool drawDeleteTracesButton( const ImVec2& drawPos, bool active )
-{
-   ImDrawList* DrawList = ImGui::GetWindowDrawList();
-
-   const auto& mousePos = ImGui::GetMousePos();
-   const bool hovering = ImGui::IsMouseHoveringWindow() && hop::ptInRect(
-                                                               mousePos.x,
-                                                               mousePos.y,
-                                                               drawPos.x,
-                                                               drawPos.y,
-                                                               drawPos.x + TOOLBAR_BUTTON_WIDTH,
-                                                               drawPos.y + TOOLBAR_BUTTON_HEIGHT );
-
-   ImColor col = active ? ( hovering ? ImColor( 0.9f, 0.0f, 0.0f ) : ImColor( 0.7f, 0.0f, 0.0f ) )
-                        : ImColor( 0.5f, 0.5f, 0.5f );
-
-   DrawList->AddLine(
-       drawPos,
-       ImVec2( drawPos.x + TOOLBAR_BUTTON_WIDTH, drawPos.y + TOOLBAR_BUTTON_HEIGHT ),
-       col,
-       3.0f );
-   DrawList->AddLine(
-       ImVec2( drawPos.x + TOOLBAR_BUTTON_WIDTH, drawPos.y ),
-       ImVec2( drawPos.x, drawPos.y + TOOLBAR_BUTTON_HEIGHT ),
-       col,
-       3.0f );
-
-   if ( active && hovering )
-   {
-      ImGui::BeginTooltip();
-      ImGui::Text( "Delete all recorded traces ('Del')" );
-      ImGui::EndTooltip();
-   }
-
-   return hovering && active && ImGui::IsMouseClicked( 0 );
-}
-
-static void drawStatusIcon( const ImVec2& drawPos, hop::SharedMemory::ConnectionState state )
-{
-   ImColor col( 0.5f, 0.5f, 0.5f );
-   const char* msg = nullptr;
-   switch ( state )
-   {
-      case hop::SharedMemory::NO_TARGET_PROCESS:
-         col = ImColor( 0.6f, 0.6f, 0.6f );
-         msg = "No target process";
-         break;
-      case hop::SharedMemory::NOT_CONNECTED:
-         col = ImColor( 0.8f, 0.0f, 0.0f );
-         msg = "No shared memory found";
-         break;
-      case hop::SharedMemory::CONNECTED:
-         col = ImColor( 0.0f, 0.8f, 0.0f );
-         msg = "Connected";
-         break;
-      case hop::SharedMemory::CONNECTED_NO_CLIENT:
-         col = ImColor( 0.8f, 0.8f, 0.0f );
-         msg = "Connected to shared memory, but no client";
-         break;
-      case hop::SharedMemory::PERMISSION_DENIED:
-         col = ImColor( 0.6f, 0.2f, 0.0f );
-         msg = "Permission to shared memory or semaphore denied";
-         break;
-      case hop::SharedMemory::UNKNOWN_CONNECTION_ERROR:
-         col = ImColor( 0.4f, 0.0f, 0.0f );
-         msg = "Unknown connection error";
-         break;
-   }
-
-   ImDrawList* DrawList = ImGui::GetWindowDrawList();
-   DrawList->AddCircleFilled( drawPos, 10.0f, col );
-
-   const auto& mousePos = ImGui::GetMousePos();
-   const bool hovering = ImGui::IsMouseHoveringWindow() &&
-                         hop::ptInCircle( mousePos.x, mousePos.y, drawPos.x, drawPos.y, 10.0f );
-   if ( hovering && msg )
-   {
-      ImGui::BeginTooltip();
-      ImGui::Text( "%s", msg );
-      ImGui::EndTooltip();
-   }
-}
-
 void hop::ProfilerView::draw( float drawPosX, float drawPosY, float canvasWidth, float canvasHeight )
 {
    HOP_PROF_FUNC();
    ImGui::SetCursorPos( ImVec2( drawPosX, drawPosY ) );
 
-   const bool isRecording = _profiler.recording();
-   const auto toolbarDrawPos = ImVec2( drawPosX, drawPosY );
-   if ( _profiler.sourceType() == Profiler::SRC_TYPE_PROCESS &&
-        drawPlayStopButton( toolbarDrawPos, isRecording ) )
-   {
-      setRecording( !isRecording );
-   }
-
-   auto deleteTracePos = toolbarDrawPos;
-   deleteTracePos.x += ( 2.0f * TOOLBAR_BUTTON_PADDING ) + TOOLBAR_BUTTON_WIDTH;
-   if ( drawDeleteTracesButton( deleteTracePos, _trackDrawInfos.size() > 0 ) )
-   {
-      hop::displayModalWindow( "Delete all traces?", hop::MODAL_TYPE_YES_NO, [&]() { clear(); } );
-   }
-
-   auto statusPos = toolbarDrawPos;
-   statusPos.x += canvasWidth - 25.0f;
-   statusPos.y += 5.0f;
-   drawStatusIcon( statusPos, _profiler.connectionState() );
-
    ImGui::BeginChild( "Timeline" );
-   if ( _trackDrawInfos.size() == 0 && !isRecording )
+   if ( _trackDrawInfos.size() == 0 && !data().recording() )
    {
       displayBackgroundHelpMsg( canvasWidth, canvasHeight );
    }
@@ -356,7 +148,7 @@ void hop::ProfilerView::draw( float drawPosX, float drawPosY, float canvasWidth,
    ImGui::EndChild();  //"Timeline"
 }
 
-void hop::Profiler::handleHotkey()
+void hop::ProfilerView::handleHotkey()
 {
    // Let the tracks handle the hotkeys first.
    //if ( _tracks.handleHotkey() ) return;
@@ -390,7 +182,8 @@ void hop::Profiler::handleHotkey()
    // {
    //    _timeline.nextBookmark();
    // }
-   else if ( ImGui::IsKeyDown( ImGui::GetKeyIndex( ImGuiKey_Delete ) ) && _trackDrawInfos.size() > 0 )
+   //else if ( ImGui::IsKeyDown( ImGui::GetKeyIndex( ImGuiKey_Delete ) ) && _trackDrawInfos.size() > 0 )
+   if ( ImGui::IsKeyDown( ImGui::GetKeyIndex( ImGuiKey_Delete ) ) && _trackDrawInfos.size() > 0 )
    {
       if ( ImGui::IsWindowFocused( ImGuiFocusedFlags_RootAndChildWindows ) &&
            !hop::modalWindowShowing() )
@@ -406,13 +199,13 @@ bool hop::ProfilerView::handleMouse( float posX, float posY, bool lmClicked, boo
    {
       // Find the previous track that is visible
       int i = _draggedTrack - 1;
-      while ( i > 0 && _tracks[i].empty() )
-      {
-         --i;
-      }
+      // while ( i > 0 && _tracks[i].empty() )
+      // {
+      //    --i;
+      // }
 
-      const float trackHeight = ( mousePosY - _tracks[i]._localDrawPos[1] - THREAD_LABEL_HEIGHT );
-      _tracks[i].setTrackHeight( trackHeight );
+      const float trackHeight = ( posY - _trackDrawInfos[i].localDrawPos[1] - THREAD_LABEL_HEIGHT );
+      _trackDrawInfos[i].trackHeight = trackHeight;
 
       handled = true;
    }
@@ -426,7 +219,17 @@ void hop::ProfilerView::clear()
    _trackDrawInfos.clear();
 }
 
-const Profiler& hop::ProfilerView::data()
+const float hop::ProfilerView::canvasHeight() const
+{
+   return 999.0f;
+}
+
+const int hop::ProfilerView::lodLevel() const
+{
+   return _lodLevel;
+}
+
+const hop::Profiler& hop::ProfilerView::data() const
 {
    return _profiler;
 }

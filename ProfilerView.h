@@ -30,6 +30,7 @@ public:
    void clear();
    void setRecording( bool recording );
 
+   const float canvasHeight() const;
    const int lodLevel() const;
    const Profiler& data() const;
 private:

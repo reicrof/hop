@@ -1,7 +1,7 @@
 #include "Timeline.h"
-#include "TimelineTrack.h"
+#include "common/TimelineTrack.h"
 #include "common/Utils.h"
-#include "StringDb.h"
+#include "common/StringDb.h"
 #include "Options.h"
 #include "Cursor.h"
 
@@ -179,18 +179,12 @@ void Timeline::draw()
 {
    HOP_PROF_FUNC();
 
-   const auto startDrawPos = ImGui::GetCursorScreenPos();
+   const auto startDrawPos = ImGui::GetCursorPos();
    _timelineDrawPosition[0] = startDrawPos.x;
    _timelineDrawPosition[1] = startDrawPos.y;
 
    // Draw the time ruler at the top of the window
    drawTimeline(startDrawPos.x, startDrawPos.y + 5);
-
-   // Save the position once the ruler is drawn. This will be the start of the
-   // canvas draw position
-   const auto& curDrawPos = ImGui::GetCursorScreenPos();
-   _canvasDrawPosition[0] = curDrawPos.x;
-   _canvasDrawPosition[1] = curDrawPos.y;
 }
 
 void Timeline::clear()
@@ -291,7 +285,7 @@ void Timeline::drawOverlay()
           durationText,
           sizeof( durationText ),
           _displayType == DISPLAY_CYCLES );
-      drawRangeSelection( startPxl, startPxl + durationPxl, _canvasDrawPosition[1], durationText );
+      drawRangeSelection( startPxl, startPxl + durationPxl, canvasPosY(), durationText );
    }
 }
 
@@ -432,27 +426,27 @@ void Timeline::drawTimeline( float posX, float posY )
 bool Timeline::handleMouse( float posX, float posY, bool /*lmPressed*/, bool /*rmPressed*/, float wheel )
 {
    bool handled = false;
-   if ( ImGui::IsItemHoveredRect() )
-   {
+   //if( ImGui::IsWindowHovered() )
+   //{
       const ImVec2 mousePosInCanvas =
           ImVec2( posX - _timelineDrawPosition[0], posY - _timelineDrawPosition[1] );
 
-      if ( ImGui::IsRootWindowOrAnyChildHovered() )
-      {
+      //if ( ImGui::IsWindowHovered( ImGuiHoveredFlags_RectOnly ) )
+      //{
          handleMouseWheel( mousePosInCanvas.x, wheel );
          handled = true;
-      }
+      //}
 
-      if ( ImGui::IsRootWindowOrAnyChildFocused() )
-      {
+      //if ( ImGui::IsRootWindowOrAnyChildFocused() )
+      //{
          handleMouseDrag( mousePosInCanvas.x, mousePosInCanvas.y );
          handled = true;
 
          // Handle left mouse click to reset range selection
          if( ImGui::GetIO().KeyCtrl && ImGui::IsMouseClicked( 0 ) )
             _rangeSelectTimeStamp[0] = _rangeSelectTimeStamp[1] = 0;
-      }
-   }
+      //}
+   //}
 
    return handled;
 }
@@ -493,7 +487,7 @@ void Timeline::handleMouseWheel( float mousePosX, float mouseWheel )
 }
 
 void Timeline::handleMouseDrag( float mouseInCanvasX, float /*mouseInCanvasY*/ )
-{   
+{
    const float windowWidthPxl = ImGui::GetWindowWidth();
 
    const int64_t mousePosAsCycles =
@@ -641,17 +635,17 @@ float Timeline::maxVerticalPosPxl() const noexcept
 
 float Timeline::canvasPosX() const noexcept
 {
-   return _canvasDrawPosition[0];
+   return _timelineDrawPosition[0];
 }
 
 float Timeline::canvasPosY() const noexcept
 {
-   return _canvasDrawPosition[1];
+   return _timelineDrawPosition[1] + TIMELINE_TOTAL_HEIGHT;
 }
 
 float Timeline::canvasPosYWithScroll() const noexcept
 {
-   return _canvasDrawPosition[1] - _verticalPosPxl;
+   return canvasPosY() - _verticalPosPxl;
 }
 
 void Timeline::setStartTime( int64_t time, AnimationType animType ) noexcept

@@ -36,7 +36,7 @@ class Viewer
    void draw( uint32_t windowWidth, uint32_t windowHeight );
 
    bool handleHotkey();
-   bool handleMouse();
+   bool handleMouse( ProfilerView* selectedProf );
 
   private:
    Timeline _timeline;

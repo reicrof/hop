@@ -1,13 +1,14 @@
+#include "ProfilerView.h"
 #include "Viewer.h"
 
 #include "Cursor.h"
-#include "Profiler.h"
-#include "ProfilerView.h"
 #include "Lod.h"
 #include "ModalWindow.h"
 #include "Options.h"
 #include "RendererGL.h"
 #include "Stats.h"
+
+#include "common/Profiler.h"
 #include "common/Utils.h"
 
 #include "platform/Platform.h"
@@ -16,8 +17,11 @@
 
 extern bool g_run;
 
-static const float MAX_FULL_SIZE_TAB_COUNT = 8.0f;
-static const float TAB_HEIGHT = 30.0f;
+static constexpr float MAX_FULL_SIZE_TAB_COUNT = 8.0f;
+static constexpr float TAB_HEIGHT = 30.0f;
+static constexpr float TOOLBAR_BUTTON_HEIGHT = 15.0f;
+static constexpr float TOOLBAR_BUTTON_WIDTH = 15.0f;
+static constexpr float TOOLBAR_BUTTON_PADDING = 5.0f;
 
 static void addNewProfilerPopUp( hop::Viewer* v, hop::Profiler::SourceType type )
 {
@@ -101,6 +105,166 @@ static void drawMenuBar( hop::Viewer* v )
    }
 }
 
+static bool drawPlayStopButton( const ImVec2& drawPos, bool isRecording )
+{
+   HOP_PROF_FUNC();
+   ImDrawList* DrawList = ImGui::GetWindowDrawList();
+
+   const auto& mousePos = ImGui::GetMousePos();
+   const bool hovering = ImGui::IsMouseHoveringWindow() && hop::ptInRect(
+                                                               mousePos.x,
+                                                               mousePos.y,
+                                                               drawPos.x,
+                                                               drawPos.y,
+                                                               drawPos.x + TOOLBAR_BUTTON_WIDTH,
+                                                               drawPos.y + TOOLBAR_BUTTON_HEIGHT );
+
+   if ( isRecording )
+   {
+      DrawList->AddRectFilled(
+          drawPos,
+          ImVec2( drawPos.x + TOOLBAR_BUTTON_WIDTH, drawPos.y + TOOLBAR_BUTTON_HEIGHT ),
+          hovering ? ImColor( 0.9f, 0.0f, 0.0f ) : ImColor( 0.7f, 0.0f, .0f ) );
+      if ( hovering )
+      {
+         ImGui::BeginTooltip();
+         ImGui::Text( "Stop recording traces ('r')" );
+         ImGui::EndTooltip();
+      }
+   }
+   else
+   {
+      ImVec2 pts[] = {
+          drawPos,
+          ImVec2( drawPos.x + TOOLBAR_BUTTON_WIDTH, drawPos.y + ( TOOLBAR_BUTTON_HEIGHT * 0.5 ) ),
+          ImVec2( drawPos.x, drawPos.y + TOOLBAR_BUTTON_WIDTH )};
+      DrawList->AddConvexPolyFilled(
+          pts, 3, hovering ? ImColor( 0.0f, 0.9f, 0.0f ) : ImColor( 0.0f, 0.7f, 0.0f ) );
+
+      if ( hovering )
+      {
+         ImGui::BeginTooltip();
+         ImGui::Text( "Start recording traces ('r')" );
+         ImGui::EndTooltip();
+      }
+   }
+
+   ImGui::SetCursorScreenPos(
+       ImVec2( drawPos.x, drawPos.y + TOOLBAR_BUTTON_HEIGHT + TOOLBAR_BUTTON_PADDING ) );
+
+   return hovering && ImGui::IsMouseClicked( 0 );
+}
+
+static bool drawDeleteTracesButton( const ImVec2& drawPos, bool active )
+{
+   ImDrawList* DrawList = ImGui::GetWindowDrawList();
+
+   const auto& mousePos = ImGui::GetMousePos();
+   const bool hovering = ImGui::IsMouseHoveringWindow() && hop::ptInRect(
+                                                               mousePos.x,
+                                                               mousePos.y,
+                                                               drawPos.x,
+                                                               drawPos.y,
+                                                               drawPos.x + TOOLBAR_BUTTON_WIDTH,
+                                                               drawPos.y + TOOLBAR_BUTTON_HEIGHT );
+
+   ImColor col = active ? ( hovering ? ImColor( 0.9f, 0.0f, 0.0f ) : ImColor( 0.7f, 0.0f, 0.0f ) )
+                        : ImColor( 0.5f, 0.5f, 0.5f );
+
+   DrawList->AddLine(
+       drawPos,
+       ImVec2( drawPos.x + TOOLBAR_BUTTON_WIDTH, drawPos.y + TOOLBAR_BUTTON_HEIGHT ),
+       col,
+       3.0f );
+   DrawList->AddLine(
+       ImVec2( drawPos.x + TOOLBAR_BUTTON_WIDTH, drawPos.y ),
+       ImVec2( drawPos.x, drawPos.y + TOOLBAR_BUTTON_HEIGHT ),
+       col,
+       3.0f );
+
+   if ( active && hovering )
+   {
+      ImGui::BeginTooltip();
+      ImGui::Text( "Delete all recorded traces ('Del')" );
+      ImGui::EndTooltip();
+   }
+
+   return hovering && active && ImGui::IsMouseClicked( 0 );
+}
+
+static void drawStatusIcon( const ImVec2 drawPos, hop::SharedMemory::ConnectionState state )
+{
+   ImColor col( 0.5f, 0.5f, 0.5f );
+   const char* msg = nullptr;
+   switch ( state )
+   {
+      case hop::SharedMemory::NO_TARGET_PROCESS:
+         col = ImColor( 0.6f, 0.6f, 0.6f );
+         msg = "No target process";
+         break;
+      case hop::SharedMemory::NOT_CONNECTED:
+         col = ImColor( 0.8f, 0.0f, 0.0f );
+         msg = "No shared memory found";
+         break;
+      case hop::SharedMemory::CONNECTED:
+         col = ImColor( 0.0f, 0.8f, 0.0f );
+         msg = "Connected";
+         break;
+      case hop::SharedMemory::CONNECTED_NO_CLIENT:
+         col = ImColor( 0.8f, 0.8f, 0.0f );
+         msg = "Connected to shared memory, but no client";
+         break;
+      case hop::SharedMemory::PERMISSION_DENIED:
+         col = ImColor( 0.6f, 0.2f, 0.0f );
+         msg = "Permission to shared memory or semaphore denied";
+         break;
+      case hop::SharedMemory::UNKNOWN_CONNECTION_ERROR:
+         col = ImColor( 0.4f, 0.0f, 0.0f );
+         msg = "Unknown connection error";
+         break;
+   }
+
+   ImDrawList* DrawList = ImGui::GetWindowDrawList();
+   DrawList->AddCircleFilled( drawPos, 10.0f, col );
+
+   const auto& mousePos = ImGui::GetMousePos();
+   const bool hovering = ImGui::IsMouseHoveringWindow() &&
+                         hop::ptInCircle( mousePos.x, mousePos.y, drawPos.x, drawPos.y, 10.0f );
+   if ( hovering && msg )
+   {
+      ImGui::BeginTooltip();
+      ImGui::Text( "%s", msg );
+      ImGui::EndTooltip();
+   }
+}
+
+static void drawToolbar( const ImVec2 toolbarDrawPos, float canvasWidth, hop::ProfilerView* profView )
+{
+   if( profView )
+   {
+      const bool isRecording = profView->data().recording();
+      if ( profView->data().sourceType() == hop::Profiler::SRC_TYPE_PROCESS &&
+         drawPlayStopButton( toolbarDrawPos, isRecording ) )
+      {
+         profView->setRecording( !isRecording );
+      }
+
+      auto deleteTracePos = toolbarDrawPos;
+      deleteTracePos.x += ( 2.0f * TOOLBAR_BUTTON_PADDING ) + TOOLBAR_BUTTON_WIDTH;
+      if ( drawDeleteTracesButton( deleteTracePos, profView->canvasHeight() > 0 ) )
+      {
+         hop::displayModalWindow( "Delete all traces?", hop::MODAL_TYPE_YES_NO, [&]() { profView->clear(); } );
+      }
+
+      auto statusPos = toolbarDrawPos;
+      statusPos.x += canvasWidth - 25.0f;
+      statusPos.y += 5.0f;
+      drawStatusIcon( statusPos, profView->data().connectionState() );
+   }
+
+   ImGui::SetCursorPosY( toolbarDrawPos.y + TOOLBAR_BUTTON_HEIGHT );
+}
+
 static int displayableProfilerName( const hop::ProfilerView* prof, char* outName, uint32_t size )
 {
    int pid;
@@ -134,7 +298,7 @@ static bool drawAddTabButton( const ImVec2& drawPos )
    return clicked;
 }
 
-static int drawTabs( hop::Viewer& viewer, int selectedTab )
+static int drawTabs( const ImVec2 drawPos, hop::Viewer& viewer, int selectedTab )
 {
    const ImVec2 windowSize = ImGui::GetWindowSize();
 
@@ -154,11 +318,10 @@ static int drawTabs( hop::Viewer& viewer, int selectedTab )
 
    // Draw tab bar background color
    ImDrawList* dl = ImGui::GetWindowDrawList();
-   const ImVec2 startDrawPos = ImGui::GetCursorPos();
-   ImGui::SetCursorPos( ImVec2( startDrawPos.x, startDrawPos.y - 1.0f ) );
+   ImGui::SetCursorPos( ImVec2( drawPos.x, drawPos.y - 1.0f ) );
    dl->AddRectFilled(
-       startDrawPos,
-       ImVec2( startDrawPos.x + windowSize.x, startDrawPos.y + TAB_HEIGHT - 1.0f ),
+       drawPos,
+       ImVec2( drawPos.x + windowSize.x, drawPos.y + TAB_HEIGHT - 1.0f ),
        inactiveWindowColor );
 
    int newTabSelection = selectedTab;
@@ -170,7 +333,7 @@ static int drawTabs( hop::Viewer& viewer, int selectedTab )
       if ( selectedTab == i )
       {
          // Draw the selected tab as its own entity
-         ImGui::SetCursorPos( ImVec2( ImGui::GetCursorPosX() + tabWidth, startDrawPos.y ) );
+         ImGui::SetCursorPos( ImVec2( ImGui::GetCursorPosX() + tabWidth, drawPos.y ) );
          continue;
       }
 
@@ -197,7 +360,7 @@ static int drawTabs( hop::Viewer& viewer, int selectedTab )
    // Draw the selected tab
    if ( selectedTab >= 0 )
    {
-      ImVec2 selectedTabPos = startDrawPos;
+      ImVec2 selectedTabPos = drawPos;
       selectedTabPos.x += ( selectedTab ) * tabWidth + ( selectedTab ) * tabFramePadding;
       ImGui::SetCursorPos( selectedTabPos );
       ImGui::PushStyleColor( ImGuiCol_Button, activeWindowColor );
@@ -220,7 +383,7 @@ static int drawTabs( hop::Viewer& viewer, int selectedTab )
    }
 
    // Draw the "+" button to add a tab
-   ImVec2 addTabPos = startDrawPos;
+   ImVec2 addTabPos = drawPos;
    addTabPos.x += profCount * tabWidth + profCount * tabFramePadding;
    if ( drawAddTabButton( addTabPos ) )
    {
@@ -234,7 +397,7 @@ static int drawTabs( hop::Viewer& viewer, int selectedTab )
    ImGui::PushStyleColor( ImGuiCol_Button, 0XFF101077 );
    ImGui::PushStyleColor( ImGuiCol_ButtonHovered, 0XFF101099 );
    ImGui::PushStyleColor( ImGuiCol_ButtonActive, 0XFF101055 );
-   ImVec2 closeButtonPos = startDrawPos;
+   ImVec2 closeButtonPos = drawPos;
    closeButtonPos.x += tabWidth - 25.0f;
    closeButtonPos.y += 5.0f;
    for ( int i = 0; i < profCount; ++i )
@@ -251,7 +414,7 @@ static int drawTabs( hop::Viewer& viewer, int selectedTab )
    ImGui::PopStyleColor( 3 );
 
    // Restore cursor pos for next drawing
-   ImGui::SetCursorPos( ImVec2( startDrawPos.x, startDrawPos.y + TAB_HEIGHT + 10.0f ) );
+   ImGui::SetCursorPos( ImVec2( drawPos.x, drawPos.y + TAB_HEIGHT + 10.0f ) );
 
    return newTabSelection;
 }
@@ -267,7 +430,7 @@ static void updateOptions( const hop::ProfilerView* selectedProf, hop::Stats& st
 }
 
 static void updateProfilers(
-    TimeDuration tlDuration,
+    hop::TimeDuration tlDuration,
     std::vector<std::unique_ptr<hop::ProfilerView> >& profilers,
     int selectedTab )
 {
@@ -337,7 +500,7 @@ int Viewer::addNewProfiler( const char* processName, bool startRecording )
    const hop::ProcessInfo procInfo = pid != -1 ? hop::getProcessInfoFromPID( pid )
                                                : hop::getProcessInfoFromProcessName( processName );
 
-   _profilers.emplace_back( new hop::Profiler( Profiler::SRC_TYPE_PROCESS, procInfo.pid, processName ) );
+   _profilers.emplace_back( new hop::ProfilerView( Profiler::SRC_TYPE_PROCESS, procInfo.pid, processName ) );
    _profilers.back()->setRecording( startRecording );
    _selectedTab = _profilers.size() - 1;
    return _selectedTab;
@@ -414,8 +577,6 @@ void Viewer::onNewFrame(
 
    // Setup display size (every frame to accommodate for window resizing)
    io.DisplaySize = ImVec2( (float)width, (float)height );
-   // io.DisplayFramebufferScale = ImVec2(w > 0 ? ((float)display_w / w) : 0, h > 0 ?
-   // ((float)display_h / h) : 0);
 
    // Setup time step
    const auto curTime = ClockType::now();
@@ -475,22 +636,28 @@ void Viewer::draw( uint32_t windowWidth, uint32_t windowHeight )
    // We only want to remove the padding for the viewer window and not all of its childrens.
    ImGui::PopStyleVar( 2 );
 
-   drawMenuBar( this );
-
+   // Update
    updateProfilers( _timeline.duration(), _profilers, _selectedTab );
 
-   _selectedTab = drawTabs( *this, _selectedTab );
+   // Then draw
+   drawMenuBar( this );
+   _selectedTab = drawTabs( ImGui::GetCursorPos(), *this, _selectedTab );
+   ProfilerView* const selectedProf = _selectedTab >= 0 ? _profilers[_selectedTab].get() : nullptr;
+   drawToolbar( ImGui::GetCursorPos(), ImGui::GetWindowWidth(), selectedProf );
 
-   if ( _selectedTab >= 0 )
+   _timeline.draw();
+   if ( selectedProf )
    {
-      ImVec2 curPos = ImGui::GetCursorPos();
-      _profilers[_selectedTab]->draw( curPos.x, curPos.y, windowWidth - 5.0f, windowHeight );
+      const ImVec2 curPos = ImGui::GetCursorPos();
+      _timeline.beginDrawCanvas( selectedProf->canvasHeight() );
+      selectedProf->draw( curPos.x, curPos.y, windowWidth - 5.0f, windowHeight );
+      _timeline.endDrawCanvas();
    }
+   
+   handleHotkey();
+   handleMouse( selectedProf );
 
    ImGui::End();  // Hop Viewer Window
-
-   handleHotkey();
-   handleMouse();
 
    // Render modal window, if any
    if ( modalWindowShowing() )
@@ -545,7 +712,7 @@ bool Viewer::handleHotkey()
    return false;
 }
 
-bool Viewer::handleMouse()
+bool Viewer::handleMouse( ProfilerView* selectedProf )
 {
    const auto mousePos = ImGui::GetMousePos();
    const bool lmb = ImGui::IsMouseDown( 0 );
@@ -553,15 +720,16 @@ bool Viewer::handleMouse()
    const float wheel = ImGui::GetIO().MouseWheel;
 
    bool mouseHandled = false;
-   if ( _selectedTab >= 0 )
+   if ( selectedProf )
    {
-      ImVec2 curPos = ImGui::GetCursorPos();
-      mouseHandled = _profilers[_selectedTab]->handleMouse( mousePos.x, mousePos.y, lmb, rmb, wheel );
-      if( !mouseHandled )
-      {
-         // _timeline->handleMouse
-      }
+      mouseHandled = selectedProf->handleMouse( mousePos.x, mousePos.y, lmb, rmb, wheel );
    }
+
+   if( !mouseHandled )
+   {
+      _timeline.handleMouse( mousePos.x, mousePos.y, lmb, rmb, wheel );
+   }
+
    return mouseHandled;
 }
 

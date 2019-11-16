@@ -3,7 +3,6 @@
 #include "common/Startup.h"
 #include "Stats.h"
 #include "common/Utils.h"
-#include "common/Startup.h"
 #include "platform/Platform.h"
 #include "imgui/imgui.h"
 #include "Options.h"
@@ -12,7 +11,7 @@
 #undef main
 
 #include "hop_icon_data.inline"
-#include "miniz.h"
+#include "common/miniz.h"
 
 #include <string>
 

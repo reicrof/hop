@@ -1,9 +1,9 @@
 #ifndef PROFILER_H_
 #define PROFILER_H_
 
-#include "Server.h"
-#include "StringDb.h"
-#include "TimelineTrack.h"
+#include "common/Server.h" // Will include Hop.h with the HOP_VIEWER defined
+#include "common/StringDb.h"
+#include "common/TimelineTrack.h"
 
 #include <string>
 

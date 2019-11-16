@@ -3,11 +3,14 @@
 #include <thread>
 #include <string>
 
+#include <atomic>
 #include <stdio.h>
 #include <stdlib.h>
 #include <mutex>
 #include <time.h>
+#include <thread>
 #include <signal.h>
+#include <vector>
 
 #define HOP_IMPLEMENTATION
 #include <Hop.h>

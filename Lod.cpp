@@ -1,6 +1,6 @@
 #include "Lod.h"
 
-#include "TraceData.h"
+#include "common/TraceData.h"
 #include "common/Utils.h"
 
 #include <algorithm>
