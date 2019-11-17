@@ -36,6 +36,7 @@ public:
    SourceType sourceType() const;
    bool recording() const;
    SharedMemory::ConnectionState connectionState() const;
+   const TimelineTrack& timelineTrackAt( int i ) const;
 
    void setRecording( bool recording );
    void fetchClientData();
@@ -66,6 +67,6 @@ private:
    TimeStamp _latestTimeStamp;
 };
 
-}  // PROFILER_H_
+}  // namespace hop
 
 #endif // PROFILER_H_

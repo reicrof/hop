@@ -1,8 +1,10 @@
 #include "ProfilerView.h"
+#include "TimelineTracksView.h"
 #include "Hop.h"
 #include "common/TimelineTrack.h"
 #include "common/Utils.h"
 #include "common/TraceData.h"
+#include "imgui/imgui.h"
 
 #include "Lod.h"
 //#include "TraceDetail.h"
@@ -11,7 +13,6 @@
 #include "RendererGL.h"
 #include <SDL_keycode.h>
 
-#include "imgui/imgui.h"
 
 #include <cassert>
 #include <cmath>
@@ -24,7 +25,6 @@
 extern bool g_run;
 
 // Drawing constants
-static constexpr float THREAD_LABEL_HEIGHT = 20.0f;
 static constexpr float MAX_TRACE_HEIGHT = 50.0f;
 static constexpr float MIN_TRACE_HEIGHT = 15.0f;
 static constexpr uint32_t DISABLED_COLOR = 0xFF505050;
@@ -80,6 +80,11 @@ hop::ProfilerView::ProfilerView( hop::Profiler::SourceType type, int processId, 
 
 }
 
+void hop::ProfilerView::fetchClientData()
+{
+   _profiler.fetchClientData();
+}
+
 void hop::ProfilerView::update( float /*deltaTimeMs*/, float globalTimeMs, TimeDuration timelineDuration )
 {
    _highlightValue = (std::sin( 0.007f * globalTimeMs ) * 0.8f + 1.0f) / 2.0f;
@@ -109,87 +114,43 @@ void hop::ProfilerView::setRecording( bool recording )
    _profiler.setRecording( recording );
 }
 
-void hop::ProfilerView::draw( float drawPosX, float drawPosY, float canvasWidth, float canvasHeight )
+void hop::ProfilerView::draw( float drawPosX, float drawPosY, const TimelineInfo& tlInfo, TimelineMsgArray* msgArray )
 {
    HOP_PROF_FUNC();
    ImGui::SetCursorPos( ImVec2( drawPosX, drawPosY ) );
 
-   ImGui::BeginChild( "Timeline" );
+   ImGui::BeginChild( "ProfilerView" );
    if ( _trackDrawInfos.size() == 0 && !data().recording() )
    {
-      displayBackgroundHelpMsg( canvasWidth, canvasHeight );
+      displayBackgroundHelpMsg( ImGui::GetWindowWidth(), ImGui::GetWindowHeight() );
    }
    else
    {
-      //  Move timeline to the most recent trace if Live mode is on
-      // if ( _recording && _timeline.realtime() )
-      // {
-      //    _timeline.moveToPresentTime( Timeline::ANIMATION_TYPE_NONE );
-      // }
-
-      // Draw the timeline ruler
-      //_timeline.draw();
-
-      // Start the canvas drawing
-      //_timeline.beginDrawCanvas( computeCanvasSize( _tracks ) );
-
-      // Draw the tracks inside the canvaws
-      // auto timelineActions =
-      //     _tracks.draw( /*TimelineTracksDrawInfo{_timeline.constructTimelineInfo()*/, _strDb} );
-
-      //_timeline.drawOverlay();
-
-      //_timeline.endDrawCanvas();
-
-      // Handle deferred timeline actions created by the module
-      //_timeline.handleDeferredActions( timelineActions );
+      TimelineTrackDrawInfo tdi = { _trackDrawInfos, _profiler, tlInfo, PADDED_TRACE_SIZE };
+      hop::drawTimelineTracks( tdi, msgArray );
    }
 
-   ImGui::EndChild();  //"Timeline"
+   ImGui::EndChild();  //"ProfilerView"
 }
 
-void hop::ProfilerView::handleHotkey()
+bool hop::ProfilerView::handleHotkey()
 {
+   bool handled = false;
    // Let the tracks handle the hotkeys first.
    //if ( _tracks.handleHotkey() ) return;
 
-   // if ( ImGui::IsKeyReleased( ImGui::GetKeyIndex( ImGuiKey_Home ) ) )
-   // {
-   //    _timeline.moveToStart();
-   // }
-   // else if ( ImGui::IsKeyReleased( ImGui::GetKeyIndex( ImGuiKey_End ) ) )
-   // {
-   //    _timeline.moveToPresentTime();
-   //    _timeline.setRealtime( true );
-   // }
-   // else if ( ImGui::IsKeyReleased( 'r' ) && ImGui::IsRootWindowOrAnyChildFocused() )
-   // {
-   //    setRecording( !_recording );
-   // }
-   // else if ( ImGui::GetIO().KeyCtrl && ImGui::IsKeyPressed( 'z' ) )
-   // {
-   //    _timeline.undoNavigation();
-   // }
-   // else if ( ImGui::GetIO().KeyCtrl && ImGui::IsKeyPressed( 'y' ) )
-   // {
-   //    _timeline.redoNavigation();
-   // }
-   // else if ( ImGui::IsKeyPressed( ImGui::GetKeyIndex( ImGuiKey_LeftArrow ) ) )
-   // {
-   //    _timeline.previousBookmark();
-   // }
-   // else if ( ImGui::IsKeyPressed( ImGui::GetKeyIndex( ImGuiKey_RightArrow ) ) )
-   // {
-   //    _timeline.nextBookmark();
-   // }
-   //else if ( ImGui::IsKeyDown( ImGui::GetKeyIndex( ImGuiKey_Delete ) ) && _trackDrawInfos.size() > 0 )
    if ( ImGui::IsKeyDown( ImGui::GetKeyIndex( ImGuiKey_Delete ) ) && _trackDrawInfos.size() > 0 )
    {
       if ( ImGui::IsWindowFocused( ImGuiFocusedFlags_RootAndChildWindows ) &&
            !hop::modalWindowShowing() )
+      {
          hop::displayModalWindow(
              "Delete all traces?", hop::MODAL_TYPE_YES_NO, [&]() { clear(); } );
+         handled = true;
+      }
    }
+
+   return handled;
 }
 
 bool hop::ProfilerView::handleMouse( float posX, float posY, bool lmClicked, bool rmClicked, float wheel )
@@ -204,8 +165,8 @@ bool hop::ProfilerView::handleMouse( float posX, float posY, bool lmClicked, boo
       //    --i;
       // }
 
-      const float trackHeight = ( posY - _trackDrawInfos[i].localDrawPos[1] - THREAD_LABEL_HEIGHT );
-      _trackDrawInfos[i].trackHeight = trackHeight;
+      //const float trackHeight = ( posY - _trackDrawInfos[i].localDrawPos[1] - THREAD_LABEL_HEIGHT );
+      //_trackDrawInfos[i].trackHeight = trackHeight;
 
       handled = true;
    }
@@ -233,16 +194,6 @@ const hop::Profiler& hop::ProfilerView::data() const
 {
    return _profiler;
 }
-
-// void hop::Profiler::setRecording( bool recording )
-// {
-//    _recording = recording;
-//    _server.setRecording( recording );
-//    if ( recording )
-//    {
-//       _timeline.setRealtime( true );
-//    }
-// }
 
 // bool hop::Profiler::saveToFile( const char* savePath )
 // {

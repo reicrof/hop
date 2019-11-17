@@ -31,11 +31,11 @@ class Timeline
    void clear();
    void beginDrawCanvas( float canvasHeightPxl );
    void endDrawCanvas();
-   TimelineInfo constructTimelineInfo() const noexcept;
+   TimelineInfo createTimelineInfo() const noexcept;
 
    bool handleMouse( float posX, float posY, bool lmPressed, bool rmPressed, float wheel );
    bool handleHotkey();
-   void handleDeferredActions( const std::vector< TimelineMessage >& msg );
+   void handleDeferredActions( const TimelineMsgArray& messages );
 
 
    /*

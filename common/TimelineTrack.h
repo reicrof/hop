@@ -9,8 +9,8 @@ namespace hop
 
 struct TimelineTrack
 {
-   void setTrackName( StrPtr_t name ) noexcept;
-   StrPtr_t trackName() const noexcept;
+   void setName( StrPtr_t name ) noexcept;
+   StrPtr_t name() const noexcept;
    void addTraces( const TraceData& traces );
    void addLockWaits( const LockWaitData& lockWaits );
    void addUnlockEvents(const std::vector<UnlockEvent>& unlockEvents);

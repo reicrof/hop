@@ -6,12 +6,12 @@
 
 namespace hop
 {
-void TimelineTrack::setTrackName( StrPtr_t name ) noexcept
+void TimelineTrack::setName( StrPtr_t name ) noexcept
 {
    _trackName = name;
 }
 
-StrPtr_t TimelineTrack::trackName() const noexcept
+StrPtr_t TimelineTrack::name() const noexcept
 {
    return _trackName;
 }

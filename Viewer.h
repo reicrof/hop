@@ -35,7 +35,7 @@ class Viewer
        float mouseWheel );
    void draw( uint32_t windowWidth, uint32_t windowHeight );
 
-   bool handleHotkey();
+   bool handleHotkey( ProfilerView* selectedProf );
    bool handleMouse( ProfilerView* selectedProf );
 
   private:

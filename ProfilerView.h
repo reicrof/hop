@@ -2,29 +2,25 @@
 #define PROFILER_VIEW_H_
 
 #include "common/Profiler.h"
+#include "TimelineTracksView.h"
 
 #include <vector>
 
 namespace hop
 {
 
-class Profiler;
-
-struct TrackDrawInfo
-{
-   float localDrawPos[2];    // This is the position at which the track is drawn in canvas coord
-   float absoluteDrawPos[2]; // The absolute position ignores the scroll but not the relative
-   float trackHeight{9999.0f};
-};
+class TimelineInfo;
+class TimelineMsgArray;
 
 class ProfilerView
 {
 public:
    ProfilerView( Profiler::SourceType type, int processId, const char* str );
+   void fetchClientData();
    void update( float deltaTimeMs, float globalTimeMs, TimeDuration timelineDuration );
-   void draw( float drawPosX, float drawPosY, float windowWidth, float windowHeight );
+   void draw( float drawPosX, float drawPosY, const TimelineInfo& tlInfo, TimelineMsgArray* msgArray );
 
-   void handleHotkey();
+   bool handleHotkey();
    bool handleMouse( float posX, float posY, bool lmClicked, bool rmClicked, float wheel );
 
    void clear();

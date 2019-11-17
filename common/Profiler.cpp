@@ -43,6 +43,12 @@ SharedMemory::ConnectionState Profiler::connectionState() const
    return _server.connectionState();
 }
 
+const TimelineTrack& Profiler::timelineTrackAt( int i ) const
+{
+   assert( i > 0 && i < _tracks.size() );
+   return _tracks[i];
+}
+
 ProfilerStats Profiler::stats() const
 {
    ProfilerStats stats = {};
@@ -197,7 +203,7 @@ void Profiler::addThreadName( StrPtr_t name, uint32_t threadIndex )
 
    assert( name != 0 );  // should not be empty name
 
-   _tracks[threadIndex].setTrackName( name );
+   _tracks[threadIndex].setName( name );
 }
 
 const uint32_t MAGIC_NUMBER = 1095780676;  // "DIPA"

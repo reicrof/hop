@@ -1,4 +1,5 @@
 #include "ProfilerView.h"
+#include "TimelineInfo.h"
 #include "Viewer.h"
 
 #include "Cursor.h"
@@ -35,6 +36,12 @@ static void addNewProfilerPopUp( hop::Viewer* v, hop::Profiler::SourceType type 
          v->openProfilerFile( str );
       }
    } );
+}
+
+static void setRecording( hop::ProfilerView* profiler, hop::Timeline* timeline, bool recording )
+{
+   profiler->setRecording( recording );
+   timeline->setRealtime( recording );
 }
 
 static void drawMenuBar( hop::Viewer* v )
@@ -105,12 +112,8 @@ static void drawMenuBar( hop::Viewer* v )
    }
 }
 
-static bool drawPlayStopButton( const ImVec2& drawPos, bool isRecording )
+static bool drawPlayButton( const ImVec2 drawPos, const ImVec2 mousePos, bool active )
 {
-   HOP_PROF_FUNC();
-   ImDrawList* DrawList = ImGui::GetWindowDrawList();
-
-   const auto& mousePos = ImGui::GetMousePos();
    const bool hovering = ImGui::IsMouseHoveringWindow() && hop::ptInRect(
                                                                mousePos.x,
                                                                mousePos.y,
@@ -119,40 +122,50 @@ static bool drawPlayStopButton( const ImVec2& drawPos, bool isRecording )
                                                                drawPos.x + TOOLBAR_BUTTON_WIDTH,
                                                                drawPos.y + TOOLBAR_BUTTON_HEIGHT );
 
-   if ( isRecording )
-   {
-      DrawList->AddRectFilled(
-          drawPos,
-          ImVec2( drawPos.x + TOOLBAR_BUTTON_WIDTH, drawPos.y + TOOLBAR_BUTTON_HEIGHT ),
-          hovering ? ImColor( 0.9f, 0.0f, 0.0f ) : ImColor( 0.7f, 0.0f, .0f ) );
-      if ( hovering )
-      {
-         ImGui::BeginTooltip();
-         ImGui::Text( "Stop recording traces ('r')" );
-         ImGui::EndTooltip();
-      }
-   }
-   else
-   {
-      ImVec2 pts[] = {
+   ImDrawList* DrawList = ImGui::GetWindowDrawList();
+   ImVec2 pts[] = {
           drawPos,
           ImVec2( drawPos.x + TOOLBAR_BUTTON_WIDTH, drawPos.y + ( TOOLBAR_BUTTON_HEIGHT * 0.5 ) ),
           ImVec2( drawPos.x, drawPos.y + TOOLBAR_BUTTON_WIDTH )};
-      DrawList->AddConvexPolyFilled(
-          pts, 3, hovering ? ImColor( 0.0f, 0.9f, 0.0f ) : ImColor( 0.0f, 0.7f, 0.0f ) );
+   ImColor col = active ? ( hovering ?ImColor( 0.0f, 0.9f, 0.0f ) : ImColor( 0.0f, 0.7f, 0.0f ) )
+                        : ImColor( 0.5f, 0.5f, 0.5f );
+   DrawList->AddConvexPolyFilled( pts, 3, col );
 
-      if ( hovering )
-      {
-         ImGui::BeginTooltip();
-         ImGui::Text( "Start recording traces ('r')" );
-         ImGui::EndTooltip();
-      }
+   if ( hovering )
+   {
+      ImGui::BeginTooltip();
+      ImGui::Text( "Start recording traces ('r')" );
+      ImGui::EndTooltip();
    }
 
-   ImGui::SetCursorScreenPos(
-       ImVec2( drawPos.x, drawPos.y + TOOLBAR_BUTTON_HEIGHT + TOOLBAR_BUTTON_PADDING ) );
+   return hovering && active && ImGui::IsMouseClicked( 0 );
+}
 
-   return hovering && ImGui::IsMouseClicked( 0 );
+static bool drawStopButton( const ImVec2 drawPos, const ImVec2 mousePos, bool active )
+{
+   const bool hovering = ImGui::IsMouseHoveringWindow() && hop::ptInRect(
+                                                               mousePos.x,
+                                                               mousePos.y,
+                                                               drawPos.x,
+                                                               drawPos.y,
+                                                               drawPos.x + TOOLBAR_BUTTON_WIDTH,
+                                                               drawPos.y + TOOLBAR_BUTTON_HEIGHT );
+
+   ImDrawList* DrawList = ImGui::GetWindowDrawList();
+   ImColor col = active ? ( hovering ? ImColor( 0.9f, 0.0f, 0.0f ) : ImColor( 0.7f, 0.0f, 0.0f ) )
+                        : ImColor( 0.5f, 0.5f, 0.5f );
+   DrawList->AddRectFilled(
+         drawPos,
+         ImVec2( drawPos.x + TOOLBAR_BUTTON_WIDTH, drawPos.y + TOOLBAR_BUTTON_HEIGHT ),
+         col );
+   if ( hovering )
+   {
+      ImGui::BeginTooltip();
+      ImGui::Text( "Stop recording traces ('r')" );
+      ImGui::EndTooltip();
+   }
+
+   return hovering && active && ImGui::IsMouseClicked( 0 );
 }
 
 static bool drawDeleteTracesButton( const ImVec2& drawPos, bool active )
@@ -238,31 +251,32 @@ static void drawStatusIcon( const ImVec2 drawPos, hop::SharedMemory::ConnectionS
    }
 }
 
-static void drawToolbar( const ImVec2 toolbarDrawPos, float canvasWidth, hop::ProfilerView* profView )
+static void drawToolbar( ImVec2 drawPos, float canvasWidth, hop::ProfilerView* profView, hop::Timeline* tl )
 {
-   if( profView )
+   drawPos.x += 5.0f;
+   const auto& mousePos   = ImGui::GetMousePos();
+   const bool isRecording = profView ? profView->data().recording() : false;
+   const bool isActive    = profView ? profView->data().sourceType() == hop::Profiler::SRC_TYPE_PROCESS : false;
+
+   const bool pressed = isRecording ? drawStopButton( drawPos, mousePos, isActive ) :
+                                      drawPlayButton( drawPos, mousePos, isActive );
+   if( pressed )
    {
-      const bool isRecording = profView->data().recording();
-      if ( profView->data().sourceType() == hop::Profiler::SRC_TYPE_PROCESS &&
-         drawPlayStopButton( toolbarDrawPos, isRecording ) )
-      {
-         profView->setRecording( !isRecording );
-      }
-
-      auto deleteTracePos = toolbarDrawPos;
-      deleteTracePos.x += ( 2.0f * TOOLBAR_BUTTON_PADDING ) + TOOLBAR_BUTTON_WIDTH;
-      if ( drawDeleteTracesButton( deleteTracePos, profView->canvasHeight() > 0 ) )
-      {
-         hop::displayModalWindow( "Delete all traces?", hop::MODAL_TYPE_YES_NO, [&]() { profView->clear(); } );
-      }
-
-      auto statusPos = toolbarDrawPos;
-      statusPos.x += canvasWidth - 25.0f;
-      statusPos.y += 5.0f;
-      drawStatusIcon( statusPos, profView->data().connectionState() );
+      setRecording( profView, tl, !isRecording );
    }
 
-   ImGui::SetCursorPosY( toolbarDrawPos.y + TOOLBAR_BUTTON_HEIGHT );
+   const ImVec2 deleteOffset( ( 2.0f * TOOLBAR_BUTTON_PADDING ) + TOOLBAR_BUTTON_WIDTH, 0.0f );
+   if ( drawDeleteTracesButton( drawPos + deleteOffset, isActive && profView->canvasHeight() > 0 ) )
+   {
+      hop::displayModalWindow( "Delete all traces?", hop::MODAL_TYPE_YES_NO, [&]() { profView->clear(); } );
+   }
+
+   if( isActive )
+   {
+      drawStatusIcon( drawPos + ImVec2( canvasWidth - 25.0f, 5.0f ), profView->data().connectionState() );
+   }
+
+   ImGui::SetCursorPosY( drawPos.y + TOOLBAR_BUTTON_HEIGHT );
 }
 
 static int displayableProfilerName( const hop::ProfilerView* prof, char* outName, uint32_t size )
@@ -360,9 +374,8 @@ static int drawTabs( const ImVec2 drawPos, hop::Viewer& viewer, int selectedTab 
    // Draw the selected tab
    if ( selectedTab >= 0 )
    {
-      ImVec2 selectedTabPos = drawPos;
-      selectedTabPos.x += ( selectedTab ) * tabWidth + ( selectedTab ) * tabFramePadding;
-      ImGui::SetCursorPos( selectedTabPos );
+      const ImVec2 selTabOffset( selectedTab * ( tabWidth + tabFramePadding ), 0.0f );
+      ImGui::SetCursorPos( drawPos + selTabOffset );
       ImGui::PushStyleColor( ImGuiCol_Button, activeWindowColor );
       ImGui::PushStyleColor( ImGuiCol_ButtonHovered, activeWindowColor );
       ImGui::PushStyleColor( ImGuiCol_ButtonActive, activeWindowColor );
@@ -383,9 +396,8 @@ static int drawTabs( const ImVec2 drawPos, hop::Viewer& viewer, int selectedTab 
    }
 
    // Draw the "+" button to add a tab
-   ImVec2 addTabPos = drawPos;
-   addTabPos.x += profCount * tabWidth + profCount * tabFramePadding;
-   if ( drawAddTabButton( addTabPos ) )
+   const ImVec2 addTabOffset = ImVec2( profCount * (tabWidth + tabFramePadding), 0.0f );
+   if ( drawAddTabButton( drawPos + addTabOffset ) )
    {
       addNewProfilerPopUp( &viewer, hop::Profiler::SRC_TYPE_PROCESS );
    }
@@ -500,7 +512,7 @@ int Viewer::addNewProfiler( const char* processName, bool startRecording )
                                                : hop::getProcessInfoFromProcessName( processName );
 
    _profilers.emplace_back( new hop::ProfilerView( Profiler::SRC_TYPE_PROCESS, procInfo.pid, processName ) );
-   _profilers.back()->setRecording( startRecording );
+   setRecording( _profilers.back().get(), &_timeline, startRecording );
    _selectedTab = _profilers.size() - 1;
    return _selectedTab;
 }
@@ -548,6 +560,11 @@ const ProfilerView* Viewer::getProfiler( int index ) const
 
 void Viewer::fetchClientsData()
 {
+   for( auto& pv : _profilers )
+   {
+      pv->fetchClientData();
+   }
+
    // if ( _pendingProfilerLoad.valid() )
    // {
    //    const auto waitRes = _pendingProfilerLoad.wait_for( std::chrono::microseconds( 200 ) );
@@ -639,18 +656,20 @@ void Viewer::draw( uint32_t windowWidth, uint32_t windowHeight )
    drawMenuBar( this );
    _selectedTab = drawTabs( ImGui::GetCursorPos(), *this, _selectedTab );
    ProfilerView* const selectedProf = _selectedTab >= 0 ? _profilers[_selectedTab].get() : nullptr;
-   drawToolbar( ImGui::GetCursorPos(), ImGui::GetWindowWidth(), selectedProf );
+   drawToolbar( ImGui::GetCursorPos(), ImGui::GetWindowWidth(), selectedProf, &_timeline );
 
+   TimelineMsgArray msgArray;
    _timeline.draw();
    _timeline.beginDrawCanvas( selectedProf ? selectedProf->canvasHeight() : 0.0f );
    if ( selectedProf )
    {
       const ImVec2 curPos = ImGui::GetCursorPos();
-      selectedProf->draw( curPos.x, curPos.y, windowWidth - 5.0f, windowHeight );
+      selectedProf->draw( curPos.x, curPos.y, _timeline.createTimelineInfo(), &msgArray );
    }
    _timeline.endDrawCanvas();
-   
-   handleHotkey();
+   _timeline.handleDeferredActions( msgArray );
+
+   handleHotkey( selectedProf );
    handleMouse( selectedProf );
 
    ImGui::End();  // Hop Viewer Window
@@ -683,29 +702,56 @@ void Viewer::draw( uint32_t windowWidth, uint32_t windowHeight )
    hop::drawCursor();
 }
 
-bool Viewer::handleHotkey()
+bool Viewer::handleHotkey( ProfilerView* selectedProf )
 {
+   bool handled = false;
    if( !modalWindowShowing() )
    {
-      if ( ImGui::IsKeyPressed( ImGui::GetKeyIndex( ImGuiKey_Escape ) ) )
+      // Let the profiler view handle the hotkey first
+      if( selectedProf )
       {
-         hop::displayModalWindow( "Exit ?", hop::MODAL_TYPE_YES_NO, [&]() { g_run = false; } );
-         return true;
+         handled = selectedProf->handleHotkey();
       }
-      else if ( ImGui::GetIO().KeyCtrl && ImGui::IsKeyPressed( 'w' ) )
+
+      // If not handled, let the timeline handle it
+      if( !handled )
       {
-         if ( _selectedTab >= 0 )
+         handled = _timeline.handleHotkey();
+      }
+
+      // If still not handle, let the viewer do its thing
+      if( !handled )
+      {
+         if ( ImGui::IsKeyReleased( 'r' ) && ImGui::IsRootWindowOrAnyChildFocused() )
          {
-            removeProfiler( _selectedTab );
+            if( selectedProf )
+            {
+               const bool recording = selectedProf->data().recording();
+               setRecording( selectedProf, &_timeline, !recording );
+            }
          }
-      }
-      else if ( ImGui::GetIO().KeyCtrl && ImGui::IsKeyPressed( 't' ) )
-      {
-         addNewProfilerPopUp( this, Profiler::SRC_TYPE_PROCESS );
+         else if ( ImGui::GetIO().KeyCtrl && ImGui::IsKeyPressed( 'w' ) )
+         {
+            if ( _selectedTab >= 0 )
+            {
+               removeProfiler( _selectedTab );
+            }
+            handled = true;
+         }
+         else if ( ImGui::GetIO().KeyCtrl && ImGui::IsKeyPressed( 't' ) )
+         {
+            addNewProfilerPopUp( this, Profiler::SRC_TYPE_PROCESS );
+            handled = true;
+         }
+         else if ( ImGui::IsKeyPressed( ImGui::GetKeyIndex( ImGuiKey_Escape ) ) )
+         {
+            hop::displayModalWindow( "Exit ?", hop::MODAL_TYPE_YES_NO, [&]() { g_run = false; } );
+            handled = true;
+         }
       }
    }
 
-   return false;
+   return handled;
 }
 
 bool Viewer::handleMouse( ProfilerView* selectedProf )

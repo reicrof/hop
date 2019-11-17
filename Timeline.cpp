@@ -129,6 +129,12 @@ namespace hop
 
 void Timeline::update( float deltaTimeMs ) noexcept
 {
+   // If we are in realtime, move the timeline to the current time
+   if( realtime() )
+   {
+      moveToPresentTime( Timeline::ANIMATION_TYPE_NONE );
+   }
+
    switch ( _animationState.type )
    {
       case ANIMATION_TYPE_NONE:
@@ -291,7 +297,7 @@ void Timeline::drawOverlay()
    }
 }
 
-TimelineInfo Timeline::constructTimelineInfo() const noexcept
+TimelineInfo Timeline::createTimelineInfo() const noexcept
 {
    return TimelineInfo{canvasPosX(),
                        canvasPosYWithScroll(),
@@ -446,7 +452,40 @@ bool Timeline::handleMouse( float posX, float posY, bool /*lmPressed*/, bool /*r
 
 bool Timeline::handleHotkey()
 {
-   return true;
+   bool handled = false;
+   if ( ImGui::IsKeyReleased( ImGui::GetKeyIndex( ImGuiKey_Home ) ) )
+   {
+      moveToStart();
+      handled = true;
+   }
+   else if ( ImGui::IsKeyReleased( ImGui::GetKeyIndex( ImGuiKey_End ) ) )
+   {
+      moveToPresentTime();
+      setRealtime( true );
+      handled = true;
+   }
+   else if ( ImGui::GetIO().KeyCtrl && ImGui::IsKeyPressed( 'z' ) )
+   {
+      undoNavigation();
+      handled = true;
+   }
+   else if ( ImGui::GetIO().KeyCtrl && ImGui::IsKeyPressed( 'y' ) )
+   {
+      redoNavigation();
+      handled = true;
+   }
+   else if ( ImGui::IsKeyPressed( ImGui::GetKeyIndex( ImGuiKey_LeftArrow ) ) )
+   {
+      previousBookmark();
+      handled = true;
+   }
+   else if ( ImGui::IsKeyPressed( ImGui::GetKeyIndex( ImGuiKey_RightArrow ) ) )
+   {
+      nextBookmark();
+      handled = true;
+   }
+
+   return handled;
 }
 
 void Timeline::handleMouseWheel( float mousePosX, float mouseWheel )
@@ -544,10 +583,11 @@ void Timeline::handleMouseDrag( float mouseInCanvasX, float /*mouseInCanvasY*/ )
    }
 }
 
-void Timeline::handleDeferredActions( const std::vector< TimelineMessage >& msgs )
+void Timeline::handleDeferredActions( const TimelineMsgArray& messages )
 {
-   for( const auto& m : msgs )
+   for( unsigned i = 0; i < messages.size(); ++i )
    {
+      const TimelineMessage& m = messages[i];
       switch( m.type )
       {
          case TimelineMessageType::FRAME_TO_TIME:
@@ -557,7 +597,12 @@ void Timeline::handleDeferredActions( const std::vector< TimelineMessage >& msgs
             frameToAbsoluteTime( m.frameToTime.time, m.frameToTime.duration, m.frameToTime.pushNavState );
             break;
          case TimelineMessageType::MOVE_VERTICAL_POS_PXL:
-            moveVerticalPositionPxl( m.verticalPos.posPxl );
+            moveVerticalPositionPxl(
+                m.verticalPos.posPxl,
+                m.verticalPos.withAnimation ? ANIMATION_TYPE_NORMAL : ANIMATION_TYPE_NONE );
+            break;
+         case TimelineMessageType::MOVE_TO_PRESENT_TIME:
+            moveToPresentTime( ANIMATION_TYPE_NONE );
             break;
       }
    }
