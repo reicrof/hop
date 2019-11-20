@@ -18,13 +18,13 @@ struct TrackDrawInfo
 
 struct TimelineTrackDrawInfo
 {
-   const std::vector< TrackDrawInfo >& drawInfos;
+   std::vector< TrackDrawInfo >& drawInfos;
    const Profiler& profiler;
    const TimelineInfo& timeline;
    float paddedTraceHeight;
 };
 
-void drawTimelineTracks( const TimelineTrackDrawInfo& tdi, TimelineMsgArray* msgArray );
+void drawTimelineTracks( TimelineTrackDrawInfo& tdi, TimelineMsgArray* msgArray );
 
 } // namespace hop
 

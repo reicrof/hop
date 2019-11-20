@@ -180,12 +180,12 @@ void hop::ProfilerView::clear()
    _trackDrawInfos.clear();
 }
 
-const float hop::ProfilerView::canvasHeight() const
+float hop::ProfilerView::canvasHeight() const
 {
    return 9999.0f;
 }
 
-const int hop::ProfilerView::lodLevel() const
+int hop::ProfilerView::lodLevel() const
 {
    return _lodLevel;
 }

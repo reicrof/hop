@@ -22,7 +22,7 @@ bool g_run = true;
 static float g_mouseWheel = 0.0f;
 static SDL_Surface* iconSurface = nullptr;
 
-static void terminateCallback( int sig )
+static void terminateCallback( int /*sig*/ )
 {
    g_run = false;
 }
