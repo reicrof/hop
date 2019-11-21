@@ -83,6 +83,14 @@ hop::ProfilerView::ProfilerView( hop::Profiler::SourceType type, int processId, 
 void hop::ProfilerView::fetchClientData()
 {
    _profiler.fetchClientData();
+
+   // Update the draw information according to new data
+   const std::vector<TimelineTrack>& tlTrackData = _profiler.timelineTracks();
+   const int newTrackCount = tlTrackData.size() - _trackDrawInfos.size();
+   if( newTrackCount )
+   {
+      _trackDrawInfos.insert( _trackDrawInfos.end(), newTrackCount, TrackDrawInfo{} );
+   }
 }
 
 void hop::ProfilerView::update( float /*deltaTimeMs*/, float globalTimeMs, TimeDuration timelineDuration )

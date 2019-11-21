@@ -36,7 +36,7 @@ public:
    SourceType sourceType() const;
    bool recording() const;
    SharedMemory::ConnectionState connectionState() const;
-   const TimelineTrack& timelineTrackAt( int i ) const;
+   const std::vector<TimelineTrack>& timelineTracks() const;
 
    void setRecording( bool recording );
    void fetchClientData();

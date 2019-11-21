@@ -111,6 +111,8 @@ void hop::drawTimelineTracks( TimelineTrackDrawInfo& info, TimelineMsgArray* msg
    char threadNameBuffer[128] = "Thread ";
    const size_t threadNamePrefix = sizeof( "Thread" );
    const float timelineOffsetY = info.timeline.canvasPosY + info.timeline.scrollAmount;
+   const std::vector<TimelineTrack>& timelineTracksData = info.profiler.timelineTracks();
+   assert( timelineTracksData.size() == info.drawInfos.size() );
    for ( size_t i = 0; i < info.drawInfos.size(); ++i )
    {
       // Skip empty threads
@@ -119,7 +121,7 @@ void hop::drawTimelineTracks( TimelineTrackDrawInfo& info, TimelineMsgArray* msg
       const bool threadHidden = hidden( info, i );
       const float trackHeight = heightWithThreadLabel( info, i );
 
-      const TimelineTrack& curTrack = info.profiler.timelineTrackAt( i );
+      const TimelineTrack& curTrack = timelineTracksData[i];
       const char* threadName = &threadNameBuffer[0];
       if( curTrack.name() != 0 )
       {
@@ -140,27 +142,28 @@ void hop::drawTimelineTracks( TimelineTrackDrawInfo& info, TimelineMsgArray* msg
 
       const ImVec2 labelsDrawPosition = ImGui::GetCursorScreenPos();
       drawLabels( info, labelsDrawPosition, threadName, i );
-/*
+
       // Then draw the interesting stuff
       const auto absDrawPos = ImGui::GetCursorScreenPos();
-      _tracks[i]._absoluteDrawPos[0] = absDrawPos.x;
-      _tracks[i]._absoluteDrawPos[1] = absDrawPos.y + info.timeline.scrollAmount - timelineOffsetY;
-      _tracks[i]._localDrawPos[0] = absDrawPos.x;
-      _tracks[i]._localDrawPos[1] = absDrawPos.y;
+      info.drawInfos[i].absoluteDrawPos[0] = absDrawPos.x;
+      info.drawInfos[i].absoluteDrawPos[1] = absDrawPos.y + info.timeline.scrollAmount - timelineOffsetY;
+      info.drawInfos[i].localDrawPos[0] = absDrawPos.x;
+      info.drawInfos[i].localDrawPos[1] = absDrawPos.y;
 
       // Handle track resize
-      if ( separatorHovered || _draggedTrack > 0 )
-      {
-         if ( _draggedTrack == -1 && ImGui::IsMouseClicked( 0 ) )
-         {
-            _draggedTrack = (int)i;
-         }
-         if( ImGui::IsMouseReleased( 0 ) )
-         {
-            _draggedTrack = -1;
-         }
-      }
+      // if ( separatorHovered || _draggedTrack > 0 )
+      // {
+      //    if ( _draggedTrack == -1 && ImGui::IsMouseClicked( 0 ) )
+      //    {
+      //       _draggedTrack = (int)i;
+      //    }
+      //    if( ImGui::IsMouseReleased( 0 ) )
+      //    {
+      //       _draggedTrack = -1;
+      //    }
+      // }
 
+/*
       ImVec2 curDrawPos = absDrawPos;
       if (!threadHidden)
       {

@@ -43,10 +43,9 @@ SharedMemory::ConnectionState Profiler::connectionState() const
    return _server.connectionState();
 }
 
-const TimelineTrack& Profiler::timelineTrackAt( int i ) const
+const std::vector<TimelineTrack>& Profiler::timelineTracks() const
 {
-   assert( i > 0 && i < _tracks.size() );
-   return _tracks[i];
+   return _tracks;
 }
 
 ProfilerStats Profiler::stats() const
