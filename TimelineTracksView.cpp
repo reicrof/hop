@@ -1,6 +1,7 @@
 #include "common/Profiler.h"
 #include "common/TimelineTrack.h"
 #include "common/StringDb.h"
+#include "common/Utils.h"
 
 #include "Cursor.h"
 #include "TimelineTracksView.h"
@@ -100,6 +101,27 @@ static void drawLabels(
    ImGui::PopID();
 }
 
+static void drawTrackHighlight( float trackX, float trackY, float trackHeight )
+{
+   if( ImGui::IsRootWindowOrAnyChildFocused() )
+   {
+      const ImVec2 trackTopLeft = ImVec2( trackX, trackY );
+      const ImVec2 trackBotRight = ImVec2( trackX + 9999, trackY + trackHeight );
+      const ImVec2 mousePos = ImGui::GetMousePos();
+      if ( hop::ptInRect(
+               mousePos.x,
+               mousePos.y,
+               trackTopLeft.x,
+               trackTopLeft.y,
+               trackBotRight.x,
+               trackBotRight.y ) )
+      {
+         ImDrawList* dl = ImGui::GetWindowDrawList();
+         dl->AddRectFilled( trackTopLeft, trackBotRight, 0x03FFFFFF );
+      }
+   }
+}
+
 void hop::drawTimelineTracks( TimelineTrackDrawInfo& info, TimelineMsgArray* msgArray )
 {
    //drawTraceDetailsWindow( info, timelineActions );
@@ -179,10 +201,10 @@ void hop::drawTimelineTracks( TimelineTrackDrawInfo& info, TimelineMsgArray* msg
          if( tracesVisible )
          {
             // Track highlights needs to be drawn before the traces themselves as it acts as a background
-            // drawTrackHighlight(
-            //     curDrawPos.x,
-            //     curDrawPos.y - THREAD_LABEL_HEIGHT,
-            //     trackHeight + THREAD_LABEL_HEIGHT );
+            drawTrackHighlight(
+                curDrawPos.x,
+                curDrawPos.y - THREAD_LABEL_HEIGHT,
+                trackHeight + THREAD_LABEL_HEIGHT );
 
             ImGui::PushClipRect(
                 ImVec2( 0.0f, curDrawPos.y ),

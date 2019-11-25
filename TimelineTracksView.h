@@ -23,6 +23,7 @@ struct TimelineTrackDrawInfo
    const Profiler& profiler;
    const TimelineInfo& timeline;
    const float paddedTraceHeight;
+   const int lodLevel;
 };
 
 void drawTimelineTracks( TimelineTrackDrawInfo& tdi, TimelineMsgArray* msgArray );
