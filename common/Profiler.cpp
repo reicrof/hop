@@ -48,6 +48,11 @@ const std::vector<TimelineTrack>& Profiler::timelineTracks() const
    return _tracks;
 }
 
+const StringDb& Profiler::stringDb() const
+{
+   return _strDb;
+}
+
 ProfilerStats Profiler::stats() const
 {
    ProfilerStats stats = {};

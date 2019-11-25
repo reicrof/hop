@@ -37,6 +37,7 @@ public:
    bool recording() const;
    SharedMemory::ConnectionState connectionState() const;
    const std::vector<TimelineTrack>& timelineTracks() const;
+   const StringDb& stringDb() const;
 
    void setRecording( bool recording );
    void fetchClientData();

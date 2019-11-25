@@ -18,10 +18,11 @@ struct TrackDrawInfo
 
 struct TimelineTrackDrawInfo
 {
-   std::vector< TrackDrawInfo >& drawInfos;
+   std::vector<TrackDrawInfo>& drawInfos;
+   int& draggedTrack;
    const Profiler& profiler;
    const TimelineInfo& timeline;
-   float paddedTraceHeight;
+   const float paddedTraceHeight;
 };
 
 void drawTimelineTracks( TimelineTrackDrawInfo& tdi, TimelineMsgArray* msgArray );

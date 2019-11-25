@@ -134,7 +134,8 @@ void hop::ProfilerView::draw( float drawPosX, float drawPosY, const TimelineInfo
    }
    else
    {
-      TimelineTrackDrawInfo tdi = { _trackDrawInfos, _profiler, tlInfo, PADDED_TRACE_SIZE };
+      TimelineTrackDrawInfo tdi = {
+          _trackDrawInfos, _draggedTrack, _profiler, tlInfo, PADDED_TRACE_SIZE};
       hop::drawTimelineTracks( tdi, msgArray );
    }
 
