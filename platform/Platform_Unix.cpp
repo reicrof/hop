@@ -115,4 +115,16 @@ void setupSignalHandlers( void (*terminateCB)(int) )
    signal( SIGCHLD, SIG_IGN );
 }
 
+uint32_t getTempFolderPath( char* buffer, uint32_t size )
+{
+   const char unixTempFolder[] = "/tmp/";
+   if( size >= sizeof( unixTempFolder ) )
+   {
+      strcpy( buffer, unixTempFolder );
+      return sizeof( unixTempFolder ) - 1; // We usually do not count the null byte
+   }
+
+   return 0;
+}
+
 } //  namespace hop

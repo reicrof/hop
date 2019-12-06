@@ -52,7 +52,7 @@ static constexpr StringCommand stringCmds[] =
    {"clear", "c", "Clear collected traces and stop recording", CMD_TYPE_CLEAR},
 };
 
-static void terminateCallback( int sig )
+static void terminateCallback( int /*sig*/ )
 {
    g_run.store( false );
 }
@@ -77,8 +77,8 @@ static std::unique_ptr<hop::Profiler> createProfiler( const char* processName, b
                                                : hop::getProcessInfoFromProcessName( processName );
 
    auto profiler = std::make_unique<hop::Profiler>( Profiler::SRC_TYPE_PROCESS, procInfo.pid, processName );
-   if( startRecording )
-      profiler->setRecording( true );
+   profiler->setRecording( startRecording );
+
    return profiler;
 }
 

@@ -95,4 +95,9 @@ void setupSignalHandlers( void (*terminateCB)(int) )
    signal( SIGTERM, terminateCB );
 }
 
+uint32_t getTempFolderPath( char* buffer, uint32_t size )
+{
+   return GetTempPathA( size, buffer );
+}
+
 }  // namespace hop

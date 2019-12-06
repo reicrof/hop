@@ -9,7 +9,7 @@
 namespace hop
 {
 
-class TimelineInfo;
+struct TimelineInfo;
 class TimelineMsgArray;
 
 class ProfilerView

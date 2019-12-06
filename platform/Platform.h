@@ -24,6 +24,8 @@ bool processAlive( hop::ProcessID id );
 void terminateProcess( hop::ProcessID id );
 void setupSignalHandlers( void (*terminateCB)(int) );
 
+uint32_t getTempFolderPath( char* buffer, uint32_t size );
+
 }  // namespace hop
 
 #endif
