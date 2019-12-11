@@ -122,6 +122,123 @@ static void drawTrackHighlight( float trackX, float trackY, float trackHeight )
    }
 }
 
+static void drawTraces(
+    uint32_t threadIndex,
+    const float posX,
+    const float posY,
+    hop::TimelineTrackDrawInfo& info,
+    hop::TimelineMsgArray* msgArray )
+{
+   using namespace hop;
+
+   const std::vector<hop::TimelineTrack>& timelineTracksData = info.profiler.timelineTracks();
+   const TimelineTrack& data = timelineTracksData[ threadIndex ];
+
+   if ( data.empty() ) return;
+
+   HOP_PROF_FUNC();
+   const auto drawStart = std::chrono::system_clock::now();
+
+   // Find the best lodLevel for our current zoom
+   //const int lodLevel = _lodLevel;
+
+   // Get all the timing boundaries
+   const TimeStamp globalStartTime  = info.timeline.globalStartTime;
+   const TimeStamp relativeStart    = info.timeline.relativeStartTime;
+   const TimeDuration timelineRange = info.timeline.duration;
+
+   const TimeStamp absoluteStart    = relativeStart + globalStartTime;
+   const TimeStamp absoluteEnd      = absoluteStart + timelineRange;
+
+    // The time range to draw in absolute time
+   const auto spanLodIndex = hop::visibleIndexSpan( data._traces.entries, absoluteStart, absoluteEnd, 0 );
+/*
+   if( spanLodIndex.first == hop::INVALID_IDX ) return;
+
+   // Gather draw data for all visible traces
+   HOP_PROF_SPLIT( "Creating draw data" );
+   const float windowWidthPxl = ImGui::GetWindowWidth();
+   for ( size_t i = spanLodIndex.first; i < spanLodIndex.second; ++i )
+   {
+      const auto& t = data._traces.lods[lodLevel][i];
+      const uint32_t zoneIndex = setBitIndex( data._traces.zones[t.traceIndex] );
+      auto& lodToDraw = t.isLoded ? lodTracesToDraw : tracesToDraw;
+      lodToDraw[zoneIndex].entries.push_back( createDrawDataForEntry(
+             t.end, t.delta, t.depth, t.traceIndex, posX, posY, drawInfo, windowWidthPxl ) );
+   }
+
+   const bool rightMouseClicked = ImGui::IsMouseReleased( 1 );
+   const bool leftMouseDblClicked = ImGui::IsMouseDoubleClicked( 0 );
+
+   const auto& zoneColors = g_options.zoneColors;
+   const auto& enabledZone = g_options.zoneEnabled;
+   const float disabledZoneOpacity = g_options.disabledZoneOpacity;
+
+   const DrawData* hoveredDrawData = nullptr;
+   size_t hoveredIdx = hop::INVALID_IDX;
+
+   // Draw trace text left-aligned
+   ImGui::PushStyleVar(ImGuiStyleVar_ButtonTextAlign, ImVec2( 0.0f, 0.5f ) );
+
+   HOP_PROF_SPLIT( "Drawing Traces" );
+   for ( size_t zoneId = 0; zoneId < lodTracesToDraw.size(); ++zoneId )
+   {
+      ImGui::PushStyleColor(ImGuiCol_Button, zoneColors[zoneId] );
+      ImGui::PushStyleColor(ImGuiCol_ButtonHovered, zoneColors[zoneId] );
+      ImGui::PushStyleColor(ImGuiCol_ButtonActive, zoneColors[zoneId] );
+      ImGui::PushStyleVar(ImGuiStyleVar_Alpha, enabledZone[zoneId] ? 1.0f : disabledZoneOpacity );
+
+      // Draw the lod traces
+      drawEntries( lodTracesToDraw[ zoneId ], drawInfo.strDb, getEmptyLabel );
+
+      // Draw the non-loded traces
+      size_t curHoveredIdx = drawEntries( tracesToDraw[ zoneId ], drawInfo.strDb, getTraceLabel );
+      if( curHoveredIdx != hop::INVALID_IDX )
+      {
+         hoveredIdx = curHoveredIdx;
+         hoveredDrawData = &tracesToDraw[ zoneId ];
+      }
+
+      ImGui::PopStyleColor(3);
+      ImGui::PopStyleVar();
+   }
+   ImGui::PopStyleVar(); // // Pop left-aligned
+
+   if( hoveredIdx != hop::INVALID_IDX )
+   {
+      const bool drawAsCycles = drawInfo.timeline.useCycles;
+      // Draw the tooltip for the hovered entry
+      ImGui::BeginTooltip();
+      drawHoveredEntryPopup(
+          *hoveredDrawData, drawInfo.strDb, hoveredIdx, getTraceLabel, drawAsCycles );
+      ImGui::EndTooltip();
+
+      // Add the hovered trace to the highlighted traces
+      addEntryToHighlight( _tracks[threadIndex], *hoveredDrawData, hoveredIdx );
+
+      // Handle mouse interaction
+      const DrawData::Entry& ddEntry = hoveredDrawData->entries[hoveredIdx];
+      if( leftMouseDblClicked )
+      {
+         timelineMsg.emplace_back(
+             createZoomOnEntryTimelineMsg( ddEntry, data._traces.entries, globalStartTime ) );
+      }
+      else if( rightMouseClicked && !drawInfo.timeline.mouseDragging )
+      {
+         ImGui::OpenPopup( CTXT_MENU_STR );
+         _contextMenuInfo.open = true;
+         _contextMenuInfo.traceClick = true;
+         _contextMenuInfo.threadIndex = threadIndex;
+         _contextMenuInfo.traceId = ddEntry.traceIndex;
+      }
+   }
+
+   const auto drawEnd = std::chrono::system_clock::now();
+   hop::g_stats.traceDrawingTimeMs +=
+       std::chrono::duration<double, std::milli>( ( drawEnd - drawStart ) ).count();
+   */
+}
+
 void hop::drawTimelineTracks( TimelineTrackDrawInfo& info, TimelineMsgArray* msgArray )
 {
    //drawTraceDetailsWindow( info, timelineActions );
@@ -213,7 +330,7 @@ void hop::drawTimelineTracks( TimelineTrackDrawInfo& info, TimelineMsgArray* msg
 
             // Draw the lock waits (before traces so that they are not hiding them)
             // drawLockWaits( i, curDrawPos.x, curDrawPos.y, info, timelineActions );
-            // drawTraces( i, curDrawPos.x, curDrawPos.y, info, timelineActions );
+            drawTraces( i, curDrawPos.x, curDrawPos.y, info, msgArray );
 
             // drawHighlightedTraces(
             //     _tracks[i]._highlightsDrawData,

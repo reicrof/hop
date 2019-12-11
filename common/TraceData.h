@@ -75,6 +75,9 @@ struct CoreEventData
 std::pair<size_t, size_t>
 visibleIndexSpan( const LodsArray& lodsArr, int lodLvl, TimeStamp absoluteStart, TimeStamp absoluteEnd, int baseDepth );
 
+std::pair<size_t, size_t>
+visibleIndexSpan( const Entries& entries, TimeStamp absoluteStart, TimeStamp absoluteEnd, int baseDepth );
+
 // Data serialization
 size_t serializedSize( const TraceData& td );
 size_t serializedSize( const LockWaitData& lw );

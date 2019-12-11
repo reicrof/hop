@@ -141,6 +141,38 @@ std::pair<size_t, size_t> visibleIndexSpan(
    return span;
 }
 
+std::pair<size_t, size_t> visibleIndexSpan(
+    const Entries& entries,
+    TimeStamp absoluteStart,
+    TimeStamp absoluteEnd,
+    int baseDepth )
+{
+   auto span = std::make_pair( hop::INVALID_IDX, hop::INVALID_IDX );
+
+   auto it1 = std::lower_bound( entries.ends.begin(), entries.ends.end(), absoluteStart );
+   auto it2 = std::upper_bound( entries.ends.begin(), entries.ends.end(), absoluteEnd );
+
+   // The last trace of the current thread does not reach the current time
+   if ( it1 == entries.ends.end() ) return span;
+
+   // Find the the first trace on right that have a depth of "baseDepth". This can be either 0
+   // for traces or 1 for lockwaits. This prevents traces that have a smaller depth than the
+   // one foune previously to vanish.
+   size_t lastIndex = std::distance( entries.ends.begin(), it2 );
+   while ( lastIndex < entries.ends.size() && entries.depths[lastIndex] != baseDepth )
+   {
+      ++lastIndex;
+   }
+   if ( lastIndex < entries.ends.size() )
+   {
+      ++lastIndex;
+   }  // We need to go one past the depth 0
+
+   span.first = std::distance( entries.ends.begin(), it1 );
+   span.second = lastIndex;
+   return span;
+}
+
 static size_t serializedSize( const hop::Entries& entries )
 {
    const size_t entriesCount = entries.ends.size();
