@@ -38,6 +38,8 @@ public:
    SharedMemory::ConnectionState connectionState() const;
    const std::vector<TimelineTrack>& timelineTracks() const;
    const StringDb& stringDb() const;
+   TimeStamp earliestTimestamp() const;
+   TimeStamp latestTimestamp() const;
 
    void setRecording( bool recording );
    void fetchClientData();

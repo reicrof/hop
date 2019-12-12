@@ -122,6 +122,72 @@ static void drawTrackHighlight( float trackX, float trackY, float trackHeight )
    }
 }
 
+
+// namespace
+// {
+//    struct DrawData
+//    {
+//       struct Entry
+//       {
+//          ImVec2 posPxl;
+//          hop::TimeDuration duration;
+//          size_t traceIndex;
+//          float lengthPxl;
+//       };
+//       std::vector< Entry > entries;
+//       union
+//       {
+//          const hop::TraceData*    tData;
+//          const hop::LockWaitData* lwData;
+//       } entryData;
+//    };
+// }
+// static DrawData::Entry createDrawDataForEntry(
+//     hop::TimeStamp traceEnd,
+//     hop::TimeDuration traceDelta,
+//     hop::Depth_t traceDepth,
+//     size_t traceIdx,
+//     const float posX,
+//     const float posY,
+//     const hop::TimelineTracksDrawInfo& drawInfo,
+//     const float windowWidthPxl )
+// {
+//    using namespace hop;
+//    const TimeStamp traceEndTime = ( traceEnd - drawInfo.timeline.globalStartTime );
+//    const auto traceEndPxl = cyclesToPxl<float>(
+//        windowWidthPxl,
+//        drawInfo.timeline.duration,
+//        traceEndTime - drawInfo.timeline.relativeStartTime );
+//    const float traceLengthPxl = std::max(
+//        MIN_TRACE_LENGTH_PXL,
+//        cyclesToPxl<float>( windowWidthPxl, drawInfo.timeline.duration, traceDelta ) );
+
+//    // Crop the trace that span outside the screen to make the text slides to be center
+//    // with the trace
+//    const float nonCroppedPosX = posX + traceEndPxl - traceLengthPxl;
+//    const float croppedTracePosX = std::max( 0.0f, posX + traceEndPxl - traceLengthPxl );
+
+//    // Get the amount cropped on each side of the screen and remove it from the total trace length
+//    const float leftCroppedAmnt = croppedTracePosX - nonCroppedPosX;
+//    const float rightCroppedAmnt =
+//        hop::clamp( ( nonCroppedPosX + traceLengthPxl ) - windowWidthPxl, 0.0f, traceLengthPxl );
+//    const float croppedTraceLenghtPxl = traceLengthPxl - (leftCroppedAmnt + rightCroppedAmnt);
+
+//    const ImVec2 tracePos( croppedTracePosX, posY + traceDepth * TimelineTrack::PADDED_TRACE_SIZE );
+
+//    return DrawData::Entry{tracePos, traceDelta, traceIdx, croppedTraceLenghtPxl};
+// }
+
+void convertTimestampToPxlPos( std::deque<hop::TimeStamp>::const_iterator first, std::deque<hop::TimeStamp>::const_iterator last, hop::TimeStamp globalStartTime, float windowWidth, hop::TimeStamp timelineRange, float* out )
+{
+   auto count = std::distance( first, last );
+   const float cyclePerPxl = timelineRange / windowWidth;
+   for( size_t i = 0; i < count; ++i, ++first )
+   {
+      out[i] = (*first - globalStartTime) / cyclePerPxl;
+   }
+}
+
 static void drawTraces(
     uint32_t threadIndex,
     const float posX,
@@ -152,21 +218,23 @@ static void drawTraces(
 
     // The time range to draw in absolute time
    const auto spanLodIndex = hop::visibleIndexSpan( data._traces.entries, absoluteStart, absoluteEnd, 0 );
-/*
+
    if( spanLodIndex.first == hop::INVALID_IDX ) return;
 
-   // Gather draw data for all visible traces
-   HOP_PROF_SPLIT( "Creating draw data" );
    const float windowWidthPxl = ImGui::GetWindowWidth();
-   for ( size_t i = spanLodIndex.first; i < spanLodIndex.second; ++i )
-   {
-      const auto& t = data._traces.lods[lodLevel][i];
-      const uint32_t zoneIndex = setBitIndex( data._traces.zones[t.traceIndex] );
-      auto& lodToDraw = t.isLoded ? lodTracesToDraw : tracesToDraw;
-      lodToDraw[zoneIndex].entries.push_back( createDrawDataForEntry(
-             t.end, t.delta, t.depth, t.traceIndex, posX, posY, drawInfo, windowWidthPxl ) );
-   }
-
+   std::vector< float > endPosPxl( spanLodIndex.second - spanLodIndex.first );
+   convertTimestampToPxlPos( data._traces.entries.ends.begin() + spanLodIndex.first, data._traces.entries.ends.begin() + spanLodIndex.second, globalStartTime, windowWidthPxl, timelineRange, endPosPxl.data() );
+   // Gather draw data for all visible traces
+   // HOP_PROF_SPLIT( "Creating draw data" );
+   // for ( size_t i = spanLodIndex.first; i < spanLodIndex.second; ++i )
+   // {
+   //    const auto& t = data._traces.lods[lodLevel][i];
+   //    const uint32_t zoneIndex = setBitIndex( data._traces.zones[t.traceIndex] );
+   //    auto& lodToDraw = t.isLoded ? lodTracesToDraw : tracesToDraw;
+   //    lodToDraw[zoneIndex].entries.push_back( createDrawDataForEntry(
+   //           t.end, t.delta, t.depth, t.traceIndex, posX, posY, drawInfo, windowWidthPxl ) );
+   // }
+/*
    const bool rightMouseClicked = ImGui::IsMouseReleased( 1 );
    const bool leftMouseDblClicked = ImGui::IsMouseDoubleClicked( 0 );
 

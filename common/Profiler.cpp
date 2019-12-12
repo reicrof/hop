@@ -53,6 +53,16 @@ const StringDb& Profiler::stringDb() const
    return _strDb;
 }
 
+TimeStamp Profiler::earliestTimestamp() const
+{
+   return _earliestTimeStamp;
+}
+
+TimeStamp Profiler::latestTimestamp() const
+{
+   return _latestTimeStamp;
+}
+
 ProfilerStats Profiler::stats() const
 {
    ProfilerStats stats = {};

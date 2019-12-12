@@ -459,6 +459,14 @@ static void updateProfilers(
    }
 }
 
+static void updateTimeline( hop::Timeline* tl, float deltaMs, const hop::ProfilerView* selectedProf )
+{
+   const hop::Profiler& profData = selectedProf->data();
+   tl->setGlobalStartTime( profData.earliestTimestamp() );
+   tl->setGlobalEndTime( profData.earliestTimestamp() );
+   tl->update( deltaMs );
+}
+
 static bool profilerAlreadyExist(
     const std::vector<std::unique_ptr<hop::ProfilerView> >& profilers,
     int pid,
@@ -626,7 +634,7 @@ void Viewer::onNewFrame(
 
    // Update
    updateProfilers( _timeline.duration(), _profilers, _selectedTab );
-   _timeline.update( deltaMs );
+   updateTimeline( &_timeline, deltaMs, _profilers[_selectedTab].get() );
 }
 
 void Viewer::draw( uint32_t windowWidth, uint32_t windowHeight )
