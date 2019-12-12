@@ -178,13 +178,23 @@ static void drawTrackHighlight( float trackX, float trackY, float trackHeight )
 //    return DrawData::Entry{tracePos, traceDelta, traceIdx, croppedTraceLenghtPxl};
 // }
 
-void convertTimestampToPxlPos( std::deque<hop::TimeStamp>::const_iterator first, std::deque<hop::TimeStamp>::const_iterator last, hop::TimeStamp globalStartTime, float windowWidth, hop::TimeStamp timelineRange, float* out )
+void convertTimestampToPxlPos( std::deque<hop::TimeStamp>::const_iterator first, std::deque<hop::TimeStamp>::const_iterator last, hop::TimeStamp cycleOffset, float windowWidth, hop::TimeStamp timelineRange, float* out )
 {
    auto count = std::distance( first, last );
    const float cyclePerPxl = timelineRange / windowWidth;
    for( size_t i = 0; i < count; ++i, ++first )
    {
-      out[i] = (*first - globalStartTime) / cyclePerPxl;
+      out[i] = (*first - cycleOffset) / cyclePerPxl;
+   }
+}
+
+void convertDeltaCyclesToPxlPos( std::deque<hop::TimeDuration>::const_iterator first, std::deque<hop::TimeDuration>::const_iterator last, float windowWidth, hop::TimeStamp timelineRange, float* out )
+{
+   auto count = std::distance( first, last );
+   const float cyclePerPxl = timelineRange / windowWidth;
+   for( size_t i = 0; i < count; ++i, ++first )
+   {
+      out[i] = *first / cyclePerPxl;
    }
 }
 
@@ -223,7 +233,9 @@ static void drawTraces(
 
    const float windowWidthPxl = ImGui::GetWindowWidth();
    std::vector< float > endPosPxl( spanLodIndex.second - spanLodIndex.first );
+   std::vector< float > startPosPxl( spanLodIndex.second - spanLodIndex.first );
    convertTimestampToPxlPos( data._traces.entries.ends.begin() + spanLodIndex.first, data._traces.entries.ends.begin() + spanLodIndex.second, globalStartTime, windowWidthPxl, timelineRange, endPosPxl.data() );
+   convertDeltaCyclesToPxlPos( data._traces.entries.deltas.begin() + spanLodIndex.first, data._traces.entries.deltas.begin() + spanLodIndex.second, windowWidthPxl, timelineRange, startPosPxl.data() );
    // Gather draw data for all visible traces
    // HOP_PROF_SPLIT( "Creating draw data" );
    // for ( size_t i = spanLodIndex.first; i < spanLodIndex.second; ++i )
