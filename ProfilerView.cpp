@@ -127,7 +127,11 @@ void hop::ProfilerView::draw( float drawPosX, float drawPosY, const TimelineInfo
    HOP_PROF_FUNC();
    ImGui::SetCursorPos( ImVec2( drawPosX, drawPosY ) );
 
-   ImGui::BeginChild( "ProfilerView" );
+   ImGui::BeginChild(
+       "ProfilerView",
+       ImVec2( 0, 0 ),
+       false,
+       ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse | ImGuiWindowFlags_NoMove );
    if ( _trackDrawInfos.size() == 0 && !data().recording() )
    {
       displayBackgroundHelpMsg( ImGui::GetWindowWidth(), ImGui::GetWindowHeight() );

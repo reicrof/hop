@@ -525,6 +525,10 @@ void Timeline::handleMouseDrag( float mouseInCanvasX, float /*mouseInCanvasY*/ )
    const int64_t mousePosAsCycles =
           _timelineStart + pxlToCycles<int64_t>( windowWidthPxl, _duration, mouseInCanvasX );
 
+   // We don't want have the focus, it probably means we are handling another window. In this
+   // case, we do not want to handle the mouse
+   if( !ImGui::IsWindowFocused( ImGuiFocusedFlags_ChildWindows ) ) return;
+
    // Ctrl + left mouse dragging ( Range Selection )
    if( ImGui::GetIO().KeyCtrl && ImGui::IsMouseDragging( 0 ) )
    {

@@ -178,23 +178,33 @@ static void drawTrackHighlight( float trackX, float trackY, float trackHeight )
 //    return DrawData::Entry{tracePos, traceDelta, traceIdx, croppedTraceLenghtPxl};
 // }
 
-void convertTimestampToPxlPos( std::deque<hop::TimeStamp>::const_iterator first, std::deque<hop::TimeStamp>::const_iterator last, hop::TimeStamp cycleOffset, float windowWidth, hop::TimeStamp timelineRange, float* out )
+static int
+getTraceLabel( size_t entryIndex, const hop::StringDb& strDb, uint32_t arrSz, char* arr )
 {
-   auto count = std::distance( first, last );
-   const float cyclePerPxl = timelineRange / windowWidth;
-   for( size_t i = 0; i < count; ++i, ++first )
-   {
-      out[i] = (*first - cycleOffset) / cyclePerPxl;
-   }
+   return snprintf( arr, arrSz, "Trace name" );
+   // const size_t idx = ddEntry.traceIndex;
+   // const char* entryName = strDb.getString( dd.entryData.tData->fctNameIds[idx] );
+ 
+   // return buildTraceLabelWithTime( entryName,  ddEntry.duration, false, arrSz, arr );
 }
 
-void convertDeltaCyclesToPxlPos( std::deque<hop::TimeDuration>::const_iterator first, std::deque<hop::TimeDuration>::const_iterator last, float windowWidth, hop::TimeStamp timelineRange, float* out )
+static void convertDeltaCyclesToPxl( std::deque<hop::TimeDuration>::const_iterator first, std::deque<hop::TimeDuration>::const_iterator last, float windowWidth, hop::TimeStamp timelineRange, float* out )
 {
    auto count = std::distance( first, last );
    const float cyclePerPxl = timelineRange / windowWidth;
    for( size_t i = 0; i < count; ++i, ++first )
    {
       out[i] = *first / cyclePerPxl;
+   }
+}
+
+static void convertEndTimestampToStartPxlPos( std::deque<hop::TimeStamp>::const_iterator first, std::deque<hop::TimeStamp>::const_iterator last, hop::TimeStamp cycleOffset, float windowWidth, hop::TimeStamp timelineRange, const float* deltas, float* out )
+{
+   auto count = std::distance( first, last );
+   const float cyclePerPxl = timelineRange / windowWidth;
+   for( size_t i = 0; i < count; ++i, ++first )
+   {
+      out[i] = ((*first - cycleOffset) / cyclePerPxl) - deltas[i];
    }
 }
 
@@ -227,15 +237,48 @@ static void drawTraces(
    const TimeStamp absoluteEnd      = absoluteStart + timelineRange;
 
     // The time range to draw in absolute time
-   const auto spanLodIndex = hop::visibleIndexSpan( data._traces.entries, absoluteStart, absoluteEnd, 0 );
+   const auto spanIndex = hop::visibleIndexSpan( data._traces.entries, absoluteStart, absoluteEnd, 0 );
 
-   if( spanLodIndex.first == hop::INVALID_IDX ) return;
+   if( spanIndex.first == hop::INVALID_IDX ) return;
+
+   const size_t traceCount = spanIndex.second - spanIndex.first;
+   static std::vector< float > startPosPxl;
+   static std::vector< float > deltaPxl;
+
+   startPosPxl.resize( traceCount );
+   deltaPxl.resize( traceCount );
 
    const float windowWidthPxl = ImGui::GetWindowWidth();
-   std::vector< float > endPosPxl( spanLodIndex.second - spanLodIndex.first );
-   std::vector< float > startPosPxl( spanLodIndex.second - spanLodIndex.first );
-   convertTimestampToPxlPos( data._traces.entries.ends.begin() + spanLodIndex.first, data._traces.entries.ends.begin() + spanLodIndex.second, globalStartTime, windowWidthPxl, timelineRange, endPosPxl.data() );
-   convertDeltaCyclesToPxlPos( data._traces.entries.deltas.begin() + spanLodIndex.first, data._traces.entries.deltas.begin() + spanLodIndex.second, windowWidthPxl, timelineRange, startPosPxl.data() );
+   const auto deltaBeginIt = data._traces.entries.deltas.begin();
+   convertDeltaCyclesToPxl( deltaBeginIt + spanIndex.first, deltaBeginIt + spanIndex.second, windowWidthPxl, timelineRange, deltaPxl.data() );
+
+   const auto endsBeginIt = data._traces.entries.ends.begin();
+   convertEndTimestampToStartPxlPos( endsBeginIt + spanIndex.first, endsBeginIt + spanIndex.second, absoluteStart, windowWidthPxl, timelineRange, deltaPxl.data(), startPosPxl.data() );
+
+   size_t hoveredIdx = hop::INVALID_IDX;
+   char entryName[256] = {};
+   for( size_t i = 0; i < traceCount; ++i )
+   {
+      const char* name = "";
+      const float curDeltaPxl = deltaPxl[i];
+      if( curDeltaPxl > 10.0f )
+      {
+         getTraceLabel( i, info.profiler.stringDb(), sizeof(entryName), entryName );
+      }
+
+      ImGui::SetCursorScreenPos( ImVec2( startPosPxl[i], posY + data._traces.entries.depths[spanIndex.first + i] * info.paddedTraceHeight ) );
+      ImGui::Button( entryName, ImVec2( curDeltaPxl, info.paddedTraceHeight ) );
+      if( ImGui::IsItemHovered() )
+      {
+         hoveredIdx = i;
+      }
+   }
+
+   startPosPxl.clear();
+   deltaPxl.clear();
+
+   //return hoveredIdx;
+
    // Gather draw data for all visible traces
    // HOP_PROF_SPLIT( "Creating draw data" );
    // for ( size_t i = spanLodIndex.first; i < spanLodIndex.second; ++i )
