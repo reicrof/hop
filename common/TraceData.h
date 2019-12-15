@@ -14,8 +14,8 @@ static constexpr size_t INVALID_IDX = std::numeric_limits<size_t>::max();
 
 struct Entries
 {
-   std::deque< TimeStamp > ends; // in ns
-   std::deque< TimeDuration > deltas; // in ns
+   std::deque< TimeStamp > starts;
+   std::deque< TimeStamp > ends;
    std::deque< Depth_t > depths;
 
    void clear();
@@ -72,8 +72,8 @@ struct CoreEventData
    std::deque<CoreEvent> data;
 };
 
-std::pair<size_t, size_t>
-visibleIndexSpan( const LodsArray& lodsArr, int lodLvl, TimeStamp absoluteStart, TimeStamp absoluteEnd, int baseDepth );
+// std::pair<size_t, size_t>
+// visibleIndexSpan( const LodsArray& lodsArr, int lodLvl, TimeStamp absoluteStart, TimeStamp absoluteEnd, int baseDepth );
 
 std::pair<size_t, size_t>
 visibleIndexSpan( const Entries& entries, TimeStamp absoluteStart, TimeStamp absoluteEnd, int baseDepth );

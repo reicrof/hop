@@ -138,14 +138,11 @@ void Profiler::addTraces( const TraceData& traces, uint32_t threadIndex )
    if ( _tracks[threadIndex]._traces.entries.ends.empty() )
    {
       // Find the earliest trace
-      TimeStamp earliestTime = traces.entries.ends[0] - traces.entries.deltas[0];
-      for ( size_t i = 1; i < traces.entries.ends.size(); ++i )
-      {
-         earliestTime = std::min( earliestTime, traces.entries.ends[i] - traces.entries.deltas[i] );
-      }
+      const TimeStamp newEarliestTime =
+         *std::min_element( traces.entries.starts.begin(), traces.entries.starts.end() );
       // Set the timeline absolute start time to this new value
-      if ( _earliestTimeStamp == 0 || earliestTime < _earliestTimeStamp )
-         _earliestTimeStamp = earliestTime;
+      if ( _earliestTimeStamp == 0 || newEarliestTime < _earliestTimeStamp )
+         _earliestTimeStamp = newEarliestTime;
    }
 
    _tracks[threadIndex].addTraces( traces );

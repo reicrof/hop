@@ -34,6 +34,54 @@ void setupLODResolution( uint32_t sreenResolutionX )
    }
 }
 
+LodsArray2 computeLods2( const Entries& entries, size_t idOffset )
+{
+   LodsArray2 resultLods;
+
+   const LodInfo2 firestLod = { -999999999, -999999999, -1 };
+   std::vector< std::array< LodInfo2, LOD_COUNT > > lodsPerDepth( entries.maxDepth + 1 );
+   for( auto& l : lodsPerDepth )
+   {
+      std::fill( l.begin(), l.end(), firestLod );
+   }
+
+   const size_t entriesCount = entries.starts.size();
+   for( size_t i = 1; i < entriesCount; ++i )
+   {
+      const TimeStamp start                   = entries.starts[i];
+      const TimeStamp end                     = entries.ends[i];
+      const Depth_t depth                     = entries.depths[i];
+      std::array< LodInfo2, LOD_COUNT >& lods = lodsPerDepth[depth];
+
+      const int curLod = 9;
+
+      const TimeDuration newTraceDelta        = end - start;
+      const TimeDuration lastTraceDelta       = lods[curLod].end - lods[curLod].start;
+      const TimeStamp timeBetweenTrace        = start - lods[curLod].end;
+
+      const hop::TimeDuration minTraceSize = LOD_MIN_TRACE_LENGTH_PXL[curLod];
+      const bool lastTraceSmallEnough = lastTraceDelta < minTraceSize;
+      const bool newTraceSmallEnough  = newTraceDelta  < minTraceSize;
+      const bool timeBetweenTraceSmallEnough = timeBetweenTrace < LOD_MIN_GAP_PXL[curLod];
+      if( lastTraceSmallEnough && newTraceSmallEnough && timeBetweenTraceSmallEnough )
+      {
+         lods[curLod].end = end;
+         lods[curLod].index = i;
+      }
+      else
+      {
+         if( lods[curLod].index != -1 )
+            resultLods[curLod].push_back( lods[curLod] );
+
+         lods[curLod].start = start;
+         lods[curLod].end   = end;
+         lods[curLod].index = i;
+      }
+   }
+
+   return resultLods;
+}
+
 LodsArray computeLods( const Entries& entries, size_t idOffset )
 {
    HOP_PROF_FUNC();
@@ -54,24 +102,24 @@ LodsArray computeLods( const Entries& entries, size_t idOffset )
          if ( lods[curDepth].empty() )
          {
             lods[curDepth].push_back(
-                LodInfo{entries.ends[i], entries.deltas[i], idOffset + i, curDepth, false} );
+                LodInfo{entries.ends[i], (TimeDuration) (entries.ends[i] - entries.starts[i]), idOffset + i, curDepth, false} );
             continue;
          }
 
          auto& lastTrace = lods[curDepth].back();
-         const TimeDuration timeBetweenTrace =
-             ( entries.ends[i] - entries.deltas[i] ) - lastTrace.end;
-         if ( canBeLoded( lodLvl, timeBetweenTrace, lastTrace.delta, entries.deltas[i] ) )
+         const TimeStamp delta = entries.ends[i] - entries.starts[i];
+         const TimeDuration timeBetweenTrace = entries.starts[i] - lastTrace.end;
+         if ( canBeLoded( lodLvl, timeBetweenTrace, lastTrace.delta, delta ) )
          {
             assert( lastTrace.depth == curDepth );
             lastTrace.end = entries.ends[i];
-            lastTrace.delta += timeBetweenTrace + entries.deltas[i];
+            lastTrace.delta += timeBetweenTrace + delta;
             lastTrace.isLoded = true;
          }
          else
          {
             lods[curDepth].push_back(
-                LodInfo{entries.ends[i], entries.deltas[i], idOffset + i, curDepth, false} );
+                LodInfo{entries.ends[i], (TimeDuration)delta, idOffset + i, curDepth, false} );
          }
       }
    }

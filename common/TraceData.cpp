@@ -9,15 +9,15 @@ namespace hop
 
 void Entries::clear()
 {
+   starts.clear();
    ends.clear();
-   deltas.clear();
    depths.clear();
    maxDepth = 0;
 }
 
 void Entries::append( const Entries& newEntries )
 {
-   deltas.insert( deltas.end(), newEntries.deltas.begin(), newEntries.deltas.end() );
+   starts.insert( starts.end(), newEntries.starts.begin(), newEntries.starts.end() );
    ends.insert( ends.end(), newEntries.ends.begin(), newEntries.ends.end() );
    depths.insert( depths.end(), newEntries.depths.begin(), newEntries.depths.end() );
 
@@ -28,7 +28,7 @@ Entries Entries::copy() const
 {
    Entries copy;
    copy.ends = this->ends;
-   copy.deltas = this->deltas;
+   copy.starts = this->starts;
    copy.maxDepth = this->maxDepth;
    copy.depths = this->depths;
    return copy;
@@ -36,7 +36,7 @@ Entries Entries::copy() const
 
 void TraceData::append( const TraceData& newTraces )
 {
-   const size_t prevSize = entries.deltas.size();
+   const size_t prevSize = entries.starts.size();
 
    entries.append( newTraces.entries );
    fileNameIds.insert(
@@ -106,40 +106,40 @@ void LockWaitData::clear()
       dq.clear();
 }
 
-std::pair<size_t, size_t> visibleIndexSpan(
-    const LodsArray& lodsArr,
-    int lodLvl,
-    TimeStamp absoluteStart,
-    TimeStamp absoluteEnd,
-    int baseDepth )
-{
-   auto span = std::make_pair( hop::INVALID_IDX, hop::INVALID_IDX );
+// std::pair<size_t, size_t> visibleIndexSpan(
+//     const LodsArray& lodsArr,
+//     int lodLvl,
+//     TimeStamp absoluteStart,
+//     TimeStamp absoluteEnd,
+//     int baseDepth )
+// {
+//    auto span = std::make_pair( hop::INVALID_IDX, hop::INVALID_IDX );
 
-   const auto& lods = lodsArr[lodLvl];
-   const LodInfo firstInfo = {absoluteStart, 0, 0, 0, false};
-   const LodInfo lastInfo = {absoluteEnd, 0, 0, 0, false};
-   auto it1 = std::lower_bound( lods.begin(), lods.end(), firstInfo );
-   auto it2 = std::upper_bound( lods.begin(), lods.end(), lastInfo );
+//    const auto& lods = lodsArr[lodLvl];
+//    const LodInfo firstInfo = {absoluteStart, 0, 0, 0, false};
+//    const LodInfo lastInfo = {absoluteEnd, 0, 0, 0, false};
+//    auto it1 = std::lower_bound( lods.begin(), lods.end(), firstInfo );
+//    auto it2 = std::upper_bound( lods.begin(), lods.end(), lastInfo );
 
-   // The last trace of the current thread does not reach the current time
-   if ( it1 == lods.end() ) return span;
+//    // The last trace of the current thread does not reach the current time
+//    if ( it1 == lods.end() ) return span;
 
-   // Find the the first trace on right that have a depth of "baseDepth". This can be either 0
-   // for traces or 1 for lockwaits. This prevents traces that have a smaller depth than the
-   // one foune previously to vanish.
-   while ( it2 != lods.end() && it2->depth != baseDepth )
-   {
-      ++it2;
-   }
-   if ( it2 != lods.end() )
-   {
-      ++it2;
-   }  // We need to go one past the depth 0
+//    // Find the the first trace on right that have a depth of "baseDepth". This can be either 0
+//    // for traces or 1 for lockwaits. This prevents traces that have a smaller depth than the
+//    // one foune previously to vanish.
+//    while ( it2 != lods.end() && it2->depth != baseDepth )
+//    {
+//       ++it2;
+//    }
+//    if ( it2 != lods.end() )
+//    {
+//       ++it2;
+//    }  // We need to go one past the depth 0
 
-   span.first = std::distance( lods.begin(), it1 );
-   span.second = std::distance( lods.begin(), it2 );
-   return span;
-}
+//    span.first = std::distance( lods.begin(), it1 );
+//    span.second = std::distance( lods.begin(), it2 );
+//    return span;
+// }
 
 std::pair<size_t, size_t> visibleIndexSpan(
     const Entries& entries,
@@ -177,8 +177,8 @@ static size_t serializedSize( const hop::Entries& entries )
 {
    const size_t entriesCount = entries.ends.size();
    const size_t size = sizeof( hop::Depth_t ) +                        // Max depth
+                       sizeof( hop::TimeStamp ) * entriesCount +       // starts
                        sizeof( hop::TimeStamp ) * entriesCount +       // ends
-                       sizeof( hop::TimeDuration ) * entriesCount +    // deltas
                        sizeof( hop::Depth_t ) * entriesCount;          // depths
    return size;
 }
@@ -200,10 +200,10 @@ static size_t serialize( const hop::Entries& entries, char* dst )
       i += sizeof( hop::TimeStamp ) * tracesCount;
    }
 
-   // deltas
+   // starts
    {
-      std::copy( entries.deltas.begin(), entries.deltas.end(), (hop::TimeDuration*)&dst[i] );
-      i += sizeof( hop::TimeDuration ) * tracesCount;
+      std::copy( entries.starts.begin(), entries.starts.end(), (hop::TimeStamp*)&dst[i] );
+      i += sizeof( hop::TimeStamp ) * tracesCount;
    }
 
    // depths
@@ -227,9 +227,9 @@ static size_t deserialize( const char* src, size_t count, hop::Entries& entries 
       i += sizeof( hop::TimeStamp ) * count;
    }
 
-   {  // deltas
-      std::copy((hop::TimeDuration*)&src[i], ((hop::TimeDuration*)&src[i]) + count, std::back_inserter(entries.deltas));
-      i += sizeof( hop::TimeDuration ) * count;
+   {  // starts
+      std::copy((hop::TimeStamp*)&src[i], ((hop::TimeStamp*)&src[i]) + count, std::back_inserter(entries.starts));
+      i += sizeof( hop::TimeStamp ) * count;
    }
 
    {  // depths

@@ -25,12 +25,21 @@ struct LodInfo
    bool operator<( const LodInfo& rhs ) const noexcept { return end < rhs.end; }
 };
 
+struct LodInfo2
+{
+   TimeStamp start, end;
+   size_t index;
+};
+
 using LodsArray = std::array< std::deque< LodInfo >, LOD_COUNT >;
+using LodsArray2 = std::array< std::deque< LodInfo2 >, LOD_COUNT >;
 
 void setupLODResolution( uint32_t sreenResolutionX );
 
 // Returns a array of LodInfo for each LOD level. The lod infos are sorted.
 LodsArray computeLods( const Entries& entries, size_t idOffset );
+
+LodsArray2 computeLods2( const Entries& entries, size_t idOffset );
 
 // Appends lods infos
 void appendLods( LodsArray& dst, const LodsArray& src );

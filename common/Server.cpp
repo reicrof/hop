@@ -308,6 +308,8 @@ size_t Server::handleNewMessage( uint8_t* data, size_t maxSize, TimeStamp minTim
 
              traceData.entries.ends.insert(
                  traceData.entries.ends.end(), ends, ends + tracesCount );
+             traceData.entries.starts.insert(
+                 traceData.entries.starts.end(), starts, starts + tracesCount );
              traceData.entries.depths.insert(
                  traceData.entries.depths.end(), depths, depths + tracesCount );
              traceData.entries.maxDepth = *std::max_element( depths, depths + tracesCount );
@@ -318,7 +320,6 @@ size_t Server::handleNewMessage( uint8_t* data, size_t maxSize, TimeStamp minTim
              // Process non trivially copiable members
              for ( size_t i = 0; i < tracesCount; ++i )
              {
-                traceData.entries.deltas.push_back( ends[i] - starts[i] );
                 traceData.fileNameIds.push_back( _stringDb.getStringIndex( fileNames[i] ) );
                 traceData.fctNameIds.push_back( _stringDb.getStringIndex( fctNames[i] ) );
              }
@@ -351,7 +352,7 @@ size_t Server::handleNewMessage( uint8_t* data, size_t maxSize, TimeStamp minTim
          for ( uint32_t i = 0; i < lwCount; ++i )
          {
             lockwaitData.entries.ends.push_back( lws[i].end );
-            lockwaitData.entries.deltas.push_back( lws[i].end - lws[i].start );
+            lockwaitData.entries.starts.push_back( lws[i].start );
             lockwaitData.entries.depths.push_back( lws[i].depth );
             lockwaitData.mutexAddrs.push_back( lws[i].mutexAddress );
             maxDepth = std::max( maxDepth, lws[i].depth );

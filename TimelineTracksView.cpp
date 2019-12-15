@@ -8,6 +8,8 @@
 #include "TimelineInfo.h"
 #include "Options.h"
 
+#include "Lod.h"
+
 #include "imgui/imgui.h"
 
 // Drawing constants
@@ -249,8 +251,10 @@ static void drawTraces(
    deltaPxl.resize( traceCount );
 
    const float windowWidthPxl = ImGui::GetWindowWidth();
-   const auto deltaBeginIt = data._traces.entries.deltas.begin();
-   convertDeltaCyclesToPxl( deltaBeginIt + spanIndex.first, deltaBeginIt + spanIndex.second, windowWidthPxl, timelineRange, deltaPxl.data() );
+   //const auto deltaBeginIt = data._traces.entries.deltas.begin();
+   //convertDeltaCyclesToPxl( deltaBeginIt + spanIndex.first, deltaBeginIt + spanIndex.second, windowWidthPxl, timelineRange, deltaPxl.data() );
+
+   LodsArray2 lods = computeLods2( data._traces.entries, 0 );
 
    const auto endsBeginIt = data._traces.entries.ends.begin();
    convertEndTimestampToStartPxlPos( endsBeginIt + spanIndex.first, endsBeginIt + spanIndex.second, absoluteStart, windowWidthPxl, timelineRange, deltaPxl.data(), startPosPxl.data() );
