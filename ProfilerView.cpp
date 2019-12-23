@@ -74,6 +74,16 @@ static float computeCanvasSize( const std::vector<hop::TrackDrawInfo>& tdi )
    return tracksHeight;
 }
 
+static int closestLodLevel( hop::TimeDuration timelineDuration )
+{
+   int lodLvl = 0;
+   while( lodLvl < hop::LOD_COUNT - 1 && timelineDuration > hop::LOD_CYCLES[lodLvl] )
+   {
+      ++lodLvl;
+   }
+   return lodLvl;
+}
+
 hop::ProfilerView::ProfilerView( hop::Profiler::SourceType type, int processId, const char* str )
    : _profiler( type, processId, str ), _lodLevel( 0 ), _draggedTrack( -1 ), _highlightValue( 0.0f )
 {
@@ -99,12 +109,7 @@ void hop::ProfilerView::update( float /*deltaTimeMs*/, float globalTimeMs, TimeD
    _highlightValue = (std::sin( 0.007f * globalTimeMs ) * 0.8f + 1.0f) / 2.0f;
 
    // Update current lod level
-   int lodLvl = 0;
-   while ( lodLvl < LOD_COUNT - 1 && timelineDuration > LOD_NANOS[lodLvl] )
-   {
-      ++lodLvl;
-   }
-   _lodLevel = lodLvl;
+   _lodLevel = closestLodLevel( timelineDuration );
 
    // Update the lods for each tracks
    const size_t trackCount = _trackDrawInfos.size();

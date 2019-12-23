@@ -255,7 +255,7 @@ static void drawTraces(
       // Create the name for the trace if it is large enough on screen
       entryName[0] = '\0';
       const float curDeltaPxl = deltaPxl[i];
-      if( curDeltaPxl > 10.0f && !curLod.loded )
+      if( curDeltaPxl > 5.0f && !curLod.loded )
       {
          const char* name = getEntryName( info.profiler, trackData, absIndex );
          buildTraceLabelWithTime( name, curLod.end - curLod.start, false, sizeof(entryName), entryName );

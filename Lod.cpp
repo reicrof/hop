@@ -5,20 +5,20 @@
 
 #include <algorithm>
 
-static constexpr float MIN_TRACE_LENGTH_PXL = 3.0f;
-static constexpr float MIN_GAP_PXL = 2.0f;
-static hop::TimeDuration LOD_MIN_GAP_PXL[hop::LOD_COUNT] = {0};
+static constexpr float MIN_TRACE_LENGTH_PXL = 8.0f;
+static constexpr float MIN_GAP_PXL = 5.0f;
+static hop::TimeDuration LOD_MIN_GAP_CYCLES[hop::LOD_COUNT] = {0};
 static hop::TimeDuration LOD_MIN_TRACE_LENGTH_PXL[hop::LOD_COUNT] = {0};
 
 namespace hop
 {
 void setupLODResolution( uint32_t sreenResolutionX )
 {
-   for ( uint32_t i = 0; i < LOD_COUNT; ++i )
+   for ( uint32_t i = 1; i < LOD_COUNT; ++i )
    {
       LOD_MIN_TRACE_LENGTH_PXL[i] =
-          pxlToCycles( sreenResolutionX, LOD_NANOS[i], MIN_TRACE_LENGTH_PXL );
-      LOD_MIN_GAP_PXL[i] = pxlToCycles( sreenResolutionX, LOD_NANOS[i], MIN_GAP_PXL );
+          pxlToCycles( sreenResolutionX, LOD_CYCLES[i-1], MIN_TRACE_LENGTH_PXL );
+      LOD_MIN_GAP_CYCLES[i] = pxlToCycles( sreenResolutionX, LOD_CYCLES[i-1], MIN_GAP_PXL );
    }
 }
 
@@ -26,12 +26,13 @@ template< unsigned LODLVL >
 static hop::LodInfo createLod( size_t index, hop::TimeStamp start, hop::TimeStamp end, hop::TimeDuration delta, const hop::LodInfo& prevLod, LodsArray& resultLods )
 {
    const TimeDuration lastTraceDelta       = prevLod.end - prevLod.start;
-   const TimeStamp timeBetweenTrace        = start - prevLod.end;
+   const auto minMaxValue                  = std::minmax( start, prevLod.end );
+   const TimeStamp timeBetweenTrace        = minMaxValue.second - minMaxValue.first;
 
-   const hop::TimeDuration minTraceSize = LOD_MIN_TRACE_LENGTH_PXL[LODLVL];
-   const bool lastTraceSmallEnough = lastTraceDelta < minTraceSize;
-   const bool newTraceSmallEnough  = delta  < minTraceSize;
-   const bool timeBetweenTraceSmallEnough = timeBetweenTrace < LOD_MIN_GAP_PXL[LODLVL];
+   const hop::TimeDuration minTraceSize   = LOD_MIN_TRACE_LENGTH_PXL[LODLVL];
+   const bool lastTraceSmallEnough        = lastTraceDelta < minTraceSize;
+   const bool newTraceSmallEnough         = delta  < minTraceSize;
+   const bool timeBetweenTraceSmallEnough = timeBetweenTrace < LOD_MIN_GAP_CYCLES[LODLVL];
 
    LodInfo computedLod = prevLod;
    if( lastTraceSmallEnough && newTraceSmallEnough && timeBetweenTraceSmallEnough )
