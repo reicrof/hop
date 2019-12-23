@@ -5,44 +5,43 @@
 
 #include <array>
 #include <deque>
+#include <vector>
 
 namespace hop
 {
 
 struct Entries;
-struct LockWaitData;
+//struct LockWaitData;
 
-constexpr TimeDuration LOD_NANOS[] = {1000, 200000, 3000000, 30000000, 300000000, 600000000, 1000000000, 3000000000, 6000000000, 30000000000, 70000000000, 600000000000, 5000000000000};
+constexpr TimeDuration LOD_NANOS[] = {1000, 200000, 30000000, 300000000, 600000000, 6000000000, 30000000000, 90000000000, 600000000000 };/*, 1000000000, 3000000000, 6000000000, 30000000000, 70000000000, 600000000000, 5000000000000};*/
 constexpr int LOD_COUNT = sizeof( LOD_NANOS ) / sizeof( LOD_NANOS[0] );
 
 struct LodInfo
 {
-   TimeStamp end;
-   TimeDuration delta;
-   size_t traceIndex;
+   TimeStamp start, end;
+   size_t index;
    Depth_t depth;
-   bool isLoded;
+   bool loded;
    bool operator<( const LodInfo& rhs ) const noexcept { return end < rhs.end; }
 };
 
-struct LodInfo2
-{
-   TimeStamp start, end;
-   size_t index;
-};
-
 using LodsArray = std::array< std::deque< LodInfo >, LOD_COUNT >;
-using LodsArray2 = std::array< std::deque< LodInfo2 >, LOD_COUNT >;
+struct LodsData
+{
+   LodsArray lods;
+   std::vector< std::array< LodInfo, LOD_COUNT > > latestLodPerDepth;
+};
 
 void setupLODResolution( uint32_t sreenResolutionX );
 
-// Returns a array of LodInfo for each LOD level. The lod infos are sorted.
-LodsArray computeLods( const Entries& entries, size_t idOffset );
+// Create and appends lods starting at start index.
+void appendLods( LodsData& lodData, const Entries& entries, size_t startIndex );
 
-LodsArray2 computeLods2( const Entries& entries, size_t idOffset );
-
-// Appends lods infos
-void appendLods( LodsArray& dst, const LodsArray& src );
+ std::pair<size_t, size_t> visibleIndexSpan(
+     const LodsArray& lodsArr,
+     int lodLvl,
+     TimeStamp absoluteStart,
+     TimeStamp absoluteEnd );
 
 }
 

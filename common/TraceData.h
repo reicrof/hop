@@ -2,7 +2,6 @@
 #define TRACE_DATA_H_
 
 #include "Hop.h"
-#include "Lod.h"
 #include <vector>
 #include <deque>
 #include <utility>
@@ -46,8 +45,6 @@ struct TraceData
 
    std::deque< LineNb_t > lineNbs;
    std::deque< ZoneId_t > zones;
-
-   LodsArray lods;
 };
 
 struct LockWaitData
@@ -63,20 +60,12 @@ struct LockWaitData
    Entries entries;
    std::deque< void* > mutexAddrs;
    std::deque< TimeStamp > lockReleases;
-
-   LodsArray lods;
 };
 
 struct CoreEventData
 {
    std::deque<CoreEvent> data;
 };
-
-// std::pair<size_t, size_t>
-// visibleIndexSpan( const LodsArray& lodsArr, int lodLvl, TimeStamp absoluteStart, TimeStamp absoluteEnd, int baseDepth );
-
-std::pair<size_t, size_t>
-visibleIndexSpan( const Entries& entries, TimeStamp absoluteStart, TimeStamp absoluteEnd, int baseDepth );
 
 // Data serialization
 size_t serializedSize( const TraceData& td );

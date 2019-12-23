@@ -2,6 +2,7 @@
 #define TIMELINE_TRACKS_VIEW_H_
 
 #include <vector>
+#include "Lod.h"
 
 namespace hop
 {
@@ -11,9 +12,9 @@ struct TimelineInfo;
 
 struct TrackDrawInfo
 {
-   float localDrawPos[2];    // This is the position at which the track is drawn in canvas coord
    float absoluteDrawPos[2]; // The absolute position ignores the scroll but not the relative
    float trackHeight{9999.0f};
+   LodsData lodsData;
 };
 
 struct TimelineTrackDrawInfo

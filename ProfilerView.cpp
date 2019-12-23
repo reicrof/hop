@@ -95,6 +95,7 @@ void hop::ProfilerView::fetchClientData()
 
 void hop::ProfilerView::update( float /*deltaTimeMs*/, float globalTimeMs, TimeDuration timelineDuration )
 {
+   HOP_PROF_FUNC();
    _highlightValue = (std::sin( 0.007f * globalTimeMs ) * 0.8f + 1.0f) / 2.0f;
 
    // Update current lod level
@@ -104,6 +105,15 @@ void hop::ProfilerView::update( float /*deltaTimeMs*/, float globalTimeMs, TimeD
       ++lodLvl;
    }
    _lodLevel = lodLvl;
+
+   // Update the lods for each tracks
+   const size_t trackCount = _trackDrawInfos.size();
+   for( size_t i = 0; i < trackCount; ++i )
+   {
+      auto& lodsData = _trackDrawInfos[i].lodsData;
+      const size_t latestLodIdx = lodsData.lods[0].empty() ? 0 : lodsData.lods[0].back().index;
+      appendLods( lodsData, _profiler.timelineTracks()[i]._traces.entries, latestLodIdx );
+   }
 
    //.update( deltaTimeMs );
    // _tracks.update( globalTimeMs, /*_timeline.duration()*/ );

@@ -105,6 +105,21 @@ int findSubstrNoCase(
 
 int getPIDFromString( const char* str );
 
+template< typename IT >
+void insertionSort( IT begin, IT end )
+{
+   if( begin == end ) return;
+
+   std::iter_swap( begin, std::min_element( begin, end ) );
+   for( IT b = begin; ++b < end; begin = b )
+   {
+      for(IT c = b; *c < *begin; --c, --begin)
+      {
+         std::iter_swap(begin, c);
+      }
+   }
+}
+
 } // namespace hop
 
 #endif  // UTILS_H_
