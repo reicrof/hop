@@ -7,6 +7,7 @@
 #include "TimelineTracksView.h"
 #include "TimelineInfo.h"
 #include "Options.h"
+#include "Stats.h"
 
 #include "Lod.h"
 
@@ -143,8 +144,10 @@ static void createDrawData( LodIt it, size_t count, hop::TimeStamp absStart, flo
    HOP_PROF_FUNC();
    for( size_t i = 0; i < count; ++i, ++it )
    {
-      startsPxl[i] = (int64_t)( it->start - absStart ) / cyclesPerPxl;
-      deltaPxl[i]  = std::max( ( it->end - it->start ) / cyclesPerPxl, 1.0f );
+      // Use the min max to clamp the starting position to 0 and remove what has been "cropped" from the length
+      const auto minMaxPxl = std::minmax( (int64_t)( it->start - absStart ) / cyclesPerPxl, 0.0f );
+      startsPxl[i] = minMaxPxl.second;
+      deltaPxl[i]  = std::max( (( it->end - it->start ) / cyclesPerPxl) + minMaxPxl.first, 1.0f );
    }
 }
 
@@ -205,9 +208,9 @@ static void drawTraces(
    using namespace hop;
 
    const std::vector<hop::TimelineTrack>& timelineTracksData = info.profiler.timelineTracks();
-   const TimelineTrack& data = timelineTracksData[ threadIndex ];
+   const TimelineTrack& trackData = timelineTracksData[ threadIndex ];
 
-   if ( data.empty() ) return;
+   if ( trackData.empty() ) return;
 
    HOP_PROF_FUNC();
    const auto drawStart = std::chrono::system_clock::now();
@@ -242,7 +245,7 @@ static void drawTraces(
    ImGui::PushStyleVar(ImGuiStyleVar_ButtonTextAlign, ImVec2( 0.0f, 0.5f ) );
    const auto& zoneColors = g_options.zoneColors;
 
-   size_t hoveredIdx = hop::INVALID_IDX;
+   size_t hoveredLodIdx = hop::INVALID_IDX;
    char entryName[256] = {};
    for( size_t i = 0; i < traceCount; ++i )
    {
@@ -254,38 +257,44 @@ static void drawTraces(
       const float curDeltaPxl = deltaPxl[i];
       if( curDeltaPxl > 10.0f && !curLod.loded )
       {
-         const char* name = getEntryName( info.profiler, data, absIndex );
+         const char* name = getEntryName( info.profiler, trackData, absIndex );
          buildTraceLabelWithTime( name, curLod.end - curLod.start, false, sizeof(entryName), entryName );
       }
 
-      const uint32_t zoneId = setBitIndex( data._traces.zones[absIndex] );
+      const uint32_t zoneId = setBitIndex( trackData._traces.zones[absIndex] );
       ImGui::PushStyleColor(ImGuiCol_Button, zoneColors[zoneId] );
       ImGui::PushStyleColor(ImGuiCol_ButtonHovered, zoneColors[zoneId] );
       ImGui::PushStyleColor(ImGuiCol_ButtonActive, zoneColors[zoneId] );
 
-      ImGui::SetCursorScreenPos( ImVec2( startPosPxl[i], posY + data._traces.entries.depths[absIndex] * info.paddedTraceHeight ) );
+      ImGui::SetCursorScreenPos( ImVec2( startPosPxl[i], posY + trackData._traces.entries.depths[absIndex] * info.paddedTraceHeight ) );
       ImGui::Button( entryName, ImVec2( curDeltaPxl, info.paddedTraceHeight ) );
-      if( ImGui::IsItemHovered() )
+      if( ImGui::IsItemHovered() && !curLod.loded )
       {
-         hoveredIdx = absIndex;
+         hoveredLodIdx = i;
       }
 
       ImGui::PopStyleColor( 3 );
    }
    ImGui::PopStyleVar(); // Pop left-aligned
 
-   if( hoveredIdx != hop::INVALID_IDX )
+   if( hoveredLodIdx != hop::INVALID_IDX )
    {
       const bool rightMouseClicked = ImGui::IsMouseReleased( 1 );
       const bool leftMouseDblClicked = ImGui::IsMouseDoubleClicked( 0 );
       const bool drawAsCycles = info.timeline.useCycles;
 
       ImGui::BeginTooltip();
-      drawHoveredEntryPopup( hoveredIdx, info.profiler, data, drawAsCycles );
+      const size_t hoveredAbsIndex = (lodStartIt + hoveredLodIdx)->index;
+      drawHoveredEntryPopup( hoveredAbsIndex, info.profiler, trackData, drawAsCycles );
       ImGui::EndTooltip();
 
       // Add the hovered trace to the highlighted traces
-      //addEntryToHighlight( _tracks[threadIndex], *hoveredDrawData, hoveredIdx );
+      info.drawInfos[threadIndex].highlightInfo.emplace_back(
+         TrackHighlightInfo{
+            startPosPxl[hoveredLodIdx],
+            posY + trackData._traces.entries.depths[hoveredAbsIndex] * info.paddedTraceHeight,
+            deltaPxl[hoveredLodIdx],
+            0xFFFFFFFF } );
 
    /*
       // Handle mouse interaction
@@ -309,45 +318,25 @@ static void drawTraces(
    startPosPxl.clear();
    deltaPxl.clear();
 
-/*
-
-   
-   const auto& enabledZone = g_options.zoneEnabled;
-   const float disabledZoneOpacity = g_options.disabledZoneOpacity;
-
-   const DrawData* hoveredDrawData = nullptr;
-   size_t hoveredIdx = hop::INVALID_IDX;
-
-   HOP_PROF_SPLIT( "Drawing Traces" );
-   for ( size_t zoneId = 0; zoneId < lodTracesToDraw.size(); ++zoneId )
-   {
-      ImGui::PushStyleColor(ImGuiCol_Button, zoneColors[zoneId] );
-      ImGui::PushStyleColor(ImGuiCol_ButtonHovered, zoneColors[zoneId] );
-      ImGui::PushStyleColor(ImGuiCol_ButtonActive, zoneColors[zoneId] );
-      ImGui::PushStyleVar(ImGuiStyleVar_Alpha, enabledZone[zoneId] ? 1.0f : disabledZoneOpacity );
-
-      // Draw the lod traces
-      drawEntries( lodTracesToDraw[ zoneId ], drawInfo.strDb, getEmptyLabel );
-
-      // Draw the non-loded traces
-      size_t curHoveredIdx = drawEntries( tracesToDraw[ zoneId ], drawInfo.strDb, getTraceLabel );
-      if( curHoveredIdx != hop::INVALID_IDX )
-      {
-         hoveredIdx = curHoveredIdx;
-         hoveredDrawData = &tracesToDraw[ zoneId ];
-      }
-
-      ImGui::PopStyleColor(3);
-      ImGui::PopStyleVar();
-   }
-   ImGui::PopStyleVar(); // // Pop left-aligned
-
-   
-
    const auto drawEnd = std::chrono::system_clock::now();
    hop::g_stats.traceDrawingTimeMs +=
        std::chrono::duration<double, std::milli>( ( drawEnd - drawStart ) ).count();
-   */
+}
+
+static void drawHighlightedTraces(
+    const std::vector<hop::TrackHighlightInfo>& highInfo,
+    float highlightVal,
+    float traceHeight )
+{
+   ImDrawList* drawList = ImGui::GetWindowDrawList();
+   for( const auto& d : highInfo )
+   {
+      const uint32_t color = (d.color & 0x00FFFFFF) | (uint32_t(highlightVal * 255.0f) << 24);
+      ImVec2 topLeft( d.posPxl[0], d.posPxl[1] );
+      ImVec2 bottomRight( d.posPxl[0] + d.lengthPxl, d.posPxl[1] + traceHeight );
+
+      drawList->AddRectFilled( topLeft, bottomRight, color );
+   }
 }
 
 void hop::drawTimelineTracks( TimelineTrackDrawInfo& info, TimelineMsgArray* msgArray )
@@ -413,9 +402,8 @@ void hop::drawTimelineTracks( TimelineTrackDrawInfo& info, TimelineMsgArray* msg
          }
       }
 
-
       ImVec2 curDrawPos = absDrawPos;
-      if (!threadHidden)
+      if( !threadHidden )
       {
          const float threadStartRelDrawPos = curDrawPos.y - ImGui::GetWindowPos().y;
          const float threadEndRelDrawPos = threadStartRelDrawPos + trackHeight;
@@ -440,10 +428,8 @@ void hop::drawTimelineTracks( TimelineTrackDrawInfo& info, TimelineMsgArray* msg
             // drawLockWaits( i, curDrawPos.x, curDrawPos.y, info, timelineActions );
             drawTraces( i, curDrawPos.x, curDrawPos.y, info, msgArray );
 
-            // drawHighlightedTraces(
-            //     _tracks[i]._highlightsDrawData,
-            //     _highlightValue );
-            // _tracks[i]._highlightsDrawData.clear();
+            drawHighlightedTraces( info.drawInfos[i].highlightInfo, info.highlightValue, info.paddedTraceHeight );
+            info.drawInfos[i].highlightInfo.clear();
 
             ImGui::PopClipRect();
          }
@@ -452,7 +438,6 @@ void hop::drawTimelineTracks( TimelineTrackDrawInfo& info, TimelineMsgArray* msg
       // Set cursor for next drawing iterations
       curDrawPos.y += trackHeight;
       ImGui::SetCursorScreenPos( curDrawPos );
-      //*/
    }
 
    //drawContextMenu( info );
