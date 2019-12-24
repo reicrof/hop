@@ -31,7 +31,6 @@ static constexpr uint32_t DISABLED_COLOR = 0xFF505050;
 static constexpr uint32_t CORE_LABEL_COLOR = 0xFF333333;
 static constexpr uint32_t CORE_LABEL_BORDER_COLOR = 0xFFAAAAAA;
 static constexpr uint32_t SEPARATOR_HANDLE_COLOR = 0xFFAAAAAA;
-static const char* CTXT_MENU_STR = "Context Menu";
 
 // Static variable mutable from options
 static float TRACE_HEIGHT = 20.0f;
@@ -87,7 +86,7 @@ static int closestLodLevel( hop::TimeDuration timelineDuration )
 hop::ProfilerView::ProfilerView( hop::Profiler::SourceType type, int processId, const char* str )
    : _profiler( type, processId, str ), _lodLevel( 0 ), _draggedTrack( -1 ), _highlightValue( 0.0f )
 {
-
+   memset( &_contextMenu, 0, sizeof( _contextMenu ) );
 }
 
 void hop::ProfilerView::fetchClientData()
@@ -142,11 +141,6 @@ void hop::ProfilerView::draw( float drawPosX, float drawPosY, const TimelineInfo
    HOP_PROF_FUNC();
    ImGui::SetCursorPos( ImVec2( drawPosX, drawPosY ) );
 
-   ImGui::BeginChild(
-       "ProfilerView",
-       ImVec2( 0, 0 ),
-       false,
-       ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse | ImGuiWindowFlags_NoMove );
    if ( _trackDrawInfos.size() == 0 && !data().recording() )
    {
       displayBackgroundHelpMsg( ImGui::GetWindowWidth(), ImGui::GetWindowHeight() );
@@ -154,11 +148,9 @@ void hop::ProfilerView::draw( float drawPosX, float drawPosY, const TimelineInfo
    else
    {
       TimelineTrackDrawInfo tdi = {
-          _trackDrawInfos, _draggedTrack, _profiler, tlInfo, PADDED_TRACE_SIZE, _lodLevel, _highlightValue};
+          _trackDrawInfos, _contextMenu, _draggedTrack, _profiler, tlInfo, PADDED_TRACE_SIZE, _lodLevel, _highlightValue};
       hop::drawTimelineTracks( tdi, msgArray );
    }
-
-   ImGui::EndChild();  //"ProfilerView"
 }
 
 bool hop::ProfilerView::handleHotkey()

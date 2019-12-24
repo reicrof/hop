@@ -13,7 +13,7 @@ namespace hop
 struct Entries;
 //struct LockWaitData;
 
-constexpr TimeDuration LOD_CYCLES[] = {1000, 200000, 30000000, 300000000, 600000000, 6000000000, 70000000000, 200000000000, 600000000000 };
+extern TimeDuration LOD_CYCLES[9];
 constexpr int LOD_COUNT = sizeof( LOD_CYCLES ) / sizeof( LOD_CYCLES[0] );
 
 struct LodInfo

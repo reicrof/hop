@@ -185,133 +185,9 @@ void Timeline::draw()
 {
    HOP_PROF_FUNC();
 
-   const auto startDrawPos = ImGui::GetCursorPos();
-   _timelineDrawPosition[0] = startDrawPos.x;
-   _timelineDrawPosition[1] = startDrawPos.y;
-
-   // Draw the time ruler at the top of the window
-   drawTimeline(startDrawPos.x, startDrawPos.y + 5);
-}
-
-void Timeline::clear()
-{
-   setGlobalStartTime( 0 );
-   moveVerticalPositionPxl( 0.0f, Timeline::ANIMATION_TYPE_FAST );
-   _bookmarks.times.clear();
-   _rangeSelectTimeStamp[0] = _rangeSelectTimeStamp[1] = 0;
-}
-
-void Timeline::beginDrawCanvas( float canvasHeightPxl )
-{
-   ImGui::BeginChild(
-       "TimelineCanvas",
-       ImVec2( 0, 0 ),
-       false,
-       ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse |
-           ImGuiWindowFlags_NoMove );
-
-   _canvasHeight = canvasHeightPxl;
-
-   ImGui::SetScrollY( verticalPosPxl() );
-
-   // Push clip rect for canvas and draw
-   ImGui::PushClipRect( ImVec2( canvasPosX(), canvasPosY() ), ImVec2( 99999, 99999 ), true );
-}
-
-void Timeline::endDrawCanvas()
-{
-   drawOverlay();
-
-   ImGui::PopClipRect();
-   ImGui::EndChild();
-}
-
-void Timeline::drawOverlay()
-{
-   char durationText[32] = {};
- 
-   const ImVec2 startDrawPos( _timelineDrawPosition[0], _timelineDrawPosition[1] );
-
-   // Draw timeline mouse indicator
-   if (_timelineHoverPos > 0.0f)
-   {
-      static char text[32] = {};
-      const int64_t hoveredNano =
-          _timelineStart +
-          pxlToCycles( ImGui::GetWindowWidth(), _duration, _timelineHoverPos - startDrawPos.x );
-      hop::formatCyclesTimepointToDisplay(
-          hoveredNano, _duration, text, sizeof( text ), _displayType == DISPLAY_CYCLES );
-      drawHoveringTimelineLine( _timelineHoverPos, startDrawPos.y, text );
-   }
-
-   // Draw bookmarks
-   const ImVec2 windowSize = ImGui::GetWindowSize();
-   if( !_bookmarks.times.empty() )
-   {
-      ImGui::PushClipRect(
-          startDrawPos,
-          ImVec2( startDrawPos.x + windowSize.x, startDrawPos.y + windowSize.y ),
-          false );
-      ImGui::PushStyleColor( ImGuiCol_Button, ImVec4( 0.0f, 0.0f, 0.8f, 1.0f ) );
-      ImGui::PushStyleColor( ImGuiCol_ButtonHovered, ImVec4( 0.0f, 0.0f, 0.9f, 1.0f ));
-      ImGui::PushStyleColor( ImGuiCol_ButtonActive, ImVec4( 0.0f, 0.0f, 1.0f, 1.0f ));
-      for( auto t : _bookmarks.times )
-      {
-         float posXPxl = cyclesToPxl( windowSize.x, _duration, t - _timelineStart );
-         drawBookmarks( posXPxl + startDrawPos.x, startDrawPos.y );
-      }
-      ImGui::PopClipRect();
-      ImGui::PopStyleColor(3);
-   }
-
-
-   // Draw zoom region
-   if( _rangeZoomCycles[0] != _rangeZoomCycles[1] )
-   {
-      const auto minmaxCycles = std::minmax( _rangeZoomCycles[0], _rangeZoomCycles[1] );
-      const float startPxl =
-          cyclesToPxl<float>( windowSize.x, _duration, minmaxCycles.first - _timelineStart );
-      const TimeDuration deltaCycles = minmaxCycles.second - minmaxCycles.first;
-      const float durationPxl = cyclesToPxl( windowSize.x, _duration, deltaCycles );
-
-      ImDrawList* drawList = ImGui::GetWindowDrawList();
-      drawList->AddRectFilled(
-          ImVec2( startPxl, 0 ), ImVec2( startPxl + durationPxl, 9999 ), ImColor( 255, 255, 255, 64 ) );
-   }
-
-   // Draw selection region
-   if( _rangeSelectTimeStamp[0] != _rangeSelectTimeStamp[1] )
-   {
-      const auto minmaxCycles = std::minmax( _rangeSelectTimeStamp[0], _rangeSelectTimeStamp[1] );
-      const float startPxl =
-          cyclesToPxl<float>( windowSize.x, _duration, minmaxCycles.first - _timelineStart );
-      const TimeDuration deltaCycles = minmaxCycles.second - minmaxCycles.first;
-      const float durationPxl = cyclesToPxl( windowSize.x, _duration, deltaCycles );
-
-      hop::formatCyclesDurationToDisplay(
-          deltaCycles,
-          durationText,
-          sizeof( durationText ),
-          _displayType == DISPLAY_CYCLES );
-      drawRangeSelection( startPxl, startPxl + durationPxl, canvasPosY(), durationText );
-   }
-}
-
-TimelineInfo Timeline::createTimelineInfo() const noexcept
-{
-   return TimelineInfo{canvasPosX(),
-                       canvasPosYWithScroll(),
-                       verticalPosPxl(),
-                       globalStartTime(),
-                       relativeStartTime(),
-                       duration(),
-                       _rangeZoomCycles[0] != 0,
-                       _displayType == DISPLAY_CYCLES};
-}
-
-void Timeline::drawTimeline( float posX, float posY )
-{
-   HOP_PROF_FUNC();
+   const auto drawPos = ImGui::GetCursorPos() + ImVec2( 0.0f, 5.0f );
+   _timelineDrawPosition[0] = drawPos.x;
+   _timelineDrawPosition[1] = drawPos.y;
 
    constexpr uint64_t minStepSize = 10;
    constexpr uint64_t minStepCount = 20;
@@ -343,8 +219,8 @@ void Timeline::drawTimeline( float posX, float posY )
 
    // Draw darker background under the timeline to differentiate with the canvas
    DrawList->AddRectFilled(
-      ImVec2(posX, posY),
-      ImVec2(posX + windowWidthPxl, posY + TIMELINE_TOTAL_HEIGHT),
+      drawPos,
+      ImVec2(drawPos.x + windowWidthPxl, drawPos.y + TIMELINE_TOTAL_HEIGHT),
       ImColor( 0.1f, 0.1f, 0.1f ));
 
    // Start drawing the vertical lines on the timeline
@@ -359,14 +235,12 @@ void Timeline::drawTimeline( float posX, float posY )
        cyclesToPxl<float>( windowWidthPxl, _duration, std::abs( stepsDone.rem ) );
 
    // Start drawing one step before the start position to account for partial steps
-   ImVec2 top( posX, posY );
-   top.x -= hop::sign( stepsDone.rem ) * remainderPxl;
-   ImVec2 bottom = top;
-   bottom.y += smallLineLength;
+   ImVec2 top = drawPos - ImVec2( hop::sign( stepsDone.rem ) * remainderPxl, 0.0f );
+   ImVec2 bottom = top + ImVec2( 0.0f, smallLineLength );
 
    int64_t count = stepsDone.quot;
    TimelineTextPositions textPos;
-   const auto maxPosX = posX + windowWidthPxl;
+   const auto maxPosX = drawPos.x + windowWidthPxl;
    for ( double i = top.x; i < maxPosX; i += stepSizePxl, ++count )
    {
       // Draw biggest begin/end lines
@@ -381,9 +255,7 @@ void Timeline::drawTimeline( float posX, float posY )
       // Draw midline
       else if ( count % 5 == 0 )
       {
-         auto midLine = bottom;
-         midLine.y += deltaMidLineLength;
-         DrawList->AddLine( top, midLine, ImGui::GetColorU32( ImGuiCol_TextDisabled ), 1.5f );
+         DrawList->AddLine( top, bottom + ImVec2( 0.0f, deltaMidLineLength ), ImGui::GetColorU32( ImGuiCol_TextDisabled ), 1.5f );
       }
       else
       {
@@ -396,8 +268,8 @@ void Timeline::drawTimeline( float posX, float posY )
 
    // Draw horizontal line
    DrawList->AddLine(
-       ImVec2( posX, posY ),
-       ImVec2( posX + windowWidthPxl, posY ),
+       drawPos,
+       ImVec2( drawPos.x + windowWidthPxl, drawPos.y ),
        ImGui::GetColorU32( ImGuiCol_Border ) );
 
    // Draw the labels
@@ -419,7 +291,7 @@ void Timeline::drawTimeline( float posX, float posY )
       _timelineHoverPos = curMousePosInScreen.x;
       if( ImGui::IsMouseClicked( 1 ) )
       {
-         _bookmarks.times.push_back( _timelineStart + pxlToCycles(ImGui::GetWindowWidth(), _duration, _timelineHoverPos - posX) );
+         _bookmarks.times.push_back( _timelineStart + pxlToCycles(ImGui::GetWindowWidth(), _duration, _timelineHoverPos - drawPos.x) );
          std::sort( _bookmarks.times.begin(), _bookmarks.times.end() );
       }
    }
@@ -428,7 +300,121 @@ void Timeline::drawTimeline( float posX, float posY )
       _timelineHoverPos = -1.0f;
    }
 
-   ImGui::SetCursorScreenPos( ImVec2{posX, posY + TIMELINE_TOTAL_HEIGHT } );
+   ImGui::SetCursorScreenPos( ImVec2{drawPos.x, drawPos.y + TIMELINE_TOTAL_HEIGHT } );
+}
+
+void Timeline::clear()
+{
+   setGlobalStartTime( 0 );
+   moveVerticalPositionPxl( 0.0f, Timeline::ANIMATION_TYPE_FAST );
+   _bookmarks.times.clear();
+   _rangeSelectTimeStamp[0] = _rangeSelectTimeStamp[1] = 0;
+}
+
+void Timeline::beginDrawCanvas( float canvasHeightPxl )
+{
+   ImGui::BeginChild(
+       "TimelineCanvas",
+       ImVec2( 0, 0 ),
+       false,
+       ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse |
+           ImGuiWindowFlags_NoMove );
+
+   _canvasHeight = canvasHeightPxl;
+
+   ImGui::SetScrollY( verticalPosPxl() );
+
+   // Push clip rect for canvas and draw
+   ImGui::PushClipRect( ImVec2( canvasPosX(), canvasPosY() ), ImVec2( 99999, 99999 ), false );
+}
+
+void Timeline::endDrawCanvas()
+{
+   drawOverlay();
+
+   ImGui::PopClipRect();
+   ImGui::EndChild();
+}
+
+void Timeline::drawOverlay()
+{
+   const ImVec2 startDrawPos( _timelineDrawPosition[0], _timelineDrawPosition[1] );
+   const ImVec2 windowSize = ImGui::GetWindowSize();
+
+   // Draw timeline mouse indicator
+   if (_timelineHoverPos > 0.0f)
+   {
+      static char text[32] = {};
+      const int64_t hoveredNano =
+          _timelineStart +
+          pxlToCycles( ImGui::GetWindowWidth(), _duration, _timelineHoverPos - startDrawPos.x );
+      hop::formatCyclesTimepointToDisplay(
+          hoveredNano, _duration, text, sizeof( text ), _displayType == DISPLAY_CYCLES );
+      drawHoveringTimelineLine( _timelineHoverPos, startDrawPos.y, text );
+   }
+
+   // Draw bookmarks
+   if( !_bookmarks.times.empty() )
+   {
+      ImGui::PushClipRect(
+          startDrawPos,
+          startDrawPos + windowSize,
+          false );
+      ImGui::PushStyleColor( ImGuiCol_Button, ImVec4( 0.0f, 0.0f, 0.8f, 1.0f ) );
+      ImGui::PushStyleColor( ImGuiCol_ButtonHovered, ImVec4( 0.0f, 0.0f, 0.9f, 1.0f ));
+      ImGui::PushStyleColor( ImGuiCol_ButtonActive, ImVec4( 0.0f, 0.0f, 1.0f, 1.0f ));
+      for( auto t : _bookmarks.times )
+      {
+         float posXPxl = cyclesToPxl( windowSize.x, _duration, t - _timelineStart );
+         drawBookmarks( posXPxl + startDrawPos.x, startDrawPos.y );
+      }
+      ImGui::PopClipRect();
+      ImGui::PopStyleColor(3);
+   }
+
+   // Draw zoom region
+   if( _rangeZoomCycles[0] != _rangeZoomCycles[1] )
+   {
+      const auto minmaxCycles = std::minmax( _rangeZoomCycles[0], _rangeZoomCycles[1] );
+      const float startPxl =
+          cyclesToPxl<float>( windowSize.x, _duration, minmaxCycles.first - _timelineStart );
+      const TimeDuration deltaCycles = minmaxCycles.second - minmaxCycles.first;
+      const float durationPxl = cyclesToPxl( windowSize.x, _duration, deltaCycles );
+
+      ImDrawList* drawList = ImGui::GetWindowDrawList();
+      drawList->AddRectFilled(
+          ImVec2( startPxl, 0 ), ImVec2( startPxl + durationPxl, 9999 ), ImColor( 255, 255, 255, 64 ) );
+   }
+
+   // Draw selection region
+   if( _rangeSelectTimeStamp[0] != _rangeSelectTimeStamp[1] )
+   {
+      const auto minmaxCycles = std::minmax( _rangeSelectTimeStamp[0], _rangeSelectTimeStamp[1] );
+      const float startPxl =
+          cyclesToPxl<float>( windowSize.x, _duration, minmaxCycles.first - _timelineStart );
+      const TimeDuration deltaCycles = minmaxCycles.second - minmaxCycles.first;
+      const float durationPxl = cyclesToPxl( windowSize.x, _duration, deltaCycles );
+
+      char durationText[32] = {};
+      hop::formatCyclesDurationToDisplay(
+          deltaCycles,
+          durationText,
+          sizeof( durationText ),
+          _displayType == DISPLAY_CYCLES );
+      drawRangeSelection( startPxl, startPxl + durationPxl, canvasPosY(), durationText );
+   }
+}
+
+TimelineInfo Timeline::createTimelineInfo() const noexcept
+{
+   return TimelineInfo{canvasPosX(),
+                       canvasPosYWithScroll(),
+                       verticalPosPxl(),
+                       globalStartTime(),
+                       relativeStartTime(),
+                       duration(),
+                       _rangeZoomCycles[0] != 0,
+                       _displayType == DISPLAY_CYCLES};
 }
 
 bool Timeline::handleMouse( float posX, float posY, bool /*lmPressed*/, bool /*rmPressed*/, float wheel )

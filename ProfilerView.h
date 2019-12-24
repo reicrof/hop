@@ -32,6 +32,7 @@ public:
 private:
    Profiler _profiler;
    std::vector<TrackDrawInfo> _trackDrawInfos;
+   ContextMenu _contextMenu;
    int _lodLevel;
    int _draggedTrack;
    float _highlightValue;

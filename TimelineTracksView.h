@@ -9,6 +9,15 @@ namespace hop
 class Profiler;
 class TimelineMsgArray;
 struct TimelineInfo;
+struct ContextMenu;
+
+struct ContextMenu
+{
+   size_t traceId{0};
+   uint32_t threadIndex{0};
+   bool traceClicked{false};
+   bool open{false};
+};
 
 struct TrackHighlightInfo
 {
@@ -28,6 +37,7 @@ struct TrackDrawInfo
 struct TimelineTrackDrawInfo
 {
    std::vector<TrackDrawInfo>& drawInfos;
+   ContextMenu& contextMenu;
    int& draggedTrack;
    const Profiler& profiler;
    const TimelineInfo& timeline;

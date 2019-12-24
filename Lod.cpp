@@ -6,12 +6,14 @@
 #include <algorithm>
 
 static constexpr float MIN_TRACE_LENGTH_PXL = 8.0f;
-static constexpr float MIN_GAP_PXL = 5.0f;
+static constexpr float MIN_GAP_PXL = 4.0f;
 static hop::TimeDuration LOD_MIN_GAP_CYCLES[hop::LOD_COUNT] = {0};
 static hop::TimeDuration LOD_MIN_TRACE_LENGTH_PXL[hop::LOD_COUNT] = {0};
 
 namespace hop
 {
+TimeDuration LOD_CYCLES[9] = {1000, 200000, 30000000, 300000000, 600000000, 6000000000, 20000000000, 200000000000, 600000000000 };
+
 void setupLODResolution( uint32_t sreenResolutionX )
 {
    for ( uint32_t i = 1; i < LOD_COUNT; ++i )
