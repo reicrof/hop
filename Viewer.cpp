@@ -618,9 +618,10 @@ void Viewer::onNewFrame(
    io.MouseWheel = mousewheel;
 
    // Reset frame stats
-   hop::g_stats.drawingTimeMs = 0.0;
-   hop::g_stats.traceDrawingTimeMs = 0.0;
-   hop::g_stats.coreDrawingTimeMs = 0.0;
+   hop::g_stats.updatingTimeMs         = 0.0;
+   hop::g_stats.drawingTimeMs          = 0.0;
+   hop::g_stats.traceDrawingTimeMs     = 0.0;
+   hop::g_stats.coreDrawingTimeMs      = 0.0;
    hop::g_stats.lockwaitsDrawingTimeMs = 0.0;
 
    // Set vsync if it has changed.

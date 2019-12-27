@@ -29,10 +29,11 @@ struct TraceHighlight
 
 struct TrackViewData
 {
-   float absoluteDrawPos[2]; // The absolute position ignores the scroll but not the relative
-   float trackHeight{9999.0f};
    LodsData lodsData;
    std::vector< TraceHighlight > highlightInfo;
+   float absoluteDrawPos[2]; // The absolute position ignores the scroll but not the relative
+   float trackHeight{9999.0f};
+   Depth_t maxDepth;
 };
 
 struct TimelineTrackViews
@@ -48,10 +49,11 @@ struct TimelineTrackDrawData
 {
    const Profiler& profiler;
    const TimelineInfo& timeline;
-   const float paddedTraceHeight;
    const int lodLevel;
    const float highlightValue;
 };
+
+void updateTimelineTracks( TimelineTrackViews& tracksView, const hop::Profiler& profiler );
 
 void drawTimelineTracks( TimelineTrackViews& tracksView, const TimelineTrackDrawData& data, TimelineMsgArray* msgArray );
 

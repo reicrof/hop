@@ -7,12 +7,10 @@
 #include "imgui/imgui.h"
 
 #include "Lod.h"
-//#include "TraceDetail.h"
 #include "ModalWindow.h"
 #include "Options.h"
 #include "RendererGL.h"
 #include <SDL_keycode.h>
-
 
 #include <cassert>
 #include <cmath>
@@ -31,11 +29,6 @@ static constexpr uint32_t DISABLED_COLOR = 0xFF505050;
 static constexpr uint32_t CORE_LABEL_COLOR = 0xFF333333;
 static constexpr uint32_t CORE_LABEL_BORDER_COLOR = 0xFFAAAAAA;
 static constexpr uint32_t SEPARATOR_HANDLE_COLOR = 0xFFAAAAAA;
-
-// Static variable mutable from options
-static float TRACE_HEIGHT = 20.0f;
-static float TRACE_VERTICAL_PADDING = 2.0f;
-static float PADDED_TRACE_SIZE = TRACE_HEIGHT + TRACE_VERTICAL_PADDING;
 
 static void displayBackgroundHelpMsg( uint32_t windowWidth, uint32_t windowHeight )
 {
@@ -72,7 +65,7 @@ static int closestLodLevel( hop::TimeDuration timelineDuration )
 }
 
 hop::ProfilerView::ProfilerView( hop::Profiler::SourceType type, int processId, const char* str )
-   : _profiler( type, processId, str ), _lodLevel( 0 ), _draggedTrack( -1 ), _highlightValue( 0.0f )
+   : _profiler( type, processId, str ), _lodLevel( 0 ), _highlightValue( 0.0f )
 {
 }
 
@@ -97,14 +90,7 @@ void hop::ProfilerView::update( float /*deltaTimeMs*/, float globalTimeMs, TimeD
    // Update current lod level
    _lodLevel = closestLodLevel( timelineDuration );
 
-   // Update the lods for each tracks
-   const size_t trackCount = _trackViews.tracks.size();
-   for( size_t i = 0; i < trackCount; ++i )
-   {
-      auto& lodsData = _trackViews.tracks[i].lodsData;
-      const size_t latestLodIdx = lodsData.lods[0].empty() ? 0 : lodsData.lods[0].back().index;
-      appendLods( lodsData, _profiler.timelineTracks()[i]._traces.entries, latestLodIdx );
-   }
+   updateTimelineTracks( _trackViews, _profiler );
 
    //.update( deltaTimeMs );
    // _tracks.update( globalTimeMs, /*_timeline.duration()*/ );
@@ -134,7 +120,7 @@ void hop::ProfilerView::draw( float drawPosX, float drawPosY, const TimelineInfo
    }
    else
    {
-      TimelineTrackDrawData drawData = { _profiler, tlInfo, PADDED_TRACE_SIZE, _lodLevel, _highlightValue };
+      TimelineTrackDrawData drawData = { _profiler, tlInfo, _lodLevel, _highlightValue };
       hop::drawTimelineTracks( _trackViews, drawData, msgArray );
    }
 }
@@ -166,10 +152,10 @@ bool hop::ProfilerView::handleHotkey()
 bool hop::ProfilerView::handleMouse( float posX, float posY, bool lmClicked, bool rmClicked, float wheel )
 {
     bool handled = false;
-   if ( _draggedTrack > 0 )
+   if ( _trackViews.draggedTrack > 0 )
    {
       // Find the previous track that is visible
-      int i = _draggedTrack - 1;
+      //int i = _draggedTrack - 1;
       // while ( i > 0 && _tracks[i].empty() )
       // {
       //    --i;

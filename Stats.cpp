@@ -5,12 +5,13 @@
 namespace hop
 {
 
-Stats g_stats = { 0.0, 0.0, 0.0, 0.0, 0, 0, 0, 0, 0, 0, 0 };
+Stats g_stats = { 0.0, 0.0, 0.0, 0.0, 0.0, 0, 0, 0, 0, 0, 0, 0 };
 
 void drawStatsWindow( const Stats& stats )
 {
    ImGui::Text( "Total Frame time : %f ms\n---------------------", stats.frameTimeMs );
    ImGui::Text( "   Fetching took %f ms\n"
+                "   Updating took %f ms\n"
                 "   Drawing  took %f ms\n"
                 "      Traces     %f ms\n"
                 "      LockWaits  %f ms\n"
@@ -18,6 +19,7 @@ void drawStatsWindow( const Stats& stats )
                 "   Search   took %f ms\n"
                 "---------------------",
                 stats.fetchTimeMs,
+                stats.updatingTimeMs,
                 stats.drawingTimeMs,
                 stats.traceDrawingTimeMs,
                 stats.lockwaitsDrawingTimeMs,

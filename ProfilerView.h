@@ -33,7 +33,6 @@ private:
    Profiler _profiler;
    TimelineTrackViews _trackViews;
    int _lodLevel;
-   int _draggedTrack;
    float _highlightValue;
 };
 

@@ -21,14 +21,24 @@ static constexpr uint32_t SEPARATOR_COLOR        = 0xFF666666;
 static constexpr uint32_t SEPARATOR_HANDLE_COLOR = 0xFFAAAAAA;
 static const char* CTXT_MENU_STR = "Context Menu";
 
+// Static variable mutable from options
+static float TRACE_HEIGHT = 20.0f;
+static float TRACE_VERTICAL_PADDING = 2.0f;
+static float PADDED_TRACE_SIZE = TRACE_HEIGHT + TRACE_VERTICAL_PADDING;
+
 static bool hidden( const hop::TimelineTrackViews& tdi, const hop::TimelineTrackDrawData& data, int idx )
 {
-   return tdi.tracks[idx].trackHeight <= -data.paddedTraceHeight;
+   return tdi.tracks[idx].trackHeight <= -PADDED_TRACE_SIZE;
 }
 
 static float heightWithThreadLabel( const hop::TimelineTrackViews& tdi, int idx )
 {
     return tdi.tracks[idx].trackHeight + THREAD_LABEL_HEIGHT;
+}
+
+static void setTrackHeight( hop::TrackViewData& data, float height )
+{
+   data.trackHeight = hop::clamp( height, -PADDED_TRACE_SIZE, ((float)(data.maxDepth) + 1) * PADDED_TRACE_SIZE );
 }
 
 static bool drawSeparator( uint32_t threadIndex, bool highlightSeparator )
@@ -275,8 +285,8 @@ static size_t drawTraces(
       ImGui::PushStyleColor(ImGuiCol_ButtonHovered, zoneColors[zoneId] );
       ImGui::PushStyleColor(ImGuiCol_ButtonActive, zoneColors[zoneId] );
 
-      ImGui::SetCursorScreenPos( ImVec2( startPosPxl[i], posY + trackData._traces.entries.depths[absIndex] * data.paddedTraceHeight ) );
-      ImGui::Button( entryName, ImVec2( curDeltaPxl, data.paddedTraceHeight ) );
+      ImGui::SetCursorScreenPos( ImVec2( startPosPxl[i], posY + trackData._traces.entries.depths[absIndex] * PADDED_TRACE_SIZE ) );
+      ImGui::Button( entryName, ImVec2( curDeltaPxl, PADDED_TRACE_SIZE ) );
       if( ImGui::IsItemHovered() && !curLod.loded )
       {
          hoveredLodIdx = i;
@@ -286,19 +296,6 @@ static size_t drawTraces(
    }
    ImGui::PopStyleVar(); // Pop left-aligned
 
-   // Add the hovered trace to the highlighted traces
-   size_t hoveredAbsIndex = hop::INVALID_IDX;
-    if( hoveredLodIdx != hop::INVALID_IDX )
-    {
-       hoveredAbsIndex =  (lodStartIt + hoveredLodIdx)->index;
-   //    tracksView.tracks[threadIndex].highlightInfo.emplace_back(
-   //       hop::TraceHighlight{
-   //          startPosPxl[hoveredLodIdx],
-   //          posY + trackData._traces.entries.depths[hoveredAbsIndex] * data.paddedTraceHeight,
-   //          deltaPxl[hoveredLodIdx],
-   //          0xFFFFFFFF } );
-    }
-
    startPosPxl.clear();
    deltaPxl.clear();
 
@@ -306,7 +303,7 @@ static size_t drawTraces(
    hop::g_stats.traceDrawingTimeMs +=
        std::chrono::duration<double, std::milli>( ( drawEnd - drawStart ) ).count();
 
-   return hoveredAbsIndex;
+   return hoveredLodIdx == hop::INVALID_IDX ? hop::INVALID_IDX : (lodStartIt + hoveredLodIdx)->index;
 }
 
 static void addTraceToHighlight(
@@ -328,7 +325,7 @@ static void addTraceToHighlight(
    tracksView.tracks[threadIdx].highlightInfo.emplace_back(
          hop::TraceHighlight{
             startPxl,
-            data.timeline.canvasPosY + tracksView.tracks[threadIdx].absoluteDrawPos[1] + depth * data.paddedTraceHeight,
+            data.timeline.canvasPosY + tracksView.tracks[threadIdx].absoluteDrawPos[1] + depth * PADDED_TRACE_SIZE,
             deltaPxl,
             0xFFFFFFFF } );
 }
@@ -427,7 +424,7 @@ static void resizeAllTracksToFit( hop::TimelineTrackViews& info )
    for( size_t i = 0; i < lastThread; ++i )
       info.tracks[i].trackHeight;
 
-   info.tracks[lastThread].trackHeight = 9999.0f;
+   setTrackHeight( info.tracks[lastThread], 9999.0f );
 }
 
 static void setAllTracksCollapsed( hop::TimelineTrackViews& info, bool collapsed )
@@ -435,7 +432,7 @@ static void setAllTracksCollapsed( hop::TimelineTrackViews& info, bool collapsed
    const size_t trackCount = info.tracks.size();
    const float heightVal = collapsed ? -9999.0f : 9999.0f;
    for( size_t i = 0; i < trackCount; ++i )
-      info.tracks[i].trackHeight = heightVal;
+      setTrackHeight( info.tracks[i], heightVal );
 }
 
 static void drawContextMenu( hop::TimelineTrackViews& info )
@@ -524,12 +521,12 @@ static void drawSearchWindow(
       const Depth_t depth          = timelinetrack._traces.entries.depths[traceIdx];
 
       // If the thread was hidden, display it so we can see the selected trace
-      trackViews.tracks[selection.selectedThreadIdx].trackHeight = 9999.0f;
+      setTrackHeight( trackViews.tracks[selection.selectedThreadIdx], 9999.0f );
 
       const TimeStamp startTime = absStartTime - data.timeline.globalStartTime;
       const float verticalPosPxl = trackViews.tracks[selection.selectedThreadIdx].absoluteDrawPos[1] +
-                                   ( depth * data.paddedTraceHeight ) -
-                                   ( 3 * data.paddedTraceHeight );
+                                   ( depth * PADDED_TRACE_SIZE ) -
+                                   ( 3 * PADDED_TRACE_SIZE );
 
       // Create the timeline messages ( frame horizontally and vertically )
       msgArray->addFrameTimeMsg( startTime, absEndTime - absStartTime, true, false /*abs time*/ );
@@ -540,6 +537,29 @@ static void drawSearchWindow(
    {
       addTraceToHighlight( trackViews, data, selection.hoveredThreadIdx, selection.hoveredTraceIdx);
    }
+}
+
+void hop::updateTimelineTracks( TimelineTrackViews& tracksView, const hop::Profiler& profiler )
+{
+   HOP_PROF_FUNC();
+
+   const auto updateStart = std::chrono::system_clock::now();
+
+   const size_t trackCount = tracksView.tracks.size();
+   for( size_t i = 0; i < trackCount; ++i )
+   {
+      auto& lodsData = tracksView.tracks[i].lodsData;
+      const size_t latestLodIdx = lodsData.lods[0].empty() ? 0 : lodsData.lods[0].back().index;
+      const hop::Entries& entries = profiler.timelineTracks()[i]._traces.entries;
+      appendLods( lodsData, entries, latestLodIdx );
+
+      // Update max depth as well in case it has changed
+      tracksView.tracks[i].maxDepth = entries.maxDepth;
+   }
+
+   const auto updateEnd = std::chrono::system_clock::now();
+   hop::g_stats.updatingTimeMs +=
+       std::chrono::duration<double, std::milli>( ( updateEnd - updateStart ) ).count();
 }
 
 void hop::drawTimelineTracks( TimelineTrackViews& tracksView, const TimelineTrackDrawData& data, TimelineMsgArray* msgArray )
@@ -575,7 +595,7 @@ void hop::drawTimelineTracks( TimelineTrackViews& tracksView, const TimelineTrac
       const ImVec2 labelsDrawPosition = ImGui::GetCursorScreenPos();
       if( drawThreadLabel( labelsDrawPosition, customName, i, threadHidden ) )
       {
-         tracksView.tracks[i].trackHeight = threadHidden ? 99999.0f : -99999.0f;
+         setTrackHeight( tracksView.tracks[i], threadHidden ? 99999.0f : -99999.0f );
       }
 
       // Then draw the interesting stuff
@@ -595,6 +615,9 @@ void hop::drawTimelineTracks( TimelineTrackViews& tracksView, const TimelineTrac
             tracksView.draggedTrack = -1;
          }
       }
+
+      // Update the track height in case the max depth has changed
+      setTrackHeight( tracksView.tracks[i], tracksView.tracks[i].trackHeight );
 
       ImVec2 curDrawPos = absDrawPos;
       if( !threadHidden )
@@ -623,7 +646,7 @@ void hop::drawTimelineTracks( TimelineTrackViews& tracksView, const TimelineTrac
             const size_t hoveredIdx = drawTraces( i, curDrawPos.x, curDrawPos.y, tracksView, data );
             handleHoveredTrace( tracksView, data, i, hoveredIdx, msgArray );
 
-            drawHighlightedTraces( tracksView.tracks[i].highlightInfo, data.highlightValue, data.paddedTraceHeight );
+            drawHighlightedTraces( tracksView.tracks[i].highlightInfo, data.highlightValue, PADDED_TRACE_SIZE );
             tracksView.tracks[i].highlightInfo.clear();
 
             ImGui::PopClipRect();

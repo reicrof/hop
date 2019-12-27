@@ -8,6 +8,7 @@ namespace hop
    struct Stats
    {
       double frameTimeMs;
+      double updatingTimeMs;
       double drawingTimeMs;
       double traceDrawingTimeMs;
       double lockwaitsDrawingTimeMs;
