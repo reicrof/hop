@@ -61,18 +61,6 @@ static void displayBackgroundHelpMsg( uint32_t windowWidth, uint32_t windowHeigh
        helpTxt );
 }
 
-static float computeCanvasSize( const std::vector<hop::TrackDrawInfo>& tdi )
-{
-   float tracksHeight = 0.0f;
-   if( const size_t trackCount = tdi.size() )
-   {
-      tracksHeight = tdi[trackCount-1].absoluteDrawPos[1] + tdi[trackCount-1].trackHeight;
-      tracksHeight -= ( ImGui::GetWindowHeight() - tdi[0].absoluteDrawPos[1] );
-   }
-
-   return tracksHeight;
-}
-
 static int closestLodLevel( hop::TimeDuration timelineDuration )
 {
    int lodLvl = 0;
@@ -86,7 +74,6 @@ static int closestLodLevel( hop::TimeDuration timelineDuration )
 hop::ProfilerView::ProfilerView( hop::Profiler::SourceType type, int processId, const char* str )
    : _profiler( type, processId, str ), _lodLevel( 0 ), _draggedTrack( -1 ), _highlightValue( 0.0f )
 {
-   memset( &_contextMenu, 0, sizeof( _contextMenu ) );
 }
 
 void hop::ProfilerView::fetchClientData()
@@ -95,10 +82,10 @@ void hop::ProfilerView::fetchClientData()
 
    // Update the draw information according to new data
    const std::vector<TimelineTrack>& tlTrackData = _profiler.timelineTracks();
-   const int newTrackCount = tlTrackData.size() - _trackDrawInfos.size();
+   const int newTrackCount = tlTrackData.size() - _trackViews.tracks.size();
    if( newTrackCount )
    {
-      _trackDrawInfos.insert( _trackDrawInfos.end(), newTrackCount, TrackDrawInfo{} );
+      _trackViews.tracks.insert( _trackViews.tracks.end(), newTrackCount, TrackViewData{} );
    }
 }
 
@@ -111,10 +98,10 @@ void hop::ProfilerView::update( float /*deltaTimeMs*/, float globalTimeMs, TimeD
    _lodLevel = closestLodLevel( timelineDuration );
 
    // Update the lods for each tracks
-   const size_t trackCount = _trackDrawInfos.size();
+   const size_t trackCount = _trackViews.tracks.size();
    for( size_t i = 0; i < trackCount; ++i )
    {
-      auto& lodsData = _trackDrawInfos[i].lodsData;
+      auto& lodsData = _trackViews.tracks[i].lodsData;
       const size_t latestLodIdx = lodsData.lods[0].empty() ? 0 : lodsData.lods[0].back().index;
       appendLods( lodsData, _profiler.timelineTracks()[i]._traces.entries, latestLodIdx );
    }
@@ -141,15 +128,14 @@ void hop::ProfilerView::draw( float drawPosX, float drawPosY, const TimelineInfo
    HOP_PROF_FUNC();
    ImGui::SetCursorPos( ImVec2( drawPosX, drawPosY ) );
 
-   if ( _trackDrawInfos.size() == 0 && !data().recording() )
+   if ( _trackViews.tracks.size() == 0 && !data().recording() )
    {
       displayBackgroundHelpMsg( ImGui::GetWindowWidth(), ImGui::GetWindowHeight() );
    }
    else
    {
-      TimelineTrackDrawInfo tdi = {
-          _trackDrawInfos, _contextMenu, _draggedTrack, _profiler, tlInfo, PADDED_TRACE_SIZE, _lodLevel, _highlightValue};
-      hop::drawTimelineTracks( tdi, msgArray );
+      TimelineTrackDrawData drawData = { _profiler, tlInfo, PADDED_TRACE_SIZE, _lodLevel, _highlightValue };
+      hop::drawTimelineTracks( _trackViews, drawData, msgArray );
    }
 }
 
@@ -157,9 +143,13 @@ bool hop::ProfilerView::handleHotkey()
 {
    bool handled = false;
    // Let the tracks handle the hotkeys first.
-   //if ( _tracks.handleHotkey() ) return;
+   if( handleTimelineTracksHotKey( _trackViews ) )
+   {
+      return true;
+   }
 
-   if ( ImGui::IsKeyDown( ImGui::GetKeyIndex( ImGuiKey_Delete ) ) && _trackDrawInfos.size() > 0 )
+   // Otherwise, let the profiler handle it
+   if ( ImGui::IsKeyDown( ImGui::GetKeyIndex( ImGuiKey_Delete ) ) && _trackViews.tracks.size() > 0 )
    {
       if ( ImGui::IsWindowFocused( ImGuiFocusedFlags_RootAndChildWindows ) &&
            !hop::modalWindowShowing() )
@@ -185,8 +175,8 @@ bool hop::ProfilerView::handleMouse( float posX, float posY, bool lmClicked, boo
       //    --i;
       // }
 
-      //const float trackHeight = ( posY - _trackDrawInfos[i].localDrawPos[1] - THREAD_LABEL_HEIGHT );
-      //_trackDrawInfos[i].trackHeight = trackHeight;
+      //const float trackHeight = ( posY - _trackViews[i].localDrawPos[1] - THREAD_LABEL_HEIGHT );
+      //_trackViews[i].trackHeight = trackHeight;
 
       handled = true;
    }
@@ -197,7 +187,7 @@ bool hop::ProfilerView::handleMouse( float posX, float posY, bool lmClicked, boo
 void hop::ProfilerView::clear()
 {
    _profiler.clear();
-   _trackDrawInfos.clear();
+   _trackViews.tracks.clear();
 }
 
 float hop::ProfilerView::canvasHeight() const

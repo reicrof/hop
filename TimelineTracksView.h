@@ -3,6 +3,7 @@
 
 #include <vector>
 #include "Lod.h"
+#include "SearchWindow.h"
 
 namespace hop
 {
@@ -19,26 +20,32 @@ struct ContextMenu
    bool open{false};
 };
 
-struct TrackHighlightInfo
+struct TraceHighlight
 {
    float posPxl[2];
    float lengthPxl;
    unsigned color;
 };
 
-struct TrackDrawInfo
+struct TrackViewData
 {
    float absoluteDrawPos[2]; // The absolute position ignores the scroll but not the relative
    float trackHeight{9999.0f};
    LodsData lodsData;
-   std::vector< TrackHighlightInfo > highlightInfo;
+   std::vector< TraceHighlight > highlightInfo;
 };
 
-struct TimelineTrackDrawInfo
+struct TimelineTrackViews
 {
-   std::vector<TrackDrawInfo>& drawInfos;
-   ContextMenu& contextMenu;
-   int& draggedTrack;
+   std::vector<TrackViewData> tracks;
+   ContextMenu contextMenu;
+   SearchResult searchResult;
+   int draggedTrack{-1};
+};
+
+// External data coming from the profiler and the timeline
+struct TimelineTrackDrawData
+{
    const Profiler& profiler;
    const TimelineInfo& timeline;
    const float paddedTraceHeight;
@@ -46,7 +53,10 @@ struct TimelineTrackDrawInfo
    const float highlightValue;
 };
 
-void drawTimelineTracks( TimelineTrackDrawInfo& tdi, TimelineMsgArray* msgArray );
+void drawTimelineTracks( TimelineTrackViews& tracksView, const TimelineTrackDrawData& data, TimelineMsgArray* msgArray );
+
+// Returns true if a hotkey was handled by the timeline tracks
+bool handleTimelineTracksHotKey( TimelineTrackViews& tracksView );
 
 } // namespace hop
 

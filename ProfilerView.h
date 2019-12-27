@@ -31,8 +31,7 @@ public:
    const Profiler& data() const;
 private:
    Profiler _profiler;
-   std::vector<TrackDrawInfo> _trackDrawInfos;
-   ContextMenu _contextMenu;
+   TimelineTrackViews _trackViews;
    int _lodLevel;
    int _draggedTrack;
    float _highlightValue;

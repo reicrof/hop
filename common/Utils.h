@@ -56,8 +56,8 @@ inline int sign( const T& val )
 }
 
 // TODO template these 2 functions so they can be used with different time ratios
-template< typename T = uint64_t >
-static inline T cyclesToPxl( double windowWidth, uint64_t timelineRange, uint64_t cycles )
+template< typename T = float >
+static inline T cyclesToPxl( double windowWidth, uint64_t timelineRange, int64_t cycles )
 {
    const double cyclePerPxl = timelineRange / windowWidth;
    return static_cast<T>( (double)cycles / cyclePerPxl );

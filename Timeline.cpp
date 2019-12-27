@@ -22,6 +22,13 @@ static constexpr float TIMELINE_TOTAL_HEIGHT = 50.0f;
 
 using TimelineTextPositions = std::vector<std::pair<ImVec2, int64_t> >;
 
+static bool timelineIsHovered()
+{
+   // We don't want have the focus, it probably means we are handling another window. In this
+   // case, we do not want to handle the mouse
+   return ImGui::IsWindowHovered( ImGuiHoveredFlags_ChildWindows );
+}
+
 static void drawHoveringTimelineLine(float posInScreenX, float timelineStartPosY, const char* text )
 {
    constexpr float LINE_PADDING = 5.0f;
@@ -420,18 +427,23 @@ TimelineInfo Timeline::createTimelineInfo() const noexcept
 bool Timeline::handleMouse( float posX, float posY, bool /*lmPressed*/, bool /*rmPressed*/, float wheel )
 {
    bool handled = false;
-   const ImVec2 mousePosInCanvas =
-      ImVec2( posX - _timelineDrawPosition[0], posY - _timelineDrawPosition[1] );
 
-   handleMouseWheel( mousePosInCanvas.x, wheel );
-   handled = true;
+   // We do not want to handle the mousewheel if another window has the focus
+   if( timelineIsHovered() )
+   {
+      const ImVec2 mousePosInCanvas =
+         ImVec2( posX - _timelineDrawPosition[0], posY - _timelineDrawPosition[1] );
 
-   handleMouseDrag( mousePosInCanvas.x, mousePosInCanvas.y );
-   handled = true;
+      handleMouseWheel( mousePosInCanvas.x, wheel );
+      handled = true;
 
-   // Handle left mouse click to reset range selection
-   if( ImGui::GetIO().KeyCtrl && ImGui::IsMouseClicked( 0 ) )
-      _rangeSelectTimeStamp[0] = _rangeSelectTimeStamp[1] = 0;
+      handleMouseDrag( mousePosInCanvas.x, mousePosInCanvas.y );
+      handled = true;
+
+      // Handle left mouse click to reset range selection
+      if( ImGui::GetIO().KeyCtrl && ImGui::IsMouseClicked( 0 ) )
+         _rangeSelectTimeStamp[0] = _rangeSelectTimeStamp[1] = 0;
+   }
 
    return handled;
 }
@@ -510,10 +522,6 @@ void Timeline::handleMouseDrag( float mouseInCanvasX, float /*mouseInCanvasY*/ )
 
    const int64_t mousePosAsCycles =
           _timelineStart + pxlToCycles<int64_t>( windowWidthPxl, _duration, mouseInCanvasX );
-
-   // We don't want have the focus, it probably means we are handling another window. In this
-   // case, we do not want to handle the mouse
-   if( !ImGui::IsWindowFocused( ImGuiFocusedFlags_ChildWindows ) ) return;
 
    // Ctrl + left mouse dragging ( Range Selection )
    if( ImGui::GetIO().KeyCtrl && ImGui::IsMouseDragging( 0 ) )

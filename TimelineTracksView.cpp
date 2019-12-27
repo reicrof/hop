@@ -4,6 +4,7 @@
 #include "common/Utils.h"
 
 #include "Cursor.h"
+#include "SearchWindow.h"
 #include "TimelineTracksView.h"
 #include "TimelineInfo.h"
 #include "Options.h"
@@ -20,14 +21,14 @@ static constexpr uint32_t SEPARATOR_COLOR        = 0xFF666666;
 static constexpr uint32_t SEPARATOR_HANDLE_COLOR = 0xFFAAAAAA;
 static const char* CTXT_MENU_STR = "Context Menu";
 
-static bool hidden( const hop::TimelineTrackDrawInfo& tdi, int idx )
+static bool hidden( const hop::TimelineTrackViews& tdi, const hop::TimelineTrackDrawData& data, int idx )
 {
-   return tdi.drawInfos[idx].trackHeight <= -tdi.paddedTraceHeight;
+   return tdi.tracks[idx].trackHeight <= -data.paddedTraceHeight;
 }
 
-static float heightWithThreadLabel( const hop::TimelineTrackDrawInfo& tdi, int idx )
+static float heightWithThreadLabel( const hop::TimelineTrackViews& tdi, int idx )
 {
-    return tdi.drawInfos[idx].trackHeight + THREAD_LABEL_HEIGHT;
+    return tdi.tracks[idx].trackHeight + THREAD_LABEL_HEIGHT;
 }
 
 static bool drawSeparator( uint32_t threadIndex, bool highlightSeparator )
@@ -210,11 +211,12 @@ static size_t drawTraces(
     uint32_t threadIndex,
     const float posX,
     const float posY,
-    hop::TimelineTrackDrawInfo& info )
+    hop::TimelineTrackViews& tracksView,
+    const hop::TimelineTrackDrawData& data )
 {
    using namespace hop;
 
-   const std::vector<hop::TimelineTrack>& timelineTracksData = info.profiler.timelineTracks();
+   const std::vector<hop::TimelineTrack>& timelineTracksData = data.profiler.timelineTracks();
    const TimelineTrack& trackData = timelineTracksData[ threadIndex ];
 
    if ( trackData.empty() ) return hop::INVALID_IDX;
@@ -223,16 +225,16 @@ static size_t drawTraces(
    const auto drawStart = std::chrono::system_clock::now();
 
    // Get all the timing boundaries
-   const TimeStamp globalStartTime  = info.timeline.globalStartTime;
-   const TimeStamp relativeStart    = info.timeline.relativeStartTime;
-   const TimeDuration timelineRange = info.timeline.duration;
+   const TimeStamp globalStartTime  = data.timeline.globalStartTime;
+   const TimeStamp relativeStart    = data.timeline.relativeStartTime;
+   const TimeDuration timelineRange = data.timeline.duration;
 
    const TimeStamp absoluteStart    = relativeStart + globalStartTime;
    const TimeStamp absoluteEnd      = absoluteStart + timelineRange;
 
    // The time range to draw in absolute time
-   const LodsData& lodsData = info.drawInfos[threadIndex].lodsData;
-   const auto spanIndex = hop::visibleIndexSpan( lodsData.lods, info.lodLevel, absoluteStart, absoluteEnd );
+   const LodsData& lodsData = tracksView.tracks[threadIndex].lodsData;
+   const auto spanIndex = hop::visibleIndexSpan( lodsData.lods, data.lodLevel, absoluteStart, absoluteEnd );
 
    if( spanIndex.first == hop::INVALID_IDX ) return hop::INVALID_IDX;
 
@@ -245,7 +247,7 @@ static size_t drawTraces(
 
    const float windowWidthPxl = ImGui::GetWindowWidth();
 
-   const auto lodStartIt = lodsData.lods[info.lodLevel].begin() + spanIndex.first;
+   const auto lodStartIt = lodsData.lods[data.lodLevel].begin() + spanIndex.first;
    createDrawData( lodStartIt, traceCount, absoluteStart, timelineRange / windowWidthPxl, startPosPxl.data(), deltaPxl.data() );
 
    // Draw trace text left-aligned
@@ -264,7 +266,7 @@ static size_t drawTraces(
       const float curDeltaPxl = deltaPxl[i];
       if( curDeltaPxl > 5.0f && !curLod.loded )
       {
-         const char* name = getEntryName( info.profiler, trackData, absIndex );
+         const char* name = getEntryName( data.profiler, trackData, absIndex );
          buildTraceLabelWithTime( name, curLod.end - curLod.start, false, sizeof(entryName), entryName );
       }
 
@@ -273,8 +275,8 @@ static size_t drawTraces(
       ImGui::PushStyleColor(ImGuiCol_ButtonHovered, zoneColors[zoneId] );
       ImGui::PushStyleColor(ImGuiCol_ButtonActive, zoneColors[zoneId] );
 
-      ImGui::SetCursorScreenPos( ImVec2( startPosPxl[i], posY + trackData._traces.entries.depths[absIndex] * info.paddedTraceHeight ) );
-      ImGui::Button( entryName, ImVec2( curDeltaPxl, info.paddedTraceHeight ) );
+      ImGui::SetCursorScreenPos( ImVec2( startPosPxl[i], posY + trackData._traces.entries.depths[absIndex] * data.paddedTraceHeight ) );
+      ImGui::Button( entryName, ImVec2( curDeltaPxl, data.paddedTraceHeight ) );
       if( ImGui::IsItemHovered() && !curLod.loded )
       {
          hoveredLodIdx = i;
@@ -286,16 +288,16 @@ static size_t drawTraces(
 
    // Add the hovered trace to the highlighted traces
    size_t hoveredAbsIndex = hop::INVALID_IDX;
-   if( hoveredLodIdx != hop::INVALID_IDX )
-   {
-      hoveredAbsIndex =  (lodStartIt + hoveredLodIdx)->index;
-      info.drawInfos[threadIndex].highlightInfo.emplace_back(
-         hop::TrackHighlightInfo{
-            startPosPxl[hoveredLodIdx],
-            posY + trackData._traces.entries.depths[hoveredAbsIndex] * info.paddedTraceHeight,
-            deltaPxl[hoveredLodIdx],
-            0xFFFFFFFF } );
-   }
+    if( hoveredLodIdx != hop::INVALID_IDX )
+    {
+       hoveredAbsIndex =  (lodStartIt + hoveredLodIdx)->index;
+   //    tracksView.tracks[threadIndex].highlightInfo.emplace_back(
+   //       hop::TraceHighlight{
+   //          startPosPxl[hoveredLodIdx],
+   //          posY + trackData._traces.entries.depths[hoveredAbsIndex] * data.paddedTraceHeight,
+   //          deltaPxl[hoveredLodIdx],
+   //          0xFFFFFFFF } );
+    }
 
    startPosPxl.clear();
    deltaPxl.clear();
@@ -307,16 +309,42 @@ static size_t drawTraces(
    return hoveredAbsIndex;
 }
 
-static void handleHoveredTrace( hop::TimelineTrackDrawInfo& info, unsigned threadIndex, size_t hoveredIdx, hop::TimelineMsgArray* msgArray )
+static void addTraceToHighlight(
+   hop::TimelineTrackViews& tracksView,
+   const hop::TimelineTrackDrawData& data,
+   uint32_t threadIdx,
+   size_t traceIdx )
+{
+   const auto& tracksData        = data.profiler.timelineTracks()[threadIdx];
+   const hop::TimeStamp start    = tracksData._traces.entries.starts[traceIdx];
+   const hop::TimeStamp end      = tracksData._traces.entries.ends[traceIdx];
+   const hop::Depth_t depth      = tracksData._traces.entries.depths[traceIdx];
+   const hop::TimeDuration delta = end - start;
+
+   const float wndWidth = ImGui::GetWindowWidth();
+   const float startPxl = hop::cyclesToPxl<float>( wndWidth, data.timeline.duration, start - data.timeline.globalStartTime - data.timeline.relativeStartTime );
+   const float deltaPxl = hop::cyclesToPxl<float>( wndWidth, data.timeline.duration, delta );
+
+   tracksView.tracks[threadIdx].highlightInfo.emplace_back(
+         hop::TraceHighlight{
+            startPxl,
+            data.timeline.canvasPosY + tracksView.tracks[threadIdx].absoluteDrawPos[1] + depth * data.paddedTraceHeight,
+            deltaPxl,
+            0xFFFFFFFF } );
+}
+
+static void handleHoveredTrace( hop::TimelineTrackViews& trackView, const hop::TimelineTrackDrawData& data, unsigned threadIndex, size_t hoveredIdx, hop::TimelineMsgArray* msgArray )
 {
    const bool rightMouseClicked = ImGui::IsMouseReleased( 1 );
    if( hoveredIdx != hop::INVALID_IDX )
    {
-      const bool drawAsCycles = info.timeline.useCycles;
-      const hop::TimelineTrack& trackData = info.profiler.timelineTracks()[threadIndex];
+      addTraceToHighlight( trackView, data, threadIndex, hoveredIdx );
+
+      const bool drawAsCycles = data.timeline.useCycles;
+      const hop::TimelineTrack& trackData = data.profiler.timelineTracks()[threadIndex];
 
       ImGui::BeginTooltip();
-      drawHoveredEntryPopup( hoveredIdx, info.profiler, trackData, drawAsCycles );
+      drawHoveredEntryPopup( hoveredIdx, data.profiler, trackData, drawAsCycles );
       ImGui::EndTooltip();
 
       const bool leftMouseDblClicked = ImGui::IsMouseDoubleClicked( 0 );
@@ -327,29 +355,29 @@ static void handleHoveredTrace( hop::TimelineTrackDrawInfo& info, unsigned threa
          const hop::TimeStamp end = trackData._traces.entries.ends[hoveredIdx];
          msgArray->addFrameTimeMsg( start, end-start, true, true );
       }
-      else if( rightMouseClicked && !info.timeline.mouseDragging )
+      else if( rightMouseClicked && !data.timeline.mouseDragging )
       {
          ImGui::OpenPopup( CTXT_MENU_STR );
-         info.contextMenu.open = true;
-         info.contextMenu.traceClicked = true;
-         info.contextMenu.threadIndex = threadIndex;
-         info.contextMenu.traceId = hoveredIdx;
+         trackView.contextMenu.open = true;
+         trackView.contextMenu.traceClicked = true;
+         trackView.contextMenu.threadIndex = threadIndex;
+         trackView.contextMenu.traceId = hoveredIdx;
       }
    }
 
    // No trace were right clicked. Check for right click in canvas
    const float mousePosY = ImGui::GetMousePos().y;
-   if( rightMouseClicked && !info.contextMenu.open && !info.timeline.mouseDragging &&
-       mousePosY > info.timeline.canvasPosY )
+   if( rightMouseClicked && !trackView.contextMenu.open && !data.timeline.mouseDragging &&
+       mousePosY > data.timeline.canvasPosY )
    {
       ImGui::OpenPopup( CTXT_MENU_STR );
-      info.contextMenu.open = true;
+      trackView.contextMenu.open = true;
 
       // Find out where the right click happened to figure out which track needs to be profiled
       int i = 1;
-      for( ; i < (int)info.drawInfos.size(); ++i)
+      for( ; i < (int)trackView.tracks.size(); ++i)
       {
-         if( info.drawInfos[ i ].absoluteDrawPos[ 1 ] - THREAD_LABEL_HEIGHT > mousePosY )
+         if( trackView.tracks[ i ].absoluteDrawPos[ 1 ] - THREAD_LABEL_HEIGHT > mousePosY )
          {
             printf( "right clicked track %d\n", i );
             break;
@@ -368,7 +396,7 @@ static void handleHoveredTrace( hop::TimelineTrackDrawInfo& info, unsigned threa
 }
 
 static void drawHighlightedTraces(
-    const std::vector<hop::TrackHighlightInfo>& highInfo,
+    const std::vector<hop::TraceHighlight>& highInfo,
     float highlightVal,
     float traceHeight )
 {
@@ -383,10 +411,10 @@ static void drawHighlightedTraces(
    }
 }
 
-static void resizeAllTracksToFit( hop::TimelineTrackDrawInfo& info )
+static void resizeAllTracksToFit( hop::TimelineTrackViews& info )
 {
    float visibleTrackCount = 0;
-   for( auto& i : info.drawInfos )
+   for( auto& i : info.tracks )
       if( !i.lodsData.latestLodPerDepth.empty() ) ++visibleTrackCount;
 
    float timelineCanvasHeight = ImGui::GetIO().DisplaySize.y;
@@ -395,22 +423,22 @@ static void resizeAllTracksToFit( hop::TimelineTrackDrawInfo& info )
    const float heightPerTrack = totalTraceHeight / visibleTrackCount;
 
    // Autofit all track except the last one
-   const size_t lastThread = info.drawInfos.size() - 1;
+   const size_t lastThread = info.tracks.size() - 1;
    for( size_t i = 0; i < lastThread; ++i )
-      info.drawInfos[i].trackHeight;
+      info.tracks[i].trackHeight;
 
-   info.drawInfos[lastThread].trackHeight = 9999.0f;
+   info.tracks[lastThread].trackHeight = 9999.0f;
 }
 
-static void setAllTracksCollapsed( hop::TimelineTrackDrawInfo& info, bool collapsed )
+static void setAllTracksCollapsed( hop::TimelineTrackViews& info, bool collapsed )
 {
-   const size_t trackCount = info.drawInfos.size();
+   const size_t trackCount = info.tracks.size();
    const float heightVal = collapsed ? -9999.0f : 9999.0f;
    for( size_t i = 0; i < trackCount; ++i )
-      info.drawInfos[i].trackHeight = heightVal;
+      info.tracks[i].trackHeight = heightVal;
 }
 
-static void drawContextMenu( hop::TimelineTrackDrawInfo& info )
+static void drawContextMenu( hop::TimelineTrackViews& info )
 {
    if ( info.contextMenu.open )
    {
@@ -475,28 +503,67 @@ static void drawContextMenu( hop::TimelineTrackDrawInfo& info )
    }
 }
 
-void hop::drawTimelineTracks( TimelineTrackDrawInfo& info, TimelineMsgArray* msgArray )
+static void drawSearchWindow(
+   hop::TimelineTrackViews& trackViews,
+   const hop::TimelineTrackDrawData& data,
+   hop::TimelineMsgArray* msgArray )
+{
+   HOP_PROF_FUNC();
+   using namespace hop;
+
+   const auto& tracksData = data.profiler.timelineTracks();
+   const SearchSelection selection = drawSearchResult( trackViews.searchResult, data.profiler.stringDb(), data.timeline, tracksData );
+
+   if ( selection.selectedTraceIdx != (size_t)-1 && selection.selectedThreadIdx != (uint32_t)-1 )
+   {
+      const auto& timelinetrack    = tracksData[selection.selectedThreadIdx];
+      const size_t traceIdx        = selection.selectedTraceIdx;
+
+      const TimeStamp absStartTime = timelinetrack._traces.entries.starts[traceIdx];
+      const TimeStamp absEndTime   = timelinetrack._traces.entries.ends[traceIdx];
+      const Depth_t depth          = timelinetrack._traces.entries.depths[traceIdx];
+
+      // If the thread was hidden, display it so we can see the selected trace
+      trackViews.tracks[selection.selectedThreadIdx].trackHeight = 9999.0f;
+
+      const TimeStamp startTime = absStartTime - data.timeline.globalStartTime;
+      const float verticalPosPxl = trackViews.tracks[selection.selectedThreadIdx].absoluteDrawPos[1] +
+                                   ( depth * data.paddedTraceHeight ) -
+                                   ( 3 * data.paddedTraceHeight );
+
+      // Create the timeline messages ( frame horizontally and vertically )
+      msgArray->addFrameTimeMsg( startTime, absEndTime - absStartTime, true, false /*abs time*/ );
+      msgArray->addMoveVerticalPositionMsg( verticalPosPxl, true );
+   }
+
+   if ( selection.hoveredTraceIdx != (size_t)-1 && selection.hoveredThreadIdx != (uint32_t)-1 )
+   {
+      addTraceToHighlight( trackViews, data, selection.hoveredThreadIdx, selection.hoveredTraceIdx);
+   }
+}
+
+void hop::drawTimelineTracks( TimelineTrackViews& tracksView, const TimelineTrackDrawData& data, TimelineMsgArray* msgArray )
 {
    //drawTraceDetailsWindow( info, timelineActions );
-   //drawSearchWindow( info, timelineActions );
+   drawSearchWindow( tracksView, data, msgArray );
    //drawTraceStats( _traceStats, info.strDb, info.timeline.useCycles );
 
-   ImGui::SetCursorScreenPos( ImVec2( info.timeline.canvasPosX, info.timeline.canvasPosY ) );
+   ImGui::SetCursorScreenPos( ImVec2( data.timeline.canvasPosX, data.timeline.canvasPosY ) );
 
    // Get data from profiler
-   const std::vector<TimelineTrack>& timelineTracksData = info.profiler.timelineTracks();
-   const StringDb& stringDb                             = info.profiler.stringDb();
+   const std::vector<TimelineTrack>& timelineTracksData = data.profiler.timelineTracks();
+   const StringDb& stringDb                             = data.profiler.stringDb();
 
-   const float timelineOffsetY = info.timeline.canvasPosY + info.timeline.scrollAmount;
-   assert( timelineTracksData.size() == info.drawInfos.size() );
-   for ( size_t i = 0; i < info.drawInfos.size(); ++i )
+   const float timelineOffsetY = data.timeline.canvasPosY + data.timeline.scrollAmount;
+   assert( timelineTracksData.size() == tracksView.tracks.size() );
+   for ( size_t i = 0; i < tracksView.tracks.size(); ++i )
    {
       // Skip empty threads
       const TimelineTrack& trackData = timelineTracksData[i];
       if( trackData.empty() ) continue;
 
-      const bool threadHidden = hidden( info, i );
-      const float trackHeight = heightWithThreadLabel( info, i );
+      const bool threadHidden = hidden( tracksView, data, i );
+      const float trackHeight = heightWithThreadLabel( tracksView, i );
 
       // First draw the separator of the track
       const bool highlightSeparator = ImGui::IsRootWindowOrAnyChildFocused();
@@ -508,24 +575,24 @@ void hop::drawTimelineTracks( TimelineTrackDrawInfo& info, TimelineMsgArray* msg
       const ImVec2 labelsDrawPosition = ImGui::GetCursorScreenPos();
       if( drawThreadLabel( labelsDrawPosition, customName, i, threadHidden ) )
       {
-         info.drawInfos[i].trackHeight = threadHidden ? 99999.0f : -99999.0f;
+         tracksView.tracks[i].trackHeight = threadHidden ? 99999.0f : -99999.0f;
       }
 
       // Then draw the interesting stuff
       const auto absDrawPos = ImGui::GetCursorScreenPos();
-      info.drawInfos[i].absoluteDrawPos[0] = absDrawPos.x;
-      info.drawInfos[i].absoluteDrawPos[1] = absDrawPos.y + info.timeline.scrollAmount - timelineOffsetY;
+      tracksView.tracks[i].absoluteDrawPos[0] = absDrawPos.x;
+      tracksView.tracks[i].absoluteDrawPos[1] = absDrawPos.y + data.timeline.scrollAmount - timelineOffsetY;
 
       // Handle track resize
-      if ( separatorHovered || info.draggedTrack > 0 )
+      if ( separatorHovered || tracksView.draggedTrack > 0 )
       {
-         if ( info.draggedTrack == -1 && ImGui::IsMouseClicked( 0 ) )
+         if ( tracksView.draggedTrack == -1 && ImGui::IsMouseClicked( 0 ) )
          {
-            info.draggedTrack = (int)i;
+            tracksView.draggedTrack = (int)i;
          }
          if( ImGui::IsMouseReleased( 0 ) )
          {
-            info.draggedTrack = -1;
+            tracksView.draggedTrack = -1;
          }
       }
 
@@ -553,11 +620,11 @@ void hop::drawTimelineTracks( TimelineTrackDrawInfo& info, TimelineMsgArray* msg
 
             // Draw the lock waits (before traces so that they are not hiding them)
             // drawLockWaits( i, curDrawPos.x, curDrawPos.y, info, timelineActions );
-            const size_t hoveredIdx = drawTraces( i, curDrawPos.x, curDrawPos.y, info );
-            handleHoveredTrace( info, i, hoveredIdx, msgArray );
+            const size_t hoveredIdx = drawTraces( i, curDrawPos.x, curDrawPos.y, tracksView, data );
+            handleHoveredTrace( tracksView, data, i, hoveredIdx, msgArray );
 
-            drawHighlightedTraces( info.drawInfos[i].highlightInfo, info.highlightValue, info.paddedTraceHeight );
-            info.drawInfos[i].highlightInfo.clear();
+            drawHighlightedTraces( tracksView.tracks[i].highlightInfo, data.highlightValue, data.paddedTraceHeight );
+            tracksView.tracks[i].highlightInfo.clear();
 
             ImGui::PopClipRect();
          }
@@ -568,5 +635,17 @@ void hop::drawTimelineTracks( TimelineTrackDrawInfo& info, TimelineMsgArray* msg
       ImGui::SetCursorScreenPos( curDrawPos );
    }
 
-   drawContextMenu( info );
+   drawContextMenu( tracksView );
+}
+
+bool hop::handleTimelineTracksHotKey( hop::TimelineTrackViews& tracksView )
+{
+   if( ImGui::GetIO().KeyCtrl && ImGui::IsKeyPressed( 'f' ) )
+   {
+      tracksView.searchResult.searchWindowOpen = true;
+      tracksView.searchResult.focusSearchWindow = true;
+      return true;
+   }
+
+   return false;
 }
