@@ -31,7 +31,7 @@ public:
    const Profiler& data() const;
 private:
    Profiler _profiler;
-   TimelineTrackViews _trackViews;
+   TimelineTracksView _trackViews;
    int _lodLevel;
    float _highlightValue;
 };

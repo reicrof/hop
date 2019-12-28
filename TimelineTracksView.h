@@ -10,39 +10,6 @@ namespace hop
 class Profiler;
 class TimelineMsgArray;
 struct TimelineInfo;
-struct ContextMenu;
-
-struct ContextMenu
-{
-   size_t traceId{0};
-   uint32_t threadIndex{0};
-   bool traceClicked{false};
-   bool open{false};
-};
-
-struct TraceHighlight
-{
-   float posPxl[2];
-   float lengthPxl;
-   unsigned color;
-};
-
-struct TrackViewData
-{
-   LodsData lodsData;
-   std::vector< TraceHighlight > highlightInfo;
-   float absoluteDrawPos[2]; // The absolute position ignores the scroll but not the relative
-   float trackHeight{9999.0f};
-   Depth_t maxDepth;
-};
-
-struct TimelineTrackViews
-{
-   std::vector<TrackViewData> tracks;
-   ContextMenu contextMenu;
-   SearchResult searchResult;
-   int draggedTrack{-1};
-};
 
 // External data coming from the profiler and the timeline
 struct TimelineTrackDrawData
@@ -53,12 +20,58 @@ struct TimelineTrackDrawData
    const float highlightValue;
 };
 
-void updateTimelineTracks( TimelineTrackViews& tracksView, const hop::Profiler& profiler );
+class TimelineTracksView
+{
+public:
+   uint32_t count() const;
+   bool hidden( uint32_t trackIdx ) const;
+   float trackHeightWithThreadLabel( uint32_t trackIdx ) const;
 
-void drawTimelineTracks( TimelineTrackViews& tracksView, const TimelineTrackDrawData& data, TimelineMsgArray* msgArray );
+   void update( const Profiler& profiler );
+   void draw( const TimelineTrackDrawData& data, TimelineMsgArray* msgArray );
 
-// Returns true if a hotkey was handled by the timeline tracks
-bool handleTimelineTracksHotKey( TimelineTrackViews& tracksView );
+   // Returns true if the mouse/keys was handled by the tracks
+   bool handleHotkeys();
+   bool handleMouse( float posX, float posY, bool lmClicked, bool rmClicked, float wheel );
+
+   void setTrackHeight( uint32_t trackIdx, float height );
+   void clear();
+
+   // Per track view data
+   struct TrackViewData
+   {
+      LodsData lodsData;
+      float absoluteDrawPos[2];
+      float relativePosY; // The absolute position ignores the scroll but not the relative
+      float trackHeight{9999.0f};
+      Depth_t maxDepth;
+   };
+   struct ContextMenu
+   {
+      size_t traceId{0};
+      uint32_t threadIndex{0};
+      bool traceClicked{false};
+      bool open{false};
+   };
+
+private:
+   void handleHoveredTrace(
+      const hop::TimelineTrackDrawData& data,
+      unsigned threadIndex,
+      size_t hoveredIdx,
+      hop::TimelineMsgArray* msgArray );
+   SearchSelection drawSearchWindow(
+      const hop::TimelineTrackDrawData& data,
+      hop::TimelineMsgArray* msgArray );
+   void drawContextMenu();
+   void resizeAllTracksToFit();
+   void setAllTracksCollapsed( bool collapsed );
+
+   std::vector<TrackViewData> _tracks;
+   ContextMenu _contextMenu;
+   SearchResult _searchResult;
+   int _draggedTrack{-1};
+};
 
 } // namespace hop
 

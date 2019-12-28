@@ -72,14 +72,6 @@ hop::ProfilerView::ProfilerView( hop::Profiler::SourceType type, int processId, 
 void hop::ProfilerView::fetchClientData()
 {
    _profiler.fetchClientData();
-
-   // Update the draw information according to new data
-   const std::vector<TimelineTrack>& tlTrackData = _profiler.timelineTracks();
-   const int newTrackCount = tlTrackData.size() - _trackViews.tracks.size();
-   if( newTrackCount )
-   {
-      _trackViews.tracks.insert( _trackViews.tracks.end(), newTrackCount, TrackViewData{} );
-   }
 }
 
 void hop::ProfilerView::update( float /*deltaTimeMs*/, float globalTimeMs, TimeDuration timelineDuration )
@@ -90,7 +82,7 @@ void hop::ProfilerView::update( float /*deltaTimeMs*/, float globalTimeMs, TimeD
    // Update current lod level
    _lodLevel = closestLodLevel( timelineDuration );
 
-   updateTimelineTracks( _trackViews, _profiler );
+   _trackViews.update( _profiler );
 
    //.update( deltaTimeMs );
    // _tracks.update( globalTimeMs, /*_timeline.duration()*/ );
@@ -114,14 +106,14 @@ void hop::ProfilerView::draw( float drawPosX, float drawPosY, const TimelineInfo
    HOP_PROF_FUNC();
    ImGui::SetCursorPos( ImVec2( drawPosX, drawPosY ) );
 
-   if ( _trackViews.tracks.size() == 0 && !data().recording() )
+   if ( _trackViews.count() == 0 && !data().recording() )
    {
       displayBackgroundHelpMsg( ImGui::GetWindowWidth(), ImGui::GetWindowHeight() );
    }
    else
    {
       TimelineTrackDrawData drawData = { _profiler, tlInfo, _lodLevel, _highlightValue };
-      hop::drawTimelineTracks( _trackViews, drawData, msgArray );
+      _trackViews.draw( drawData, msgArray );
    }
 }
 
@@ -129,13 +121,13 @@ bool hop::ProfilerView::handleHotkey()
 {
    bool handled = false;
    // Let the tracks handle the hotkeys first.
-   if( handleTimelineTracksHotKey( _trackViews ) )
+   if( _trackViews.handleHotkeys() )
    {
       return true;
    }
 
    // Otherwise, let the profiler handle it
-   if ( ImGui::IsKeyDown( ImGui::GetKeyIndex( ImGuiKey_Delete ) ) && _trackViews.tracks.size() > 0 )
+   if ( ImGui::IsKeyDown( ImGui::GetKeyIndex( ImGuiKey_Delete ) ) && _trackViews.count() > 0 )
    {
       if ( ImGui::IsWindowFocused( ImGuiFocusedFlags_RootAndChildWindows ) &&
            !hop::modalWindowShowing() )
@@ -151,29 +143,13 @@ bool hop::ProfilerView::handleHotkey()
 
 bool hop::ProfilerView::handleMouse( float posX, float posY, bool lmClicked, bool rmClicked, float wheel )
 {
-    bool handled = false;
-   if ( _trackViews.draggedTrack > 0 )
-   {
-      // Find the previous track that is visible
-      //int i = _draggedTrack - 1;
-      // while ( i > 0 && _tracks[i].empty() )
-      // {
-      //    --i;
-      // }
-
-      //const float trackHeight = ( posY - _trackViews[i].localDrawPos[1] - THREAD_LABEL_HEIGHT );
-      //_trackViews[i].trackHeight = trackHeight;
-
-      handled = true;
-   }
-
-   return handled;
+   return _trackViews.handleMouse( posX, posY, lmClicked, rmClicked, wheel );
 }
 
 void hop::ProfilerView::clear()
 {
    _profiler.clear();
-   _trackViews.tracks.clear();
+   _trackViews.clear();
 }
 
 float hop::ProfilerView::canvasHeight() const
