@@ -555,7 +555,7 @@ void TimelineTracksView::draw( const TimelineTrackDrawData& data, TimelineMsgArr
             // drawLockWaits( i, curDrawPos.x, curDrawPos.y, info, timelineActions );
             const size_t hoveredIdx = drawTraces( i, curDrawPos.x, curDrawPos.y, _tracks, data );
 
-            //handleHoveredTrace( _contextMenu, data, i, hoveredIdx, msgArray );
+            handleHoveredTrace( _contextMenu, _tracks, data, i, hoveredIdx, msgArray );
             if( hoveredIdx != hop::INVALID_IDX )
             {
                addTraceToHighlight( _tracks, data, i, hoveredIdx, highlightInfo );

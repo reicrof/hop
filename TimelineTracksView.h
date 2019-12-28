@@ -55,11 +55,6 @@ public:
    };
 
 private:
-   void handleHoveredTrace(
-      const hop::TimelineTrackDrawData& data,
-      unsigned threadIndex,
-      size_t hoveredIdx,
-      hop::TimelineMsgArray* msgArray );
    SearchSelection drawSearchWindow(
       const hop::TimelineTrackDrawData& data,
       hop::TimelineMsgArray* msgArray );
