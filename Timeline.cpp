@@ -24,9 +24,14 @@ using TimelineTextPositions = std::vector<std::pair<ImVec2, int64_t> >;
 
 static bool timelineIsHovered()
 {
-   // We don't want have the focus, it probably means we are handling another window. In this
-   // case, we do not want to handle the mouse
-   return ImGui::IsWindowHovered( ImGuiHoveredFlags_ChildWindows );
+   // The timeline is not hovered, it probably means we are handling another window.
+   return ImGui::IsWindowHovered( ImGuiHoveredFlags_RootAndChildWindows );
+}
+
+static bool timelineIsFocused()
+{
+   // The timeline is not focused, it probably means we are handling another window or clicking a trace.
+   return ImGui::IsWindowFocused(ImGuiHoveredFlags_RootAndChildWindows);
 }
 
 static void drawHoveringTimelineLine(float posInScreenX, float timelineStartPosY, const char* text )
@@ -428,21 +433,26 @@ bool Timeline::handleMouse( float posX, float posY, bool /*lmPressed*/, bool /*r
 {
    bool handled = false;
 
+   const ImVec2 mousePosInCanvas =
+         ImVec2( posX - _timelineDrawPosition[0], posY - _timelineDrawPosition[1] );
+
    // We do not want to handle the mousewheel if another window has the focus
    if( timelineIsHovered() )
    {
-      const ImVec2 mousePosInCanvas =
-         ImVec2( posX - _timelineDrawPosition[0], posY - _timelineDrawPosition[1] );
-
       handleMouseWheel( mousePosInCanvas.x, wheel );
       handled = true;
+   }
 
+   // When clicking in the timeline, but on a trace, imgui consider it has loosing the hover,
+   // but still having the focus. So we need to check for the focus instead of the hover
+   if( timelineIsFocused() )
+   {
       handleMouseDrag( mousePosInCanvas.x, mousePosInCanvas.y );
-      handled = true;
 
       // Handle left mouse click to reset range selection
       if( ImGui::GetIO().KeyCtrl && ImGui::IsMouseClicked( 0 ) )
          _rangeSelectTimeStamp[0] = _rangeSelectTimeStamp[1] = 0;
+      handled = true;
    }
 
    return handled;
@@ -519,7 +529,6 @@ void Timeline::handleMouseWheel( float mousePosX, float mouseWheel )
 void Timeline::handleMouseDrag( float mouseInCanvasX, float /*mouseInCanvasY*/ )
 {
    const float windowWidthPxl = ImGui::GetWindowWidth();
-
    const int64_t mousePosAsCycles =
           _timelineStart + pxlToCycles<int64_t>( windowWidthPxl, _duration, mouseInCanvasX );
 

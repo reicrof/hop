@@ -450,10 +450,8 @@ void TimelineTracksView::update( const hop::Profiler& profiler )
    const size_t trackCount = _tracks.size();
    for( size_t i = 0; i < trackCount; ++i )
    {
-      auto& lodsData = _tracks[i].lodsData;
-      const size_t latestLodIdx = lodsData.lods[0].empty() ? 0 : lodsData.lods[0].back().index;
       const hop::Entries& entries = profiler.timelineTracks()[i]._traces.entries;
-      appendLods( lodsData, entries, latestLodIdx );
+      appendLods( _tracks[i].lodsData, entries );
 
       // Update max depth as well in case it has changed
       _tracks[i].maxDepth = entries.maxDepth;

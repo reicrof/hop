@@ -30,12 +30,13 @@ struct LodsData
 {
    LodsArray lods;
    std::vector< std::array< LodInfo, LOD_COUNT > > latestLodPerDepth;
+   size_t lastTraceIdx{0};
 };
 
 void setupLODResolution( uint32_t sreenResolutionX );
 
-// Create and appends lods starting at start index.
-void appendLods( LodsData& lodData, const Entries& entries, size_t startIndex );
+// Create and appends lods
+void appendLods( LodsData& lodData, const Entries& entries );
 
  std::pair<size_t, size_t> visibleIndexSpan(
      const LodsArray& lodsArr,

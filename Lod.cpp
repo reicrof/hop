@@ -5,8 +5,8 @@
 
 #include <algorithm>
 
-static constexpr float MIN_TRACE_LENGTH_PXL = 8.0f;
-static constexpr float MIN_GAP_PXL = 4.0f;
+static constexpr float MIN_TRACE_LENGTH_PXL = 10.0f;
+static constexpr float MIN_GAP_PXL = 5.0f;
 static hop::TimeDuration LOD_MIN_GAP_CYCLES[hop::LOD_COUNT] = {0};
 static hop::TimeDuration LOD_MIN_TRACE_LENGTH_PXL[hop::LOD_COUNT] = {0};
 
@@ -39,36 +39,53 @@ static hop::LodInfo createLod( size_t index, hop::TimeStamp start, hop::TimeStam
    LodInfo computedLod = prevLod;
    if( lastTraceSmallEnough && newTraceSmallEnough && timeBetweenTraceSmallEnough )
    {
-      computedLod.end   = end;
       computedLod.loded = true;
       assert(computedLod.index != hop::INVALID_IDX);
    }
    else
    {
-      if( computedLod.index != -1 )
+      if (computedLod.index != -1) {
          resultLods[LODLVL].push_back( computedLod );
+      }
 
       computedLod.start = start;
-      computedLod.end   = end;
       computedLod.index = index;
       computedLod.loded = false;
    }
 
+   computedLod.end = end;
+
    return computedLod;
 }
 
-static void initializeLodsPerDepth( LodsData& lodData, const Entries& entries )
+// Adds missing 'latest' entry for new depths and returns the end timestamp of the earliest modifiable lod
+static std::array<size_t, LOD_COUNT> initializeLodsPerDepth( LodsData& lodData, const Entries& entries )
 {
    HOP_PROF_FUNC();
-   const size_t maxDepth = entries.maxDepth + 1;
    const size_t curDepth = lodData.latestLodPerDepth.size();
 
+   // Find the earliest possible lodinfo that could be modified
+   const size_t earliestIndex = curDepth == 0 ? 0 : hop::INVALID_IDX;
+   std::array<size_t, LOD_COUNT> earliestEnd;
+   std::fill( earliestEnd.begin(), earliestEnd.end(), earliestIndex );
+   for( unsigned i = 0; i < curDepth; ++i )
+   {
+      for( unsigned j = 0; j < LOD_COUNT; ++j )
+      {
+         earliestEnd[j] = std::min( earliestEnd[j], lodData.latestLodPerDepth[i][j].end );
+      }
+   }
+
+   // Then add the missing lodinfo for the new 'depths'
+   const size_t maxDepth = entries.maxDepth + 1;
    for( size_t i = 0; i < maxDepth - curDepth; ++i )
    {
       Depth_t depth = curDepth + i;
       lodData.latestLodPerDepth.emplace_back();
       std::fill( lodData.latestLodPerDepth.back().begin(), lodData.latestLodPerDepth.back().end(), LodInfo{ hop::INVALID_IDX, hop::INVALID_IDX, hop::INVALID_IDX, depth, false } );
    }
+
+   return earliestEnd;
 }
 
 template <unsigned N>
@@ -84,18 +101,15 @@ void createAllLods<0>(size_t i, hop::TimeStamp start, hop::TimeStamp end, hop::T
    lods[0] = createLod<0>( i, start, end, delta, lods[0], resultLods );
 }
 
-void appendLods( LodsData& lodData, const Entries& entries, size_t startIndex )
+void appendLods( LodsData& lodData, const Entries& entries )
 {
+   if( entries.ends.empty() ) return;
+
+   HOP_ZONE( HOP_ZONE_COLOR_2 );
    HOP_PROF_FUNC();
-   // Keep the initial sizes for each lods for the sort at the end
-   std::array< size_t, LOD_COUNT > initialLodsCount;
-   for (size_t i = 0; i < LOD_COUNT; ++i)
-   {
-      initialLodsCount[i] = lodData.lods[i].size();
-   }
+   const std::array<size_t, LOD_COUNT> earliestEnds = initializeLodsPerDepth( lodData, entries );
 
-   initializeLodsPerDepth( lodData, entries );
-
+   const size_t startIndex = lodData.lastTraceIdx;
    const size_t entriesCount = entries.starts.size();
    for( size_t i = startIndex; i < entriesCount; ++i )
    {
@@ -111,9 +125,15 @@ void appendLods( LodsData& lodData, const Entries& entries, size_t startIndex )
 
    for( size_t i = 0; i < LOD_COUNT; ++i )
    {
-      hop::insertionSort( lodData.lods[i].begin() + initialLodsCount[i], lodData.lods[i].end() );
-      assert_is_sorted( lodData.lods[i].begin() + initialLodsCount[i], lodData.lods[i].end() );
+      HOP_PROF_SPLIT( "Sorting lods" );
+      const auto lodStartIt = lodData.lods[i].begin();
+      auto it = std::lower_bound(lodStartIt, lodData.lods[i].end(), LodInfo{ earliestEnds[i], earliestEnds[i], 0, 0, false });
+      auto dist = std::distance( lodStartIt, it );
+      hop::insertionSort( lodStartIt + dist, lodData.lods[i].end() );
+      assert_is_sorted( lodStartIt, lodData.lods[i].end() );
    }
+
+   lodData.lastTraceIdx = entriesCount;
 }
 
 std::pair<size_t, size_t> visibleIndexSpan(
