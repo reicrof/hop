@@ -26,15 +26,11 @@ static float TRACE_HEIGHT = 20.0f;
 static float TRACE_VERTICAL_PADDING = 2.0f;
 static float PADDED_TRACE_SIZE = TRACE_HEIGHT + TRACE_VERTICAL_PADDING;
 
-namespace
+struct HighlightInfo
 {
-struct TraceHighlight
-{
-   float posPxl[2];
-   float lengthPxl;
-   unsigned color;
+   uint32_t threadIdx;
+   size_t traceIdx;
 };
-}
 
 static void resetContextMenu( hop::TimelineTracksView::ContextMenu* ctxt )
 {
@@ -306,43 +302,32 @@ static size_t drawTraces(
    return hoveredLodIdx == hop::INVALID_IDX ? hop::INVALID_IDX : (lodStartIt + hoveredLodIdx)->index;
 }
 
-static void addTraceToHighlight(
-   const std::vector<hop::TimelineTracksView::TrackViewData>& tracksView,
-   const hop::TimelineTrackDrawData& data,
-   uint32_t threadIdx,
-   size_t traceIdx,
-   std::vector<TraceHighlight>& highlightInfo )
-{
-   const auto& tracksData        = data.profiler.timelineTracks()[threadIdx];
-   const hop::TimeStamp start    = tracksData._traces.entries.starts[traceIdx];
-   const hop::TimeStamp end      = tracksData._traces.entries.ends[traceIdx];
-   const hop::Depth_t depth      = tracksData._traces.entries.depths[traceIdx];
-   const hop::TimeDuration delta = end - start;
-
-   const float wndWidth = ImGui::GetWindowWidth();
-   const float startPxl = hop::cyclesToPxl<float>( wndWidth, data.timeline.duration, start - data.timeline.globalStartTime - data.timeline.relativeStartTime );
-   const float deltaPxl = hop::cyclesToPxl<float>( wndWidth, data.timeline.duration, delta );
-
-   highlightInfo.emplace_back(
-         TraceHighlight{
-            startPxl,
-            data.timeline.canvasPosY + tracksView[threadIdx].absoluteDrawPos[1] + depth * PADDED_TRACE_SIZE,
-            deltaPxl,
-            0xFFFFFFFF } );
-}
-
 static void drawHighlightedTraces(
-    const std::vector<TraceHighlight>& highInfo,
+    const std::vector<hop::TimelineTracksView::TrackViewData>& tracksView,
+    const hop::TimelineTrackDrawData& data,
+    const std::vector<HighlightInfo>& traceToHighlight,
     float highlightVal )
 {
-   ImDrawList* drawList = ImGui::GetWindowDrawList();
-   for( const auto& d : highInfo )
+   ImDrawList* drawList               = ImGui::GetWindowDrawList();
+   const float wndWidth               = ImGui::GetWindowWidth();
+   const uint32_t color               = 0x00FFFFFF | (uint32_t(highlightVal * 255.0f) << 24);
+   const hop::TimeDuration tlDuration = data.timeline.duration;
+   const hop::TimeDuration tlStart    = data.timeline.globalStartTime + data.timeline.relativeStartTime;
+   for( const auto& trace : traceToHighlight )
    {
-      const uint32_t color = (d.color & 0x00FFFFFF) | (uint32_t(highlightVal * 255.0f) << 24);
-      ImVec2 topLeft( d.posPxl[0], d.posPxl[1] );
-      ImVec2 bottomRight( d.posPxl[0] + d.lengthPxl, d.posPxl[1] + PADDED_TRACE_SIZE );
+      const auto& tracksData        = data.profiler.timelineTracks()[trace.threadIdx];
+      const hop::TimeStamp start    = tracksData._traces.entries.starts[trace.traceIdx];
+      const hop::TimeStamp end      = tracksData._traces.entries.ends[trace.traceIdx];
+      const hop::Depth_t depth      = tracksData._traces.entries.depths[trace.traceIdx];
+      const hop::TimeDuration delta = end - start;
 
-      drawList->AddRectFilled( topLeft, bottomRight, color );
+      const float startPxl = hop::cyclesToPxl<float>( wndWidth, tlDuration, start - tlStart );
+      const float deltaPxl = hop::cyclesToPxl<float>( wndWidth, tlDuration, delta );
+      const float posYPxl  =
+         data.timeline.canvasPosY + tracksView[trace.threadIdx].absoluteDrawPos[1] + depth * PADDED_TRACE_SIZE;
+
+      ImVec2 topLeft( startPxl, posYPxl );
+      drawList->AddRectFilled( topLeft, topLeft + ImVec2( deltaPxl, PADDED_TRACE_SIZE ), color );
    }
 }
 
@@ -352,6 +337,7 @@ static void handleHoveredTrace(
    const hop::TimelineTrackDrawData& data,
    unsigned threadIndex,
    size_t hoveredIdx,
+   std::vector<HighlightInfo>& traceToHighlight,
    hop::TimelineMsgArray* msgArray )
 {
    const bool rightMouseClicked = ImGui::IsMouseReleased( 1 );
@@ -380,6 +366,8 @@ static void handleHoveredTrace(
          contextMenu.threadIndex = threadIndex;
          contextMenu.traceId = hoveredIdx;
       }
+
+      traceToHighlight.emplace_back(HighlightInfo{ threadIndex, hoveredIdx });
    }
 
    // No trace were right clicked. Check for right click in canvas
@@ -464,15 +452,11 @@ void TimelineTracksView::update( const hop::Profiler& profiler )
 
 void TimelineTracksView::draw( const TimelineTrackDrawData& data, TimelineMsgArray* msgArray )
 {
-   std::vector<TraceHighlight> highlightInfo;
+   std::vector<HighlightInfo> highlightInfo;
    highlightInfo.reserve( 16 );
 
-   //drawTraceDetailsWindow( info, timelineActions );
-   const SearchSelection searchRes = drawSearchWindow( data, msgArray );
-   if( searchRes.hoveredTraceIdx != (size_t)-1 && searchRes.hoveredThreadIdx != (uint32_t)-1 )
-   {
-      addTraceToHighlight( _tracks, data, searchRes.hoveredThreadIdx, searchRes.hoveredTraceIdx, highlightInfo );
-   }
+   drawTraceDetailsWindow( data, highlightInfo, msgArray );
+   drawSearchWindow( data, highlightInfo, msgArray );
    //drawTraceStats( _traceStats, info.strDb, info.timeline.useCycles );
 
    ImGui::SetCursorScreenPos( ImVec2( data.timeline.canvasPosX, data.timeline.canvasPosY ) );
@@ -483,7 +467,7 @@ void TimelineTracksView::draw( const TimelineTrackDrawData& data, TimelineMsgArr
 
    const float timelineOffsetY = data.timeline.canvasPosY + data.timeline.scrollAmount;
    assert( timelineTracksData.size() == _tracks.size() );
-   for ( size_t i = 0; i < _tracks.size(); ++i )
+   for ( uint32_t i = 0; i < _tracks.size(); ++i )
    {
       // Skip empty threads
       const TimelineTrack& trackData = timelineTracksData[i];
@@ -553,13 +537,9 @@ void TimelineTracksView::draw( const TimelineTrackDrawData& data, TimelineMsgArr
             // drawLockWaits( i, curDrawPos.x, curDrawPos.y, info, timelineActions );
             const size_t hoveredIdx = drawTraces( i, curDrawPos.x, curDrawPos.y, _tracks, data );
 
-            handleHoveredTrace( _contextMenu, _tracks, data, i, hoveredIdx, msgArray );
-            if( hoveredIdx != hop::INVALID_IDX )
-            {
-               addTraceToHighlight( _tracks, data, i, hoveredIdx, highlightInfo );
-            }
+            handleHoveredTrace( _contextMenu, _tracks, data, i, hoveredIdx, highlightInfo, msgArray );
 
-            drawHighlightedTraces( highlightInfo, data.highlightValue );
+            drawHighlightedTraces( _tracks, data, highlightInfo, data.highlightValue );
 
             ImGui::PopClipRect();
          }
@@ -570,11 +550,12 @@ void TimelineTracksView::draw( const TimelineTrackDrawData& data, TimelineMsgArr
       ImGui::SetCursorScreenPos( curDrawPos );
    }
 
-   drawContextMenu();
+   drawContextMenu( data );
 }
 
-SearchSelection TimelineTracksView::drawSearchWindow(
+void TimelineTracksView::drawSearchWindow(
    const hop::TimelineTrackDrawData& data,
+   std::vector<HighlightInfo>& traceToHighlight,
    hop::TimelineMsgArray* msgArray )
 {
    HOP_PROF_FUNC();
@@ -605,7 +586,50 @@ SearchSelection TimelineTracksView::drawSearchWindow(
       msgArray->addMoveVerticalPositionMsg( verticalPosPxl, true );
    }
 
-   return selection;
+   if( selection.hoveredThreadIdx != hop::INVALID_IDX && selection.hoveredTraceIdx != hop::INVALID_IDX )
+   {
+      traceToHighlight.emplace_back( HighlightInfo{ selection.hoveredThreadIdx, selection.hoveredTraceIdx } );
+   }
+}
+
+void TimelineTracksView::drawTraceDetailsWindow(
+   const hop::TimelineTrackDrawData& data,
+   std::vector<HighlightInfo>& traceToHighlight,
+   hop::TimelineMsgArray* msgArray )
+{
+   const TraceDetailDrawResult traceDetailRes =
+       drawTraceDetails( _traceDetails, data.profiler.timelineTracks(), data.profiler.stringDb(), data.timeline.useCycles );
+
+   if( traceDetailRes.clicked )
+   {
+      Depth_t minDepth = std::numeric_limits< Depth_t >::max();
+      TimeStamp minTime = std::numeric_limits< TimeStamp >::max();
+      TimeStamp maxTime = std::numeric_limits< TimeStamp >::min();
+      const auto& timelinetrack = data.profiler.timelineTracks()[traceDetailRes.hoveredThreadIdx];
+      for( size_t idx : traceDetailRes.hoveredTraceIds )
+      {
+         minDepth = std::min( timelinetrack._traces.entries.depths[ idx ], minDepth );
+         maxTime = std::max( timelinetrack._traces.entries.ends[ idx ], maxTime );
+         minTime = std::min( timelinetrack._traces.entries.starts[ idx ], minTime );
+      }
+
+      const float verticalPosPxl = _tracks[traceDetailRes.hoveredThreadIdx].absoluteDrawPos[1] +
+                                   ( minDepth * PADDED_TRACE_SIZE ) -
+                                   ( 3 * PADDED_TRACE_SIZE );
+
+      // Create the timeline messages ( frame horizontally and vertically )
+      msgArray->addFrameTimeMsg( minTime, maxTime - minTime, true, true );
+      msgArray->addMoveVerticalPositionMsg( verticalPosPxl, true );
+   }
+
+   const size_t prevSize   = traceToHighlight.size();
+   const size_t newElCount = traceDetailRes.hoveredTraceIds.size();
+   traceToHighlight.resize(
+      prevSize + newElCount, HighlightInfo{ 0, traceDetailRes.hoveredThreadIdx } );
+   for( size_t i = 0; i < newElCount; ++i )
+   {
+      traceToHighlight[prevSize+i].traceIdx = traceDetailRes.hoveredTraceIds[i];
+   }
 }
 
 bool TimelineTracksView::handleHotkeys()
@@ -655,7 +679,7 @@ void TimelineTracksView::clear()
    _draggedTrack = -1;
 }
 
-void TimelineTracksView::drawContextMenu()
+void TimelineTracksView::drawContextMenu( const TimelineTrackDrawData& data )
 {
    if ( _contextMenu.open )
    {
@@ -674,10 +698,10 @@ void TimelineTracksView::drawContextMenu()
              }
              else if ( ImGui::Selectable( "Profile Stack" ) )
              {
-               //  _traceDetails = createTraceDetails(
-               //      _tracks[_contextMenuInfo.threadIndex]._traces,
-               //      _contextMenuInfo.threadIndex,
-               //      _contextMenuInfo.traceId );
+                _traceDetails = createTraceDetails(
+                    data.profiler.timelineTracks()[_contextMenu.threadIndex]._traces,
+                    _contextMenu.threadIndex,
+                    _contextMenu.traceId );
              }
           }
           else

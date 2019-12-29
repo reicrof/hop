@@ -4,6 +4,9 @@
 #include <vector>
 #include "Lod.h"
 #include "SearchWindow.h"
+#include "TraceStats.h"
+
+struct HighlightInfo;
 
 namespace hop
 {
@@ -55,16 +58,22 @@ public:
    };
 
 private:
-   SearchSelection drawSearchWindow(
+   void drawSearchWindow(
       const hop::TimelineTrackDrawData& data,
+      std::vector<HighlightInfo>& traceToHighlight,
       hop::TimelineMsgArray* msgArray );
-   void drawContextMenu();
+   void drawTraceDetailsWindow(
+      const hop::TimelineTrackDrawData& data,
+      std::vector<HighlightInfo>& traceToHighlight,
+      hop::TimelineMsgArray* msgArray );
+   void drawContextMenu( const TimelineTrackDrawData& data );
    void resizeAllTracksToFit();
    void setAllTracksCollapsed( bool collapsed );
 
    std::vector<TrackViewData> _tracks;
    ContextMenu _contextMenu;
    SearchResult _searchResult;
+   TraceDetails _traceDetails;
    int _draggedTrack{-1};
 };
 
