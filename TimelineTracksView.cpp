@@ -379,12 +379,11 @@ static void handleHoveredTrace(
       contextMenu.open = true;
 
       // Find out where the right click happened to figure out which track needs to be profiled
-      int i = 1;
-      for( ; i < (int)tracksView.size(); ++i)
+      int trackIdx = tracksView.size() - 1;
+      for( ; trackIdx >=0; --trackIdx)
       {
-         if( tracksView[ i ].absoluteDrawPos[ 1 ] - THREAD_LABEL_HEIGHT > mousePosY )
+         if( tracksView[ trackIdx ].relativePosY - THREAD_LABEL_HEIGHT < mousePosY )
          {
-            printf( "right clicked track %d\n", i );
             break;
          }
       }
@@ -394,9 +393,8 @@ static void handleHoveredTrace(
       // while( prevValidTrack > 0 && _tracks[ prevValidTrack ].empty() )
       //    --prevValidTrack;
 
-      //assert( prevValidTrack >= 0 );
-
-      //info.contextMenu.threadIndex = prevValidTrack;
+      assert( trackIdx >= 0 );
+      contextMenu.threadIndex = trackIdx;
    }
 }
 
@@ -625,7 +623,7 @@ void TimelineTracksView::drawTraceDetailsWindow(
    const size_t prevSize   = traceToHighlight.size();
    const size_t newElCount = traceDetailRes.hoveredTraceIds.size();
    traceToHighlight.resize(
-      prevSize + newElCount, HighlightInfo{ 0, traceDetailRes.hoveredThreadIdx } );
+      prevSize + newElCount, HighlightInfo{ traceDetailRes.hoveredThreadIdx, 0 } );
    for( size_t i = 0; i < newElCount; ++i )
    {
       traceToHighlight[prevSize+i].traceIdx = traceDetailRes.hoveredTraceIds[i];
