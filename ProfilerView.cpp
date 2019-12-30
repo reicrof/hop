@@ -83,17 +83,6 @@ void hop::ProfilerView::update( float /*deltaTimeMs*/, float globalTimeMs, TimeD
    _lodLevel = closestLodLevel( timelineDuration );
 
    _trackViews.update( _profiler );
-
-   //.update( deltaTimeMs );
-   // _tracks.update( globalTimeMs, /*_timeline.duration()*/ );
-   // if( _name.empty() || _pid < 0 )
-   // {
-   //    const char* name = _server.processInfo( &_pid );
-   //    if( name )
-   //    {
-   //       _name = name;
-   //    }
-   // }
 }
 
 void hop::ProfilerView::setRecording( bool recording )

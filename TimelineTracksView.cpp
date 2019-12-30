@@ -16,10 +16,12 @@
 #include "imgui/imgui.h"
 
 // Drawing constants
-static constexpr float THREAD_LABEL_HEIGHT       = 20.0f;
-static constexpr uint32_t DISABLED_COLOR         = 0xFF505050;
-static constexpr uint32_t SEPARATOR_COLOR        = 0xFF666666;
-static constexpr uint32_t SEPARATOR_HANDLE_COLOR = 0xFFAAAAAA;
+static constexpr float THREAD_LABEL_HEIGHT        = 20.0f;
+static constexpr uint32_t DISABLED_COLOR          = 0xFF505050;
+static constexpr uint32_t SEPARATOR_COLOR         = 0xFF666666;
+static constexpr uint32_t SEPARATOR_HANDLE_COLOR  = 0xFFAAAAAA;
+static constexpr uint32_t CORE_LABEL_COLOR        = 0xFF333333;
+static constexpr uint32_t CORE_LABEL_BORDER_COLOR = 0xFFAAAAAA;
 static const char* CTXT_MENU_STR = "Context Menu";
 
 // Static variable mutable from options
@@ -71,6 +73,99 @@ static bool drawSeparator( uint32_t threadIndex, bool highlightSeparator )
    return handledHovered && highlightSeparator;
 }
 
+static void drawCoreLabels( const ImVec2& drawPosition, const hop::TimelineTrackDrawData& data, uint32_t threadIdx )
+{
+   using namespace hop;
+   const auto& coreData = data.profiler.timelineTracks()[threadIdx]._coreEvents;
+   if( options::showCoreInfo() && !coreData.data.empty() )
+   {
+      const auto drawStart = std::chrono::system_clock::now();
+
+      const auto globalStartTime = data.timeline.globalStartTime;
+      const float windowWidthPxl = ImGui::GetWindowWidth();
+
+      // The time range to draw in absolute time
+      const TimeStamp firstTraceAbsoluteTime = globalStartTime + data.timeline.relativeStartTime;
+      const TimeStamp lastTraceAbsoluteTime = firstTraceAbsoluteTime + data.timeline.duration;
+
+      CoreEvent firstEv = { firstTraceAbsoluteTime, firstTraceAbsoluteTime, 0 };
+      CoreEvent lastEv = { lastTraceAbsoluteTime, lastTraceAbsoluteTime, 0 };
+      auto cmp = []( const CoreEvent& lhs, const CoreEvent& rhs) { return lhs.end < rhs.end; };
+      auto it1 = std::lower_bound( coreData.data.begin(), coreData.data.end(), firstEv, cmp );
+      auto it2 = std::upper_bound( coreData.data.begin(), coreData.data.end(), lastEv, cmp );
+
+      if( it2 != coreData.data.end() ) ++it2;
+      //if( it2 != coreData.data.end() ) ++it2;
+
+      if( it1 == it2 ) return; // Nothing to draw here
+
+
+      ImGui::PushStyleColor( ImGuiCol_Button, CORE_LABEL_COLOR );
+      ImGui::PushStyleColor( ImGuiCol_ButtonHovered, CORE_LABEL_COLOR );
+      ImGui::PushStyleColor( ImGuiCol_ButtonActive, CORE_LABEL_COLOR );
+      ImGui::PushStyleColor( ImGuiCol_Border, CORE_LABEL_BORDER_COLOR );
+      ImGui::PushStyleVar( ImGuiStyleVar_FrameBorderSize, 1.0f );
+
+      char label[32] = "Core ";
+      const int prefixSize = strlen( label );
+
+      const float cyclesPerPxl = data.timeline.duration / ImGui::GetWindowWidth();
+
+      const uint64_t minCycleToMerge = hop::pxlToCycles( windowWidthPxl, data.timeline.duration, 10 );
+      const uint64_t minCycleToSkip = hop::pxlToCycles( windowWidthPxl, data.timeline.duration, 0.5f );
+      CoreEvent prevEvent = *it1;
+
+      // Lambda used to draw the labels inside the loop and for the last entry as well
+      const auto drawCoreLabelFct = [&]( const CoreEvent& ev )
+      {
+         auto startPxl = (int64_t)( ev.start - firstTraceAbsoluteTime ) / cyclesPerPxl;
+         auto deltaPxl = ( ev.end - ev.start ) / cyclesPerPxl;
+         snprintf( label + prefixSize, sizeof( label ) - prefixSize, "%u", ev.core );
+
+         ImGui::SetCursorScreenPos( ImVec2( startPxl, drawPosition.y ) );
+         ImGui::Button( label, ImVec2( deltaPxl, TRACE_HEIGHT - 1 ) );
+         if( ImGui::IsItemHovered() )
+         {
+            ImGui::BeginTooltip();
+            ImGui::TextUnformatted( label );
+            ImGui::EndTooltip();
+         }
+      };
+
+      for( ++it1 ; it1 != it2; ++it1 )
+      {
+         // If we have 2 consecutive traces with the same core and they are close enough, merge them
+         // for drawing
+         if( it1->core == prevEvent.core &&
+            ( it1->start < prevEvent.end || ( it1->start - prevEvent.end ) < minCycleToMerge ) )
+         {
+            prevEvent.start = std::min( prevEvent.start, it1->start );
+            prevEvent.end = it1->end;
+            continue;
+         }
+
+         // Skip drawing the label if it is too small
+         const auto labelDuration = prevEvent.end - prevEvent.start;
+         if( labelDuration > minCycleToSkip )
+         {
+            drawCoreLabelFct( prevEvent );
+         }
+
+         prevEvent = *it1;
+      }
+
+      // Add the last entry to draw
+      drawCoreLabelFct( prevEvent );
+
+      ImGui::PopStyleVar(1);
+      ImGui::PopStyleColor(4);
+
+      const auto drawEnd = std::chrono::system_clock::now();
+      hop::g_stats.coreDrawingTimeMs +=
+         std::chrono::duration<double, std::milli>( ( drawEnd - drawStart ) ).count();
+   }
+}
+
 static bool drawThreadLabel(
     const ImVec2& drawPosition,
     const char* threadName,
@@ -99,18 +194,11 @@ static bool drawThreadLabel(
    {
       threadLabelCol = DISABLED_COLOR;
    }
-   else if( hop::options::showCoreInfo() )
-   {
-      // Draw the core labels
-      // drawCoresLabels(
-      //     ImVec2( drawPosition.x, drawPosition.y + 1.0f ), tracks[trackIndex]._coreEvents, info );
-      // Restore draw position for thread label
-      //ImGui::SetCursorScreenPos( drawPosition );
-   }
 
    ImGui::PopClipRect();
 
    // Draw thread label
+   ImGui::SetCursorScreenPos( drawPosition );
    ImGui::PushID( trackIndex );
    ImGui::PushStyleColor( ImGuiCol_Button, threadLabelCol );
    const bool labelPressed = ImGui::Button( nameBuffer, ImVec2( 0, THREAD_LABEL_HEIGHT ) );
@@ -480,8 +568,10 @@ void TimelineTracksView::draw( const TimelineTrackDrawData& data, TimelineMsgArr
 
       const char* customName = trackData.name() != 0 ? stringDb.getString( stringDb.getStringIndex( trackData.name() ) ) : nullptr;
 
-      //drawCoreLabels(stuff)
       const ImVec2 labelsDrawPosition = ImGui::GetCursorScreenPos();
+
+      drawCoreLabels( labelsDrawPosition, data, i );
+
       if( drawThreadLabel( labelsDrawPosition, customName, i, threadHidden ) )
       {
          setTrackHeight( i, threadHidden ? 99999.0f : -99999.0f );
