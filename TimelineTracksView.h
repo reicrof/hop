@@ -74,6 +74,7 @@ private:
    ContextMenu _contextMenu;
    SearchResult _searchResult;
    TraceDetails _traceDetails;
+   TraceStats _traceStats;
    int _draggedTrack{-1};
 };
 

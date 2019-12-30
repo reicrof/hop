@@ -4,6 +4,7 @@
 #include "common/Utils.h"
 
 #include "Cursor.h"
+#include "ModalWindow.h"
 #include "SearchWindow.h"
 #include "TimelineTracksView.h"
 #include "TimelineInfo.h"
@@ -32,9 +33,9 @@ struct HighlightInfo
    size_t traceIdx;
 };
 
-static void resetContextMenu( hop::TimelineTracksView::ContextMenu* ctxt )
+static void resetContextMenu( hop::TimelineTracksView::ContextMenu& ctxt )
 {
-   memset( ctxt, 0, sizeof( *ctxt ) );
+   memset( &ctxt, 0, sizeof( ctxt ) );
 }
 
 static bool drawSeparator( uint32_t threadIndex, bool highlightSeparator )
@@ -388,11 +389,6 @@ static void handleHoveredTrace(
          }
       }
 
-      // Get the index of the previous valid track
-      // int64_t prevValidTrack = i - 1;
-      // while( prevValidTrack > 0 && _tracks[ prevValidTrack ].empty() )
-      //    --prevValidTrack;
-
       assert( trackIdx >= 0 );
       contextMenu.threadIndex = trackIdx;
    }
@@ -455,7 +451,7 @@ void TimelineTracksView::draw( const TimelineTrackDrawData& data, TimelineMsgArr
 
    drawTraceDetailsWindow( data, highlightInfo, msgArray );
    drawSearchWindow( data, highlightInfo, msgArray );
-   //drawTraceStats( _traceStats, info.strDb, info.timeline.useCycles );
+   drawTraceStats( _traceStats, data.profiler.stringDb(), data.timeline.useCycles );
 
    ImGui::SetCursorScreenPos( ImVec2( data.timeline.canvasPosX, data.timeline.canvasPosY ) );
 
@@ -672,8 +668,10 @@ void TimelineTracksView::setTrackHeight( uint32_t trackIdx, float height )
 void TimelineTracksView::clear()
 {
    _tracks.clear();
-   resetContextMenu( &_contextMenu );
+   resetContextMenu( _contextMenu );
    clearSearchResult( _searchResult );
+   clearTraceStats( _traceStats );
+   clearTraceDetails( _traceDetails );
    _draggedTrack = -1;
 }
 
@@ -689,10 +687,10 @@ void TimelineTracksView::drawContextMenu( const TimelineTrackDrawData& data )
           {
              if ( ImGui::Selectable( "Trace Stats" ) )
              {
-               //  _traceStats = createTraceStats(
-               //      _tracks[_contextMenuInfo.threadIndex]._traces,
-               //      _contextMenuInfo.threadIndex,
-               //      _contextMenuInfo.traceId );
+                _traceStats = createTraceStats(
+                    data.profiler.timelineTracks()[_contextMenu.threadIndex]._traces,
+                    _contextMenu.threadIndex,
+                    _contextMenu.traceId );
              }
              else if ( ImGui::Selectable( "Profile Stack" ) )
              {
@@ -706,13 +704,13 @@ void TimelineTracksView::drawContextMenu( const TimelineTrackDrawData& data )
           {
              if ( ImGui::Selectable( "Profile Track" ) )
              {
-               //   hop::displayModalWindow( "Computing total trace size...", hop::MODAL_TYPE_NO_CLOSE );
-               //   const uint32_t tIdx = _contextMenuInfo.threadIndex;
-               //   std::thread t( [ this, tIdx, dispTrace = _tracks[tIdx]._traces.copy() ]() {
-               //      _traceDetails = createGlobalTraceDetails( dispTrace, tIdx );
-               //      closeModalWindow();
-               //   } );
-               //   t.detach();
+                 hop::displayModalWindow( "Computing total trace size...", hop::MODAL_TYPE_NO_CLOSE );
+                 const uint32_t tIdx = _contextMenu.threadIndex;
+                 std::thread t( [ this, tIdx, dispTrace = data.profiler.timelineTracks()[tIdx]._traces.copy() ]() {
+                    _traceDetails = createGlobalTraceDetails( dispTrace, tIdx );
+                    closeModalWindow();
+                 } );
+                 t.detach();
              }
              else if ( ImGui::BeginMenu("Tracks") )
              {
@@ -736,7 +734,7 @@ void TimelineTracksView::drawContextMenu( const TimelineTrackDrawData& data )
        else
        {
           // Reset the context menu info if not used anymore
-          resetContextMenu( &_contextMenu );
+          resetContextMenu( _contextMenu );
        }
        ImGui::PopStyleVar();
    }
