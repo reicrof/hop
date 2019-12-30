@@ -9,26 +9,22 @@
 namespace hop
 {
 
-struct Options
+namespace options
 {
-   float traceHeight{20.0f};
-   bool startFullScreen{true};
-   bool vsyncOn{true};
-   bool debugWindow{false};
-   bool showCoreInfo{true};
-   std::array< uint32_t, HOP_MAX_ZONE_COLORS + 1 > zoneColors;
-   std::array< bool, HOP_MAX_ZONE_COLORS + 1 > zoneEnabled;
-   float disabledZoneOpacity{0.2f};
+   bool save();
+   bool load();
+   void draw();
+   void enableOptionWindow();
 
-   bool optionWindowOpened{false};
-};
+   float traceHeight();
+   float windowOpacity();
+   bool showDebugWindow();
+   bool showCoreInfo();
+   bool fullscreen();
+   bool vsyncOn();
+   const std::array< uint32_t, HOP_MAX_ZONE_COLORS + 1 >& zoneColors();
+} 
 
-extern Options g_options;
-
-bool saveOptions();
-bool loadOptions();
-void drawOptionsWindow( Options& opt );
-
-}
+} // namespace hop
 
 #endif // OPTIONS_H_

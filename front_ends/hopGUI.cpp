@@ -186,7 +186,7 @@ int main( int argc, char* argv[] )
    }
 
    uint32_t createWindowFlags = SDL_WINDOW_OPENGL | SDL_WINDOW_RESIZABLE;
-   if ( hop::g_options.startFullScreen ) createWindowFlags |= SDL_WINDOW_MAXIMIZED;
+   if ( hop::options::fullscreen() ) createWindowFlags |= SDL_WINDOW_MAXIMIZED;
 
    SDL_Window* window = SDL_CreateWindow(
        "Hop", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, 1600, 1024, createWindowFlags );
@@ -207,7 +207,7 @@ int main( int argc, char* argv[] )
    SDL_GL_SetSwapInterval( 1 );
 
    const hop::LaunchOptions opts = hop::parseArgs( argc, argv );
-   hop::loadOptions();
+   hop::options::load();
 
    createIcon( window );
 
@@ -282,7 +282,7 @@ int main( int argc, char* argv[] )
       hop::g_stats.frameTimeMs = duration<double, std::milli>( ( frameEnd - frameStart ) ).count();
    }
 
-   hop::saveOptions();
+   hop::options::save();
 
    // We have launched a child process. Let's close it
    if ( opts.startExec )

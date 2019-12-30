@@ -79,7 +79,7 @@ static void drawMenuBar( hop::Viewer* v )
          }
          if ( ImGui::MenuItem( "Options", NULL ) )
          {
-            hop::g_options.optionWindowOpened = true;
+            hop::options::enableOptionWindow();
          }
          ImGui::Separator();
          if ( ImGui::MenuItem( "Exit", NULL ) )
@@ -453,7 +453,7 @@ static void updateProfilers(
       p->update( dtTimeMs, globalTimeMs, tlDuration );
    }
 
-   if( hop::g_options.debugWindow && selectedTab >= 0 )
+   if( hop::options::showDebugWindow() && selectedTab >= 0 )
    {
       updateOptions( profilers[ selectedTab ].get(), hop::g_stats );
    }
@@ -504,7 +504,7 @@ namespace hop
 {
 Viewer::Viewer( uint32_t screenSizeX, uint32_t /*screenSizeY*/ )
     : _selectedTab( -1 ),
-      _vsyncEnabled( hop::g_options.vsyncOn )
+      _vsyncEnabled( hop::options::vsyncOn() )
 {
    hop::setupLODResolution( screenSizeX );
    hop::initCursors();
@@ -625,9 +625,9 @@ void Viewer::onNewFrame(
    hop::g_stats.lockwaitsDrawingTimeMs = 0.0;
 
    // Set vsync if it has changed.
-   if ( _vsyncEnabled != hop::g_options.vsyncOn )
+   if ( _vsyncEnabled != hop::options::vsyncOn() )
    {
-      _vsyncEnabled = hop::g_options.vsyncOn;
+      _vsyncEnabled = hop::options::vsyncOn();
       renderer::setVSync( _vsyncEnabled );
    }
 
@@ -693,7 +693,8 @@ void Viewer::draw( uint32_t windowWidth, uint32_t windowHeight )
       renderModalWindow();
    }
 
-   drawOptionsWindow( hop::g_options );
+   // Draw the option window
+   hop::options::draw();
 
    // Update draw stats before drawing the actual stats window
    const auto drawEnd = std::chrono::system_clock::now();
@@ -701,7 +702,7 @@ void Viewer::draw( uint32_t windowWidth, uint32_t windowHeight )
        std::chrono::duration<double, std::milli>( ( drawEnd - drawStart ) ).count();
 
    // Draw stats window
-   if ( hop::g_options.debugWindow )
+   if ( hop::options::showDebugWindow() )
    {
       hop::drawStatsWindow( hop::g_stats );
    }

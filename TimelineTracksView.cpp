@@ -23,8 +23,8 @@ static constexpr uint32_t SEPARATOR_HANDLE_COLOR = 0xFFAAAAAA;
 static const char* CTXT_MENU_STR = "Context Menu";
 
 // Static variable mutable from options
-static float TRACE_HEIGHT = 20.0f;
 static float TRACE_VERTICAL_PADDING = 2.0f;
+static float TRACE_HEIGHT = 20.0f;
 static float PADDED_TRACE_SIZE = TRACE_HEIGHT + TRACE_VERTICAL_PADDING;
 
 struct HighlightInfo
@@ -93,13 +93,13 @@ static bool drawThreadLabel(
        ImVec2( 99999.0f, 999999.0f ),
        true );
 
-   const auto& zoneColors = hop::g_options.zoneColors;
+   const auto& zoneColors = hop::options::zoneColors();
    uint32_t threadLabelCol = zoneColors[( trackIndex + 1 ) % HOP_MAX_ZONE_COLORS];
    if( hidden )
    {
       threadLabelCol = DISABLED_COLOR;
    }
-   else if( hop::g_options.showCoreInfo )
+   else if( hop::options::showCoreInfo() )
    {
       // Draw the core labels
       // drawCoresLabels(
@@ -259,7 +259,7 @@ static size_t drawTraces(
 
    // Draw trace text left-aligned
    ImGui::PushStyleVar(ImGuiStyleVar_ButtonTextAlign, ImVec2( 0.0f, 0.5f ) );
-   const auto& zoneColors = g_options.zoneColors;
+   const auto& zoneColors = hop::options::zoneColors();
 
    size_t hoveredLodIdx = hop::INVALID_IDX;
    char entryName[256] = {};
@@ -438,6 +438,10 @@ void TimelineTracksView::update( const hop::Profiler& profiler )
       // Update max depth as well in case it has changed
       _tracks[i].maxDepth = entries.maxDepth;
    }
+
+   // Finally update according to the options
+   TRACE_HEIGHT = hop::options::traceHeight();
+   PADDED_TRACE_SIZE = TRACE_HEIGHT + TRACE_VERTICAL_PADDING;
 
    const auto updateEnd = std::chrono::system_clock::now();
    hop::g_stats.updatingTimeMs +=

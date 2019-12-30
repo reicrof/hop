@@ -1,5 +1,6 @@
 #include "SearchWindow.h"
 
+#include "Options.h" // window opacity
 #include "TimelineInfo.h"
 #include "Stats.h"
 
@@ -129,7 +130,8 @@ SearchSelection drawSearchResult(
 
    if ( searchRes.searchWindowOpen )
    {
-      ImGui::PushStyleColor( ImGuiCol_WindowBg, ImVec4( 0.20f, 0.20f, 0.20f, 0.75f ) );
+      const float wndOpacity = hop::options::windowOpacity();
+      ImGui::PushStyleColor( ImGuiCol_WindowBg, ImVec4( 0.20f, 0.20f, 0.20f, wndOpacity ) );
       ImGui::SetNextWindowSize( ImVec2( 600, 300 ), ImGuiSetCond_FirstUseEver );
       if ( ImGui::Begin( "Search Window", &searchRes.searchWindowOpen ) )
       {
@@ -158,6 +160,8 @@ SearchSelection drawSearchResult(
          const float entryHeight = ImGui::GetTextLineHeightWithSpacing();
          const float totalEntrySize = entryHeight * ( searchRes.tracesIdxThreadIdx.size() + 10 );
          ImGui::SetNextWindowContentSize( ImVec2( 0, totalEntrySize ) );
+
+         ImGui::PushStyleColor( ImGuiCol_ChildBg, ImVec4( 0.20f, 0.20f, 0.20f, wndOpacity ) );
 
          // Draw the table header
          const auto buttonCol = ImVec4( 0.20f, 0.20f, 0.20f, 0.0f );
@@ -275,6 +279,7 @@ SearchSelection drawSearchResult(
             hoveredTraceId = traceIdThreadId.first;
             hoveredThreadId = traceIdThreadId.second;
          }
+         ImGui::PopStyleColor();
       }
       ImGui::End();
       ImGui::PopStyleColor();
