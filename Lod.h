@@ -42,7 +42,8 @@ void appendLods( LodsData& lodData, const Entries& entries );
      const LodsArray& lodsArr,
      int lodLvl,
      TimeStamp absoluteStart,
-     TimeStamp absoluteEnd );
+     TimeStamp absoluteEnd,
+     Depth_t minDepth );
 
 }
 

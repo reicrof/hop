@@ -78,6 +78,7 @@ static std::array<size_t, LOD_COUNT> initializeLodsPerDepth( LodsData& lodData, 
 
    // Then add the missing lodinfo for the new 'depths'
    const size_t maxDepth = entries.maxDepth + 1;
+   assert(maxDepth >= curDepth);
    for( size_t i = 0; i < maxDepth - curDepth; ++i )
    {
       Depth_t depth = curDepth + i;
@@ -140,7 +141,8 @@ std::pair<size_t, size_t> visibleIndexSpan(
     const LodsArray& lodsArr,
     int lodLvl,
     TimeStamp absoluteStart,
-    TimeStamp absoluteEnd )
+    TimeStamp absoluteEnd,
+    Depth_t lowestDepth )
 {
    auto span = std::make_pair( hop::INVALID_IDX, hop::INVALID_IDX );
 
@@ -156,7 +158,7 @@ std::pair<size_t, size_t> visibleIndexSpan(
    // Find the the first trace on right that have a depth of "baseDepth". This can be either 0
    // for traces or 1 for lockwaits. This prevents traces that have a smaller depth than the
    // one foune previously to vanish.
-   while ( it2 != lods.end() && it2->depth > 0 )
+   while ( it2 != lods.end() && it2->depth > lowestDepth )
    {
       ++it2;
    }

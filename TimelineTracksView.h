@@ -43,7 +43,8 @@ public:
    // Per track view data
    struct TrackViewData
    {
-      LodsData lodsData;
+      LodsData traceLodsData;
+      LodsData lockwaitsLodsData;
       float absoluteDrawPos[2];
       float relativePosY; // The absolute position ignores the scroll but not the relative
       float trackHeight{9999.0f};
