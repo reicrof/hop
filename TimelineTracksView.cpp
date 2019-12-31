@@ -182,7 +182,7 @@ static bool drawThreadLabel(
    }
    else
    {
-      snprintf( nameBuffer, sizeof( nameBuffer ), "Thread %lu", trackIndex );
+      snprintf( nameBuffer, sizeof( nameBuffer ), "Thread %u", trackIndex );
    }
 
    const ImVec2 threadLabelSize = ImGui::CalcTextSize( nameBuffer );
@@ -270,7 +270,7 @@ static int traceLabelWithTime( const hop::TimelineTrackDrawData& data, uint32_t 
 
    return snprintf( arr, arrSize, "%s (%s)", label, fmtTime );
 }
-static int lockwaitLabelWithTime(const hop::TimelineTrackDrawData& data, uint32_t threadIndex, size_t index, hop::TimeDuration duration, uint32_t arrSize, char* arr)
+static int lockwaitLabelWithTime(const hop::TimelineTrackDrawData&, uint32_t, size_t, hop::TimeDuration, uint32_t arrSize, char* arr)
 {
    return snprintf( arr, arrSize, "%s", "Lock wait" );
 }
@@ -315,9 +315,9 @@ static void drawHoveredTracePopup( const hop::TimelineTrackDrawData& data, uint3
        "Trace End   = %zu\n"
        "Trace Delta = %zu",
        entryIndex,
-       end - delta,
-       end,
-       delta );
+       (size_t)(end - delta),
+       (size_t)end,
+       (size_t)delta );
    ImGui::TextUnformatted( strDebug );
 #endif
 }
@@ -428,7 +428,6 @@ static void drawHighlightedTraces(
 
 static void handleHoveredTrace(
    hop::TimelineTracksView::ContextMenu& contextMenu,
-   const std::vector<hop::TimelineTracksView::TrackViewData>& tracksView,
    const hop::TimelineTrackDrawData& data,
    unsigned threadIndex,
    size_t hoveredIdx,
@@ -467,8 +466,6 @@ static void handleHoveredTrace(
 }
 
 static void handleHoveredLockWait(
-   hop::TimelineTracksView::ContextMenu& contextMenu,
-   const std::vector<hop::TimelineTracksView::TrackViewData>& tracksView,
    const hop::TimelineTrackDrawData& data,
    unsigned threadIndex,
    size_t hoveredIdx,
@@ -672,11 +669,11 @@ void TimelineTracksView::draw( const TimelineTrackDrawData& data, TimelineMsgArr
 
             // Draw the lock waits  entries (before traces so that they are not hiding them)
             const size_t lwHoveredIdx = drawEntries( curDrawPos, i, data, _tracks[i].lockwaitsLodsData, lockwaitLabelWithTime, getLockWaitZoneId );
-            handleHoveredLockWait( _contextMenu, _tracks, data, i, lwHoveredIdx, highlightInfo, msgArray );
+            handleHoveredLockWait( data, i, lwHoveredIdx, highlightInfo, msgArray );
 
             // Draw the traces entries
             const size_t traceHoveredIdx = drawEntries( curDrawPos, i, data, _tracks[i].traceLodsData, traceLabelWithTime, getTraceZoneId );
-            handleHoveredTrace( _contextMenu, _tracks, data, i, traceHoveredIdx, highlightInfo, msgArray );
+            handleHoveredTrace( _contextMenu, data, i, traceHoveredIdx, highlightInfo, msgArray );
 
             if( lwHoveredIdx == hop::INVALID_IDX && traceHoveredIdx == hop::INVALID_IDX )
             {
@@ -711,7 +708,7 @@ void TimelineTracksView::drawSearchWindow(
    const auto& tracksData = data.profiler.timelineTracks();
    const SearchSelection selection = drawSearchResult( _searchResult, data.profiler.stringDb(), data.timeline, tracksData );
 
-   if( selection.hoveredThreadIdx != hop::INVALID_IDX && selection.hoveredTraceIdx != hop::INVALID_IDX )
+   if( selection.hoveredThreadIdx != (uint32_t)hop::INVALID_IDX && selection.hoveredTraceIdx != hop::INVALID_IDX )
    {
       const auto& timelinetrack    = tracksData[selection.hoveredThreadIdx];
 
@@ -721,7 +718,7 @@ void TimelineTracksView::drawSearchWindow(
 
       traceToHighlight.emplace_back( HighlightInfo{ absStartTime, absEndTime, selection.hoveredThreadIdx, depth } );
 
-      if ( selection.selectedTraceIdx != hop::INVALID_IDX && selection.selectedThreadIdx != hop::INVALID_IDX )
+      if ( selection.selectedTraceIdx != hop::INVALID_IDX && selection.selectedThreadIdx != (uint32_t)hop::INVALID_IDX )
       {
          assert( selection.selectedTraceIdx == selection.hoveredTraceIdx && selection.hoveredThreadIdx == selection.selectedThreadIdx );
          // If the thread was hidden, display it so we can see the selected trace
@@ -794,7 +791,7 @@ bool TimelineTracksView::handleHotkeys()
    return false;
 }
 
-bool TimelineTracksView::handleMouse( float posX, float posY, bool lmClicked, bool rmClicked, float wheel )
+bool TimelineTracksView::handleMouse( float, float posY, bool, bool, float )
 {
    bool handled = false;
    if ( _draggedTrack > 0 )

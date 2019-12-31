@@ -7,8 +7,8 @@
 
 static constexpr float MIN_TRACE_LENGTH_PXL = 10.0f;
 static constexpr float MIN_GAP_PXL = 5.0f;
-static hop::TimeDuration LOD_MIN_GAP_CYCLES[hop::LOD_COUNT] = {0};
-static hop::TimeDuration LOD_MIN_TRACE_LENGTH_PXL[hop::LOD_COUNT] = {0};
+static hop::TimeStamp LOD_MIN_GAP_CYCLES[hop::LOD_COUNT] = {0};
+static hop::TimeStamp LOD_MIN_TRACE_LENGTH_PXL[hop::LOD_COUNT] = {0};
 
 namespace hop
 {
@@ -40,11 +40,11 @@ static hop::LodInfo createLod( size_t index, hop::TimeStamp start, hop::TimeStam
    if( lastTraceSmallEnough && newTraceSmallEnough && timeBetweenTraceSmallEnough )
    {
       computedLod.loded = true;
-      assert(computedLod.index != hop::INVALID_IDX);
+      assert( computedLod.index != hop::INVALID_IDX );
    }
    else
    {
-      if (computedLod.index != -1) {
+      if( computedLod.index != hop::INVALID_IDX ) {
          resultLods[LODLVL].push_back( computedLod );
       }
 
@@ -59,14 +59,15 @@ static hop::LodInfo createLod( size_t index, hop::TimeStamp start, hop::TimeStam
 }
 
 // Adds missing 'latest' entry for new depths and returns the end timestamp of the earliest modifiable lod
-static std::array<size_t, LOD_COUNT> initializeLodsPerDepth( LodsData& lodData, const Entries& entries )
+static std::array<hop::TimeStamp, LOD_COUNT>
+initializeLodsPerDepth( LodsData& lodData, const Entries& entries )
 {
    HOP_PROF_FUNC();
    const size_t curDepth = lodData.latestLodPerDepth.size();
 
    // Find the earliest possible lodinfo that could be modified
    const size_t earliestIndex = curDepth == 0 ? 0 : hop::INVALID_IDX;
-   std::array<size_t, LOD_COUNT> earliestEnd;
+   std::array<TimeStamp, LOD_COUNT> earliestEnd;
    std::fill( earliestEnd.begin(), earliestEnd.end(), earliestIndex );
    for( unsigned i = 0; i < curDepth; ++i )
    {
@@ -108,7 +109,7 @@ void appendLods( LodsData& lodData, const Entries& entries )
 
    HOP_ZONE( HOP_ZONE_COLOR_2 );
    HOP_PROF_FUNC();
-   const std::array<size_t, LOD_COUNT> earliestEnds = initializeLodsPerDepth( lodData, entries );
+   const std::array<TimeStamp, LOD_COUNT> earliestEnds = initializeLodsPerDepth( lodData, entries );
 
    const size_t startIndex = lodData.lastTraceIdx;
    const size_t entriesCount = entries.starts.size();
@@ -147,8 +148,8 @@ std::pair<size_t, size_t> visibleIndexSpan(
    auto span = std::make_pair( hop::INVALID_IDX, hop::INVALID_IDX );
 
    const auto& lods = lodsArr[lodLvl];
-   const LodInfo firstInfo = {absoluteStart, absoluteStart, 0};
-   const LodInfo lastInfo = {absoluteEnd, absoluteEnd, 0};
+   const LodInfo firstInfo = {absoluteStart, absoluteStart, 0, 0, false};
+   const LodInfo lastInfo = {absoluteEnd, absoluteEnd, 0, 0, false};
    auto it1 = std::lower_bound( lods.begin(), lods.end(), firstInfo );
    auto it2 = std::upper_bound( lods.begin(), lods.end(), lastInfo );
 

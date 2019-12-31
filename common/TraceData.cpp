@@ -36,8 +36,6 @@ Entries Entries::copy() const
 
 void TraceData::append( const TraceData& newTraces )
 {
-   const size_t prevSize = entries.starts.size();
-
    entries.append( newTraces.entries );
    fileNameIds.insert(
        fileNameIds.end(), newTraces.fileNameIds.begin(), newTraces.fileNameIds.end() );
@@ -69,8 +67,6 @@ TraceData TraceData::copy() const
 
 void LockWaitData::append( const LockWaitData& newLockWaits )
 {
-   const size_t prevSize = entries.ends.size();
-
    entries.append( newLockWaits.entries );
    mutexAddrs.insert( mutexAddrs.end(), newLockWaits.mutexAddrs.begin(), newLockWaits.mutexAddrs.end() );
 

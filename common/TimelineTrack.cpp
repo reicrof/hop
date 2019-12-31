@@ -29,7 +29,6 @@ void TimelineTrack::addTraces( const TraceData& newTraces )
 void TimelineTrack::addLockWaits( const LockWaitData& lockWaits )
 {
    HOP_PROF_FUNC();
-   const size_t prevSize = _lockWaits.mutexAddrs.size();
    _lockWaits.append( lockWaits );
 }
 

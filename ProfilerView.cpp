@@ -22,14 +22,6 @@
 
 extern bool g_run;
 
-// Drawing constants
-static constexpr float MAX_TRACE_HEIGHT = 50.0f;
-static constexpr float MIN_TRACE_HEIGHT = 15.0f;
-static constexpr uint32_t DISABLED_COLOR = 0xFF505050;
-static constexpr uint32_t CORE_LABEL_COLOR = 0xFF333333;
-static constexpr uint32_t CORE_LABEL_BORDER_COLOR = 0xFFAAAAAA;
-static constexpr uint32_t SEPARATOR_HANDLE_COLOR = 0xFFAAAAAA;
-
 static void displayBackgroundHelpMsg( uint32_t windowWidth, uint32_t windowHeight )
 {
    const char* helpTxt =

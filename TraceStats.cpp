@@ -171,7 +171,6 @@ static std::vector<hop::TraceDetail> mergeTraceDetails( const hop::TraceData& tr
          bool merged = false;
          const TimeStamp end = traces.entries.ends[ idx ];
          const TimeStamp start = traces.entries.starts[ idx ];
-         const TimeStamp delta = end - start;
          for( size_t i = 0; i < endTimes.size(); ++i )
          {
             const TimeStamp curStart = startTimes[i];
