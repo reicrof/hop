@@ -4,6 +4,8 @@
 #include "Hop.h"
 #include "TraceData.h"
 
+#include <unordered_map>
+
 namespace hop
 {
 
@@ -22,6 +24,8 @@ struct TimelineTrack
    LockWaitData _lockWaits;
    CoreEventData _coreEvents;
    StrPtr_t _trackName{0};
+
+   std::unordered_map< void*, std::vector< TimeStamp > > _lockWaitsPerMutex;
 };
 
 size_t serializedSize( const TimelineTrack& ti );

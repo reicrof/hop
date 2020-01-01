@@ -29,39 +29,45 @@ void TimelineTrack::addTraces( const TraceData& newTraces )
 void TimelineTrack::addLockWaits( const LockWaitData& lockWaits )
 {
    HOP_PROF_FUNC();
+   const size_t prevSize = _lockWaits.mutexAddrs.size();
    _lockWaits.append( lockWaits );
+
+   for( size_t i = 0; i < lockWaits.mutexAddrs.size(); ++i )
+   {
+      _lockWaitsPerMutex[ lockWaits.mutexAddrs[i] ].push_back( prevSize + i );
+   }
 }
 
-void TimelineTrack::addUnlockEvents(const std::vector<UnlockEvent>& /*unlockEvents*/)
+void TimelineTrack::addUnlockEvents( const std::vector<UnlockEvent>& unlockEvents )
 {
    // If we did not get any lock events prior to the unlock events, simply ignore them
    if( _lockWaits.entries.ends.empty() ) return;
 
-//    HOP_PROF_FUNC();
-//    for( const auto& ue : unlockEvents )
-//    {
-//       // Find the list of lockwaits that have not yet been associated with
-//       // an unlock events for a specific mutex
-//       const auto lockWaitsIdx = _lockWaitsPerMutex.find( ue.mutexAddress );
-//       if(lockWaitsIdx != _lockWaitsPerMutex.end() )
-//       {
-//          std::vector< TimeStamp >& lockwaitIdx = lockWaitsIdx->second;
-//          size_t i = 0;
-//          for (; i < lockwaitIdx.size(); ++i)
-//          {
-//             if( _lockWaits.entries.ends[lockwaitIdx[i]] < ue.time )
-//             {
-//                _lockWaits.lockReleases[lockwaitIdx[i]] = ue.time;
-//                break;
-//             }
-//          }
-//          // If we found a lockwait that is associted with a specific unlock events,
-//          // all prior lockwaits can be dismiss and are either already associated or
-//          // their unlock event was dropped
-//          if( i++ != lockwaitIdx.size() )
-//             lockwaitIdx.erase( lockwaitIdx.begin(), lockwaitIdx.begin() + i );
-//       }
-//    }
+   HOP_PROF_FUNC();
+   for( const auto& ue : unlockEvents )
+   {
+      // Find the list of lockwaits that have not yet been associated with
+      // an unlock events for a specific mutex
+      const auto lockWaitsIdx = _lockWaitsPerMutex.find( ue.mutexAddress );
+      if( lockWaitsIdx != _lockWaitsPerMutex.end() )
+      {
+         std::vector< TimeStamp >& lockwaitIdx = lockWaitsIdx->second;
+         size_t i = 0;
+         for (; i < lockwaitIdx.size(); ++i)
+         {
+            if( _lockWaits.entries.ends[lockwaitIdx[i]] < ue.time )
+            {
+               _lockWaits.lockReleases[lockwaitIdx[i]] = ue.time;
+               break;
+            }
+         }
+         // If we found a lockwait that is associted with a specific unlock events,
+         // all prior lockwaits can be dismiss and are either already associated or
+         // their unlock event was dropped
+         if( i++ != lockwaitIdx.size() )
+            lockwaitIdx.erase( lockwaitIdx.begin(), lockwaitIdx.begin() + i );
+      }
+   }
 }
 
 void TimelineTrack::addCoreEvents( const std::vector<CoreEvent>& coreEvents )
