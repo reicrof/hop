@@ -682,8 +682,8 @@ void Viewer::draw( uint32_t windowWidth, uint32_t windowHeight )
    _timeline.endDrawCanvas();
    _timeline.handleDeferredActions( msgArray );
 
-   handleHotkey( selectedProf );
    handleMouse( selectedProf );
+   handleHotkey( selectedProf );
 
    ImGui::End();  // Hop Viewer Window
 

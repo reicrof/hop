@@ -58,7 +58,6 @@ void TimelineTrack::addLockWaits( const LockWaitData& lockWaits )
    for( size_t i = 0; i < lockWaits.mutexAddrs.size(); ++i )
    {
       addLockWaitsRecord( &_lockWaitsPerMutex[ lockWaits.mutexAddrs[i] ], prevSize + i );
-      //_lockWaitsPerMutex[ lockWaits.mutexAddrs[i] ].push_back( prevSize + i );
    }
 }
 
@@ -86,11 +85,10 @@ void TimelineTrack::addUnlockEvents( const std::vector<UnlockEvent>& unlockEvent
             }
          }
          // If we found a lockwait that is associted with a specific unlock events,
-         // all prior lockwaits can be dismiss and are either already associated or
+         // all prior lockwaits can be dismiss as they are either already associated or
          // their unlock event was dropped
          if( i++ != lwRecords.count )
-            keepLatestLockWaitsRecords( &lwRecords, i );
-            //lockwaitIdx.erase( lockwaitIdx.begin(), lockwaitIdx.begin() + i );
+            keepLatestLockWaitsRecords( &lwRecords, lwRecords.count - i );
       }
    }
 }

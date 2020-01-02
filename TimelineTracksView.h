@@ -29,6 +29,7 @@ public:
    uint32_t count() const;
    bool hidden( uint32_t trackIdx ) const;
    float trackHeightWithThreadLabel( uint32_t trackIdx ) const;
+   float trackAbsoluteDrawPosY( uint32_t trackIdx ) const;
 
    void update( const Profiler& profiler );
    void draw( const TimelineTrackDrawData& data, TimelineMsgArray* msgArray );

@@ -38,6 +38,15 @@ struct HighlightInfo
    hop::Depth_t depth;
 };
 
+struct LockOwnerInfo
+{
+   LockOwnerInfo( hop::TimeDuration dur, uint32_t tIdx ) : lockDuration( dur ), threadIndex( tIdx )
+   {
+   }
+   hop::TimeDuration lockDuration{0};
+   uint32_t threadIndex{0};
+};
+
 static void resetContextMenu( hop::TimelineTracksView::ContextMenu& ctxt )
 {
    ctxt.traceId = 0;
@@ -336,6 +345,47 @@ static void drawHoveredTracePopup( const hop::TimelineTrackDrawData& data, uint3
 #endif
 }
 
+static void drawHoveredLockWaitPopup(
+    const void* mutexAddr,
+    hop::TimeDuration duration,
+    const std::vector<LockOwnerInfo>& locksInfo,
+    bool drawAsCycles )
+{
+   char buffer[512];
+   snprintf( buffer, sizeof( buffer ), "Waiting lock 0x%p for ", mutexAddr );
+   int charWritten = strlen( buffer );
+   charWritten += hop::formatCyclesDurationToDisplay(
+       duration, buffer + charWritten, sizeof( buffer ) - charWritten, drawAsCycles );
+
+   if( !locksInfo.empty() )
+   {
+      // Print infos about which threads own the lock
+      char formattedLockTime[64] = {};
+      for( const auto& i : locksInfo )
+      {
+         hop::formatCyclesDurationToDisplay(
+             i.lockDuration, formattedLockTime, sizeof( formattedLockTime ), drawAsCycles );
+         charWritten += snprintf(
+             buffer + charWritten,
+             sizeof( buffer ) - charWritten,
+             "\n  Thread #%u (%s)",
+             i.threadIndex,
+             formattedLockTime );
+      }
+   }
+   else
+   {
+      // Set a message to warn the user than the thread owning the lock is not part of
+      // any profiled code
+      snprintf(
+          buffer + charWritten,
+          sizeof( buffer ) - charWritten,
+          "\n  Threads owning the lock were not profiled or the number of cycles required\n  to "
+          "acquire the lock was smaller than what HOP_MIN_LOCK_CYCLES defines" );
+   }
+   ImGui::TextUnformatted( buffer );
+}
+
 static size_t drawEntries(
     const ImVec2 drawPos,
     uint32_t threadIndex,
@@ -479,23 +529,114 @@ static void handleHoveredTrace(
    }
 }
 
+static std::vector<LockOwnerInfo> highlightLockOwner(
+    const hop::TimelineTracksView& tracksView,
+    const hop::TimelineTrackDrawData& data,
+    const void* highlightedMutexAddr,
+    uint32_t threadIdx,
+    size_t hoveredLwIndex )
+{
+   using namespace hop;
+   HOP_PROF_FUNC();
+   std::vector<LockOwnerInfo> lockInfos;
+   lockInfos.reserve( 16 );
+
+   const std::vector<TimelineTrack>& tlt = data.profiler.timelineTracks();
+
+   // Info of the currently highlighted lock wait
+   const TimeStamp highlightedLWEnd   = tlt[threadIdx]._lockWaits.entries.ends[hoveredLwIndex];
+   const TimeStamp highlightedLWStart = tlt[threadIdx]._lockWaits.entries.starts[hoveredLwIndex];
+
+   // Data for drawing the owner's highlight
+   ImDrawList* DrawList          = ImGui::GetOverlayDrawList();
+   const float wndWidth          = ImGui::GetWindowWidth();
+   const int highlightAlpha      = 70.0f * data.highlightValue;
+   const TimeDuration tlDuration = data.timeline.duration;
+   const TimeDuration tlStart    = data.timeline.globalStartTime + data.timeline.relativeStartTime;   
+
+   // Go through all the threads and find the one that owned the lock during the
+   // highlighted periods
+   for( size_t i = 0; i < tlt.size(); ++i )
+   {
+      // Skip the current thread as it is obviously trying to acquire the lock...
+      if( i == threadIdx ) continue;
+
+      const LockWaitData& lockWaits = tlt[i]._lockWaits;
+
+      const auto lastUnlock = std::lower_bound(
+          lockWaits.entries.ends.cbegin(), lockWaits.entries.ends.cend(), highlightedLWEnd );
+
+      // This is the first lockdata that was acquired after the highlighted trace end
+      auto lockDataIdx = std::distance( lockWaits.entries.ends.cbegin(), lastUnlock );
+      if( lockDataIdx != 0 ) --lockDataIdx;
+
+      const float tracesHeight = tracksView.trackHeightWithThreadLabel( i );
+      while( lockDataIdx != 0 )
+      {
+         if( lockWaits.mutexAddrs[lockDataIdx] == highlightedMutexAddr )
+         {
+            const TimeStamp lockWaitEndTime = lockWaits.entries.ends[lockDataIdx];
+            const TimeStamp unlockTime      = lockWaits.lockReleases[lockDataIdx];
+
+            // We've gone to far, so early break
+            if( unlockTime != 0 && unlockTime < highlightedLWStart ) break;
+
+            const TimeDuration lockHoldDuration = unlockTime - lockWaitEndTime;
+
+            // Add info to result vector
+            bool added = false;
+            for( auto& info : lockInfos )
+            {
+               if( info.threadIndex == i )
+               {
+                  info.lockDuration += lockHoldDuration;
+                  added = true;
+                  break;
+               }
+            }
+            if( !added ) lockInfos.emplace_back( lockHoldDuration, i );
+
+            const float startPxl =
+                hop::cyclesToPxl( wndWidth, tlDuration, lockWaitEndTime - tlStart );
+            const float durationPxl = hop::cyclesToPxl( wndWidth, tlDuration, lockHoldDuration );
+            const float posYPxl = data.timeline.canvasPosY + tracksView.trackAbsoluteDrawPosY( i );
+
+            DrawList->AddRectFilled(
+                ImVec2( startPxl, posYPxl ),
+                ImVec2( startPxl + durationPxl, posYPxl + tracesHeight ),
+                ImColor( 0, 255, 0, 30 + highlightAlpha ) );
+         }
+
+         --lockDataIdx;
+      }
+   }
+
+   return lockInfos;
+}
+
 static void handleHoveredLockWait(
+   const hop::TimelineTracksView& tracksView,
    const hop::TimelineTrackDrawData& data,
-   unsigned threadIndex,
+   unsigned threadIdx,
    size_t hoveredIdx,
    std::vector<HighlightInfo>& traceToHighlight,
    hop::TimelineMsgArray* msgArray )
 {
    if( hoveredIdx != hop::INVALID_IDX )
    {
-      // ImGui::BeginTooltip();
-      // drawHoveredTracePopup( data, threadIndex, hoveredIdx );
-      // ImGui::EndTooltip();
+      const auto& lwData               = data.profiler.timelineTracks()[threadIdx]._lockWaits;
+      const hop::TimeStamp start       = lwData.entries.starts[hoveredIdx];
+      const hop::TimeStamp end         = lwData.entries.ends[hoveredIdx];
+      const hop::Depth_t depth         = lwData.entries.depths[hoveredIdx];
+      const void* highlightedMutexAddr = lwData.mutexAddrs[hoveredIdx];
 
-      const auto& lwData = data.profiler.timelineTracks()[threadIndex]._lockWaits;
-      const hop::TimeStamp start = lwData.entries.starts[hoveredIdx];
-      const hop::TimeStamp end   = lwData.entries.ends[hoveredIdx];
-      const hop::Depth_t depth   = lwData.entries.depths[hoveredIdx];
+      const std::vector<LockOwnerInfo> lockOwnerInfo =
+          highlightLockOwner( tracksView, data, highlightedMutexAddr, threadIdx, hoveredIdx );
+
+      ImGui::BeginTooltip();
+      drawHoveredLockWaitPopup(
+          highlightedMutexAddr, end - start, lockOwnerInfo, data.timeline.useCycles );
+      ImGui::EndTooltip();
 
       // Handle mouse interaction
       if( ImGui::IsMouseDoubleClicked( 0 ) )
@@ -503,7 +644,7 @@ static void handleHoveredLockWait(
          msgArray->addFrameTimeMsg( start, end-start, true, true );
       }
 
-      traceToHighlight.emplace_back(HighlightInfo{ start, end, threadIndex, depth });
+      traceToHighlight.emplace_back(HighlightInfo{ start, end, threadIdx, depth });
    }
 }
 
@@ -551,6 +692,11 @@ bool TimelineTracksView::hidden( uint32_t trackIdx ) const
 float TimelineTracksView::trackHeightWithThreadLabel( uint32_t trackIdx ) const
 {
     return _tracks[trackIdx].trackHeight + THREAD_LABEL_HEIGHT;
+}
+
+float TimelineTracksView::trackAbsoluteDrawPosY( uint32_t trackIdx ) const
+{
+   return _tracks[trackIdx].absoluteDrawPos[1];
 }
 
 void TimelineTracksView::update( const hop::Profiler& profiler )
@@ -683,7 +829,7 @@ void TimelineTracksView::draw( const TimelineTrackDrawData& data, TimelineMsgArr
 
             // Draw the lock waits  entries (before traces so that they are not hiding them)
             const size_t lwHoveredIdx = drawEntries( curDrawPos, i, data, _tracks[i].lockwaitsLodsData, lockwaitLabelWithTime, getLockWaitZoneId );
-            handleHoveredLockWait( data, i, lwHoveredIdx, highlightInfo, msgArray );
+            handleHoveredLockWait( *this, data, i, lwHoveredIdx, highlightInfo, msgArray );
 
             // Draw the traces entries
             const size_t traceHoveredIdx = drawEntries( curDrawPos, i, data, _tracks[i].traceLodsData, traceLabelWithTime, getTraceZoneId );
