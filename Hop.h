@@ -1917,7 +1917,8 @@ int ringbuf_setup( ringbuf_t* rbuf, unsigned nworkers, size_t length )
    {
       return -1;
    }
-   memset( rbuf, 0, sizeof( ringbuf_t ) );
+   rbuf->next.store(0);
+   rbuf->written  = 0;
    rbuf->space    = length;
    rbuf->end      = RBUF_OFF_MAX;
    rbuf->nworkers = nworkers;

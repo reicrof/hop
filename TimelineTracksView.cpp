@@ -91,6 +91,7 @@ static bool drawSeparator( uint32_t threadIndex, bool highlightSeparator )
 static void drawCoreLabels( const ImVec2& drawPosition, const hop::TimelineTrackDrawData& data, uint32_t threadIdx )
 {
    using namespace hop;
+   HOP_PROF_FUNC();
    const auto& coreData = data.profiler.timelineTracks()[threadIdx]._coreEvents;
    if( options::showCoreInfo() && !coreData.data.empty() )
    {
