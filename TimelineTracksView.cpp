@@ -19,6 +19,7 @@
 
 // Drawing constants
 static constexpr float THREAD_LABEL_HEIGHT        = 20.0f;
+static constexpr float MIN_PXL_SIZE_FOR_TEXT      = 5.0f;
 static constexpr uint32_t DISABLED_COLOR          = 0xFF505050;
 static constexpr uint32_t SEPARATOR_COLOR         = 0xFF666666;
 static constexpr uint32_t SEPARATOR_HANDLE_COLOR  = 0xFFAAAAAA;
@@ -93,7 +94,7 @@ static void drawCoreLabels( const ImVec2& drawPosition, const hop::TimelineTrack
    using namespace hop;
    HOP_PROF_FUNC();
    const auto& coreData = data.profiler.timelineTracks()[threadIdx]._coreEvents;
-   if( options::showCoreInfo() && !coreData.data.empty() )
+   if( !coreData.data.empty() )
    {
       const auto drawStart = std::chrono::system_clock::now();
 
@@ -115,16 +116,15 @@ static void drawCoreLabels( const ImVec2& drawPosition, const hop::TimelineTrack
       if( it1 == it2 ) return; // Nothing to draw here
 
 
-      ImGui::PushStyleColor( ImGuiCol_Button, CORE_LABEL_COLOR );
-      ImGui::PushStyleColor( ImGuiCol_ButtonHovered, CORE_LABEL_COLOR );
-      ImGui::PushStyleColor( ImGuiCol_ButtonActive, CORE_LABEL_COLOR );
       ImGui::PushStyleColor( ImGuiCol_Border, CORE_LABEL_BORDER_COLOR );
       ImGui::PushStyleVar( ImGuiStyleVar_FrameBorderSize, 1.0f );
 
       char label[32] = "Core ";
       const int prefixSize = strlen( label );
 
-      const float windowWidth = ImGui::GetWindowWidth();
+      const float windowWidth  = ImGui::GetWindowWidth();
+      const ImVec2 framePading = ImGui::GetStyle().FramePadding;
+      const ImVec2 textAlign   = ImVec2( 0.5f, 0.5f );
       const float cyclesPerPxl = data.timeline.duration / windowWidth;
 
       const uint64_t minCycleToMerge = hop::pxlToCycles( windowWidthPxl, data.timeline.duration, 10 );
@@ -132,22 +132,22 @@ static void drawCoreLabels( const ImVec2& drawPosition, const hop::TimelineTrack
       CoreEvent prevEvent = *it1;
 
       // Lambda used to draw the labels inside the loop and for the last entry as well
-      const auto drawCoreLabelFct = [&]( const CoreEvent& ev )
-      {
-         const float startPxl  = (int64_t)( ev.start - firstTraceAbsoluteTime ) / cyclesPerPxl;
-         const std::pair<float,float> minMaxPxl = std::minmax( startPxl, 0.0f );
+      const auto drawCoreLabelFct = [&]( const CoreEvent& ev ) {
+         const float startPxl = ( int64_t )( ev.start - firstTraceAbsoluteTime ) / cyclesPerPxl;
+         const std::pair<float, float> minMaxPxl = std::minmax( startPxl, 0.0f );
 
          auto deltaPxl = ( ev.end - ev.start ) / cyclesPerPxl;
-         deltaPxl = std::min( deltaPxl + minMaxPxl.first, windowWidth );
-         snprintf( label + prefixSize, sizeof( label ) - prefixSize, "%u", ev.core );
+         deltaPxl      = std::min( deltaPxl + minMaxPxl.first, windowWidth );
 
-         ImGui::SetCursorScreenPos( ImVec2( minMaxPxl.second, drawPosition.y ) );
-         ImGui::Button( label, ImVec2( deltaPxl, TRACE_HEIGHT - 1 ) );
-         if( ImGui::IsItemHovered() )
+         const ImVec2 from( minMaxPxl.second, drawPosition.y );
+         const ImVec2 to( from + ImVec2( deltaPxl, TRACE_HEIGHT - 1 ) );
+         ImGui::RenderFrame( from, to, CORE_LABEL_COLOR );
+         if( deltaPxl >= MIN_PXL_SIZE_FOR_TEXT )
          {
-            ImGui::BeginTooltip();
-            ImGui::TextUnformatted( label );
-            ImGui::EndTooltip();
+            snprintf( label + prefixSize, sizeof( label ) - prefixSize, "%u", ev.core );
+            const ImVec2 labelSize = ImGui::CalcTextSize( label );
+            ImGui::RenderTextClipped(
+                from + framePading, to - framePading, label, NULL, &labelSize, textAlign );
          }
       };
 
@@ -177,7 +177,7 @@ static void drawCoreLabels( const ImVec2& drawPosition, const hop::TimelineTrack
       drawCoreLabelFct( prevEvent );
 
       ImGui::PopStyleVar(1);
-      ImGui::PopStyleColor(4);
+      ImGui::PopStyleColor(1);
 
       const auto drawEnd = std::chrono::system_clock::now();
       hop::g_stats.coreDrawingTimeMs +=
@@ -445,7 +445,7 @@ static size_t drawEntries(
 
       // Create the name for the trace if it is large enough on screen
       entryName[0] = '\0';
-      if( deltaPxl[i] > 5.0f && !curLod.loded )
+      if( deltaPxl[i] > MIN_PXL_SIZE_FOR_TEXT && !curLod.loded )
       {
          getEntryLabelFct( data, threadIndex, absIndex, curLod.end - curLod.start, sizeof(entryName), entryName );
          ImVec2 labelSize = ImGui::CalcTextSize(entryName, NULL, true);
@@ -692,7 +692,11 @@ bool TimelineTracksView::hidden( uint32_t trackIdx ) const
 
 float TimelineTracksView::trackHeightWithThreadLabel( uint32_t trackIdx ) const
 {
-    return _tracks[trackIdx].trackHeight + THREAD_LABEL_HEIGHT;
+   const auto& t                 = _tracks[trackIdx];
+   // Return the min between the "set" height value and its min possible value (nb track * height)
+   const float trackHeight       = t.trackHeight + THREAD_LABEL_HEIGHT;
+   const float maxPossibleHeight = ( t.maxDepth + 1 ) * PADDED_TRACE_SIZE + THREAD_LABEL_HEIGHT;
+   return std::min( trackHeight, maxPossibleHeight );
 }
 
 float TimelineTracksView::trackAbsoluteDrawPosY( uint32_t trackIdx ) const
@@ -731,7 +735,8 @@ void TimelineTracksView::update( const hop::Profiler& profiler )
       appendLods( _tracks[i].lockwaitsLodsData, lwEntries );
 
       // Update max depth as well in case it has changed
-      _tracks[i].maxDepth = std::max( traceEntries.maxDepth, lwEntries.maxDepth );
+      const Depth_t newMaxDepth = std::max( traceEntries.maxDepth, lwEntries.maxDepth );
+      _tracks[i].maxDepth       = newMaxDepth;
    }
 
    // Finally update according to the options
@@ -777,7 +782,11 @@ void TimelineTracksView::draw( const TimelineTrackDrawData& data, TimelineMsgArr
 
       const ImVec2 labelsDrawPosition = ImGui::GetCursorScreenPos();
 
-      drawCoreLabels( labelsDrawPosition, data, i );
+      // Draw the core before the thread labels so they are not drawn over them
+      if( !threadHidden && options::showCoreInfo() )
+      {
+         drawCoreLabels( labelsDrawPosition, data, i );
+      }
 
       if( drawThreadLabel( labelsDrawPosition, customName, i, threadHidden ) )
       {
@@ -802,9 +811,6 @@ void TimelineTracksView::draw( const TimelineTrackDrawData& data, TimelineMsgArr
             _draggedTrack = -1;
          }
       }
-
-      // Update the track height in case the max depth has changed
-      setTrackHeight( i, _tracks[i].trackHeight );
 
       ImVec2 curDrawPos = absDrawPos;
       if( !threadHidden )
@@ -959,7 +965,7 @@ bool TimelineTracksView::handleMouse( float, float posY, bool, bool, float )
    {
       // Find the previous track that is visible
       int i = _draggedTrack - 1;
-      while ( i > 0 && _tracks[i].maxDepth > 0 )
+      while ( i > 0 && _tracks[i].absoluteDrawPos[1] == 0 )
       {
          --i;
       }

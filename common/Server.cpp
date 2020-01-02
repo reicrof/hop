@@ -405,8 +405,6 @@ size_t Server::handleNewMessage( uint8_t* data, size_t maxSize, TimeStamp minTim
 
          const size_t newCount = mergeAndRemoveDuplicates( coreEventsPtr, eventCount );
 
-         assert_is_sorted( coreEventsPtr, coreEventsPtr + newCount );
-
          // TODO: Could lock later when we received all the messages
          std::lock_guard<hop::Mutex> guard( _sharedPendingDataMutex );
          auto& coreEvents = _sharedPendingData.coreEventsPerThread[threadIndex];

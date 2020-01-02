@@ -8,6 +8,7 @@
 #include <cctype> // toupper
 #include <chrono>
 #include <cstdio>
+#include <functional>
 #include <math.h>
 
 #define __STDC_FORMAT_MACROS
@@ -34,12 +35,12 @@ int formatCyclesTimepointToDisplay(
 
 void formatSizeInBytesToDisplay( size_t sizeInBytes, char* str, size_t strSize );
 
-template <typename I>
-inline void assert_is_sorted( I first, I last )
+template <typename I, class Compare = std::less<> >
+inline void assert_is_sorted( I first, I last, Compare comp = Compare() )
 {
-   (void)first;(void)last;
+   (void)first;(void)last;(void)comp;
 #ifdef HOP_ASSERT_IS_SORTED
-   assert( std::is_sorted( first, last ) );
+   assert( std::is_sorted( first, last, comp ) );
 #endif
 }
 
