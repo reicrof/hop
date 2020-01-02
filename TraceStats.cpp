@@ -624,7 +624,14 @@ void clearTraceDetails( TraceDetails& traceDetail )
 
 void clearTraceStats( TraceStats& stats )
 {
-   stats = TraceStats{ 0, 0, 0, 0, 0, std::vector< float >(), false, false };
+   stats.fctNameId       = 0;
+   stats.count           = 0;
+   stats.min             = 0;
+   stats.max             = 0;
+   stats.median          = 0;
+   stats.open            = false;
+   stats.focus           = false;
+   stats.displayableDurations.clear();
 }
 
 }
