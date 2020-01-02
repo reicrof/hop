@@ -76,7 +76,8 @@ static std::unique_ptr<hop::Profiler> createProfiler( const char* processName, b
    const hop::ProcessInfo procInfo = pid != -1 ? hop::getProcessInfoFromPID( pid )
                                                : hop::getProcessInfoFromProcessName( processName );
 
-   auto profiler = std::make_unique<hop::Profiler>( Profiler::SRC_TYPE_PROCESS, procInfo.pid, processName );
+   auto profiler = std::unique_ptr<hop::Profiler>(
+       new hop::Profiler( Profiler::SRC_TYPE_PROCESS, procInfo.pid, processName ) );
    profiler->setRecording( startRecording );
 
    return profiler;
