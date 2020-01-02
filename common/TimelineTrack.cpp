@@ -2,7 +2,30 @@
 
 #include "Utils.h"
 
+#include <algorithm>
 #include <vector>
+
+static void addLockWaitsRecord( hop::LockWaitsRecords* records, size_t index )
+{
+   if( records->count >= hop::STAMPS_RECORD_SIZE )
+   {
+      const auto startIt = std::begin(records->indices);
+      std::rotate( startIt, startIt + 1, std::end(records->indices) );
+      records->count = hop::STAMPS_RECORD_SIZE - 1;
+   }
+
+   records->indices[records->count++] = index;
+}
+
+static void keepLatestLockWaitsRecords( hop::LockWaitsRecords* records, uint32_t countToKeep )
+{
+   if( countToKeep < records->count )
+   {
+      const auto endIt = std::begin(records->indices) + records->count;
+      std::rotate( std::begin(records->indices), endIt - countToKeep, endIt );
+      records->count = countToKeep;
+   }
+}
 
 namespace hop
 {
@@ -34,7 +57,8 @@ void TimelineTrack::addLockWaits( const LockWaitData& lockWaits )
 
    for( size_t i = 0; i < lockWaits.mutexAddrs.size(); ++i )
    {
-      _lockWaitsPerMutex[ lockWaits.mutexAddrs[i] ].push_back( prevSize + i );
+      addLockWaitsRecord( &_lockWaitsPerMutex[ lockWaits.mutexAddrs[i] ], prevSize + i );
+      //_lockWaitsPerMutex[ lockWaits.mutexAddrs[i] ].push_back( prevSize + i );
    }
 }
 
@@ -51,21 +75,22 @@ void TimelineTrack::addUnlockEvents( const std::vector<UnlockEvent>& unlockEvent
       const auto lockWaitsIdx = _lockWaitsPerMutex.find( ue.mutexAddress );
       if( lockWaitsIdx != _lockWaitsPerMutex.end() )
       {
-         std::vector< TimeStamp >& lockwaitIdx = lockWaitsIdx->second;
+         LockWaitsRecords& lwRecords = lockWaitsIdx->second;
          size_t i = 0;
-         for (; i < lockwaitIdx.size(); ++i)
+         for (; i < lwRecords.count; ++i)
          {
-            if( _lockWaits.entries.ends[lockwaitIdx[i]] < ue.time )
+            if( _lockWaits.entries.ends[lwRecords.indices[i]] < ue.time )
             {
-               _lockWaits.lockReleases[lockwaitIdx[i]] = ue.time;
+               _lockWaits.lockReleases[lwRecords.indices[i]] = ue.time;
                break;
             }
          }
          // If we found a lockwait that is associted with a specific unlock events,
          // all prior lockwaits can be dismiss and are either already associated or
          // their unlock event was dropped
-         if( i++ != lockwaitIdx.size() )
-            lockwaitIdx.erase( lockwaitIdx.begin(), lockwaitIdx.begin() + i );
+         if( i++ != lwRecords.count )
+            keepLatestLockWaitsRecords( &lwRecords, i );
+            //lockwaitIdx.erase( lockwaitIdx.begin(), lockwaitIdx.begin() + i );
       }
    }
 }

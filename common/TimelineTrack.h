@@ -9,6 +9,13 @@
 namespace hop
 {
 
+constexpr uint32_t STAMPS_RECORD_SIZE = 16;
+struct LockWaitsRecords
+{
+   size_t indices[STAMPS_RECORD_SIZE];
+   uint32_t count;
+};
+
 struct TimelineTrack
 {
    void setName( StrPtr_t name ) noexcept;
@@ -25,7 +32,7 @@ struct TimelineTrack
    CoreEventData _coreEvents;
    StrPtr_t _trackName{0};
 
-   std::unordered_map< void*, std::vector< TimeStamp > > _lockWaitsPerMutex;
+   std::unordered_map< void*, LockWaitsRecords > _lockWaitsPerMutex;
 };
 
 size_t serializedSize( const TimelineTrack& ti );
