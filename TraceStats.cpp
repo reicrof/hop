@@ -330,42 +330,48 @@ createTraceDetails( const TraceData& traces, uint32_t threadIndex, size_t traceI
    return details;
 }
 
- TraceStats createTraceStats(const TraceData& traces, uint32_t, size_t traceId)
- {
-    const StrPtr_t fileName = traces.fileNameIds[ traceId ];
-    const StrPtr_t fctName = traces.fctNameIds[ traceId ];
-    const LineNb_t lineNb = traces.lineNbs[ traceId ];
+TraceStats createTraceStats( const TraceData& traces, uint32_t, size_t traceId )
+{
+   const StrPtr_t fileName = traces.fileNameIds[traceId];
+   const StrPtr_t fctName             = traces.fctNameIds[traceId];
+   const LineNb_t lineNb              = traces.lineNbs[traceId];
 
-    std::vector<float> displayableDurations;
-    std::vector<float> medianValues;
-    displayableDurations.reserve( 256 );
-    medianValues.reserve( 256 );
-    TimeDuration min = std::numeric_limits< TimeDuration >::max();
-    TimeDuration max = 0;
-    TimeDuration median = 0;
-    size_t count = 0;
+   TraceStats stats;
+   stats.min       = std::numeric_limits<TimeDuration>::max();
+   stats.max       = 0;
+   stats.median    = 0;
+   stats.count     = 0;
+   stats.fctNameId = fctName;
+   stats.displayableDurations.reserve( 256 );
+   std::vector<float> medianValues;
+   medianValues.reserve( 256 );
 
-    for (size_t i = 0; i < traces.fileNameIds.size(); ++i)
-    {
-       if (traces.fileNameIds[i] == fileName && traces.fctNameIds[i] == fctName && traces.lineNbs[i] == lineNb)
-       {
-          const TimeDuration delta = traces.entries.ends[i] - traces.entries.starts[i];
-          displayableDurations.push_back( (float) delta );
-          medianValues.push_back( delta );
-          min = std::min( min, delta );
-          max = std::max( max, delta );
-          ++count;
-       }
-    }
+   for( size_t i = 0; i < traces.fileNameIds.size(); ++i )
+   {
+      if( traces.fileNameIds[i] == fileName && traces.fctNameIds[i] == fctName &&
+          traces.lineNbs[i] == lineNb )
+      {
+         const TimeDuration delta = traces.entries.ends[i] - traces.entries.starts[i];
+         stats.displayableDurations.push_back( (float)delta );
+         medianValues.push_back( delta );
+         stats.min = std::min( stats.min, delta );
+         stats.max = std::max( stats.max, delta );
+         ++stats.count;
+      }
+   }
 
-    if( !medianValues.empty() )
-    {
-       std::nth_element(medianValues.begin(), medianValues.begin() + medianValues.size() / 2, medianValues.end());
-       median = medianValues[ medianValues.size() / 2 ];
-    }
+   if( !medianValues.empty() )
+   {
+      std::nth_element(
+          medianValues.begin(),
+          medianValues.begin() + medianValues.size() / 2,
+          medianValues.end() );
+      stats.median = medianValues[medianValues.size() / 2];
+   }
 
-    return TraceStats{ fctName, count, min, max, median, std::move(displayableDurations), true, true };
- }
+   stats.open = stats.focus = true;
+   return stats;
+}
 
 TraceDetails createGlobalTraceDetails( const TraceData& traces, uint32_t threadIndex )
 {
