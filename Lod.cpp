@@ -10,6 +10,9 @@ static constexpr float MIN_GAP_PXL = 5.0f;
 static hop::TimeStamp LOD_MIN_GAP_CYCLES[hop::LOD_COUNT] = {0};
 static hop::TimeStamp LOD_MIN_TRACE_LENGTH_PXL[hop::LOD_COUNT] = {0};
 
+#define HOP_USE_INSERTION_SORT 0
+
+
 namespace hop
 {
 TimeDuration LOD_CYCLES[9] = {1000, 200000, 30000000, 300000000, 600000000, 6000000000, 20000000000, 200000000000, 600000000000 };
@@ -131,7 +134,14 @@ void appendLods( LodsData& lodData, const Entries& entries )
       const auto lodStartIt = lodData.lods[i].begin();
       auto it = std::lower_bound(lodStartIt, lodData.lods[i].end(), LodInfo{ earliestEnds[i], earliestEnds[i], 0, 0, false });
       auto dist = std::distance( lodStartIt, it );
+
+#ifdef HOP_USE_INSERTION_SORT
+      // In theory, since the data is mostly already sorted, the insertion sort should be better
+      // than the standard sort.
       hop::insertionSort( lodStartIt + dist, lodData.lods[i].end() );
+#else
+      std::sort( lodStartIt + dist, lodData.lods[i].end() );
+#endif
       assert_is_sorted( lodStartIt, lodData.lods[i].end() );
    }
 

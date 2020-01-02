@@ -40,7 +40,10 @@ struct HighlightInfo
 
 static void resetContextMenu( hop::TimelineTracksView::ContextMenu& ctxt )
 {
-   memset( &ctxt, 0, sizeof( ctxt ) );
+   ctxt.traceId = 0;
+   ctxt.threadIndex = 0;
+   ctxt.traceClicked = false;
+   ctxt.open = false;
 }
 
 static bool drawSeparator( uint32_t threadIndex, bool highlightSeparator )
@@ -98,7 +101,6 @@ static void drawCoreLabels( const ImVec2& drawPosition, const hop::TimelineTrack
       auto it2 = std::upper_bound( coreData.data.begin(), coreData.data.end(), lastEv, cmp );
 
       if( it2 != coreData.data.end() ) ++it2;
-      //if( it2 != coreData.data.end() ) ++it2;
 
       if( it1 == it2 ) return; // Nothing to draw here
 
@@ -112,7 +114,8 @@ static void drawCoreLabels( const ImVec2& drawPosition, const hop::TimelineTrack
       char label[32] = "Core ";
       const int prefixSize = strlen( label );
 
-      const float cyclesPerPxl = data.timeline.duration / ImGui::GetWindowWidth();
+      const float windowWidth = ImGui::GetWindowWidth();
+      const float cyclesPerPxl = data.timeline.duration / windowWidth;
 
       const uint64_t minCycleToMerge = hop::pxlToCycles( windowWidthPxl, data.timeline.duration, 10 );
       const uint64_t minCycleToSkip = hop::pxlToCycles( windowWidthPxl, data.timeline.duration, 0.5f );
@@ -121,11 +124,14 @@ static void drawCoreLabels( const ImVec2& drawPosition, const hop::TimelineTrack
       // Lambda used to draw the labels inside the loop and for the last entry as well
       const auto drawCoreLabelFct = [&]( const CoreEvent& ev )
       {
-         auto startPxl = (int64_t)( ev.start - firstTraceAbsoluteTime ) / cyclesPerPxl;
+         const float startPxl  = (int64_t)( ev.start - firstTraceAbsoluteTime ) / cyclesPerPxl;
+         const std::pair<float,float> minMaxPxl = std::minmax( startPxl, 0.0f );
+
          auto deltaPxl = ( ev.end - ev.start ) / cyclesPerPxl;
+         deltaPxl = std::min( deltaPxl + minMaxPxl.first, windowWidth );
          snprintf( label + prefixSize, sizeof( label ) - prefixSize, "%u", ev.core );
 
-         ImGui::SetCursorScreenPos( ImVec2( startPxl, drawPosition.y ) );
+         ImGui::SetCursorScreenPos( ImVec2( minMaxPxl.second, drawPosition.y ) );
          ImGui::Button( label, ImVec2( deltaPxl, TRACE_HEIGHT - 1 ) );
          if( ImGui::IsItemHovered() )
          {
@@ -232,16 +238,24 @@ static void drawTrackHighlight( float trackX, float trackY, float trackHeight )
    }
 }
 
-template< typename LodIt >
-static void createDrawData( LodIt it, size_t count, hop::TimeStamp absStart, float cyclesPerPxl, float* __restrict startsPxl, float* __restrict deltaPxl )
+template <typename LodIt>
+static void createDrawData(
+    LodIt it,
+    size_t count,
+    hop::TimeStamp absStart,
+    float cyclesPerPxl,
+    float* __restrict startsPxl,
+    float* __restrict deltaPxl )
 {
    HOP_PROF_FUNC();
    for( size_t i = 0; i < count; ++i, ++it )
    {
-      // Use the min max to clamp the starting position to 0 and remove what has been "cropped" from the length
-      const auto minMaxPxl = std::minmax( (int64_t)( it->start - absStart ) / cyclesPerPxl, 0.0f );
+      // Use the min max to clamp the starting position to 0 and remove what has been "cropped" from
+      // the length
+      const std::pair<float, float> minMaxPxl = // Do not use auto as minmax returns a reference
+          std::minmax( ( int64_t )( it->start - absStart ) / cyclesPerPxl, 0.0f );
       startsPxl[i] = minMaxPxl.second;
-      deltaPxl[i]  = std::max( (( it->end - it->start ) / cyclesPerPxl) + minMaxPxl.first, 1.0f );
+      deltaPxl[i]  = std::max( ( ( it->end - it->start ) / cyclesPerPxl ) + minMaxPxl.first, 1.0f );
    }
 }
 

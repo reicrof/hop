@@ -269,7 +269,7 @@ int main( int argc, char* argv[] )
 
       viewer.draw( w, h );
 
-      const auto frameEnd = ClockType::now();
+      auto frameEnd = ClockType::now();
 
       // If we rendered fast, fetch data again instead of stalling on the vsync
       if ( duration<double, std::milli>( ( frameEnd - frameStart ) ).count() < 10.0 )
@@ -278,6 +278,8 @@ int main( int argc, char* argv[] )
       }
 
       SDL_GL_SwapWindow( window );
+
+      frameEnd = ClockType::now();
 
       hop::g_stats.frameTimeMs = duration<double, std::milli>( ( frameEnd - frameStart ) ).count();
    }
