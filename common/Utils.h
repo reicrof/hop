@@ -35,7 +35,7 @@ int formatCyclesTimepointToDisplay(
 
 void formatSizeInBytesToDisplay( size_t sizeInBytes, char* str, size_t strSize );
 
-template <typename I, class Compare = std::less<> >
+template <typename I, class Compare = std::less<typename I::value_type> >
 inline void assert_is_sorted( I first, I last, Compare comp = Compare() )
 {
    (void)first;(void)last;(void)comp;
