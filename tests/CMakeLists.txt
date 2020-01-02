@@ -1,6 +1,9 @@
 
 include_directories(${ROOT_DIR})
 
+set( CMAKE_VERBOSE_MAKEFILE on )
+set( CMAKE_CXX_STANDARD 14 )
+
 if(UNIX)
    set( platform_src "${ROOT_DIR}/platform/Platform_Unix.cpp" )
 else()
