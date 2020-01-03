@@ -16,6 +16,8 @@
 
 #include "imgui/imgui.h"
 
+#include <thread> // For saving/opening files
+
 extern bool g_run;
 
 static constexpr float MAX_FULL_SIZE_TAB_COUNT = 8.0f;
@@ -23,6 +25,55 @@ static constexpr float TAB_HEIGHT = 30.0f;
 static constexpr float TOOLBAR_BUTTON_HEIGHT = 15.0f;
 static constexpr float TOOLBAR_BUTTON_WIDTH = 15.0f;
 static constexpr float TOOLBAR_BUTTON_PADDING = 5.0f;
+
+static void saveProfilerToFile( hop::ProfilerView* prof, const char* savePath )
+{
+   hop::displayModalWindow( "Saving...", hop::MODAL_TYPE_NO_CLOSE );
+
+   // Spawn a thread so we do not freeze the ui
+   std::string path( savePath );
+   std::thread t( [prof, path]() {
+      const bool success = prof->saveToFile( path.c_str() );
+      hop::closeModalWindow();
+      if( !success )
+      {
+         hop::displayModalWindow( "Error while saving file", hop::MODAL_TYPE_ERROR );
+      }
+   } );
+
+   t.detach();
+}
+
+static std::future< hop::ProfilerView* > openProfilerFile( const char* openPath )
+{
+   using namespace hop;
+   displayModalWindow( "Loading...", MODAL_TYPE_NO_CLOSE );
+
+   // Spawn a thread so we do not freeze the ui
+   std::string path( openPath );
+
+   return std::async(
+       std::launch::async,
+       []( std::string path ) {
+          ProfilerView* prof = new ProfilerView( Profiler::SRC_TYPE_FILE, -1, path.c_str() );
+          const bool success = prof->openFile( path.c_str() );
+          if( success )
+          {
+             // Do the first update here to create the LODs. The params does not make difference
+             // in this scenario as they will be updated once we go back to the main thread
+             prof->update( 16.0f, 5000000000 );
+          }
+          else
+          {
+             displayModalWindow( "Error while saving file", hop::MODAL_TYPE_ERROR );
+          }
+
+          closeModalWindow();
+
+          return prof;
+       },
+       path );
+}
 
 static void addNewProfilerPopUp( hop::Viewer* v, hop::Profiler::SourceType type )
 {
@@ -63,15 +114,14 @@ static void drawMenuBar( hop::Viewer* v )
          }
          if( ImGui::MenuItem( menuSaveAsHop, NULL, false, profIdx >= 0 ) )
          {
-            // hop::Profiler* prof = v->getProfiler( profIdx );
-            // hop::displayStringInputModalWindow(
-            //     menuSaveAsHop, [=]( const char* path ) { prof->saveToFile( path ); } );
+            hop::ProfilerView* prof = v->getProfiler( profIdx );
+            hop::displayStringInputModalWindow( menuSaveAsHop, [=]( const char* savePath ) {
+               saveProfilerToFile( prof, savePath );
+            } );
          }
          if( ImGui::MenuItem( menuOpenHopFile, NULL ) )
          {
-            hop::displayStringInputModalWindow( menuOpenHopFile, [=]( const char* path ) {
-               v->openProfilerFile( path );
-            } );
+            addNewProfilerPopUp( v, hop::Profiler::SRC_TYPE_FILE );
          }
          if( ImGui::MenuItem( menuHelp, NULL ) )
          {
@@ -288,7 +338,9 @@ static int displayableProfilerName( const hop::ProfilerView* prof, char* outName
       return snprintf( outName, size, "%s", "<No Target Process>" );
    }
 
-   return snprintf( outName, size, "%s (%d)", profName, pid );
+   const hop::Profiler::SourceType type = prof->data().sourceType();
+   const char* format = (type == hop::Profiler::SRC_TYPE_PROCESS) ? "%s (%d)" : "%s";
+   return snprintf( outName, size, format, profName, pid );
 }
 
 static bool drawAddTabButton( const ImVec2& drawPos )
@@ -446,11 +498,10 @@ static void updateProfilers(
     std::vector<std::unique_ptr<hop::ProfilerView> >& profilers,
     int selectedTab )
 {
-   const float dtTimeMs = ImGui::GetIO().DeltaTime * 1000;
    const float globalTimeMs = ImGui::GetTime() * 1000;
    for ( auto& p : profilers )
    {
-      p->update( dtTimeMs, globalTimeMs, tlDuration );
+      p->update( globalTimeMs, tlDuration );
    }
 
    if( hop::options::showDebugWindow() && selectedTab >= 0 )
@@ -529,19 +580,10 @@ int Viewer::addNewProfiler( const char* processName, bool startRecording )
    return _selectedTab;
 }
 
-void Viewer::openProfilerFile( const char* /*filePath*/ )
+void Viewer::openProfilerFile( const char* filePath )
 {
    assert( !_pendingProfilerLoad.valid() );
-
-   //std::string strPath = filePath;
-   // _pendingProfilerLoad = std::async(
-   //     std::launch::async,
-   //     []( std::string path ) {
-   //        Profiler* prof = new hop::Profiler();
-   //        prof->setSource( Profiler::SRC_TYPE_FILE, -1, path.c_str() );
-   //        return prof;
-   //     },
-   //     strPath );
+   _pendingProfilerLoad = ::openProfilerFile( filePath );
 }
 
 int Viewer::removeProfiler( int index )
@@ -570,6 +612,12 @@ const ProfilerView* Viewer::getProfiler( int index ) const
    return _profilers[index].get();
 }
 
+ProfilerView* Viewer::getProfiler( int index )
+{
+   assert( index >= 0 && index < (int)_profilers.size() );
+   return _profilers[index].get();  
+}
+
 void Viewer::fetchClientsData()
 {
    for( auto& pv : _profilers )
@@ -577,19 +625,19 @@ void Viewer::fetchClientsData()
       pv->fetchClientData();
    }
 
-   // if ( _pendingProfilerLoad.valid() )
-   // {
-   //    const auto waitRes = _pendingProfilerLoad.wait_for( std::chrono::microseconds( 200 ) );
-   //    if ( waitRes == std::future_status::ready )
-   //    {
-   //       std::unique_ptr<Profiler> loadedProf( _pendingProfilerLoad.get() );
-   //       if ( strlen( loadedProf->nameAndPID() ) > 0 )
-   //       {
-   //          _profilers.emplace_back( std::move(loadedProf) );
-   //          _selectedTab = _profilers.size() - 1;
-   //       }
-   //    }
-   // }
+   if ( _pendingProfilerLoad.valid() )
+   {
+      const auto waitRes = _pendingProfilerLoad.wait_for( std::chrono::microseconds( 200 ) );
+      if ( waitRes == std::future_status::ready )
+      {
+         std::unique_ptr<ProfilerView> loadedProf( _pendingProfilerLoad.get() );
+         if ( loadedProf.get() )
+         {
+            _profilers.emplace_back( std::move(loadedProf) );
+            _selectedTab = _profilers.size() - 1;
+         }
+      }
+   }
 }
 
 void Viewer::onNewFrame(

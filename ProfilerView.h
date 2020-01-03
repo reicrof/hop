@@ -17,7 +17,7 @@ class ProfilerView
 public:
    ProfilerView( Profiler::SourceType type, int processId, const char* str );
    void fetchClientData();
-   void update( float deltaTimeMs, float globalTimeMs, TimeDuration timelineDuration );
+   void update( float globalTimeMs, TimeDuration timelineDuration );
    void draw( float drawPosX, float drawPosY, const TimelineInfo& tlInfo, TimelineMsgArray* msgArray );
 
    bool handleHotkey();
@@ -25,6 +25,9 @@ public:
 
    void clear();
    void setRecording( bool recording );
+
+   bool saveToFile( const char* path );
+   bool openFile( const char* path );
 
    float canvasHeight() const;
    int lodLevel() const;

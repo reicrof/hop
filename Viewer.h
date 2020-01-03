@@ -23,6 +23,7 @@ class Viewer
    void fetchClientsData();
 
   const ProfilerView* getProfiler( int index ) const;
+  ProfilerView* getProfiler( int index );
 
    void onNewFrame(
        float deltaMs,

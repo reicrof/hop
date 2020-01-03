@@ -16,7 +16,8 @@ Profiler::Profiler( SourceType type, int processId, const char* str )
       _earliestTimeStamp( 0 ),
       _latestTimeStamp( 0 )
 {
-   _server.start( _pid , _name.c_str());
+   if( type == Profiler::SRC_TYPE_PROCESS )
+      _server.start( _pid , _name.c_str());
 }
 
 const char* Profiler::nameAndPID( int* processId ) const
@@ -229,18 +230,17 @@ struct SaveFileHeader
 
 bool hop::Profiler::saveToFile( const char* savePath )
 {
+   HOP_PROF_FUNC();
    setRecording( false );
    // Compute the size of the serialized data
-   const size_t dbSerializedSize       = serializedSize( _strDb );
-   std::vector<size_t> timelineTrackSerializedSize( _tracks.size() );
+   const size_t dbSerializedSize  = serializedSize( _strDb );
+   size_t timelineTracksSerializedSize = 0;
    for( size_t i = 0; i < _tracks.size(); ++i )
    {
-      timelineTrackSerializedSize[i] = serializedSize( _tracks[i] );
+      timelineTracksSerializedSize += serializedSize( _tracks[i] );
    }
 
-   const size_t totalSerializedSize =
-       std::accumulate(
-           timelineTrackSerializedSize.begin(), timelineTrackSerializedSize.end(), size_t{0} ) + dbSerializedSize;
+   const size_t totalSerializedSize = timelineTracksSerializedSize + dbSerializedSize;
 
    std::vector<char> data( totalSerializedSize );
 
@@ -250,6 +250,7 @@ bool hop::Profiler::saveToFile( const char* savePath )
       index += serialize( _tracks[i], &data[index] );
    }
 
+   HOP_PROF_SPLIT( "Compressing" );
    mz_ulong compressedSize = compressBound( totalSerializedSize );
    std::vector<char> compressedData( compressedSize );
    int compressionStatus = compress(
@@ -263,11 +264,64 @@ bool hop::Profiler::saveToFile( const char* savePath )
       return false;
    }
 
+   HOP_PROF_SPLIT( "Writing to disk" );
    std::ofstream of( savePath, std::ofstream::binary );
    SaveFileHeader header = {
        MAGIC_NUMBER, 1, totalSerializedSize, (uint32_t)dbSerializedSize, (uint32_t)_tracks.size()};
    of.write( (const char*)&header, sizeof( header ) );
    of.write( &compressedData[0], compressedSize );
+
+   return true;
+}
+
+bool hop::Profiler::openFile( const char* path )
+{
+   HOP_PROF_FUNC();
+   std::ifstream input( path, std::ifstream::binary );
+   if( !input.is_open() ) return false;
+
+   clear();  // Remove any existing data
+
+   std::vector<char> data(
+       ( std::istreambuf_iterator<char>( input ) ), ( std::istreambuf_iterator<char>() ) );
+
+   SaveFileHeader* header = (SaveFileHeader*)&data[0];
+   if( header->magicNumber != MAGIC_NUMBER )
+   {
+      return false;
+   }
+
+   HOP_PROF_SPLIT( "Uncompressing" );
+   std::vector<char> uncompressedData( header->uncompressedSize );
+   mz_ulong uncompressedSize = uncompressedData.size();
+
+   int uncompressStatus = uncompress(
+       (unsigned char*)uncompressedData.data(),
+       &uncompressedSize,
+       (unsigned char*)&data[sizeof( SaveFileHeader )],
+       data.size() - sizeof( SaveFileHeader ) );
+
+   if( uncompressStatus != Z_OK )
+   {
+      return false;
+   }
+
+   HOP_PROF_SPLIT( "Updating data" );
+
+   size_t i            = 0;
+   const size_t dbSize = deserialize( &uncompressedData[i], _strDb );
+   assert( dbSize == header->strDbSize );
+   i += dbSize;
+
+   std::vector<TimelineTrack> timelineTracks( header->threadCount );
+   for( uint32_t j = 0; j < header->threadCount; ++j )
+   {
+      size_t timelineTrackSize = deserialize( &uncompressedData[i], timelineTracks[j] );
+      addTraces( timelineTracks[j]._traces, j );
+      addLockWaits( timelineTracks[j]._lockWaits, j );
+      i += timelineTrackSize;
+   }
+   _srcType = SRC_TYPE_FILE;
 
    return true;
 }
