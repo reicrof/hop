@@ -93,9 +93,10 @@ void TimelineTrack::addUnlockEvents( const std::vector<UnlockEvent>& unlockEvent
    }
 }
 
-void TimelineTrack::addCoreEvents( const std::vector<CoreEvent>& coreEvents )
+void TimelineTrack::addCoreEvents( const CoreEventData& coreEvents )
 {
-   _coreEvents.data.insert( _coreEvents.data.end(), coreEvents.begin(), coreEvents.end() );
+   _coreEvents.data.insert(
+       _coreEvents.data.end(), coreEvents.data.begin(), coreEvents.data.end() );
 
    assert_is_sorted(
        _coreEvents.data.begin(),
@@ -121,7 +122,8 @@ bool TimelineTrack::empty() const
 
 size_t serializedSize( const TimelineTrack& ti )
 {
-   return serializedSize( ti._traces ) + serializedSize( ti._lockWaits );
+   return serializedSize( ti._traces ) + serializedSize( ti._lockWaits ) +
+          serializedSize( ti._coreEvents );
 }
 
 size_t serialize( const TimelineTrack& ti, char* data )
@@ -132,6 +134,7 @@ size_t serialize( const TimelineTrack& ti, char* data )
 
     i += serialize( ti._traces, &data[i] );
     i += serialize( ti._lockWaits, &data[i] );
+    i += serialize( ti._coreEvents, &data[i] );
    
     assert( i == serialSize );
 
@@ -144,6 +147,7 @@ size_t deserialize( const char* data, TimelineTrack& ti )
 
     i += deserialize( &data[i], ti._traces );
     i += deserialize( &data[i], ti._lockWaits );
+    i += deserialize( &data[i], ti._coreEvents );
 
     return i;
 }

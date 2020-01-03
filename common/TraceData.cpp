@@ -300,4 +300,39 @@ size_t deserialize( const char* src, LockWaitData& lw )
    return i;
 }
 
+size_t serializedSize( const CoreEventData& ced )
+{
+   return sizeof( size_t ) +                              // CoreEvents count
+          ced.data.size() * sizeof( ced.data[0] );        // Actual Data
+}
+
+size_t serialize( const CoreEventData& ced, char* dst )
+{
+   size_t i = 0;
+
+   const size_t coreEventCount = ced.data.size();
+
+   memcpy( &dst[i], &coreEventCount, sizeof( size_t ) );
+   i += sizeof( size_t );
+
+   std::copy( ced.data.begin(), ced.data.end(), (CoreEvent*)&dst[i] );
+   i += sizeof( ced.data[0] ) * coreEventCount;
+
+   return i;
+}
+
+size_t deserialize( const char* src, CoreEventData& ced )
+{
+   size_t i = 0;
+
+   const size_t count = *(size_t*)&src[i];
+   i += sizeof( size_t );
+
+   // Core Events
+   std::copy((CoreEvent*)&src[i], ((CoreEvent*) &src[i]) + count, std::back_inserter(ced.data));
+   i += sizeof( ced.data[0] ) * count;
+
+   return i;
+}
+
 } // namespace hop

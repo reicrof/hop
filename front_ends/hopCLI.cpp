@@ -287,6 +287,7 @@ int main( int argc, char* argv[] )
 
    assert( opts.saveFilePath );
 
+   printf( "\nSaving file to disk... It might take a few seconds\n" );
    profiler->saveToFile( opts.saveFilePath );
 
    // We have launched a child process. Let's close it
@@ -295,5 +296,8 @@ int main( int argc, char* argv[] )
       hop::terminateProcess( childProcId );
    }
 
-   // The interpreter thread will leak. This is a small cost to pay to have simple dumb portable code.
+   // The interpreter thread will leak since we cannot reliably have a std::getline that is either
+   // non-blocking or with a timeout. Therefore the thread will not join since it will most likely
+   // be stuck in the getline function. This is a small cost to pay to have simple dumb portable
+   // code.
 }

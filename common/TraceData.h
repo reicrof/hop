@@ -70,10 +70,13 @@ struct CoreEventData
 // Data serialization
 size_t serializedSize( const TraceData& td );
 size_t serializedSize( const LockWaitData& lw );
+size_t serializedSize( const CoreEventData& ced );
 size_t serialize( const TraceData& td, char* dst );
 size_t serialize( const LockWaitData& lw, char* dst );
+size_t serialize( const CoreEventData& ced, char* dst );
 size_t deserialize( const char* src, TraceData& td );
 size_t deserialize( const char* src, LockWaitData& lw );
+size_t deserialize( const char* src, CoreEventData& ced );
 
 }
 

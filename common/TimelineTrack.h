@@ -23,7 +23,7 @@ struct TimelineTrack
    void addTraces( const TraceData& traces );
    void addLockWaits( const LockWaitData& lockWaits );
    void addUnlockEvents(const std::vector<UnlockEvent>& unlockEvents);
-   void addCoreEvents( const std::vector<CoreEvent>& coreEvents );
+   void addCoreEvents( const CoreEventData& coreEvents );
    Depth_t maxDepth() const noexcept;
    bool empty() const;
 

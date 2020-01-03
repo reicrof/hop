@@ -56,8 +56,7 @@ static std::future< hop::ProfilerView* > openProfilerFile( const char* openPath 
        std::launch::async,
        []( std::string path ) {
           ProfilerView* prof = new ProfilerView( Profiler::SRC_TYPE_FILE, -1, path.c_str() );
-          const bool success = prof->openFile( path.c_str() );
-          if( success )
+          if( prof->openFile( path.c_str() ) )
           {
              // Do the first update here to create the LODs. The params does not make difference
              // in this scenario as they will be updated once we go back to the main thread
@@ -65,7 +64,7 @@ static std::future< hop::ProfilerView* > openProfilerFile( const char* openPath 
           }
           else
           {
-             displayModalWindow( "Error while saving file", hop::MODAL_TYPE_ERROR );
+             displayModalWindow( "Error while opening file", hop::MODAL_TYPE_ERROR );
           }
 
           closeModalWindow();

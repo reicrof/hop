@@ -190,7 +190,7 @@ void Profiler::addUnlockEvents( const std::vector<UnlockEvent>& unlockEvents, ui
    }
 }
 
-void Profiler::addCoreEvents( const std::vector<CoreEvent>& coreEvents, uint32_t threadIndex )
+void Profiler::addCoreEvents( const CoreEventData& coreEvents, uint32_t threadIndex )
 {
    HOP_PROF_FUNC();
    // Check if new thread
@@ -199,7 +199,7 @@ void Profiler::addCoreEvents( const std::vector<CoreEvent>& coreEvents, uint32_t
       _tracks.resize( threadIndex + 1 );
    }
 
-   if ( !coreEvents.empty() )
+   if ( !coreEvents.data.empty() )
    {
       _tracks[threadIndex].addCoreEvents( coreEvents );
    }
@@ -319,6 +319,7 @@ bool hop::Profiler::openFile( const char* path )
       size_t timelineTrackSize = deserialize( &uncompressedData[i], timelineTracks[j] );
       addTraces( timelineTracks[j]._traces, j );
       addLockWaits( timelineTracks[j]._lockWaits, j );
+      addCoreEvents( timelineTracks[j]._coreEvents, j );
       i += timelineTrackSize;
    }
    _srcType = SRC_TYPE_FILE;

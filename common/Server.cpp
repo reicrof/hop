@@ -408,7 +408,7 @@ size_t Server::handleNewMessage( uint8_t* data, size_t maxSize, TimeStamp minTim
          // TODO: Could lock later when we received all the messages
          std::lock_guard<hop::Mutex> guard( _sharedPendingDataMutex );
          auto& coreEvents = _sharedPendingData.coreEventsPerThread[threadIndex];
-         coreEvents.insert( coreEvents.end(), coreEventsPtr, coreEventsPtr + newCount );
+         coreEvents.data.insert( coreEvents.data.end(), coreEventsPtr, coreEventsPtr + newCount );
          return ( size_t )( bufPtr - data );
       }
       default:
@@ -487,7 +487,7 @@ void Server::PendingData::clear()
 
    for ( auto& coreEvents : coreEventsPerThread )
    {
-      coreEvents.second.clear();
+      coreEvents.second.data.clear();
    }
 
    threadNames.clear();

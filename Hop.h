@@ -54,7 +54,9 @@ For more information, please refer to <http://unlicense.org/>
 
 // Total size of the shared memory ring buffer. This does not
 // include the meta-data size
+#if !defined( HOP_SHARED_MEM_SIZE )
 #define HOP_SHARED_MEM_SIZE 32000000
+#endif
 
 // Minimum cycles for a lock to be considered in the profiled data
 #define HOP_MIN_LOCK_CYCLES 1000
@@ -156,7 +158,7 @@ enum HopZoneColor
 #include <stdint.h>
 
 // Useful macros
-#define HOP_VERSION 0.8f
+#define HOP_VERSION 0.9f
 #define HOP_CONSTEXPR constexpr
 #define HOP_NOEXCEPT noexcept
 #define HOP_STATIC_ASSERT static_assert
