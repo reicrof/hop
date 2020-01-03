@@ -28,6 +28,7 @@ class TimelineTracksView
 public:
    uint32_t count() const;
    bool hidden( uint32_t trackIdx ) const;
+   bool empty( uint32_t trackIdx ) const;
    float trackHeightWithThreadLabel( uint32_t trackIdx ) const;
    float trackAbsoluteDrawPosY( uint32_t trackIdx ) const;
 

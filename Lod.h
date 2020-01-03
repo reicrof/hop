@@ -29,8 +29,7 @@ using LodsArray = std::array< std::deque< LodInfo >, LOD_COUNT >;
 struct LodsData
 {
    LodsArray lods;
-   std::vector< std::array< LodInfo, LOD_COUNT > > latestLodPerDepth;
-   size_t lastTraceIdx{0};
+   size_t idOffset{0};
 };
 
 void setupLODResolution( uint32_t sreenResolutionX );

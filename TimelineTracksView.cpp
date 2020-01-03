@@ -56,6 +56,15 @@ static void resetContextMenu( hop::TimelineTracksView::ContextMenu& ctxt )
    ctxt.open = false;
 }
 
+static int32_t visibleTrackAt( const hop::TimelineTracksView* tltv, int32_t index )
+{
+   while ( index > 0 && tltv->empty( index ) )
+   {
+      --index;
+   }
+   return index;
+}
+
 static bool drawSeparator( uint32_t threadIndex, bool highlightSeparator )
 {
    const float Y_PADDING   = 5.0f;
@@ -666,7 +675,9 @@ static void handleHoveredTrack(
       int trackIdx = tracksView.size() - 1;
       for( ; trackIdx >=0; --trackIdx)
       {
-         if( tracksView[ trackIdx ].relativePosY - THREAD_LABEL_HEIGHT < mousePosY )
+         const bool visibleTrack = tracksView[ trackIdx ].relativePosY != 0 &&
+                                   tracksView[ trackIdx ].absoluteDrawPos[1] != 0;
+         if( visibleTrack && tracksView[trackIdx].relativePosY - THREAD_LABEL_HEIGHT < mousePosY )
          {
             break;
          }
@@ -688,6 +699,11 @@ uint32_t TimelineTracksView::count() const
 bool TimelineTracksView::hidden( uint32_t trackIdx ) const
 {
    return _tracks[trackIdx].trackHeight <= -PADDED_TRACE_SIZE;
+}
+
+bool TimelineTracksView::empty( uint32_t trackIdx ) const
+{
+   return _tracks[trackIdx].absoluteDrawPos[1] == 0;
 }
 
 float TimelineTracksView::trackHeightWithThreadLabel( uint32_t trackIdx ) const
@@ -935,14 +951,20 @@ void TimelineTracksView::drawTraceDetailsWindow(
 
    const size_t prevSize   = traceToHighlight.size();
    const size_t newElCount = traceDetailRes.hoveredTraceIds.size();
-   traceToHighlight.resize( prevSize + newElCount );
-   for( size_t i = 0; i < newElCount; ++i )
+
+   // FIXME if the number of element to highlight is too big, the whole app will slow down.
+   // Some kind of LOD mechanism should also be added for the highlights
+   if( newElCount < 200000 )
    {
-      const size_t idx = traceDetailRes.hoveredTraceIds[i];
-      traceToHighlight[prevSize+i].start     = entries.starts[ idx ];
-      traceToHighlight[prevSize+i].end       = entries.ends[ idx ];
-      traceToHighlight[prevSize+i].threadIdx = traceDetailRes.hoveredThreadIdx;
-      traceToHighlight[prevSize+i].depth     = entries.depths[ idx ];
+      traceToHighlight.resize( prevSize + newElCount );
+      for( size_t i = 0; i < newElCount; ++i )
+      {
+         const size_t idx = traceDetailRes.hoveredTraceIds[i];
+         traceToHighlight[prevSize+i].start     = entries.starts[ idx ];
+         traceToHighlight[prevSize+i].end       = entries.ends[ idx ];
+         traceToHighlight[prevSize+i].threadIdx = traceDetailRes.hoveredThreadIdx;
+         traceToHighlight[prevSize+i].depth     = entries.depths[ idx ];
+      }
    }
 }
 
@@ -964,14 +986,9 @@ bool TimelineTracksView::handleMouse( float, float posY, bool, bool, float )
    if ( _draggedTrack > 0 )
    {
       // Find the previous track that is visible
-      int i = _draggedTrack - 1;
-      while ( i > 0 && _tracks[i].absoluteDrawPos[1] == 0 )
-      {
-         --i;
-      }
-
-      const float trackHeight = ( posY - _tracks[i].relativePosY - THREAD_LABEL_HEIGHT );
-      setTrackHeight( i, trackHeight );
+      const int visibleIdx = visibleTrackAt( this, _draggedTrack - 1 );
+      const float trackHeight = ( posY - _tracks[visibleIdx].relativePosY - THREAD_LABEL_HEIGHT );
+      setTrackHeight( visibleIdx, trackHeight );
 
      handled = true;
    }
@@ -1063,8 +1080,10 @@ void TimelineTracksView::drawContextMenu( const TimelineTrackDrawData& data )
 void TimelineTracksView::resizeAllTracksToFit()
 {
    float visibleTrackCount = 0;
-   for( auto& i : _tracks )
-      if( !i.traceLodsData.latestLodPerDepth.empty() ) ++visibleTrackCount;
+   for( size_t i = 0; i < _tracks.size(); ++i )
+   {
+      if( !empty( i ) ) ++visibleTrackCount;
+   }
 
    float timelineCanvasHeight = ImGui::GetIO().DisplaySize.y;
 
