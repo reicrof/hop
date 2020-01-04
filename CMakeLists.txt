@@ -66,18 +66,19 @@ file(GLOB hop_gui_src
 add_executable(hop ${common_src} ${hop_gui_src} )
 target_compile_definitions( hop PUBLIC HOP_ENABLED )
 
-set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -DHOP_DEBUG -D${NOC_IMPL_DEFINE}")
+set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -DHOP_DEBUG")
 
-target_include_directories( hop SYSTEM PRIVATE ${ROOT_DIR} ${ROOT_DIR}/thirdparties ${OPENGL_INCLUDE_DIRS} ${SDL2_INCLUDE_DIR} ${PLATFORM_EXTRA_INCLUDES} )
+target_compile_definitions( hop PUBLIC HOP_ENABLED ${NOC_IMPL_DEFINE} )
+target_include_directories( hop PRIVATE ${ROOT_DIR} ${ROOT_DIR}/thirdparties ${OPENGL_INCLUDE_DIRS} ${SDL2_INCLUDE_DIR} ${PLATFORM_EXTRA_INCLUDES} )
 target_link_libraries( hop PUBLIC ${PLATFORM_LINK_FLAGS} ${HOP_WINDOWS_LIB} ${OPENGL_LIBRARIES} ${SDL2_LIBRARY} )
 
 #####################
 ### HOP CLI
 #####################
 add_executable( hopcli hopcli/hopCLI.cpp  ${common_src} )
-target_include_directories( hopcli SYSTEM PRIVATE ${ROOT_DIR} )
-target_link_libraries( hopcli PUBLIC ${PLATFORM_LINK_FLAGS} )
 target_compile_definitions( hopcli PUBLIC HOP_ENABLED )
+target_include_directories( hopcli PRIVATE ${ROOT_DIR} )
+target_link_libraries( hopcli PUBLIC ${PLATFORM_LINK_FLAGS} )
 
 #####################
 ### Test clients
