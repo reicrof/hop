@@ -7,13 +7,16 @@ project (hop)
 if(UNIX)
    if(APPLE)
         set( CMAKE_OSX_DEPLOYMENT_TARGET 10.11 )
+        set( NOC_IMPL_DEFINE "NOC_FILE_DIALOG_OSX" )
    else()
         set( HOP_LIBRT_FLAG "-lrt" )
+        set( NOC_IMPL_DEFINE "NOC_FILE_DIALOG_GTK" )
    endif()
    set( CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -Wextra -pedantic -Wstrict-aliasing=2 " )
 else()
    set( CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS}" )
    set( HOP_WRAP_SRC wrap_library/hop_wrap_windows.cpp )
+   set( NOC_IMPL_DEFINE "NOC_FILE_DIALOG_WIN32" )
 endif()
 
 set( default_build_type "Release" )
@@ -53,19 +56,16 @@ set( common_src ${common_src} ${viewer_platform_src} )
 ### HOP GUI
 #####################
 file(GLOB hop_gui_src
-    "*.h"
     "*.cpp"
-    "*.c"
-    "imgui/*.h"
-    "imgui/*.cpp"
+    "thirdparties/imgui/*.cpp"
 )
 
 add_executable(hop ${common_src} ${hop_gui_src} "front_ends/hopGUI.cpp" )
 target_compile_definitions( hop PUBLIC HOP_ENABLED )
 
-set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -DHOP_DEBUG")
+set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -DHOP_DEBUG -D${NOC_IMPL_DEFINE}")
 
-target_include_directories( hop SYSTEM PRIVATE ${ROOT_DIR} ${OPENGL_INCLUDE_DIRS} ${SDL2_INCLUDE_DIR} )
+target_include_directories( hop SYSTEM PRIVATE ${ROOT_DIR} ${OPENGL_INCLUDE_DIRS} ${SDL2_INCLUDE_DIR} ${ROOT_DIR}/thirdparties )
 target_link_libraries( hop PUBLIC -lpthread ${HOP_LIBRT_FLAG} ${HOP_WINDOWS_LIB} ${OPENGL_LIBRARIES} ${SDL2_LIBRARY} -ldl )
 
 #####################

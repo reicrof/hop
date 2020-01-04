@@ -16,6 +16,9 @@
 
 #include "imgui/imgui.h"
 
+#define NOC_FILE_DIALOG_IMPLEMENTATION
+#include "noc_file_dialog/noc_file_dialog.h"
+
 #include <thread> // For saving/opening files
 
 extern bool g_run;
@@ -26,14 +29,15 @@ static constexpr float TOOLBAR_BUTTON_HEIGHT = 15.0f;
 static constexpr float TOOLBAR_BUTTON_WIDTH = 15.0f;
 static constexpr float TOOLBAR_BUTTON_PADDING = 5.0f;
 
-static void saveProfilerToFile( hop::ProfilerView* prof, const char* savePath )
+static void saveProfilerToFile( hop::ProfilerView* prof )
 {
-   hop::displayModalWindow( "Saving...", hop::MODAL_TYPE_NO_CLOSE );
-
    // Spawn a thread so we do not freeze the ui
-   std::string path( savePath );
-   std::thread t( [prof, path]() {
-      const bool success = prof->saveToFile( path.c_str() );
+   std::thread t( [prof]() {
+      const int flags = NOC_FILE_DIALOG_SAVE | NOC_FILE_DIALOG_OVERWRITE_CONFIRMATION;
+      const char* path = noc_file_dialog_open( flags, ".hop", nullptr, nullptr );
+
+      hop::displayModalWindow( "Saving...", hop::MODAL_TYPE_NO_CLOSE );
+      const bool success = prof->saveToFile( path );
       hop::closeModalWindow();
       if( !success )
       {
@@ -44,47 +48,42 @@ static void saveProfilerToFile( hop::ProfilerView* prof, const char* savePath )
    t.detach();
 }
 
-static std::future< hop::ProfilerView* > openProfilerFile( const char* openPath )
+static std::future< hop::ProfilerView* > openProfilerFile()
 {
    using namespace hop;
-   displayModalWindow( "Loading...", MODAL_TYPE_NO_CLOSE );
-
-   // Spawn a thread so we do not freeze the ui
-   std::string path( openPath );
-
    return std::async(
        std::launch::async,
-       []( std::string path ) {
-          ProfilerView* prof = new ProfilerView( Profiler::SRC_TYPE_FILE, -1, path.c_str() );
-          if( prof->openFile( path.c_str() ) )
+       []()
+       {
+          ProfilerView* prof = nullptr;
+          const char* path = noc_file_dialog_open( NOC_FILE_DIALOG_OPEN, ".hop", nullptr, nullptr );
+          if( path )
           {
-             // Do the first update here to create the LODs. The params does not make difference
-             // in this scenario as they will be updated once we go back to the main thread
-             prof->update( 16.0f, 5000000000 );
-          }
-          else
-          {
-             displayModalWindow( "Error while opening file", hop::MODAL_TYPE_ERROR );
-          }
+             displayModalWindow( "Loading...", MODAL_TYPE_NO_CLOSE );
 
-          closeModalWindow();
+            prof = new ProfilerView( Profiler::SRC_TYPE_FILE, -1, path );
+            if( prof->openFile( path ) )
+            {
+               // Do the first update here to create the LODs. The params does not make difference
+               // in this scenario as they will be updated once we go back to the main thread
+               prof->update( 16.0f, 5000000000 );
+            }
+            else
+            {
+               displayModalWindow( "Error while opening file", hop::MODAL_TYPE_ERROR );
+            }
+
+            closeModalWindow();
+          }
 
           return prof;
-       },
-       path );
+       } );
 }
 
-static void addNewProfilerPopUp( hop::Viewer* v, hop::Profiler::SourceType type )
+static void addNewProfilerByNamePopUp( hop::Viewer* v )
 {
    hop::displayStringInputModalWindow( "Enter name or PID of process", [=]( const char* str ) {
-      if ( type == hop::Profiler::SRC_TYPE_PROCESS )
-      {
-         v->addNewProfiler( str, false );
-      }
-      else if ( type == hop::Profiler::SRC_TYPE_FILE )
-      {
-         v->openProfilerFile( str );
-      }
+      v->addNewProfiler( str, false );
    } );
 }
 
@@ -109,18 +108,15 @@ static void drawMenuBar( hop::Viewer* v )
          const int profIdx = v->activeProfilerIndex();
          if ( ImGui::MenuItem( menuAddProfiler, NULL ) )
          {
-            addNewProfilerPopUp( v, hop::Profiler::SRC_TYPE_PROCESS );
+            addNewProfilerByNamePopUp( v );
          }
          if( ImGui::MenuItem( menuSaveAsHop, NULL, false, profIdx >= 0 ) )
          {
-            hop::ProfilerView* prof = v->getProfiler( profIdx );
-            hop::displayStringInputModalWindow( menuSaveAsHop, [=]( const char* savePath ) {
-               saveProfilerToFile( prof, savePath );
-            } );
+            saveProfilerToFile( v->getProfiler( profIdx ) );
          }
          if( ImGui::MenuItem( menuOpenHopFile, NULL ) )
          {
-            addNewProfilerPopUp( v, hop::Profiler::SRC_TYPE_FILE );
+            v->openProfilerFile();
          }
          if( ImGui::MenuItem( menuHelp, NULL ) )
          {
@@ -450,7 +446,7 @@ static int drawTabs( const ImVec2 drawPos, hop::Viewer& viewer, int selectedTab 
    const ImVec2 addTabOffset = ImVec2( profCount * (tabWidth + tabFramePadding), 0.0f );
    if ( drawAddTabButton( drawPos + addTabOffset ) )
    {
-      addNewProfilerPopUp( &viewer, hop::Profiler::SRC_TYPE_PROCESS );
+      addNewProfilerByNamePopUp( &viewer );
    }
 
    ImGui::PopStyleVar( 2 );
@@ -579,10 +575,10 @@ int Viewer::addNewProfiler( const char* processName, bool startRecording )
    return _selectedTab;
 }
 
-void Viewer::openProfilerFile( const char* filePath )
+void Viewer::openProfilerFile()
 {
    assert( !_pendingProfilerLoad.valid() );
-   _pendingProfilerLoad = ::openProfilerFile( filePath );
+   _pendingProfilerLoad = ::openProfilerFile();
 }
 
 int Viewer::removeProfiler( int index )
@@ -801,7 +797,7 @@ bool Viewer::handleHotkey( ProfilerView* selectedProf )
          }
          else if ( ImGui::GetIO().KeyCtrl && ImGui::IsKeyPressed( 't' ) )
          {
-            addNewProfilerPopUp( this, Profiler::SRC_TYPE_PROCESS );
+            addNewProfilerByNamePopUp( this );
             handled = true;
          }
          else if ( ImGui::IsKeyPressed( ImGui::GetKeyIndex( ImGuiKey_Escape ) ) )
