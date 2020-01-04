@@ -5,9 +5,9 @@ set( CMAKE_VERBOSE_MAKEFILE on )
 set( CMAKE_CXX_STANDARD 14 )
 
 if(UNIX)
-   set( platform_src "${ROOT_DIR}/platform/Platform_Unix.cpp" )
+   set( platform_src "${ROOT_DIR}/common/platform/Platform_Unix.cpp" )
 else()
-   set( platform_src "${ROOT_DIR}/platform/Platform_Windows.cpp" )
+   set( platform_src "${ROOT_DIR}/common/platform/Platform_Windows.cpp" )
 endif()
 
 add_executable (Tsc_test Tsc_test.cpp ${platform_src} ${ROOT_DIR}/common/Utils.cpp)

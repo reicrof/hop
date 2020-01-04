@@ -1,10 +1,11 @@
 #ifndef TIMELINE_TRACKS_VIEW_H_
 #define TIMELINE_TRACKS_VIEW_H_
 
+#include "hop/Lod.h"
+#include "hop/SearchWindow.h"
+#include "hop/TraceStats.h"
+
 #include <vector>
-#include "Lod.h"
-#include "SearchWindow.h"
-#include "TraceStats.h"
 
 struct HighlightInfo;
 

@@ -1,7 +1,7 @@
 #ifndef TIMELINE_INFO_H_
 #define TIMELINE_INFO_H_
 
-#include <Hop.h>
+#include "Hop.h"
 
 #include <cassert>
 

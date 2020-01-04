@@ -2,7 +2,7 @@
 #define PROFILER_VIEW_H_
 
 #include "common/Profiler.h"
-#include "TimelineTracksView.h"
+#include "hop/TimelineTracksView.h"
 
 #include <vector>
 

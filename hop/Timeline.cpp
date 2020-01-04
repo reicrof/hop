@@ -1,9 +1,9 @@
-#include "Timeline.h"
+#include "hop/Timeline.h"
 #include "common/TimelineTrack.h"
 #include "common/Utils.h"
 #include "common/StringDb.h"
-#include "Options.h"
-#include "Cursor.h"
+#include "hop/Options.h"
+#include "hop/Cursor.h"
 
 #include "imgui/imgui.h"
 
@@ -186,7 +186,7 @@ void Timeline::update( float deltaTimeMs ) noexcept
          }
          else
          {
-            _verticalPosPxl += verticalDelta * 0.1;
+            _verticalPosPxl += verticalDelta * 0.1f;
          }
          break;
       }

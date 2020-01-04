@@ -1,5 +1,7 @@
-#include "Stats.h"
+#include "hop/Stats.h"
+
 #include "common/Utils.h"
+
 #include "imgui/imgui.h"
 
 namespace hop

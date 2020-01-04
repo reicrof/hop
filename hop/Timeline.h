@@ -2,7 +2,7 @@
 #define TIMELINE_H_
 
 #include "Hop.h"
-#include "TimelineInfo.h"
+#include "hop/TimelineInfo.h"
 
 #include <vector>
 

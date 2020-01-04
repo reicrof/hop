@@ -1,8 +1,9 @@
 #ifndef HOP_MUTEX_H_
 #define HOP_MUTEX_H_
 
-#include <mutex>
 #include "Hop.h"
+
+#include <mutex>
 
 namespace hop
 {

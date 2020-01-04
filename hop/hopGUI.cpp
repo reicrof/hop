@@ -1,17 +1,19 @@
 #define HOP_IMPLEMENTATION
-#include <Hop.h>
-#include "common/Startup.h"
-#include "Stats.h"
+#include "Hop.h"
+#include "hop/Stats.h"
+#include "hop/Options.h"
+#include "hop/Viewer.h"
+
+#include "common/miniz.h"
 #include "common/Utils.h"
-#include "platform/Platform.h"
-#include "imgui/imgui.h"
-#include "Options.h"
-#include "Viewer.h"
-#include <SDL.h>
-#undef main
+#include "common/Startup.h"
+#include "common/platform/Platform.h"
 
 #include "hop_icon_data.inline"
-#include "common/miniz.h"
+
+#include "imgui/imgui.h"
+#include <SDL.h>
+#undef main
 
 #include <chrono>
 #include <string>

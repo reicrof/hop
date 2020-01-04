@@ -1,8 +1,7 @@
-#include "SearchWindow.h"
-
-#include "Options.h" // window opacity
-#include "TimelineInfo.h"
-#include "Stats.h"
+#include "hop/SearchWindow.h"
+#include "hop/Options.h" // window opacity
+#include "hop/TimelineInfo.h"
+#include "hop/Stats.h"
 
 #include "common/StringDb.h"
 #include "common/TimelineTrack.h"

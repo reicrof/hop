@@ -1,5 +1,5 @@
 #include "TestUtils.h"
-#include "platform/Platform.h"
+#include "common/platform/Platform.h"
 #include <string.h>
 
 int main()

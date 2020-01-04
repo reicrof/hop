@@ -1,15 +1,18 @@
-#include "ProfilerView.h"
-#include "TimelineTracksView.h"
+#include "hop/ProfilerView.h"
+#include "hop/TimelineTracksView.h"
+
+#include "hop/Lod.h"
+#include "hop/ModalWindow.h"
+#include "hop/Options.h"
+#include "hop/RendererGL.h"
+
 #include "Hop.h"
+
 #include "common/TimelineTrack.h"
 #include "common/Utils.h"
 #include "common/TraceData.h"
-#include "imgui/imgui.h"
 
-#include "Lod.h"
-#include "ModalWindow.h"
-#include "Options.h"
-#include "RendererGL.h"
+#include "imgui/imgui.h"
 #include <SDL_keycode.h>
 
 #include <cassert>

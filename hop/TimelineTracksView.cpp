@@ -4,15 +4,14 @@
 #include "common/StringDb.h"
 #include "common/Utils.h"
 
-#include "Cursor.h"
-#include "ModalWindow.h"
-#include "SearchWindow.h"
-#include "TimelineTracksView.h"
-#include "TimelineInfo.h"
-#include "Options.h"
-#include "Stats.h"
-
-#include "Lod.h"
+#include "hop/Cursor.h"
+#include "hop/ModalWindow.h"
+#include "hop/SearchWindow.h"
+#include "hop/TimelineTracksView.h"
+#include "hop/TimelineInfo.h"
+#include "hop/Options.h"
+#include "hop/Stats.h"
+#include "hop/Lod.h"
 
 #include "imgui/imgui.h"
 #include "imgui/imgui_internal.h"

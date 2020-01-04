@@ -1,7 +1,7 @@
 #ifndef VIEWER_H_
 #define VIEWER_H_
 
-#include "Timeline.h"
+#include "hop/Timeline.h"
 
 #include <future>
 #include <memory>

@@ -1,6 +1,6 @@
 #include "common/Utils.h"
 
-#include "platform/Platform.h"
+#include "common/platform/Platform.h"
 
 #include <cstring>
 

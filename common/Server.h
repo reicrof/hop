@@ -4,9 +4,9 @@
 #define HOP_VIEWER
 #include <Hop.h>
 
-#include "Mutex.h"
-#include "StringDb.h"
-#include "TraceData.h"
+#include "common/Mutex.h"
+#include "common/StringDb.h"
+#include "common/TraceData.h"
 
 #include <string>
 #include <thread>

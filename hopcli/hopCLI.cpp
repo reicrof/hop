@@ -1,9 +1,9 @@
 #define HOP_IMPLEMENTATION
-#include <Hop.h>
+#include "Hop.h"
 #include "common/Startup.h"
 #include "common/Profiler.h"
 #include "common/Utils.h"
-#include "platform/Platform.h"
+#include "common/platform/Platform.h"
 #undef main
 
 #include <atomic>

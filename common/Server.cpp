@@ -1,6 +1,6 @@
-#include "Server.h"
+#include "common/Server.h"
 #include "common/Utils.h"
-#include "platform/Platform.h"
+#include "common/platform/Platform.h"
 
 #include <stdio.h>
 #include <errno.h>

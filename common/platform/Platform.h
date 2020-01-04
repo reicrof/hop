@@ -6,7 +6,7 @@
 namespace hop
 {
 
-typedef int ProcessID;
+typedef int64_t ProcessID;
 struct ProcessInfo
 {
    ProcessID pid;

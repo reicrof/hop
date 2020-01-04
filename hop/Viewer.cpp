@@ -1,18 +1,16 @@
-#include "ProfilerView.h"
-#include "TimelineInfo.h"
-#include "Viewer.h"
-
-#include "Cursor.h"
-#include "Lod.h"
-#include "ModalWindow.h"
-#include "Options.h"
-#include "RendererGL.h"
-#include "Stats.h"
+#include "hop/ProfilerView.h"
+#include "hop/TimelineInfo.h"
+#include "hop/Viewer.h"
+#include "hop/Cursor.h"
+#include "hop/Lod.h"
+#include "hop/ModalWindow.h"
+#include "hop/Options.h"
+#include "hop/RendererGL.h"
+#include "hop/Stats.h"
 
 #include "common/Profiler.h"
 #include "common/Utils.h"
-
-#include "platform/Platform.h"
+#include "common/platform/Platform.h"
 
 #include "imgui/imgui.h"
 

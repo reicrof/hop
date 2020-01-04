@@ -1,5 +1,6 @@
 #include "Platform.h"
 
+#include <inttypes.h>
 #include <signal.h>
 #include <string.h>
 #include <stdlib.h>
@@ -22,7 +23,7 @@ ProcessInfo getProcessInfoFromPID( ProcessID pid )
    ProcessInfo info = {};
 
    char cmd[128] = {};
-   snprintf( cmd, sizeof( cmd ), "ps -p %d -o comm= | xargs basename | tr -d '\n'", pid );
+   snprintf( cmd, sizeof( cmd ), "ps -p %" PRId64 " -o comm= | xargs basename | tr -d '\n'", pid );
 
    // Get name from PID
    if( FILE* fp = popen( cmd, "r" ) )

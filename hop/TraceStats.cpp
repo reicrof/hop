@@ -1,6 +1,6 @@
-#include "TraceStats.h"
+#include "hop/TraceStats.h"
 
-#include "Options.h"  // window opacity
+#include "hop/Options.h"  // window opacity
 
 #include "common/TraceData.h"
 #include "common/TimelineTrack.h"

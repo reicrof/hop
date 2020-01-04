@@ -233,14 +233,14 @@ bool hop::Profiler::saveToFile( const char* savePath )
    HOP_PROF_FUNC();
    setRecording( false );
    // Compute the size of the serialized data
-   const size_t dbSerializedSize  = serializedSize( _strDb );
-   size_t timelineTracksSerializedSize = 0;
+   const mz_ulong dbSerializedSize = serializedSize( _strDb );
+   mz_ulong timelineTracksSerializedSize = 0;
    for( size_t i = 0; i < _tracks.size(); ++i )
    {
       timelineTracksSerializedSize += serializedSize( _tracks[i] );
    }
 
-   const size_t totalSerializedSize = timelineTracksSerializedSize + dbSerializedSize;
+   const mz_ulong totalSerializedSize = timelineTracksSerializedSize + dbSerializedSize;
 
    std::vector<char> data( totalSerializedSize );
 
