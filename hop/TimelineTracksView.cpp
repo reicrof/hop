@@ -97,102 +97,6 @@ static bool drawSeparator( uint32_t threadIndex, bool highlightSeparator )
    return handledHovered && highlightSeparator;
 }
 
-static void drawCoreLabels( const ImVec2& drawPosition, const hop::TimelineTrackDrawData& data, uint32_t threadIdx )
-{
-   using namespace hop;
-   HOP_PROF_FUNC();
-   const auto& coreData = data.profiler.timelineTracks()[threadIdx]._coreEvents;
-   if( !coreData.data.empty() )
-   {
-      const auto drawStart = std::chrono::system_clock::now();
-
-      const auto globalStartTime = data.timeline.globalStartTime;
-      const float windowWidthPxl = ImGui::GetWindowWidth();
-
-      // The time range to draw in absolute time
-      const TimeStamp firstTraceAbsoluteTime = globalStartTime + data.timeline.relativeStartTime;
-      const TimeStamp lastTraceAbsoluteTime = firstTraceAbsoluteTime + data.timeline.duration;
-
-      CoreEvent firstEv = { firstTraceAbsoluteTime, firstTraceAbsoluteTime, 0 };
-      CoreEvent lastEv = { lastTraceAbsoluteTime, lastTraceAbsoluteTime, 0 };
-      auto cmp = []( const CoreEvent& lhs, const CoreEvent& rhs) { return lhs.end < rhs.end; };
-      auto it1 = std::lower_bound( coreData.data.begin(), coreData.data.end(), firstEv, cmp );
-      auto it2 = std::upper_bound( coreData.data.begin(), coreData.data.end(), lastEv, cmp );
-
-      if( it2 != coreData.data.end() ) ++it2;
-
-      if( it1 == it2 ) return; // Nothing to draw here
-
-
-      ImGui::PushStyleColor( ImGuiCol_Border, CORE_LABEL_BORDER_COLOR );
-      ImGui::PushStyleVar( ImGuiStyleVar_FrameBorderSize, 1.0f );
-
-      char label[32] = "Core ";
-      const int prefixSize = strlen( label );
-
-      const float windowWidth  = ImGui::GetWindowWidth();
-      const ImVec2 framePading = ImGui::GetStyle().FramePadding;
-      const ImVec2 textAlign   = ImVec2( 0.5f, 0.5f );
-      const float cyclesPerPxl = data.timeline.duration / windowWidth;
-
-      const uint64_t minCycleToMerge = hop::pxlToCycles( windowWidthPxl, data.timeline.duration, 10 );
-      const uint64_t minCycleToSkip = hop::pxlToCycles( windowWidthPxl, data.timeline.duration, 0.5f );
-      CoreEvent prevEvent = *it1;
-
-      // Lambda used to draw the labels inside the loop and for the last entry as well
-      const auto drawCoreLabelFct = [&]( const CoreEvent& ev ) {
-         const float startPxl = ( int64_t )( ev.start - firstTraceAbsoluteTime ) / cyclesPerPxl;
-         const std::pair<float, float> minMaxPxl = std::minmax( startPxl, 0.0f );
-
-         auto deltaPxl = ( ev.end - ev.start ) / cyclesPerPxl;
-         deltaPxl      = std::min( deltaPxl + minMaxPxl.first, windowWidth );
-
-         const ImVec2 from( minMaxPxl.second, drawPosition.y );
-         const ImVec2 to( from + ImVec2( deltaPxl, TRACE_HEIGHT - 1 ) );
-         ImGui::RenderFrame( from, to, CORE_LABEL_COLOR );
-         if( deltaPxl >= MIN_PXL_SIZE_FOR_TEXT )
-         {
-            snprintf( label + prefixSize, sizeof( label ) - prefixSize, "%u", ev.core );
-            const ImVec2 labelSize = ImGui::CalcTextSize( label );
-            ImGui::RenderTextClipped(
-                from + framePading, to - framePading, label, NULL, &labelSize, textAlign );
-         }
-      };
-
-      for( ++it1 ; it1 != it2; ++it1 )
-      {
-         // If we have 2 consecutive traces with the same core and they are close enough, merge them
-         // for drawing
-         if( it1->core == prevEvent.core &&
-            ( it1->start < prevEvent.end || ( it1->start - prevEvent.end ) < minCycleToMerge ) )
-         {
-            prevEvent.start = std::min( prevEvent.start, it1->start );
-            prevEvent.end = it1->end;
-            continue;
-         }
-
-         // Skip drawing the label if it is too small
-         const auto labelDuration = prevEvent.end - prevEvent.start;
-         if( labelDuration > minCycleToSkip )
-         {
-            drawCoreLabelFct( prevEvent );
-         }
-
-         prevEvent = *it1;
-      }
-
-      // Add the last entry to draw
-      drawCoreLabelFct( prevEvent );
-
-      ImGui::PopStyleVar(1);
-      ImGui::PopStyleColor(1);
-
-      const auto drawEnd = std::chrono::system_clock::now();
-      hop::g_stats.coreDrawingTimeMs +=
-         std::chrono::duration<double, std::milli>( ( drawEnd - drawStart ) ).count();
-   }
-}
-
 static bool drawThreadLabel(
     const ImVec2& drawPosition,
     const char* threadName,
@@ -302,20 +206,32 @@ static int traceLabelWithTime( const hop::TimelineTrackDrawData& data, uint32_t 
 
    return snprintf( arr, arrSize, "%s (%s)", label, fmtTime );
 }
-static int lockwaitLabelWithTime(const hop::TimelineTrackDrawData&, uint32_t, size_t, hop::TimeDuration, uint32_t arrSize, char* arr)
+static int lockwaitLabelWithTime( const hop::TimelineTrackDrawData&, uint32_t, size_t, hop::TimeDuration, uint32_t arrSize, char* arr )
 {
    return snprintf( arr, arrSize, "%s", "Lock wait" );
 }
+static int coreEventLabel( const hop::TimelineTrackDrawData& data, uint32_t threadIdx, size_t entryIdx, hop::TimeDuration, uint32_t arrSize, char* arr )
+{
+   const auto& coreEvents = data.profiler.timelineTracks()[threadIdx]._coreEvents;
+   return snprintf( arr, arrSize, "Core %u", coreEvents.cores[entryIdx] );
+}
 
-using GetEntryZone = hop::ZoneId_t (*)( const hop::TimelineTrackDrawData& data, uint32_t threadIdx, size_t entryIdx );
-static hop::ZoneId_t getTraceZoneId( const hop::TimelineTrackDrawData& data, uint32_t threadIdx, size_t entryIdx )
+using GetEntryColor = uint32_t (*)( const hop::TimelineTrackDrawData& data, uint32_t threadIdx, size_t entryIdx );
+static uint32_t getTraceColor( const hop::TimelineTrackDrawData& data, uint32_t threadIdx, size_t entryIdx )
 {
-   return data.profiler.timelineTracks()[threadIdx]._traces.zones[entryIdx];
+   const hop::ZoneId_t zoneId = data.profiler.timelineTracks()[threadIdx]._traces.zones[entryIdx];
+   const uint32_t colorIdx = setBitIndex( zoneId );
+   return hop::options::zoneColors()[colorIdx];
 }
-static hop::ZoneId_t getLockWaitZoneId( const hop::TimelineTrackDrawData&, uint32_t, size_t )
+static uint32_t getLockWaitColor( const hop::TimelineTrackDrawData&, uint32_t, size_t )
 {
-   return 1;
+   return 0XFF0000FF;
 }
+static uint32_t getCoreEventColor( const hop::TimelineTrackDrawData&, uint32_t, size_t )
+{
+   return 0xFF7b7b7b;
+}
+
 /* ----------------------------------------------------- */
 
 static void drawHoveredTracePopup( const hop::TimelineTrackDrawData& data, uint32_t threadIndex, size_t entryIndex )
@@ -401,7 +317,7 @@ static size_t drawEntries(
     const hop::TimelineTrackDrawData& data,
     const hop::LodsData& lodsData,
     GetEntryLabel getEntryLabelFct,
-    GetEntryZone getEntryZoneFct )
+    GetEntryColor getEntryColor )
 {
    using namespace hop;
 
@@ -434,7 +350,6 @@ static size_t drawEntries(
    const auto lodStartIt = lodsData.lods[data.lodLevel].begin() + spanIndex.first;
    createDrawData( lodStartIt, traceCount, absoluteStart, timelineRange / windowWidthPxl, startPosPxl.data(), deltaPxl.data() );
 
-   const auto& zoneColors   = hop::options::zoneColors();
    const ImVec2 mousePos    = ImGui::GetMousePos();
    const ImVec2 textAlign   = ImVec2( 0.0f, 0.5f );
    const ImVec2 framePading = ImGui::GetStyle().FramePadding;
@@ -446,10 +361,9 @@ static size_t drawEntries(
       const LodInfo& curLod = *(lodStartIt + i);
       const size_t absIndex = curLod.index;
 
-      const uint32_t zoneId = setBitIndex( getEntryZoneFct( data, threadIndex, absIndex ) );
       const ImVec2 from( startPosPxl[i], drawPos.y + curLod.depth * PADDED_TRACE_SIZE );
       const ImVec2 to( from + ImVec2( deltaPxl[i], PADDED_TRACE_SIZE ) );
-      ImGui::RenderFrame( from, to, zoneColors[zoneId] );
+      ImGui::RenderFrame( from, to, getEntryColor( data, threadIndex, absIndex ) );
 
       // Create the name for the trace if it is large enough on screen
       entryName[0] = '\0';
@@ -749,6 +663,10 @@ void TimelineTracksView::update( const hop::Profiler& profiler )
       const hop::Entries& lwEntries = track._lockWaits.entries;
       appendLods( _tracks[i].lockwaitsLodsData, lwEntries );
 
+      // Create LOD for the coreevents
+      const hop::Entries& coreEntries = track._coreEvents.entries;
+      appendLods( _tracks[i].coreEventLodsData, coreEntries );
+
       // Update max depth as well in case it has changed
       const Depth_t newMaxDepth = std::max( traceEntries.maxDepth, lwEntries.maxDepth );
       _tracks[i].maxDepth       = newMaxDepth;
@@ -800,7 +718,7 @@ void TimelineTracksView::draw( const TimelineTrackDrawData& data, TimelineMsgArr
       // Draw the core before the thread labels so they are not drawn over them
       if( !threadHidden && options::showCoreInfo() )
       {
-         drawCoreLabels( labelsDrawPosition, data, i );
+         drawEntries( labelsDrawPosition, i, data, _tracks[i].coreEventLodsData, coreEventLabel, getCoreEventColor );
       }
 
       if( drawThreadLabel( labelsDrawPosition, customName, i, threadHidden ) )
@@ -850,11 +768,11 @@ void TimelineTracksView::draw( const TimelineTrackDrawData& data, TimelineMsgArr
                 true );
 
             // Draw the lock waits  entries (before traces so that they are not hiding them)
-            const size_t lwHoveredIdx = drawEntries( curDrawPos, i, data, _tracks[i].lockwaitsLodsData, lockwaitLabelWithTime, getLockWaitZoneId );
+            const size_t lwHoveredIdx = drawEntries( curDrawPos, i, data, _tracks[i].lockwaitsLodsData, lockwaitLabelWithTime, getLockWaitColor );
             handleHoveredLockWait( *this, data, i, lwHoveredIdx, highlightInfo, msgArray );
 
             // Draw the traces entries
-            const size_t traceHoveredIdx = drawEntries( curDrawPos, i, data, _tracks[i].traceLodsData, traceLabelWithTime, getTraceZoneId );
+            const size_t traceHoveredIdx = drawEntries( curDrawPos, i, data, _tracks[i].traceLodsData, traceLabelWithTime, getTraceColor );
             handleHoveredTrace( _contextMenu, data, i, traceHoveredIdx, highlightInfo, msgArray );
 
             if( lwHoveredIdx == hop::INVALID_IDX && traceHoveredIdx == hop::INVALID_IDX )

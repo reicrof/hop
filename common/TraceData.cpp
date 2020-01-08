@@ -93,6 +93,19 @@ void LockWaitData::clear()
    lockReleases.clear();
 }
 
+
+void CoreEventData::append( const CoreEventData& newCoreEvents )
+{
+   entries.append( newCoreEvents.entries );
+   cores.insert( cores.end(), newCoreEvents.cores.begin(), newCoreEvents.cores.end() );
+}
+
+void CoreEventData::clear()
+{
+   entries.clear();
+   cores.clear();
+}
+
 static size_t serializedSize( const hop::Entries& entries )
 {
    const size_t entriesCount = entries.ends.size();
@@ -303,20 +316,25 @@ size_t deserialize( const char* src, LockWaitData& lw )
 size_t serializedSize( const CoreEventData& ced )
 {
    return sizeof( size_t ) +                              // CoreEvents count
-          ced.data.size() * sizeof( ced.data[0] );        // Actual Data
+          serializedSize( ced.entries ) +                 // Entries
+          ced.cores.size() * sizeof( ced.cores[0] );      // Core information
 }
 
 size_t serialize( const CoreEventData& ced, char* dst )
 {
    size_t i = 0;
 
-   const size_t coreEventCount = ced.data.size();
+   const size_t coreEventCount = ced.cores.size();
 
    memcpy( &dst[i], &coreEventCount, sizeof( size_t ) );
    i += sizeof( size_t );
 
-   std::copy( ced.data.begin(), ced.data.end(), (CoreEvent*)&dst[i] );
-   i += sizeof( ced.data[0] ) * coreEventCount;
+   // Entries
+   i += serialize( ced.entries, &dst[i] );
+
+   // Core Events
+   std::copy( ced.cores.begin(), ced.cores.end(), (Core_t*)&dst[i] );
+   i += sizeof( ced.cores[0] ) * coreEventCount;
 
    return i;
 }
@@ -328,9 +346,11 @@ size_t deserialize( const char* src, CoreEventData& ced )
    const size_t count = *(size_t*)&src[i];
    i += sizeof( size_t );
 
+   i += deserialize( &src[i], count, ced.entries );
+
    // Core Events
-   std::copy((CoreEvent*)&src[i], ((CoreEvent*) &src[i]) + count, std::back_inserter(ced.data));
-   i += sizeof( ced.data[0] ) * count;
+   std::copy((Core_t*)&src[i], ((Core_t*) &src[i]) + count, std::back_inserter(ced.cores));
+   i += sizeof( ced.cores[0] ) * count;
 
    return i;
 }

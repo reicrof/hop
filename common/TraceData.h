@@ -64,7 +64,16 @@ struct LockWaitData
 
 struct CoreEventData
 {
-   std::deque<CoreEvent> data;
+   CoreEventData() = default;
+   CoreEventData(CoreEventData&& ) = default;
+   CoreEventData(const CoreEventData& ) = delete;
+   CoreEventData& operator=(const CoreEventData& ) = delete;
+
+   void append( const CoreEventData& newCoreEvents );
+   void clear();
+
+   Entries entries;
+   std::deque<Core_t> cores;
 };
 
 // Data serialization

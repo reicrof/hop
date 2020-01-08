@@ -405,10 +405,18 @@ size_t Server::handleNewMessage( uint8_t* data, size_t maxSize, TimeStamp minTim
 
          const size_t newCount = mergeAndRemoveDuplicates( coreEventsPtr, eventCount );
 
+         CoreEventData coresData;
+         for ( uint32_t i = 0; i < newCount; ++i )
+         {
+            coresData.entries.ends.push_back( coreEventsPtr[i].end );
+            coresData.entries.starts.push_back( coreEventsPtr[i].start );
+            coresData.cores.push_back( coreEventsPtr[i].core );
+         }
+         coresData.entries.depths.insert( coresData.entries.depths.end(), newCount, 0 );
+
          // TODO: Could lock later when we received all the messages
          std::lock_guard<hop::Mutex> guard( _sharedPendingDataMutex );
-         auto& coreEvents = _sharedPendingData.coreEventsPerThread[threadIndex];
-         coreEvents.data.insert( coreEvents.data.end(), coreEventsPtr, coreEventsPtr + newCount );
+         _sharedPendingData.coreEventsPerThread[threadIndex].append( coresData );
          return ( size_t )( bufPtr - data );
       }
       default:
@@ -487,7 +495,7 @@ void Server::PendingData::clear()
 
    for ( auto& coreEvents : coreEventsPerThread )
    {
-      coreEvents.second.data.clear();
+      coreEvents.second.clear();
    }
 
    threadNames.clear();

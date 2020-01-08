@@ -48,6 +48,7 @@ public:
    {
       LodsData traceLodsData;
       LodsData lockwaitsLodsData;
+      LodsData coreEventLodsData;
       float absoluteDrawPos[2];
       float relativePosY; // The absolute position ignores the scroll but not the relative
       float trackHeight{9999.0f};

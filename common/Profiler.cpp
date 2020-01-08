@@ -199,7 +199,7 @@ void Profiler::addCoreEvents( const CoreEventData& coreEvents, uint32_t threadIn
       _tracks.resize( threadIndex + 1 );
    }
 
-   if ( !coreEvents.data.empty() )
+   if ( !coreEvents.cores.empty() )
    {
       _tracks[threadIndex].addCoreEvents( coreEvents );
    }
