@@ -45,6 +45,7 @@ void setupLODResolution( uint32_t sreenResolutionX )
 
 LodsArray computeLods( const Entries& entries, size_t idOffset )
 {
+   HOP_ZONE( 2 );
    HOP_PROF_FUNC();
    assert( LOD_MIN_GAP_CYCLES[LOD_COUNT - 1] > 0 && "LOD resolution was not setup" );
 

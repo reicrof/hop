@@ -22,7 +22,7 @@ namespace options
    bool showCoreInfo();
    bool fullscreen();
    bool vsyncOn();
-   const std::array< uint32_t, HOP_MAX_ZONE_COLORS + 1 >& zoneColors();
+   const std::array< uint32_t, HOP_ZONE_MAX + 1 >& zoneColors();
 } 
 
 } // namespace hop

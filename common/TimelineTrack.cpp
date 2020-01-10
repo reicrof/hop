@@ -41,7 +41,7 @@ StrPtr_t TimelineTrack::name() const noexcept
 
 void TimelineTrack::addTraces( const TraceData& newTraces )
 {
-   HOP_ZONE( HOP_ZONE_COLOR_4 );
+   HOP_ZONE( 1 );
    HOP_PROF_FUNC();
 
    _traces.append( newTraces );

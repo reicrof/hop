@@ -61,32 +61,11 @@ For more information, please refer to <http://unlicense.org/>
 // Minimum cycles for a lock to be considered in the profiled data
 #define HOP_MIN_LOCK_CYCLES 1000
 
-// These are the zone that can be used. You can change the name
-// but you must not change the values.
-enum
-{
-   HOP_MAX_ZONE_COLORS = 16
-};
-enum HopZoneColor
-{
-   HOP_ZONE_COLOR_NONE = 0xFFFF,
-   HOP_ZONE_COLOR_1    = 1U << 0U,
-   HOP_ZONE_COLOR_2    = 1U << 1U,
-   HOP_ZONE_COLOR_3    = 1U << 2U,
-   HOP_ZONE_COLOR_4    = 1U << 3U,
-   HOP_ZONE_COLOR_5    = 1U << 4U,
-   HOP_ZONE_COLOR_6    = 1U << 5U,
-   HOP_ZONE_COLOR_7    = 1U << 6U,
-   HOP_ZONE_COLOR_8    = 1U << 7U,
-   HOP_ZONE_COLOR_9    = 1U << 8U,
-   HOP_ZONE_COLOR_10   = 1U << 9U,
-   HOP_ZONE_COLOR_11   = 1U << 10U,
-   HOP_ZONE_COLOR_12   = 1U << 11U,
-   HOP_ZONE_COLOR_13   = 1U << 12U,
-   HOP_ZONE_COLOR_14   = 1U << 13U,
-   HOP_ZONE_COLOR_15   = 1U << 14U,
-   HOP_ZONE_COLOR_16   = 1U << 15U,
-};
+// Default zone is always 0
+#define HOP_ZONE_DEFAULT 0
+
+// This is the max value for a zone. Zones are stored as unsigned char
+#define HOP_ZONE_MAX  255
 
 ///////////////////////////////////////////////////////////////
 /////       THESE ARE THE MACROS YOU SHOULD USE     ///////////
@@ -214,8 +193,8 @@ using TimeDuration = int64_t;
 using StrPtr_t     = uint64_t;
 using LineNb_t     = uint32_t;
 using Core_t       = uint32_t;
-using ZoneId_t     = uint16_t;
 using Depth_t      = uint16_t;
+using ZoneId_t     = uint16_t;
 
 inline TimeStamp rdtscp( uint32_t& aux )
 {
@@ -308,8 +287,8 @@ struct Traces
    StrPtr_t* fileNameIds;     // Index into string array for the file name
    StrPtr_t* fctNameIds;      // Index into string array for the function name
    LineNb_t* lineNumbers;     // Line at which the trace was inserted
-   ZoneId_t* zones;           // Zone to which this trace belongs
    Depth_t* depths;           // The depth in the callstack of this trace
+   ZoneId_t* zones;           // Zone to which this trace belongs
 };
 
 HOP_CONSTEXPR uint32_t EXPECTED_LOCK_WAIT_SIZE = 32;
@@ -444,9 +423,9 @@ class ProfGuardDynamicString
 class ZoneGuard
 {
   public:
-   ZoneGuard( HopZoneColor newZone ) HOP_NOEXCEPT
+   ZoneGuard( ZoneId_t newZone ) HOP_NOEXCEPT
    {
-      _prevZoneId = ClientManager::PushNewZone( static_cast<ZoneId_t>( newZone ) );
+      _prevZoneId = ClientManager::PushNewZone( newZone );
    }
    ~ZoneGuard() { ClientManager::PushNewZone( _prevZoneId ); }
 
@@ -846,9 +825,9 @@ namespace hop
 static thread_local int tl_traceLevel       = 0;
 static thread_local uint32_t tl_threadIndex = 0;  // Index of the tread as they are coming in
 static thread_local uint64_t tl_threadId    = 0;  // ID of the thread as seen by the OS
-static thread_local ZoneId_t tl_zoneId      = HOP_ZONE_COLOR_NONE;
+static thread_local ZoneId_t tl_zoneId      = HOP_ZONE_DEFAULT;
 static thread_local char tl_threadNameBuffer[64];
-static thread_local StrPtr_t tl_threadName = 0;
+static thread_local StrPtr_t tl_threadName  = 0;
 
 static std::atomic<bool> g_done{false};  // Was the shared memory destroyed? (Are we done?)
 

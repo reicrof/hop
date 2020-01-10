@@ -15,8 +15,8 @@ static const char* showCoreInfoToken = "show_core_info";
 static const char* vsyncOnToken = "vsync_on";
 
 static const uint32_t DEFAULT_COLORS[] = {
-    0xff375fbc, 0xff3cb44b, 0xffffe119, 0xff0082c8, 0xfff58231, 0xff911eb4, 0xff46f0f0, 0xfff032e6,
-    0xffd2f53c, 0xfffabebe, 0xff008080, 0xffe6beff, 0xffaa6e28, 0xfffffac8, 0xff800000, 0xffe6194b,
+    0xffe6194b, 0xff3cb44b, 0xffffe119, 0xff0082c8, 0xfff58231, 0xff911eb4, 0xff46f0f0, 0xfff032e6,
+    0xffd2f53c, 0xfffabebe, 0xff008080, 0xffe6beff, 0xffaa6e28, 0xfffffac8, 0xff800000, 0xff375fbc,
     0xff0000ff };
 
 namespace hop
@@ -29,7 +29,7 @@ struct Options
    bool vsyncOn{true};
    bool showDebugWindow{false};
    bool showCoreInfo{true};
-   std::array< uint32_t, HOP_MAX_ZONE_COLORS + 1 > zoneColors;
+   std::array< uint32_t, HOP_ZONE_MAX + 1 > zoneColors;
    bool optionWindowOpened{false};
 } g_options = {};
 
@@ -63,7 +63,7 @@ bool options::showCoreInfo()
    return g_options.showCoreInfo;
 }
 
-const std::array< uint32_t, HOP_MAX_ZONE_COLORS + 1 >& options::zoneColors()
+const std::array< uint32_t, HOP_ZONE_MAX + 1 >& options::zoneColors()
 {
    return g_options.zoneColors;
 }
@@ -106,10 +106,12 @@ bool options::save()
 bool options::load()
 {
    // Even without a config file we load the default zone colors first
-   for( size_t i = 0; i < g_options.zoneColors.size(); ++i )
-   {
-      g_options.zoneColors[i] = DEFAULT_COLORS[i];
-   }
+   const uint32_t defaultColorCount = sizeof( DEFAULT_COLORS ) / sizeof( DEFAULT_COLORS[0] );
+   memcpy( g_options.zoneColors.data(), DEFAULT_COLORS, defaultColorCount * sizeof( uint32_t ) );
+   // Once the default colors are copied, fill the rest of the array with the default color
+   std::fill(
+       g_options.zoneColors.data() + defaultColorCount, g_options.zoneColors.end(),
+       DEFAULT_COLORS[0] );
 
    std::ifstream inOptions( "hop.conf" );
    std::string token;
@@ -182,34 +184,25 @@ void options::draw()
 
       if ( ImGui::CollapsingHeader( "Zone Colors" ) )
       {
-         size_t i = HOP_MAX_ZONE_COLORS - 1;
+         size_t i = 0;
          ImColor color = g_options.zoneColors[i];
          ImGui::PushID( i );
-         ImGui::Text( "General Zone" );
+         ImGui::Text( "Default Zone" );
          ImGui::SameLine();
          ImGui::ColorEdit3( "", (float*)&color.Value );
          ImGui::PopID();
          g_options.zoneColors[i] = color;
 
-         for( i = 0; i < g_options.zoneColors.size() - 2; ++i )
+         for( i = 1; i < g_options.zoneColors.size(); ++i )
          {
             color = g_options.zoneColors[i];
             ImGui::PushID( i );
-            ImGui::Text( "Zone #%d", (int)i+1 );
+            ImGui::Text( "Zone #%d", (int)i );
             ImGui::SameLine();
             ImGui::ColorEdit3( "", (float*)&color.Value );
             ImGui::PopID();
             g_options.zoneColors[i] = color;
          }
-
-         i = HOP_MAX_ZONE_COLORS; // Locks uses index 16 for color infos
-         color = g_options.zoneColors[i];
-         ImGui::PushID( i );
-         ImGui::Text( "Locks" );
-         ImGui::SameLine();
-         ImGui::ColorEdit3( "", (float*)&color.Value );
-         ImGui::PopID();
-         g_options.zoneColors[i] = color;
       }
    }
    ImGui::End();

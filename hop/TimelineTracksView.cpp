@@ -121,7 +121,7 @@ static bool drawThreadLabel(
        true );
 
    const auto& zoneColors = hop::options::zoneColors();
-   uint32_t threadLabelCol = zoneColors[( trackIndex + 1 ) % HOP_MAX_ZONE_COLORS];
+   uint32_t threadLabelCol = zoneColors[( trackIndex + 1 ) % 16];
    if( hidden )
    {
       threadLabelCol = DISABLED_COLOR;
@@ -184,17 +184,6 @@ static void createDrawData(
    }
 }
 
-static uint32_t setBitIndex( hop::ZoneId_t zone )
-{
-   uint32_t count = 0;
-   while ( zone )
-   {
-      zone = zone >> 1;
-      ++count;
-   }
-   return count-1;
-}
-
 /*
    Customization point for the draw entries function
 */
@@ -223,8 +212,7 @@ using GetEntryColor = uint32_t (*)( const hop::TimelineTrackDrawData& data, uint
 static uint32_t getTraceColor( const hop::TimelineTrackDrawData& data, uint32_t threadIdx, size_t entryIdx )
 {
    const hop::ZoneId_t zoneId = data.profiler.timelineTracks()[threadIdx]._traces.zones[entryIdx];
-   const uint32_t colorIdx = setBitIndex( zoneId );
-   return hop::options::zoneColors()[colorIdx];
+   return hop::options::zoneColors()[zoneId];
 }
 static uint32_t getLockWaitColor( const hop::TimelineTrackDrawData&, uint32_t, size_t )
 {
