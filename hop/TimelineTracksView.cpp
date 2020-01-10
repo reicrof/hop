@@ -22,6 +22,7 @@ static constexpr float MIN_PXL_SIZE_FOR_TEXT      = 5.0f;
 static constexpr uint32_t DISABLED_COLOR          = 0xFF505050;
 static constexpr uint32_t SEPARATOR_COLOR         = 0xFF666666;
 static constexpr uint32_t SEPARATOR_HANDLE_COLOR  = 0xFFAAAAAA;
+static constexpr uint32_t LOCK_WAIT_COLOR         = 0XFF0000FF;
 static constexpr uint32_t CORE_LABEL_COLOR        = 0xFF333333;
 static constexpr uint32_t CORE_LABEL_BORDER_COLOR = 0xFFAAAAAA;
 static const char* CTXT_MENU_STR = "Context Menu";
@@ -227,11 +228,11 @@ static uint32_t getTraceColor( const hop::TimelineTrackDrawData& data, uint32_t 
 }
 static uint32_t getLockWaitColor( const hop::TimelineTrackDrawData&, uint32_t, size_t )
 {
-   return 0XFF0000FF;
+   return LOCK_WAIT_COLOR;
 }
 static uint32_t getCoreEventColor( const hop::TimelineTrackDrawData&, uint32_t, size_t )
 {
-   return 0xFF333333;
+   return CORE_LABEL_COLOR;
 }
 
 /* ----------------------------------------------------- */

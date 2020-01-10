@@ -29,17 +29,21 @@ static constexpr float TOOLBAR_BUTTON_PADDING = 5.0f;
 
 static void saveProfilerToFile( hop::ProfilerView* prof )
 {
+   prof->setRecording( false );
    // Spawn a thread so we do not freeze the ui
    std::thread t( [prof]() {
       const int flags = NOC_FILE_DIALOG_SAVE | NOC_FILE_DIALOG_OVERWRITE_CONFIRMATION;
-      const char* path = noc_file_dialog_open( flags, ".hop\0\0", nullptr, nullptr );
+      const char* path = noc_file_dialog_open( flags, "hop\0*.hop\0", nullptr, nullptr );
 
-      hop::displayModalWindow( "Saving...", hop::MODAL_TYPE_NO_CLOSE );
-      const bool success = prof->saveToFile( path );
-      hop::closeModalWindow();
-      if( !success )
+      if( path )
       {
-         hop::displayModalWindow( "Error while saving file", hop::MODAL_TYPE_ERROR );
+         hop::displayModalWindow( "Saving...", hop::MODAL_TYPE_NO_CLOSE );
+         const bool success = prof->saveToFile( path );
+         hop::closeModalWindow();
+         if( !success )
+         {
+            hop::displayModalWindow( "Error while saving file", hop::MODAL_TYPE_ERROR );
+         }
       }
    } );
 
