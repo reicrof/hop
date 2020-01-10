@@ -311,18 +311,22 @@ static void drawHoveredLockWaitPopup(
    ImGui::TextUnformatted( buffer );
 }
 
+struct DrawEntriesInfo
+{
+   GetEntryLabel getEntryLabelFct;
+   GetEntryColor getEntryColor;
+   ImVec2        textAlign;
+   float         borderSize;
+};
+
 static size_t drawEntries(
     const ImVec2 drawPos,
     uint32_t threadIndex,
     const hop::TimelineTrackDrawData& data,
     const hop::LodsData& lodsData,
-    GetEntryLabel getEntryLabelFct,
-    GetEntryColor getEntryColor )
+    const DrawEntriesInfo& drawInfo )
 {
    using namespace hop;
-
-   HOP_PROF_FUNC();
-   const auto drawStart = std::chrono::system_clock::now();
 
    // Get all the timing boundaries
    const TimeStamp globalStartTime  = data.timeline.globalStartTime;
@@ -351,8 +355,11 @@ static size_t drawEntries(
    createDrawData( lodStartIt, traceCount, absoluteStart, timelineRange / windowWidthPxl, startPosPxl.data(), deltaPxl.data() );
 
    const ImVec2 mousePos    = ImGui::GetMousePos();
-   const ImVec2 textAlign   = ImVec2( 0.0f, 0.5f );
    const ImVec2 framePading = ImGui::GetStyle().FramePadding;
+
+   const bool withBorder = drawInfo.borderSize > 0.0f;
+   if( withBorder )
+      ImGui::PushStyleVar( ImGuiStyleVar_FrameBorderSize, drawInfo.borderSize );
 
    char entryName[256] = {};
    size_t hoveredLodIdx = hop::INVALID_IDX;
@@ -363,15 +370,15 @@ static size_t drawEntries(
 
       const ImVec2 from( startPosPxl[i], drawPos.y + curLod.depth * PADDED_TRACE_SIZE );
       const ImVec2 to( from + ImVec2( deltaPxl[i], PADDED_TRACE_SIZE ) );
-      ImGui::RenderFrame( from, to, getEntryColor( data, threadIndex, absIndex ) );
+      ImGui::RenderFrame( from, to, drawInfo.getEntryColor( data, threadIndex, absIndex ), withBorder );
 
       // Create the name for the trace if it is large enough on screen
       entryName[0] = '\0';
-      if( deltaPxl[i] > MIN_PXL_SIZE_FOR_TEXT && !curLod.loded )
+      if( deltaPxl[i] > MIN_PXL_SIZE_FOR_TEXT /*&& !curLod.loded*/ )
       {
-         getEntryLabelFct( data, threadIndex, absIndex, curLod.end - curLod.start, sizeof(entryName), entryName );
+         drawInfo.getEntryLabelFct( data, threadIndex, absIndex, curLod.end - curLod.start, sizeof(entryName), entryName );
          ImVec2 labelSize = ImGui::CalcTextSize(entryName, NULL, true);
-         ImGui::RenderTextClipped( from + framePading, to - framePading, entryName, NULL, &labelSize, textAlign, nullptr );
+         ImGui::RenderTextClipped( from + framePading, to - framePading, entryName, NULL, &labelSize, drawInfo.textAlign, nullptr );
 
          // Keep the index around if the mouse is inside the drawing
          if( hop::ptInRect( mousePos.x, mousePos.y, from.x, from.y, to.x, to.y ) )
@@ -381,14 +388,70 @@ static size_t drawEntries(
       }
    }
 
+   if( withBorder )
+      ImGui::PopStyleVar();
+
    startPosPxl.clear();
    deltaPxl.clear();
+
+   return hoveredLodIdx == hop::INVALID_IDX ? hop::INVALID_IDX : (lodStartIt + hoveredLodIdx)->index;
+}
+
+static size_t drawCoreLabels(
+    const ImVec2 drawPos,
+    uint32_t threadIdx,
+    const hop::TimelineTrackDrawData& data,
+    const hop::LodsData& lodsData )
+{
+   HOP_PROF_FUNC();
+
+   const auto drawStart = std::chrono::system_clock::now();
+
+   const DrawEntriesInfo drawInfo = {coreEventLabel, getCoreEventColor, ImVec2( 0.5f, 0.5f ), 2.0f};
+   const size_t hoveredIdx        = drawEntries( drawPos, threadIdx, data, lodsData, drawInfo );
+
+   const auto drawEnd = std::chrono::system_clock::now();
+   hop::g_stats.coreDrawingTimeMs +=
+       std::chrono::duration<double, std::milli>( ( drawEnd - drawStart ) ).count();
+
+   return hoveredIdx;
+}
+
+static size_t drawLockWaits(
+    const ImVec2 drawPos,
+    uint32_t threadIdx,
+    const hop::TimelineTrackDrawData& data,
+    const hop::LodsData& lodsData )
+{
+   const auto drawStart = std::chrono::system_clock::now();
+
+   DrawEntriesInfo drawInfo = {lockwaitLabelWithTime, getLockWaitColor, ImVec2( 0.0f, 0.5f ), 0.0f};
+   const size_t hoveredIdx  = drawEntries( drawPos, threadIdx, data, lodsData, drawInfo );
+
+   const auto drawEnd = std::chrono::system_clock::now();
+   hop::g_stats.lockwaitsDrawingTimeMs +=
+       std::chrono::duration<double, std::milli>( ( drawEnd - drawStart ) ).count();
+
+   return hoveredIdx;
+}
+
+static size_t drawTraces(
+    const ImVec2 drawPos,
+    uint32_t threadIdx,
+    const hop::TimelineTrackDrawData& data,
+    const hop::LodsData& lodsData )
+{
+   const auto drawStart = std::chrono::system_clock::now();
+
+   DrawEntriesInfo drawInfo = {traceLabelWithTime, getTraceColor, ImVec2( 0.0f, 0.5f ), 0.0f};
+   // Draw the lock waits  entries (before traces so that they are not hiding them)
+   const size_t hoveredIdx = drawEntries( drawPos, threadIdx, data, lodsData, drawInfo );
 
    const auto drawEnd = std::chrono::system_clock::now();
    hop::g_stats.traceDrawingTimeMs +=
        std::chrono::duration<double, std::milli>( ( drawEnd - drawStart ) ).count();
 
-   return hoveredLodIdx == hop::INVALID_IDX ? hop::INVALID_IDX : (lodStartIt + hoveredLodIdx)->index;
+   return hoveredIdx;
 }
 
 static void drawHighlightedTraces(
@@ -657,11 +720,11 @@ void TimelineTracksView::update( const hop::Profiler& profiler )
 
       // Create the LOD for the traces
       const hop::Entries& traceEntries = track._traces.entries;
-      appendLods( _tracks[i].traceLodsData, traceEntries );
+      //appendLods( _tracks[i].traceLodsData, traceEntries );
 
       // Create LOD for the lockwaits
       const hop::Entries& lwEntries = track._lockWaits.entries;
-      appendLods( _tracks[i].lockwaitsLodsData, lwEntries );
+      //appendLods( _tracks[i].lockwaitsLodsData, lwEntries );
 
       // Create LOD for the coreevents
       const hop::Entries& coreEntries = track._coreEvents.entries;
@@ -718,7 +781,7 @@ void TimelineTracksView::draw( const TimelineTrackDrawData& data, TimelineMsgArr
       // Draw the core before the thread labels so they are not drawn over them
       if( !threadHidden && options::showCoreInfo() )
       {
-         drawEntries( labelsDrawPosition, i, data, _tracks[i].coreEventLodsData, coreEventLabel, getCoreEventColor );
+         drawCoreLabels( labelsDrawPosition, i, data, _tracks[i].coreEventLodsData );
       }
 
       if( drawThreadLabel( labelsDrawPosition, customName, i, threadHidden ) )
@@ -768,11 +831,13 @@ void TimelineTracksView::draw( const TimelineTrackDrawData& data, TimelineMsgArr
                 true );
 
             // Draw the lock waits  entries (before traces so that they are not hiding them)
-            const size_t lwHoveredIdx = drawEntries( curDrawPos, i, data, _tracks[i].lockwaitsLodsData, lockwaitLabelWithTime, getLockWaitColor );
+            const size_t lwHoveredIdx =
+                drawLockWaits( curDrawPos, i, data, _tracks[i].lockwaitsLodsData );
             handleHoveredLockWait( *this, data, i, lwHoveredIdx, highlightInfo, msgArray );
 
             // Draw the traces entries
-            const size_t traceHoveredIdx = drawEntries( curDrawPos, i, data, _tracks[i].traceLodsData, traceLabelWithTime, getTraceColor );
+            const size_t traceHoveredIdx =
+                drawTraces( curDrawPos, i, data, _tracks[i].traceLodsData );
             handleHoveredTrace( _contextMenu, data, i, traceHoveredIdx, highlightInfo, msgArray );
 
             if( lwHoveredIdx == hop::INVALID_IDX && traceHoveredIdx == hop::INVALID_IDX )
