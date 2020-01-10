@@ -14,7 +14,6 @@
 
 #include "imgui/imgui.h"
 
-#define NOC_FILE_DIALOG_IMPLEMENTATION
 #include "noc_file_dialog/noc_file_dialog.h"
 
 #include <thread> // For saving/opening files
@@ -33,42 +32,42 @@ static const char* NOC_DIALOG_EXT_FILTER = "hop\0*.hop\0";
 static void saveProfilerToFile( hop::ProfilerView* prof )
 {
    prof->setRecording( false );
-   // Spawn a thread so we do not freeze the ui
-   std::thread t( [prof]() {
-      const int flags = NOC_FILE_DIALOG_SAVE | NOC_FILE_DIALOG_OVERWRITE_CONFIRMATION;
-      const char* path = noc_file_dialog_open( flags, NOC_DIALOG_EXT_FILTER, nullptr, nullptr );
-
-      if( path )
-      {
+   const int flags = NOC_FILE_DIALOG_SAVE | NOC_FILE_DIALOG_OVERWRITE_CONFIRMATION;
+   const char* path = noc_file_dialog_open( flags, NOC_DIALOG_EXT_FILTER, nullptr, nullptr );
+   if( path )
+   {
+      // Spawn a thread so we do not freeze the ui
+      std::thread t( [prof]( std::string path ) {
          hop::displayModalWindow( "Saving...", hop::MODAL_TYPE_NO_CLOSE );
-         const bool success = prof->saveToFile( path );
+         const bool success = prof->saveToFile( path.c_str() );
          hop::closeModalWindow();
          if( !success )
          {
             hop::displayModalWindow( "Error while saving file", hop::MODAL_TYPE_ERROR );
          }
-      }
-   } );
+      }, path );
 
-   t.detach();
+      t.detach();
+   }
 }
 
 static std::future< hop::ProfilerView* > openProfilerFile()
 {
    using namespace hop;
-   return std::async(
-       std::launch::async,
-       []()
-       {
-          ProfilerView* prof = nullptr;
-          const char* path =
+   const char* path =
               noc_file_dialog_open( NOC_FILE_DIALOG_OPEN, NOC_DIALOG_EXT_FILTER, nullptr, nullptr );
-          if( path )
-          {
-             displayModalWindow( "Loading...", MODAL_TYPE_NO_CLOSE );
+   if( path )
+   {
+      return std::async(
+         std::launch::async,
+         []( std::string path )
+         {
+            ProfilerView* prof = nullptr;
+            
+            displayModalWindow( "Loading...", MODAL_TYPE_NO_CLOSE );
 
-            prof = new ProfilerView( Profiler::SRC_TYPE_FILE, -1, path );
-            if( prof->openFile( path ) )
+            prof = new ProfilerView( Profiler::SRC_TYPE_FILE, -1, path.c_str() );
+            if( prof->openFile( path.c_str() ) )
             {
                // Do the first update here to create the LODs. The params does not make difference
                // in this scenario as they will be updated once we go back to the main thread
@@ -80,10 +79,12 @@ static std::future< hop::ProfilerView* > openProfilerFile()
             }
 
             closeModalWindow();
-          }
 
-          return prof;
-       } );
+            return prof;
+         }, path );
+   }
+
+   return std::future< hop::ProfilerView* >{};
 }
 
 static void addNewProfilerByNamePopUp( hop::Viewer* v )

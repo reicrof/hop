@@ -21,17 +21,20 @@ if(UNIX)
 
    if(APPLE)
         set( CMAKE_OSX_DEPLOYMENT_TARGET 10.11 )
+        set( NOC_IMPL_FILE "noc_file_dialog/noc_file_dialog.mm")
         set( NOC_IMPL_DEFINE "NOC_FILE_DIALOG_OSX" )
    else()
         find_package( PkgConfig REQUIRED )
         pkg_check_modules( GTK3 REQUIRED gtk+-3.0 )
         set( PLATFORM_LINK_FLAGS "${PLATFORM_LINK_FLAGS} -lrt -l${GTK3_LIBRARIES}" )
+        set( NOC_IMPL_FILE "noc_file_dialog/noc_file_dialog.cpp")
         set( NOC_IMPL_DEFINE "NOC_FILE_DIALOG_GTK" )
         set( PLATFORM_EXTRA_INCLUDES ${GTK3_INCLUDE_DIRS} )
    endif()
 else() # Windows
    set( CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /fp:fast" )
    set( HOP_WRAP_SRC wrap_library/hop_wrap_windows.cpp )
+   set( NOC_IMPL_FILE "noc_file_dialog/noc_file_dialog.cpp")
    set( NOC_IMPL_DEFINE "NOC_FILE_DIALOG_WIN32" )
 endif()
 
@@ -61,6 +64,7 @@ set( common_src ${common_src} ${viewer_platform_src} )
 file(GLOB hop_gui_src
     "hop/*.cpp"
     "thirdparties/imgui/*.cpp"
+    "thirdparties/${NOC_IMPL_FILE}"
 )
 
 add_executable(hop ${common_src} ${hop_gui_src} )
