@@ -806,6 +806,20 @@ bool Viewer::handleHotkey( ProfilerView* selectedProf )
             addNewProfilerByNamePopUp( this );
             handled = true;
          }
+         else if ( ImGui::GetIO().KeyCtrl && ImGui::IsKeyPressed( 's' ) )
+         {
+            const int profIdx = activeProfilerIndex();
+            if( profIdx >= 0 )
+            {
+               saveProfilerToFile( getProfiler( profIdx ) );
+               handled = true;
+            }
+         }
+         else if ( ImGui::GetIO().KeyCtrl && ImGui::IsKeyPressed( 'o' ) )
+         {
+            openProfilerFile();
+            handled = true;
+         }
          else if ( ImGui::IsKeyPressed( ImGui::GetKeyIndex( ImGuiKey_Escape ) ) )
          {
             hop::displayModalWindow( "Exit ?", hop::MODAL_TYPE_YES_NO, [&]() { g_run = false; } );
