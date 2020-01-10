@@ -32,7 +32,7 @@ static void saveProfilerToFile( hop::ProfilerView* prof )
    // Spawn a thread so we do not freeze the ui
    std::thread t( [prof]() {
       const int flags = NOC_FILE_DIALOG_SAVE | NOC_FILE_DIALOG_OVERWRITE_CONFIRMATION;
-      const char* path = noc_file_dialog_open( flags, ".hop", nullptr, nullptr );
+      const char* path = noc_file_dialog_open( flags, ".hop\0\0", nullptr, nullptr );
 
       hop::displayModalWindow( "Saving...", hop::MODAL_TYPE_NO_CLOSE );
       const bool success = prof->saveToFile( path );

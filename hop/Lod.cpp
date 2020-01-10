@@ -249,7 +249,7 @@ computeCoreEventLods( const Entries& entries, const std::deque<Core_t>& cores, s
          else
          {
             resLods[lodLvl].push_back(
-                LodInfo{entries.starts[i], entries.ends[i], i, entries.ends[i], false} );
+                LodInfo{entries.starts[i], entries.ends[i], i, entries.depths[i], false} );
          }
       }
    }
