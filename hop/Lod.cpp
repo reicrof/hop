@@ -7,8 +7,8 @@
 
 static constexpr float MIN_TRACE_LENGTH_PXL = 10.0f;
 static constexpr float MIN_GAP_PXL = 5.0f;
-static hop::TimeStamp LOD_MIN_GAP_CYCLES[hop::LOD_COUNT] = {0};
-static hop::TimeStamp LOD_MIN_TRACE_LENGTH_PXL[hop::LOD_COUNT] = {0};
+static hop::TimeDuration LOD_MIN_GAP_CYCLES[hop::LOD_COUNT] = {0};
+static hop::TimeDuration LOD_MIN_TRACE_LENGTH_PXL[hop::LOD_COUNT] = {0};
 
 #define HOP_USE_INSERTION_SORT 0
 
@@ -217,6 +217,119 @@ void appendLods( LodsData& dst, const Entries& entries )
       assert_is_sorted( dst.lods[i].begin(), dst.lods[i].end() );
 
       nonLodedInfos.clear();
+   }
+
+   // Update to the new offset
+   dst.idOffset = entries.ends.size();
+}
+
+LodsArray
+computeCoreEventLods( const Entries& entries, const std::deque<Core_t>& cores, size_t idOffset )
+{
+   HOP_PROF_FUNC();
+
+   LodsArray resLods;
+
+   int lodLvl = 0;
+   // Compute first LOD from raw data
+   {
+      // First lod is always added
+      resLods[lodLvl].push_back(
+          LodInfo{entries.starts[idOffset], entries.ends[idOffset], idOffset, 0, false} );
+      HOP_PROF( "Compute first LOD level" );
+      for ( size_t i = idOffset + 1; i < entries.ends.size(); ++i )
+      {
+         auto& lastEvent = resLods[lodLvl].back();
+         if( cores[lastEvent.index] == cores[i] )
+         {
+            lastEvent.start = std::min( lastEvent.start, entries.starts[i] );
+            lastEvent.end = entries.ends[i];
+            lastEvent.loded = true;
+         }
+         else
+         {
+            resLods[lodLvl].push_back(
+                LodInfo{entries.starts[i], entries.ends[i], i, entries.ends[i], false} );
+         }
+      }
+   }
+
+   std::sort( resLods[lodLvl].begin(), resLods[lodLvl].end() );
+
+   // Compute the LOD based on the previous LOD levels
+   const std::deque<LodInfo>* lastComputedLod = &resLods[lodLvl];
+   for ( lodLvl = 1; lodLvl < LOD_COUNT; ++lodLvl )
+   {
+      HOP_PROF( "Computing next LOD lvl" );
+      resLods[lodLvl].emplace_back( lastComputedLod->front() );
+      for ( const auto& l : *lastComputedLod )
+      {
+         auto& lastEvent = resLods[lodLvl].back();
+         if( cores[lastEvent.index] == cores[l.index] )
+         {
+            lastEvent.start = std::min( lastEvent.start, l.start );
+            lastEvent.end   = l.end;
+            lastEvent.loded = true;
+         }
+         else
+         {
+            resLods[lodLvl].emplace_back( l );
+         }
+      }
+      std::sort( resLods[lodLvl].begin(), resLods[lodLvl].end() );
+
+      // Update the last compute lod ptr
+      lastComputedLod = &resLods[lodLvl];
+   }
+
+   return resLods;
+}
+
+void appendCoreEventLods( LodsData& dst, const Entries& entries, const std::deque<Core_t>& cores )
+{
+   if( entries.ends.size() <= dst.idOffset ) return;
+
+   LodsArray src = computeCoreEventLods( entries, cores, dst.idOffset );
+
+   HOP_PROF_FUNC();
+
+   // For all LOD levels
+   for( size_t lodLvl = 0; lodLvl < src.size(); ++lodLvl )
+   {
+      // First trace to insert
+      auto newTraceIt  = src[lodLvl].cbegin();
+      long sortFromIdx = dst.lods[lodLvl].size();
+
+      // If there is already LOD in the dest, try to merge them
+      bool loded = false;
+      if( !dst.lods[lodLvl].empty() )
+      {
+         auto prevTraceIt               = dst.lods[lodLvl].rbegin();
+         const int64_t timeBetweenTrace = newTraceIt->start - prevTraceIt->end;
+         if( cores[prevTraceIt->index] == cores[newTraceIt->index] &&
+             timeBetweenTrace < LOD_MIN_GAP_CYCLES[lodLvl] )
+         {
+            prevTraceIt->start = std::min( prevTraceIt->start, newTraceIt->start );
+            prevTraceIt->end   = newTraceIt->end;
+            prevTraceIt->loded = true;
+            const long dist    = std::distance( prevTraceIt, dst.lods[lodLvl].rend() );
+            sortFromIdx        = std::min( dist, sortFromIdx );
+            loded              = true;
+         }
+      }
+
+      if( !loded )
+      {
+         dst.lods[lodLvl].insert( dst.lods[lodLvl].end(), newTraceIt, src[lodLvl].cend() );
+      }
+      else
+      {
+         std::sort(
+             dst.lods[lodLvl].begin() + std::max( 0l, ( sortFromIdx - 1 ) ),
+             dst.lods[lodLvl].end() );
+      }
+
+      assert_is_sorted( dst.lods[lodLvl].begin(), dst.lods[lodLvl].end() );
    }
 
    // Update to the new offset

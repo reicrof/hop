@@ -170,6 +170,7 @@ static void createDrawData(
     float* __restrict deltaPxl )
 {
    HOP_PROF_FUNC();
+   const float windowWidth = ImGui::GetWindowWidth();
    for( size_t i = 0; i < count; ++i, ++it )
    {
       // Use the min max to clamp the starting position to 0 and remove what has been "cropped" from
@@ -177,7 +178,8 @@ static void createDrawData(
       const std::pair<float, float> minMaxPxl = // Do not use auto as minmax returns a reference
           std::minmax( ( int64_t )( it->start - absStart ) / cyclesPerPxl, 0.0f );
       startsPxl[i] = minMaxPxl.second;
-      deltaPxl[i]  = std::max( ( ( it->end - it->start ) / cyclesPerPxl ) + minMaxPxl.first, 1.0f );
+      deltaPxl[i]  = hop::clamp(
+          ( ( it->end - it->start ) / cyclesPerPxl ) + minMaxPxl.first, 1.0f, windowWidth );
    }
 }
 
@@ -229,7 +231,7 @@ static uint32_t getLockWaitColor( const hop::TimelineTrackDrawData&, uint32_t, s
 }
 static uint32_t getCoreEventColor( const hop::TimelineTrackDrawData&, uint32_t, size_t )
 {
-   return 0xFF7b7b7b;
+   return 0xFF333333;
 }
 
 /* ----------------------------------------------------- */
@@ -359,7 +361,10 @@ static size_t drawEntries(
 
    const bool withBorder = drawInfo.borderSize > 0.0f;
    if( withBorder )
+   {
       ImGui::PushStyleVar( ImGuiStyleVar_FrameBorderSize, drawInfo.borderSize );
+      ImGui::PushStyleColor( ImGuiCol_Border, CORE_LABEL_BORDER_COLOR );
+   }
 
    char entryName[256] = {};
    size_t hoveredLodIdx = hop::INVALID_IDX;
@@ -389,7 +394,10 @@ static size_t drawEntries(
    }
 
    if( withBorder )
+   {
       ImGui::PopStyleVar();
+      ImGui::PopStyleColor();
+   }
 
    startPosPxl.clear();
    deltaPxl.clear();
@@ -720,15 +728,15 @@ void TimelineTracksView::update( const hop::Profiler& profiler )
 
       // Create the LOD for the traces
       const hop::Entries& traceEntries = track._traces.entries;
-      //appendLods( _tracks[i].traceLodsData, traceEntries );
+      appendLods( _tracks[i].traceLodsData, traceEntries );
 
       // Create LOD for the lockwaits
       const hop::Entries& lwEntries = track._lockWaits.entries;
-      //appendLods( _tracks[i].lockwaitsLodsData, lwEntries );
+      appendLods( _tracks[i].lockwaitsLodsData, lwEntries );
 
       // Create LOD for the coreevents
       const hop::Entries& coreEntries = track._coreEvents.entries;
-      appendLods( _tracks[i].coreEventLodsData, coreEntries );
+      appendCoreEventLods( _tracks[i].coreEventLodsData, coreEntries, track._coreEvents.cores );
 
       // Update max depth as well in case it has changed
       const Depth_t newMaxDepth = std::max( traceEntries.maxDepth, lwEntries.maxDepth );

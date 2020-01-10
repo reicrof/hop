@@ -37,12 +37,17 @@ void setupLODResolution( uint32_t sreenResolutionX );
 // Create and appends lods
 void appendLods( LodsData& lodData, const Entries& entries );
 
- std::pair<size_t, size_t> visibleIndexSpan(
-     const LodsArray& lodsArr,
-     int lodLvl,
-     TimeStamp absoluteStart,
-     TimeStamp absoluteEnd,
-     Depth_t minDepth );
+void appendCoreEventLods(
+    LodsData& lodData,
+    const Entries& entries,
+    const std::deque<Core_t>& cores );
+
+std::pair<size_t, size_t> visibleIndexSpan(
+    const LodsArray& lodsArr,
+    int lodLvl,
+    TimeStamp absoluteStart,
+    TimeStamp absoluteEnd,
+    Depth_t minDepth );
 
 }
 

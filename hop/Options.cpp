@@ -24,7 +24,7 @@ namespace hop
 struct Options
 {
    float traceHeight{20.0f};
-   float windowOpacity{0.75f};
+   float windowOpacity{0.8f};
    bool startFullScreen{true};
    bool vsyncOn{true};
    bool showDebugWindow{false};
