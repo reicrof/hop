@@ -27,13 +27,16 @@ static constexpr float TOOLBAR_BUTTON_HEIGHT = 15.0f;
 static constexpr float TOOLBAR_BUTTON_WIDTH = 15.0f;
 static constexpr float TOOLBAR_BUTTON_PADDING = 5.0f;
 
+// Filters to use when opening the noc file dialog
+static const char* NOC_DIALOG_EXT_FILTER = "hop\0*.hop\0";
+
 static void saveProfilerToFile( hop::ProfilerView* prof )
 {
    prof->setRecording( false );
    // Spawn a thread so we do not freeze the ui
    std::thread t( [prof]() {
       const int flags = NOC_FILE_DIALOG_SAVE | NOC_FILE_DIALOG_OVERWRITE_CONFIRMATION;
-      const char* path = noc_file_dialog_open( flags, "hop\0*.hop\0", nullptr, nullptr );
+      const char* path = noc_file_dialog_open( flags, NOC_DIALOG_EXT_FILTER, nullptr, nullptr );
 
       if( path )
       {
@@ -58,7 +61,8 @@ static std::future< hop::ProfilerView* > openProfilerFile()
        []()
        {
           ProfilerView* prof = nullptr;
-          const char* path = noc_file_dialog_open( NOC_FILE_DIALOG_OPEN, ".hop", nullptr, nullptr );
+          const char* path =
+              noc_file_dialog_open( NOC_FILE_DIALOG_OPEN, NOC_DIALOG_EXT_FILTER, nullptr, nullptr );
           if( path )
           {
              displayModalWindow( "Loading...", MODAL_TYPE_NO_CLOSE );

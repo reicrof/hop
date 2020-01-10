@@ -735,7 +735,7 @@ void TimelineTracksView::update( const hop::Profiler& profiler )
       const hop::Entries& lwEntries = track._lockWaits.entries;
       appendLods( _tracks[i].lockwaitsLodsData, lwEntries );
 
-      // Create LOD for the coreevents
+      // Create LOD for the core events
       const hop::Entries& coreEntries = track._coreEvents.entries;
       appendCoreEventLods( _tracks[i].coreEventLodsData, coreEntries, track._coreEvents.cores );
 

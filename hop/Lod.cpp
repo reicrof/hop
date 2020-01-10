@@ -240,7 +240,9 @@ computeCoreEventLods( const Entries& entries, const std::deque<Core_t>& cores, s
       for ( size_t i = idOffset + 1; i < entries.ends.size(); ++i )
       {
          auto& lastEvent = resLods[lodLvl].back();
-         if( cores[lastEvent.index] == cores[i] )
+         const int64_t timeBetweenTrace = entries.starts[i] - lastEvent.end;
+         if( cores[lastEvent.index] == cores[i] &&
+             timeBetweenTrace < LOD_MIN_GAP_CYCLES[lodLvl] )
          {
             lastEvent.start = std::min( lastEvent.start, entries.starts[i] );
             lastEvent.end = entries.ends[i];
@@ -265,7 +267,9 @@ computeCoreEventLods( const Entries& entries, const std::deque<Core_t>& cores, s
       for ( const auto& l : *lastComputedLod )
       {
          auto& lastEvent = resLods[lodLvl].back();
-         if( cores[lastEvent.index] == cores[l.index] )
+         const int64_t timeBetweenTrace = l.start - lastEvent.end;
+         if( cores[lastEvent.index] == cores[l.index] &&
+             timeBetweenTrace < LOD_MIN_GAP_CYCLES[lodLvl] )
          {
             lastEvent.start = std::min( lastEvent.start, l.start );
             lastEvent.end   = l.end;
