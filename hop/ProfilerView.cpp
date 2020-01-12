@@ -25,30 +25,6 @@
 
 extern bool g_run;
 
-static void displayBackgroundHelpMsg( uint32_t windowWidth, uint32_t windowHeight )
-{
-   const char* helpTxt =
-       "-------------- Hop --------------\n\n"
-       "Press 'R' to start/stop recording\n"
-       "Right mouse click to get traces details\n"
-       "Double click on a trace to focus it\n"
-       "Right mouse drag to zoom on a region\n"
-       "Left mouse drag to measure time in region\n"
-       "Right click on the timeline to create a bookmark\n"
-       "Use arrow keys <-/-> to navigate bookmarks\n"
-       "Use CTRL+F to search traces\n"
-       "Use Del to delete traces\n";
-   const auto pos = ImGui::GetWindowPos();
-   ImDrawList* DrawList = ImGui::GetWindowDrawList();
-   auto size = ImGui::CalcTextSize( helpTxt );
-   DrawList->AddText(
-       ImGui::GetIO().Fonts->Fonts[0],
-       30.0f,
-       ImVec2( pos.x + windowWidth / 2 - ( size.x ), pos.y + windowHeight / 2 - size.y ),
-       ImGui::GetColorU32( ImGuiCol_TextDisabled ),
-       helpTxt );
-}
-
 static int closestLodLevel( hop::TimeDuration timelineDuration )
 {
    int lodLvl = 0;
@@ -100,11 +76,7 @@ void hop::ProfilerView::draw( float drawPosX, float drawPosY, const TimelineInfo
    HOP_PROF_FUNC();
    ImGui::SetCursorPos( ImVec2( drawPosX, drawPosY ) );
 
-   if ( _trackViews.count() == 0 && !data().recording() )
-   {
-      displayBackgroundHelpMsg( ImGui::GetWindowWidth(), ImGui::GetWindowHeight() );
-   }
-   else
+   if ( _trackViews.count() > 0 )
    {
       TimelineTrackDrawData drawData = { _profiler, tlInfo, _lodLevel, _highlightValue };
       _trackViews.draw( drawData, msgArray );

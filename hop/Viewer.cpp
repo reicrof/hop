@@ -7,6 +7,7 @@
 #include "hop/Options.h"
 #include "hop/RendererGL.h"
 #include "hop/Stats.h"
+#include "hop/icon_vertices_data.h"
 
 #include "common/Profiler.h"
 #include "common/Utils.h"
@@ -17,6 +18,7 @@
 #include "noc_file_dialog/noc_file_dialog.h"
 
 #include <thread> // For saving/opening files
+#include <sstream>
 
 extern bool g_run;
 
@@ -100,6 +102,54 @@ static void setRecording( hop::ProfilerView* profiler, hop::Timeline* timeline, 
    timeline->setRealtime( recording );
 }
 
+static void drawBackground( float windowWidth, float windowHeight )
+{
+   ImDrawList* DrawList = ImGui::GetWindowDrawList();
+   const float xOffset  = windowWidth / 3.0f;
+   const float yOffset  = windowHeight / 4.0f;
+
+   std::vector< ImVec2 > linePoints;
+   std::string line;
+   std::stringstream data(HOP_ICON_VERTICES);
+   while( std::getline( data, line ) )
+   {
+      linePoints.clear();
+      std::stringstream ss( line );
+      float x, y;
+      while( ss >> x && ss >> y )
+      {
+         linePoints.emplace_back( x + xOffset, y + yOffset );
+      }
+      
+      DrawList->AddPolyline(linePoints.data(), linePoints.size(), 0xFF999999, false , 4.0f);
+   }
+}
+
+static bool drawHelpMenu()
+{
+   ImGui::Text( "Hop version %.1f\n", HOP_VERSION );
+   static bool rdtscpSupported = hop::supportsRDTSCP();
+   static bool constantTscSupported = hop::supportsConstantTSC();
+   ImGui::Text(
+         "RDTSCP Supported : %s\nConstant TSC Supported : %s\n",
+         rdtscpSupported ? "yes" : "no",
+         constantTscSupported ? "yes" : "no" );
+
+   const char* helpTxt =
+       "- Press 'R' to start/stop recording\n"
+       "- Right mouse click to get traces details\n"
+       "- Double click on a trace to focus it\n"
+       "- Right mouse drag to zoom on a region\n"
+       "- Left mouse drag to measure time in region\n"
+       "- Right click on the timeline to create a bookmark\n"
+       "- Use arrow keys <-/-> to navigate bookmarks\n"
+       "- Use CTRL+F to search traces\n"
+       "- Use Del to delete traces\n";
+   ImGui::Text( "%s", helpTxt );
+   ImGui::Spacing();
+   return ImGui::Button( "Close", ImVec2( 120, 0 ) );
+}
+
 static void drawMenuBar( hop::Viewer* v )
 {
    static const char* const menuAddProfiler = "Add Profiler";
@@ -149,17 +199,9 @@ static void drawMenuBar( hop::Viewer* v )
    }
    if ( ImGui::BeginPopupModal( menuHelp, NULL, ImGuiWindowFlags_AlwaysAutoResize ) )
    {
-      ImGui::Text( "Hop version %.1f\n", HOP_VERSION );
-      static bool rdtscpSupported = hop::supportsRDTSCP();
-      static bool constantTscSupported = hop::supportsConstantTSC();
-      ImGui::Text(
-          "RDTSCP Supported : %s\nConstant TSC Supported : %s\n",
-          rdtscpSupported ? "yes" : "no",
-          constantTscSupported ? "yes" : "no" );
-      if ( ImGui::Button( "Close", ImVec2( 120, 0 ) ) )
-      {
+      if( drawHelpMenu() )
          ImGui::CloseCurrentPopup();
-      }
+
       ImGui::EndPopup();
    }
 }
@@ -553,6 +595,24 @@ static bool profilerAlreadyExist(
    return alreadyExist;
 }
 
+static void drawCanvasContent(
+   float wndWidth,
+   float wndHeight,
+   hop::ProfilerView* prof,
+   const hop::TimelineInfo& tlInfo,
+   hop::TimelineMsgArray* msgArr )
+{
+   if ( prof && prof->data().connectionState() == hop::SharedMemory::CONNECTED )
+   {
+      const ImVec2 curPos = ImGui::GetCursorPos();
+      prof->draw( curPos.x, curPos.y, tlInfo, msgArr );
+   }
+   else
+   {
+      drawBackground( wndWidth, wndHeight );
+   }
+}
+
 namespace hop
 {
 Viewer::Viewer( uint32_t screenSizeX, uint32_t /*screenSizeY*/ )
@@ -724,11 +784,9 @@ void Viewer::draw( uint32_t windowWidth, uint32_t windowHeight )
    TimelineMsgArray msgArray;
    _timeline.draw();
    _timeline.beginDrawCanvas( selectedProf ? selectedProf->canvasHeight() : 0.0f );
-   if ( selectedProf )
-   {
-      const ImVec2 curPos = ImGui::GetCursorPos();
-      selectedProf->draw( curPos.x, curPos.y, _timeline.createTimelineInfo(), &msgArray );
-   }
+
+   drawCanvasContent( windowWidth, windowHeight, selectedProf, _timeline.createTimelineInfo(), &msgArray );
+
    _timeline.endDrawCanvas();
    _timeline.handleDeferredActions( msgArray );
 
