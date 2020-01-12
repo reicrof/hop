@@ -308,6 +308,7 @@ struct DrawEntriesInfo
    GetEntryColor getEntryColor;
    ImVec2        textAlign;
    float         borderSize;
+   bool          drawLodedText;
 };
 
 static size_t drawEntries(
@@ -348,7 +349,8 @@ static size_t drawEntries(
    const ImVec2 mousePos    = ImGui::GetMousePos();
    const ImVec2 framePading = ImGui::GetStyle().FramePadding;
 
-   const bool withBorder = drawInfo.borderSize > 0.0f;
+   const bool drawLodedText = drawInfo.drawLodedText;
+   const bool withBorder    = drawInfo.borderSize > 0.0f;
    if( withBorder )
    {
       ImGui::PushStyleVar( ImGuiStyleVar_FrameBorderSize, drawInfo.borderSize );
@@ -368,7 +370,7 @@ static size_t drawEntries(
 
       // Create the name for the trace if it is large enough on screen
       entryName[0] = '\0';
-      if( deltaPxl[i] > MIN_PXL_SIZE_FOR_TEXT /*&& !curLod.loded*/ )
+      if( deltaPxl[i] > MIN_PXL_SIZE_FOR_TEXT && ( !curLod.loded || drawLodedText ) )
       {
          drawInfo.getEntryLabelFct( data, threadIndex, absIndex, curLod.end - curLod.start, sizeof(entryName), entryName );
          ImVec2 labelSize = ImGui::CalcTextSize(entryName, NULL, true);
@@ -404,7 +406,7 @@ static size_t drawCoreLabels(
 
    const auto drawStart = std::chrono::system_clock::now();
 
-   const DrawEntriesInfo drawInfo = {coreEventLabel, getCoreEventColor, ImVec2( 0.5f, 0.5f ), 2.0f};
+   const DrawEntriesInfo drawInfo = {coreEventLabel, getCoreEventColor, ImVec2( 0.5f, 0.5f ), 2.0f, true};
    const size_t hoveredIdx        = drawEntries( drawPos, threadIdx, data, lodsData, drawInfo );
 
    const auto drawEnd = std::chrono::system_clock::now();
@@ -422,7 +424,7 @@ static size_t drawLockWaits(
 {
    const auto drawStart = std::chrono::system_clock::now();
 
-   DrawEntriesInfo drawInfo = {lockwaitLabelWithTime, getLockWaitColor, ImVec2( 0.0f, 0.5f ), 0.0f};
+   DrawEntriesInfo drawInfo = {lockwaitLabelWithTime, getLockWaitColor, ImVec2( 0.0f, 0.5f ), 0.0f, false};
    const size_t hoveredIdx  = drawEntries( drawPos, threadIdx, data, lodsData, drawInfo );
 
    const auto drawEnd = std::chrono::system_clock::now();
@@ -440,7 +442,7 @@ static size_t drawTraces(
 {
    const auto drawStart = std::chrono::system_clock::now();
 
-   DrawEntriesInfo drawInfo = {traceLabelWithTime, getTraceColor, ImVec2( 0.0f, 0.5f ), 0.0f};
+   DrawEntriesInfo drawInfo = {traceLabelWithTime, getTraceColor, ImVec2( 0.0f, 0.5f ), 0.0f, false};
    // Draw the lock waits  entries (before traces so that they are not hiding them)
    const size_t hoveredIdx = drawEntries( drawPos, threadIdx, data, lodsData, drawInfo );
 

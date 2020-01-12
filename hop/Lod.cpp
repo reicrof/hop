@@ -6,7 +6,7 @@
 #include <algorithm>
 
 static constexpr float MIN_TRACE_LENGTH_PXL = 10.0f;
-static constexpr float MIN_GAP_PXL = 5.0f;
+static constexpr float MIN_GAP_PXL = 8.0f;
 static hop::TimeDuration LOD_MIN_GAP_CYCLES[hop::LOD_COUNT] = {0};
 static hop::TimeDuration LOD_MIN_TRACE_LENGTH_PXL[hop::LOD_COUNT] = {0};
 
@@ -231,6 +231,21 @@ computeCoreEventLods( const Entries& entries, const std::deque<Core_t>& cores, s
 
    LodsArray resLods;
 
+   const auto mergeLodInfo = [&cores]( int lodLvl, LodInfo& lastEvent, const LodInfo& newEvent, LodsArray& resLods )
+   {
+      const int64_t timeBetweenTrace = newEvent.start - lastEvent.end;
+      if( cores[lastEvent.index] == cores[newEvent.index] &&
+            timeBetweenTrace < LOD_MIN_GAP_CYCLES[lodLvl] )
+      {
+         lastEvent.end   = newEvent.end;
+         lastEvent.loded = true;
+      }
+      else
+      {
+         resLods[lodLvl].emplace_back( newEvent );
+      }
+   };
+
    int lodLvl = 0;
    // Compute first LOD from raw data
    {
@@ -240,24 +255,14 @@ computeCoreEventLods( const Entries& entries, const std::deque<Core_t>& cores, s
       HOP_PROF( "Compute first LOD level" );
       for ( size_t i = idOffset + 1; i < entries.ends.size(); ++i )
       {
-         auto& lastEvent = resLods[lodLvl].back();
-         const int64_t timeBetweenTrace = entries.starts[i] - lastEvent.end;
-         if( cores[lastEvent.index] == cores[i] &&
-             timeBetweenTrace < LOD_MIN_GAP_CYCLES[lodLvl] )
-         {
-            lastEvent.start = std::min( lastEvent.start, entries.starts[i] );
-            lastEvent.end = entries.ends[i];
-            lastEvent.loded = true;
-         }
-         else
-         {
-            resLods[lodLvl].push_back(
-                LodInfo{entries.starts[i], entries.ends[i], i, entries.depths[i], false} );
-         }
+         mergeLodInfo(
+            lodLvl,
+            resLods[lodLvl].back(),
+            LodInfo{entries.starts[i], entries.ends[i], i, 0, false},
+            resLods );
       }
+      std::sort( resLods[lodLvl].begin(), resLods[lodLvl].end() );
    }
-
-   std::sort( resLods[lodLvl].begin(), resLods[lodLvl].end() );
 
    // Compute the LOD based on the previous LOD levels
    const std::deque<LodInfo>* lastComputedLod = &resLods[lodLvl];
@@ -267,19 +272,7 @@ computeCoreEventLods( const Entries& entries, const std::deque<Core_t>& cores, s
       resLods[lodLvl].emplace_back( lastComputedLod->front() );
       for ( const auto& l : *lastComputedLod )
       {
-         auto& lastEvent = resLods[lodLvl].back();
-         const int64_t timeBetweenTrace = l.start - lastEvent.end;
-         if( cores[lastEvent.index] == cores[l.index] &&
-             timeBetweenTrace < LOD_MIN_GAP_CYCLES[lodLvl] )
-         {
-            lastEvent.start = std::min( lastEvent.start, l.start );
-            lastEvent.end   = l.end;
-            lastEvent.loded = true;
-         }
-         else
-         {
-            resLods[lodLvl].emplace_back( l );
-         }
+         mergeLodInfo( lodLvl, resLods[lodLvl].back(), l, resLods );
       }
       std::sort( resLods[lodLvl].begin(), resLods[lodLvl].end() );
 
@@ -302,32 +295,27 @@ void appendCoreEventLods( LodsData& dst, const Entries& entries, const std::dequ
    for( size_t lodLvl = 0; lodLvl < src.size(); ++lodLvl )
    {
       // First trace to insert
-      auto newTraceIt  = src[lodLvl].cbegin();
-      long sortFromIdx = dst.lods[lodLvl].size();
+      const auto& newEvent  = src[lodLvl].front();
+      long sortFromIdx      = dst.lods[lodLvl].size();
 
       // If there is already LOD in the dest, try to merge them
       bool loded = false;
       if( !dst.lods[lodLvl].empty() )
       {
-         auto prevTraceIt               = dst.lods[lodLvl].rbegin();
-         const int64_t timeBetweenTrace = newTraceIt->start - prevTraceIt->end;
-         if( cores[prevTraceIt->index] == cores[newTraceIt->index] &&
+         auto& prevEvent                = dst.lods[lodLvl].back();
+         const int64_t timeBetweenTrace = newEvent.start - prevEvent.end;
+         if( cores[prevEvent.index] == cores[newEvent.index] &&
              timeBetweenTrace < LOD_MIN_GAP_CYCLES[lodLvl] )
          {
-            prevTraceIt->start = std::min( prevTraceIt->start, newTraceIt->start );
-            prevTraceIt->end   = newTraceIt->end;
-            prevTraceIt->loded = true;
-            const long dist    = std::distance( prevTraceIt, dst.lods[lodLvl].rend() );
-            sortFromIdx        = std::min( dist, sortFromIdx );
-            loded              = true;
+            prevEvent.end   = newEvent.end;
+            prevEvent.loded = loded = true;
          }
       }
 
-      if( !loded )
-      {
-         dst.lods[lodLvl].insert( dst.lods[lodLvl].end(), newTraceIt, src[lodLvl].cend() );
-      }
-      else
+      // Insert all the events except the first on if it has been loded
+      dst.lods[lodLvl].insert(
+            dst.lods[lodLvl].end(), src[lodLvl].cbegin() + (int)loded, src[lodLvl].cend() );
+      if( loded )
       {
          std::sort(
              dst.lods[lodLvl].begin() + std::max( 0l, ( sortFromIdx - 1 ) ),

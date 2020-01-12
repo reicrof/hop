@@ -1,10 +1,11 @@
 #include "hop/Options.h"
 
+#include "imgui/imgui.h"
+
+#include <algorithm>
 #include <cstring>
 #include <string>
 #include <fstream>
-
-#include "imgui/imgui.h"
 
 static const char* startFullScreenToken = "start_full_screen";
 static const char* traceHeightsToken = "trace_height";
@@ -110,7 +111,7 @@ bool options::load()
    memcpy( g_options.zoneColors.data(), DEFAULT_COLORS, defaultColorCount * sizeof( uint32_t ) );
    // Once the default colors are copied, fill the rest of the array with the default color
    std::fill(
-       g_options.zoneColors.data() + defaultColorCount, g_options.zoneColors.end(),
+       g_options.zoneColors.begin() + defaultColorCount, g_options.zoneColors.end(),
        DEFAULT_COLORS[0] );
 
    std::ifstream inOptions( "hop.conf" );
@@ -184,7 +185,7 @@ void options::draw()
 
       if ( ImGui::CollapsingHeader( "Zone Colors" ) )
       {
-         size_t i = 0;
+         int i = 0;
          ImColor color = g_options.zoneColors[i];
          ImGui::PushID( i );
          ImGui::Text( "Default Zone" );
