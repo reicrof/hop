@@ -908,6 +908,8 @@ void TimelineTracksView::drawTraceDetailsWindow(
    const TraceDetailDrawResult traceDetailRes =
        drawTraceDetails( _traceDetails, data.profiler.timelineTracks(), data.profiler.stringDb(), data.timeline.useCycles );
 
+   if( traceDetailRes.hoveredTraceIds.empty() ) return; // Nothing to draw or check
+
    const auto& entries = data.profiler.timelineTracks()[traceDetailRes.hoveredThreadIdx]._traces.entries;
    if( traceDetailRes.clicked )
    {
