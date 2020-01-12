@@ -5,10 +5,10 @@
 
 #include <algorithm>
 
-static constexpr float MIN_TRACE_LENGTH_PXL = 10.0f;
-static constexpr float MIN_GAP_PXL = 8.0f;
+static constexpr float MIN_TRACE_LENGTH_PXL = 15.0f;
+static constexpr float MIN_GAP_PXL = 5.0f;
 static hop::TimeDuration LOD_MIN_GAP_CYCLES[hop::LOD_COUNT] = {0};
-static hop::TimeDuration LOD_MIN_TRACE_LENGTH_PXL[hop::LOD_COUNT] = {0};
+static hop::TimeDuration LOD_MIN_TRACE_LENGTH_CYCLES[hop::LOD_COUNT] = {0};
 
 #define HOP_USE_INSERTION_SORT 0
 
@@ -18,7 +18,7 @@ static bool canBeLoded(
     hop::TimeDuration lastTraceDelta,
     hop::TimeDuration newTraceDelta )
 {
-   const hop::TimeDuration minTraceSize = LOD_MIN_TRACE_LENGTH_PXL[lodLevel];
+   const hop::TimeDuration minTraceSize = LOD_MIN_TRACE_LENGTH_CYCLES[lodLevel];
    const hop::TimeDuration minTimeBetweenTrace = LOD_MIN_GAP_CYCLES[lodLevel];
    return lastTraceDelta < minTraceSize && newTraceDelta < minTraceSize &&
           timeBetweenTrace < minTimeBetweenTrace;
@@ -37,7 +37,7 @@ void setupLODResolution( uint32_t sreenResolutionX )
 {
    for ( uint32_t i = 1; i < LOD_COUNT; ++i )
    {
-      LOD_MIN_TRACE_LENGTH_PXL[i] =
+      LOD_MIN_TRACE_LENGTH_CYCLES[i] =
           pxlToCycles( sreenResolutionX, LOD_CYCLES[i-1], MIN_TRACE_LENGTH_PXL );
       LOD_MIN_GAP_CYCLES[i] = pxlToCycles( sreenResolutionX, LOD_CYCLES[i-1], MIN_GAP_PXL );
    }
