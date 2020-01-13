@@ -57,6 +57,7 @@ LodsArray computeLods( const Entries& entries, size_t idOffset )
 
    // Compute first LOD from raw data
    {
+      bool needSorting = false;
       HOP_PROF( "Compute first LOD level" );
       for ( size_t i = idOffset; i < entries.ends.size(); ++i )
       {
@@ -79,6 +80,8 @@ LodsArray computeLods( const Entries& entries, size_t idOffset )
             assert( lastTrace.depth == curDepth );
             lastTrace.end = entries.ends[i];
             lastTrace.loded = true;
+            // Since we have loded at least one trace, we need to sort them
+            needSorting = true;
          }
          else
          {
@@ -86,13 +89,16 @@ LodsArray computeLods( const Entries& entries, size_t idOffset )
                 LodInfo{entries.starts[i], entries.ends[i], i, curDepth, false} );
          }
       }
-   }
 
-   for ( const auto& l : lods )
-   {
-      resLods[lodLvl].insert( resLods[lodLvl].end(), l.begin(), l.end() );
+      // Insert the data and sort if necessary
+      for ( const auto& l : lods )
+      {
+         resLods[lodLvl].insert( resLods[lodLvl].end(), l.begin(), l.end() );
+      }
+
+      if( needSorting )
+         std::sort( resLods[lodLvl].begin(), resLods[lodLvl].end() );
    }
-   std::sort( resLods[lodLvl].begin(), resLods[lodLvl].end() );
 
    // Clear depth lods to reuse them for next lods
    for ( auto& l : lods )
@@ -101,6 +107,7 @@ LodsArray computeLods( const Entries& entries, size_t idOffset )
    }
 
    // Compute the LOD based on the previous LOD levels
+   bool needSorting = false;
    const std::deque<LodInfo>* lastComputedLod = &resLods[lodLvl];
    for ( lodLvl = 1; lodLvl < LOD_COUNT; ++lodLvl )
    {
@@ -121,6 +128,8 @@ LodsArray computeLods( const Entries& entries, size_t idOffset )
             assert( lastTrace.depth == curDepth );
             lastTrace.end   = l.end;
             lastTrace.loded = true;
+            // Since we have loded at least one trace, we need to sort themneedSorting
+            needSorting = true;
          }
          else
          {
@@ -132,7 +141,8 @@ LodsArray computeLods( const Entries& entries, size_t idOffset )
       {
          resLods[lodLvl].insert( resLods[lodLvl].end(), l.begin(), l.end() );
       }
-      std::sort( resLods[lodLvl].begin(), resLods[lodLvl].end() );
+      if( needSorting )
+         std::sort( resLods[lodLvl].begin(), resLods[lodLvl].end() );
 
       // Clear for reuse
       for ( auto& l : lods ) l.clear();
