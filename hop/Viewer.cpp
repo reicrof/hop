@@ -7,7 +7,7 @@
 #include "hop/Options.h"
 #include "hop/RendererGL.h"
 #include "hop/Stats.h"
-#include "hop/icon_vertices_data.h"
+#include "hop/hop_icon_vect.inline"
 
 #include "common/Profiler.h"
 #include "common/Utils.h"

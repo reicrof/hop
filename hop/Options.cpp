@@ -185,7 +185,7 @@ void options::draw()
 
       if ( ImGui::CollapsingHeader( "Zone Colors" ) )
       {
-         int i = 0;
+         size_t i = 0;
          ImColor color = g_options.zoneColors[i];
          ImGui::PushID( i );
          ImGui::Text( "Default Zone" );

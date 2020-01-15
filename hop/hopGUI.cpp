@@ -3,13 +3,12 @@
 #include "hop/Stats.h"
 #include "hop/Options.h"
 #include "hop/Viewer.h"
+#include "hop_icon_raster.inline"
 
 #include "common/miniz.h"
 #include "common/Utils.h"
 #include "common/Startup.h"
 #include "common/platform/Platform.h"
-
-#include "hop_icon_data.inline"
 
 #include "imgui/imgui.h"
 #include <SDL.h>
