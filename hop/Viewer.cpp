@@ -595,6 +595,11 @@ static bool profilerAlreadyExist(
    return alreadyExist;
 }
 
+static bool validConnectionState( hop::SharedMemory::ConnectionState state )
+{
+   return state == hop::SharedMemory::CONNECTED || state == hop::SharedMemory::CONNECTED_NO_CLIENT;
+}
+
 static void drawCanvasContent(
    float wndWidth,
    float wndHeight,
@@ -603,7 +608,7 @@ static void drawCanvasContent(
    hop::TimelineMsgArray* msgArr )
 {
    if ( prof && 
-      ( prof->data().connectionState() == hop::SharedMemory::CONNECTED ||
+      ( validConnectionState( prof->data().connectionState() ) ||
         prof->data().sourceType() == hop::Profiler::SRC_TYPE_FILE ) )
    {
       const ImVec2 curPos = ImGui::GetCursorPos();
