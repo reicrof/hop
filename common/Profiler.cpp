@@ -266,12 +266,15 @@ bool hop::Profiler::saveToFile( const char* savePath )
 
    HOP_PROF_SPLIT( "Writing to disk" );
    std::ofstream of( savePath, std::ofstream::binary );
-   SaveFileHeader header = {
-       MAGIC_NUMBER, 1, totalSerializedSize, (uint32_t)dbSerializedSize, (uint32_t)_tracks.size()};
-   of.write( (const char*)&header, sizeof( header ) );
-   of.write( &compressedData[0], compressedSize );
+   if( of.is_open() )
+   {
+      SaveFileHeader header = {
+         MAGIC_NUMBER, 1, totalSerializedSize, (uint32_t)dbSerializedSize, (uint32_t)_tracks.size()};
+      of.write( (const char*)&header, sizeof( header ) );
+      of.write( &compressedData[0], compressedSize );
+   }
 
-   return true;
+   return of.good();
 }
 
 bool hop::Profiler::openFile( const char* path )

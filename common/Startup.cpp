@@ -26,7 +26,7 @@ void printUsage( const char* progname )
 {
    printf(
        "Usage : %s [OPTION] <process name>\n\n OPTIONS:\n"
-       "\t-o output path for saved file (Required for command line)\n"
+       "\t-o output path for saved file\n"
        "\t-e Launch specified executable with its arguments and start recording\n"
        "\t-v Display version info and exit\n\t-h Show usage\n",
        progname );

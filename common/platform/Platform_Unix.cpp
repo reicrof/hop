@@ -128,4 +128,10 @@ uint32_t getTempFolderPath( char* buffer, uint32_t size )
    return 0;
 }
 
+uint32_t getWorkingDirectory( char* buffer, uint32_t size )
+{
+   getcwd( buffer, size );
+   return strlen( buffer );
+}
+
 } //  namespace hop

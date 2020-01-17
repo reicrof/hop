@@ -25,6 +25,7 @@ void terminateProcess( hop::ProcessID id );
 void setupSignalHandlers( void (*terminateCB)(int) );
 
 uint32_t getTempFolderPath( char* buffer, uint32_t size );
+uint32_t getWorkingDirectory( char* buffer, uint32_t size );
 
 }  // namespace hop
 

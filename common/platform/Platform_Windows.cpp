@@ -100,4 +100,9 @@ uint32_t getTempFolderPath( char* buffer, uint32_t size )
    return GetTempPathA( size, buffer );
 }
 
+uint32_t getWorkingDirectory( char* buffer, uint32_t size )
+{
+   return GetCurrentDirectoryA( size, buffer );
+}
+
 }  // namespace hop

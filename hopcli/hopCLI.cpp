@@ -8,9 +8,11 @@
 
 #include <atomic>
 #include <iostream>
+#include <fstream>
 #include <memory>
 #include <mutex>
 #include <string>
+#include <sstream>
 #include <thread>
 
 std::atomic< bool > g_run{true};
@@ -26,12 +28,14 @@ enum CommandType
    CMD_TYPE_BEGIN_RECORDING,
    CMD_TYPE_END_RECORDING,
    CMD_TYPE_STATUS,
-   CMD_TYPE_CLEAR
+   CMD_TYPE_CLEAR,
+   CMD_TYPE_WRITE_FILE
 };
 
 struct Command
 {
    CommandType type;
+   std::string arguments;
 };
 
 struct StringCommand
@@ -50,6 +54,7 @@ static constexpr StringCommand stringCmds[] =
    {"end", "e", "End recording", CMD_TYPE_END_RECORDING},
    {"status", "s", "Show status of the profiling", CMD_TYPE_STATUS},
    {"clear", "c", "Clear collected traces and stop recording", CMD_TYPE_CLEAR},
+   {"write", "w", "Write to path ie. write 'path/to/save/file'", CMD_TYPE_WRITE_FILE}
 };
 
 static void terminateCallback( int /*sig*/ )
@@ -83,6 +88,20 @@ static std::unique_ptr<hop::Profiler> createProfiler( const char* processName, b
    return profiler;
 }
 
+static bool createDefaultOutputFilePath( char* buffer, uint32_t size )
+{
+   const char* defaultFileName = "/out.hop";
+   const uint32_t charWritten = hop::getWorkingDirectory( buffer, size );
+   if( charWritten >= size - strlen( defaultFileName ) - 1 )
+   {
+      fprintf( stderr, "Current working directory too long\n" );
+      return false;
+   }
+
+   strcat( buffer, defaultFileName );
+   return true;
+}
+
 static int validateArguments( const hop::LaunchOptions& opts )
 {
    if( !opts.processName )
@@ -91,10 +110,15 @@ static int validateArguments( const hop::LaunchOptions& opts )
       return -1;
    }
 
-   if( !opts.saveFilePath )
+   if( opts.saveFilePath )
    {
-      fprintf( stderr, "No output save path specified.\n" );
-      return -1;
+      // Check if the path is valid
+      std::ofstream outFile( opts.saveFilePath );
+      if( !outFile.is_open() )
+      {
+         fprintf( stderr, "Invalid save path.\n" );
+         return -1;
+      }
    }
 
    return 0;
@@ -131,10 +155,14 @@ std::mutex commandsMutex;
 std::vector< Command > g_commands;
 static Command parseCmdLine( std::string cmdline )
 {
-   std::transform( cmdline.begin(), cmdline.end(), cmdline.begin(), ::tolower );
-   cmdline = lefttrim( cmdline );
-   cmdline = righttrim( cmdline );
-   const char* lowerCmdLine = cmdline.c_str();
+   std::stringstream ss( cmdline );
+   std::string command, arguments;
+   ss >> command;
+   ss >> arguments;
+   std::transform( command.begin(), command.end(), command.begin(), ::tolower );
+   command = lefttrim( command );
+   command = righttrim( command );
+   const char* lowerCmdLine = command.c_str();
 
    Command cmd;
 
@@ -153,6 +181,7 @@ static Command parseCmdLine( std::string cmdline )
           strcmp( it->cmdStr, lowerCmdLine ) == 0 )
       {
          cmd.type = it->type;
+         cmd.arguments = std::move( arguments );
          break;
       }
    }
@@ -214,6 +243,20 @@ static bool processCommands( hop::Profiler* prof )
          prof->clear();
          shouldPrintStatus = true;
          break;
+      case CMD_TYPE_WRITE_FILE:
+      {
+         if( !cmd.arguments.empty() )
+         {
+            if( !prof->saveToFile( cmd.arguments.c_str() ) )
+            {
+               printf( "Error while trying to write file to : %s\n", cmd.arguments.c_str() );
+            }
+         }
+         else
+         {
+            printf( "Missing path argument to write file\n" );
+         }
+      }
       default:
          break;
       }
@@ -239,10 +282,18 @@ int main( int argc, char* argv[] )
       return -2;
    }
 
-   const hop::LaunchOptions opts = hop::parseArgs( argc, argv );
-   if( const int err = validateArguments(opts) )
+   hop::LaunchOptions opts = hop::parseArgs( argc, argv );
+   if( const int err = validateArguments( opts ) )
    {
       exit( err );
+   }
+
+   // Use the current working directory and default filename if none is provided
+   char defaultSavePath[256];
+   if( !opts.saveFilePath )
+   {
+      createDefaultOutputFilePath( defaultSavePath, sizeof( defaultSavePath ) );
+      opts.saveFilePath = &defaultSavePath[0];
    }
 
    hop::setupSignalHandlers( terminateCallback );
@@ -287,7 +338,7 @@ int main( int argc, char* argv[] )
 
    assert( opts.saveFilePath );
 
-   printf( "\nSaving file to disk... It might take a few seconds\n" );
+   printf( "\nSaving file to %s\nThis might take a few seconds\n", opts.saveFilePath );
    profiler->saveToFile( opts.saveFilePath );
 
    // We have launched a child process. Let's close it

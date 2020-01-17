@@ -602,7 +602,9 @@ static void drawCanvasContent(
    const hop::TimelineInfo& tlInfo,
    hop::TimelineMsgArray* msgArr )
 {
-   if ( prof && prof->data().connectionState() == hop::SharedMemory::CONNECTED )
+   if ( prof && 
+      ( prof->data().connectionState() == hop::SharedMemory::CONNECTED ||
+        prof->data().sourceType() == hop::Profiler::SRC_TYPE_FILE ) )
    {
       const ImVec2 curPos = ImGui::GetCursorPos();
       prof->draw( curPos.x, curPos.y, tlInfo, msgArr );
