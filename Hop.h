@@ -1408,7 +1408,6 @@ class Client
       }
 
       ringbuf_produce( ringbuf, _worker );
-      ClientManager::sharedMemory().signalSemaphore();
 
       // Update sent array size
       _sentStringDataSize = stringDataSize;
@@ -1453,7 +1452,6 @@ class Client
       }
 
       ringbuf_produce( ringbuf, _worker );
-      ClientManager::sharedMemory().signalSemaphore();
 
       _traces.count = 0;
 
@@ -1491,7 +1489,6 @@ class Client
       }
 
       ringbuf_produce( ringbuf, _worker );
-      ClientManager::sharedMemory().signalSemaphore();
 
       const auto lastEntry = _cores.back();
       _cores.clear();
@@ -1531,7 +1528,6 @@ class Client
       }
 
       ringbuf_produce( ringbuf, _worker );
-      ClientManager::sharedMemory().signalSemaphore();
 
       _lockWaits.clear();
 
@@ -1570,7 +1566,6 @@ class Client
       }
 
       ringbuf_produce( ringbuf, _worker );
-      ClientManager::sharedMemory().signalSemaphore();
 
       _unlockEvents.clear();
 
@@ -1605,7 +1600,6 @@ class Client
       }
 
       ringbuf_produce( ringbuf, _worker );
-      ClientManager::sharedMemory().signalSemaphore();
 
       return true;
    }
@@ -1613,38 +1607,44 @@ class Client
    void flushToConsumer()
    {
       const TimeStamp timeStamp = getTimeStamp();
+      bool signalConsumer = false;
 
       // If we have a consumer, send life signal
       if( ClientManager::HasConnectedConsumer() && ClientManager::ShouldSendHeartbeat( timeStamp ) )
       {
          sendHeartbeat( timeStamp );
+         signalConsumer = true;
       }
 
       // If no one is there to listen, no need to send any data
-      if( !ClientManager::HasListeningConsumer() )
+      if( ClientManager::HasListeningConsumer() )
+      {
+         // If the shared memory reset timestamp more recent than our local one
+         // it means we need to clear our string table. Otherwise it means we
+         // already took care of it. Since some traces might depend on strings
+         // that were added dynamically (ie before clearing the db), we cannot
+         // consider them and need to return here.
+         TimeStamp resetTimeStamp = ClientManager::sharedMemory().lastResetTimestamp();
+         if( _clientResetTimeStamp < resetTimeStamp )
+         {
+            resetStringData();
+            resetPendingTraces();
+            return;
+         }
+
+         signalConsumer |= sendStringData( timeStamp );  // Always send string data first
+         signalConsumer |= sendTraces( timeStamp );
+         signalConsumer |= sendLockWaits( timeStamp );
+         signalConsumer |= sendUnlockEvents( timeStamp );
+         signalConsumer |= sendCores( timeStamp );
+      }
+      else
       {
          resetPendingTraces();
-         return;
       }
 
-      // If the shared memory reset timestamp more recent than our local one
-      // it means we need to clear our string table. Otherwise it means we
-      // already took care of it. Since some traces might depend on strings
-      // that were added dynamically (ie before clearing the db), we cannot
-      // consider them and need to return here.
-      TimeStamp resetTimeStamp = ClientManager::sharedMemory().lastResetTimestamp();
-      if( _clientResetTimeStamp < resetTimeStamp )
-      {
-         resetStringData();
-         resetPendingTraces();
-         return;
-      }
-
-      sendStringData( timeStamp );  // Always send string data first
-      sendTraces( timeStamp );
-      sendLockWaits( timeStamp );
-      sendUnlockEvents( timeStamp );
-      sendCores( timeStamp );
+      if( signalConsumer )
+         ClientManager::sharedMemory().signalSemaphore();
    }
 
    Traces _traces;
