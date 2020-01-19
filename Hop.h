@@ -54,37 +54,18 @@ For more information, please refer to <http://unlicense.org/>
 
 // Total size of the shared memory ring buffer. This does not
 // include the meta-data size
+#if !defined( HOP_SHARED_MEM_SIZE )
 #define HOP_SHARED_MEM_SIZE 32000000
+#endif
 
 // Minimum cycles for a lock to be considered in the profiled data
 #define HOP_MIN_LOCK_CYCLES 1000
 
-// These are the zone that can be used. You can change the name
-// but you must not change the values.
-enum
-{
-   HOP_MAX_ZONE_COLORS = 16
-};
-enum HopZoneColor
-{
-   HOP_ZONE_COLOR_NONE = 0xFFFF,
-   HOP_ZONE_COLOR_1    = 1U << 0U,
-   HOP_ZONE_COLOR_2    = 1U << 1U,
-   HOP_ZONE_COLOR_3    = 1U << 2U,
-   HOP_ZONE_COLOR_4    = 1U << 3U,
-   HOP_ZONE_COLOR_5    = 1U << 4U,
-   HOP_ZONE_COLOR_6    = 1U << 5U,
-   HOP_ZONE_COLOR_7    = 1U << 6U,
-   HOP_ZONE_COLOR_8    = 1U << 7U,
-   HOP_ZONE_COLOR_9    = 1U << 8U,
-   HOP_ZONE_COLOR_10   = 1U << 9U,
-   HOP_ZONE_COLOR_11   = 1U << 10U,
-   HOP_ZONE_COLOR_12   = 1U << 11U,
-   HOP_ZONE_COLOR_13   = 1U << 12U,
-   HOP_ZONE_COLOR_14   = 1U << 13U,
-   HOP_ZONE_COLOR_15   = 1U << 14U,
-   HOP_ZONE_COLOR_16   = 1U << 15U,
-};
+// Default zone is always 0
+#define HOP_ZONE_DEFAULT 0
+
+// This is the max value for a zone. Zones are stored as unsigned char
+#define HOP_ZONE_MAX  255
 
 ///////////////////////////////////////////////////////////////
 /////       THESE ARE THE MACROS YOU SHOULD USE     ///////////
@@ -156,7 +137,7 @@ enum HopZoneColor
 #include <stdint.h>
 
 // Useful macros
-#define HOP_VERSION 0.8f
+#define HOP_VERSION 0.9f
 #define HOP_CONSTEXPR constexpr
 #define HOP_NOEXCEPT noexcept
 #define HOP_STATIC_ASSERT static_assert
@@ -212,8 +193,8 @@ using TimeDuration = int64_t;
 using StrPtr_t     = uint64_t;
 using LineNb_t     = uint32_t;
 using Core_t       = uint32_t;
-using ZoneId_t     = uint16_t;
 using Depth_t      = uint16_t;
+using ZoneId_t     = uint16_t;
 
 inline TimeStamp rdtscp( uint32_t& aux )
 {
@@ -306,8 +287,8 @@ struct Traces
    StrPtr_t* fileNameIds;     // Index into string array for the file name
    StrPtr_t* fctNameIds;      // Index into string array for the function name
    LineNb_t* lineNumbers;     // Line at which the trace was inserted
-   ZoneId_t* zones;           // Zone to which this trace belongs
    Depth_t* depths;           // The depth in the callstack of this trace
+   ZoneId_t* zones;           // Zone to which this trace belongs
 };
 
 HOP_CONSTEXPR uint32_t EXPECTED_LOCK_WAIT_SIZE = 32;
@@ -442,9 +423,9 @@ class ProfGuardDynamicString
 class ZoneGuard
 {
   public:
-   ZoneGuard( HopZoneColor newZone ) HOP_NOEXCEPT
+   ZoneGuard( ZoneId_t newZone ) HOP_NOEXCEPT
    {
-      _prevZoneId = ClientManager::PushNewZone( static_cast<ZoneId_t>( newZone ) );
+      _prevZoneId = ClientManager::PushNewZone( newZone );
    }
    ~ZoneGuard() { ClientManager::PushNewZone( _prevZoneId ); }
 
@@ -844,9 +825,9 @@ namespace hop
 static thread_local int tl_traceLevel       = 0;
 static thread_local uint32_t tl_threadIndex = 0;  // Index of the tread as they are coming in
 static thread_local uint64_t tl_threadId    = 0;  // ID of the thread as seen by the OS
-static thread_local ZoneId_t tl_zoneId      = HOP_ZONE_COLOR_NONE;
+static thread_local ZoneId_t tl_zoneId      = HOP_ZONE_DEFAULT;
 static thread_local char tl_threadNameBuffer[64];
-static thread_local StrPtr_t tl_threadName = 0;
+static thread_local StrPtr_t tl_threadName  = 0;
 
 static std::atomic<bool> g_done{false};  // Was the shared memory destroyed? (Are we done?)
 
@@ -1427,7 +1408,6 @@ class Client
       }
 
       ringbuf_produce( ringbuf, _worker );
-      ClientManager::sharedMemory().signalSemaphore();
 
       // Update sent array size
       _sentStringDataSize = stringDataSize;
@@ -1472,7 +1452,6 @@ class Client
       }
 
       ringbuf_produce( ringbuf, _worker );
-      ClientManager::sharedMemory().signalSemaphore();
 
       _traces.count = 0;
 
@@ -1510,7 +1489,6 @@ class Client
       }
 
       ringbuf_produce( ringbuf, _worker );
-      ClientManager::sharedMemory().signalSemaphore();
 
       const auto lastEntry = _cores.back();
       _cores.clear();
@@ -1550,7 +1528,6 @@ class Client
       }
 
       ringbuf_produce( ringbuf, _worker );
-      ClientManager::sharedMemory().signalSemaphore();
 
       _lockWaits.clear();
 
@@ -1589,7 +1566,6 @@ class Client
       }
 
       ringbuf_produce( ringbuf, _worker );
-      ClientManager::sharedMemory().signalSemaphore();
 
       _unlockEvents.clear();
 
@@ -1624,7 +1600,6 @@ class Client
       }
 
       ringbuf_produce( ringbuf, _worker );
-      ClientManager::sharedMemory().signalSemaphore();
 
       return true;
    }
@@ -1632,38 +1607,44 @@ class Client
    void flushToConsumer()
    {
       const TimeStamp timeStamp = getTimeStamp();
+      bool signalConsumer = false;
 
       // If we have a consumer, send life signal
       if( ClientManager::HasConnectedConsumer() && ClientManager::ShouldSendHeartbeat( timeStamp ) )
       {
          sendHeartbeat( timeStamp );
+         signalConsumer = true;
       }
 
       // If no one is there to listen, no need to send any data
-      if( !ClientManager::HasListeningConsumer() )
+      if( ClientManager::HasListeningConsumer() )
+      {
+         // If the shared memory reset timestamp more recent than our local one
+         // it means we need to clear our string table. Otherwise it means we
+         // already took care of it. Since some traces might depend on strings
+         // that were added dynamically (ie before clearing the db), we cannot
+         // consider them and need to return here.
+         TimeStamp resetTimeStamp = ClientManager::sharedMemory().lastResetTimestamp();
+         if( _clientResetTimeStamp < resetTimeStamp )
+         {
+            resetStringData();
+            resetPendingTraces();
+            return;
+         }
+
+         signalConsumer |= sendStringData( timeStamp );  // Always send string data first
+         signalConsumer |= sendTraces( timeStamp );
+         signalConsumer |= sendLockWaits( timeStamp );
+         signalConsumer |= sendUnlockEvents( timeStamp );
+         signalConsumer |= sendCores( timeStamp );
+      }
+      else
       {
          resetPendingTraces();
-         return;
       }
 
-      // If the shared memory reset timestamp more recent than our local one
-      // it means we need to clear our string table. Otherwise it means we
-      // already took care of it. Since some traces might depend on strings
-      // that were added dynamically (ie before clearing the db), we cannot
-      // consider them and need to return here.
-      TimeStamp resetTimeStamp = ClientManager::sharedMemory().lastResetTimestamp();
-      if( _clientResetTimeStamp < resetTimeStamp )
-      {
-         resetStringData();
-         resetPendingTraces();
-         return;
-      }
-
-      sendStringData( timeStamp );  // Always send string data first
-      sendTraces( timeStamp );
-      sendLockWaits( timeStamp );
-      sendUnlockEvents( timeStamp );
-      sendCores( timeStamp );
+      if( signalConsumer )
+         ClientManager::sharedMemory().signalSemaphore();
    }
 
    Traces _traces;
@@ -1917,7 +1898,8 @@ int ringbuf_setup( ringbuf_t* rbuf, unsigned nworkers, size_t length )
    {
       return -1;
    }
-   memset( rbuf, 0, sizeof( ringbuf_t ) );
+   rbuf->next.store(0);
+   rbuf->written  = 0;
    rbuf->space    = length;
    rbuf->end      = RBUF_OFF_MAX;
    rbuf->nworkers = nworkers;

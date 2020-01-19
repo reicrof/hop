@@ -3,11 +3,14 @@
 #include <thread>
 #include <string>
 
+#include <atomic>
 #include <stdio.h>
 #include <stdlib.h>
 #include <mutex>
 #include <time.h>
+#include <thread>
 #include <signal.h>
+#include <vector>
 
 #define HOP_IMPLEMENTATION
 #include <Hop.h>
@@ -37,7 +40,7 @@ MyMutex g_mutex1;
 static std::atomic<int> workerId{0};
 void testMutex( MyMutex& m, int mtxId, std::chrono::microseconds sleepTime )
 {
-   HOP_ZONE( HOP_ZONE_COLOR_1 );
+   HOP_ZONE( 1 );
    char name[256];
    snprintf( name, 256, "MUTEX WORKER %d", workerId.fetch_add(1) );
    HOP_SET_THREAD_NAME( name );
