@@ -31,6 +31,7 @@ public:
    ~Profiler();
 
    const char* nameAndPID( int* processId = nullptr ) const;
+   float cpuFreqGHz() const;
    ProfilerStats stats() const;
    SourceType sourceType() const;
    bool recording() const;
@@ -58,8 +59,9 @@ private:
    int _pid;
    std::vector<TimelineTrack> _tracks;
    StringDb _strDb;
-   bool _recording{ false };
+   bool _recording;
    SourceType _srcType;
+   float _loadedFileCpuFreqGHz;
 
    Server _server;
    Server::PendingData _serverPendingData;

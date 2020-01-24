@@ -37,7 +37,7 @@ class Timeline
    bool handleHotkey();
    void handleDeferredActions( const TimelineMsgArray& messages );
 
-
+   void setCpuFreqGHz( float cpuFreqGHz );
    /*
                            Visible Timeline
    ---------------------|||||||||||||||||||||||------------ > time
@@ -148,6 +148,8 @@ class Timeline
 
    int64_t _rangeZoomCycles[2] = {};
    int64_t _rangeSelectTimeStamp[2] = {};
+
+   float _cpuFreqGHz = {1.0f}; // 1 Ghz or 1 nanoseconds per cycles
 
    std::vector< AnimationState > _undoPositionStates, _redoPositionStates;
 

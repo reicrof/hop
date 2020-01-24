@@ -31,10 +31,10 @@ static T merge_consecutive( T first, T last, BinaryPredicate pred, MergeFct merg
    return last - mergeCount;
 }
 
-static int mergeAndRemoveDuplicates( hop::CoreEvent* coreEvents, uint32_t count )
+static int mergeAndRemoveDuplicates( hop::CoreEvent* coreEvents, uint32_t count, float cpuGHz )
 {
    // Merge events that are less than 10 micro apart
-   const uint64_t minCycles = hop::nanosToCycles( 10000 );
+   const uint64_t minCycles = hop::nanosToCycles( 10000, cpuGHz );
    auto canMergeCore = [minCycles]( const hop::CoreEvent& lhs, const hop::CoreEvent& rhs ) {
       return lhs.core == rhs.core &&
              ( ( rhs.start < lhs.end || ( rhs.start - lhs.end ) < minCycles ) );
@@ -214,6 +214,24 @@ size_t Server::sharedMemorySize() const
    }
 
    return 0;
+}
+
+float Server::cpuFreqGHz() const
+{
+   if( _cpuFreqGHz == 0 && _sharedMem.valid() )
+   {
+      if( _sharedMem.sharedMetaInfo()->usingStdChronoTimeStamps )
+      {
+         // Using std::chrono means we are already using nanoseconds -> 1Ghz
+         _cpuFreqGHz = 1.0f;
+      }
+      else
+      {
+         _cpuFreqGHz = hop::getCpuFreqGHz();
+      }
+   }
+
+   return _cpuFreqGHz;
 }
 
 void Server::setRecording( bool recording )
@@ -403,7 +421,7 @@ size_t Server::handleNewMessage( uint8_t* data, size_t maxSize, TimeStamp minTim
          bufPtr += eventCount * sizeof( CoreEvent );
          assert( ( size_t )( bufPtr - data ) <= maxSize );
 
-         const size_t newCount = mergeAndRemoveDuplicates( coreEventsPtr, eventCount );
+         const size_t newCount = mergeAndRemoveDuplicates( coreEventsPtr, eventCount, cpuFreqGHz() );
 
          CoreEventData coresData;
          for ( uint32_t i = 0; i < newCount; ++i )

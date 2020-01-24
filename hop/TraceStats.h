@@ -60,11 +60,12 @@ TraceDetailDrawResult drawTraceDetails(
     TraceDetails& details,
     const std::vector<TimelineTrack>& tracks,
     const StringDb& strDb,
-    bool drawAsCycles );
+    bool drawAsCycles,
+    float cpuFreqGHz );
 
 
 TraceStats createTraceStats( const TraceData& traces, uint32_t threadIndex, size_t traceId );
-void drawTraceStats( TraceStats& stats, const StringDb& strDb, bool drawAsCycles );
+void drawTraceStats( TraceStats& stats, const StringDb& strDb, bool drawAsCycles, float cpuFreqGHz );
 void clearTraceDetails( TraceDetails& details );
 void clearTraceStats( TraceStats& stats );
 }
