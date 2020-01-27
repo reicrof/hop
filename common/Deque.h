@@ -7,6 +7,7 @@
 #include <cassert>
 #include <cstdint>
 #include <cstring> // memcpy
+#include <cstddef>
 #include <type_traits>
 #include <iostream>
 #include <vector>
@@ -30,7 +31,7 @@ class Deque
      public:
       using value_type = T;
       using difference_type = typename std::iterator<std::random_access_iterator_tag, T>::difference_type;
-      using VectorBlocksPtr = std::conditional_t< Const, const std::vector<Block*>, std::vector<Block*> >;
+      using VectorBlocksPtr = typename std::conditional< Const, const std::vector<Block*>, std::vector<Block*> >::type;
 
       VectorBlocksPtr* _blocks;
       uint32_t _blockId;
@@ -266,7 +267,9 @@ class Deque
     struct Block
     {
        Block() : elementCount( 0 ) {
+#if defined(__GNUC__) && (__GNUC___ > 5)
            static_assert( std::is_trivially_copyable<T>::value, "Type is not POD" );
+#endif
        }
 
        uint32_t append( const T* inData, uint32_t count )
