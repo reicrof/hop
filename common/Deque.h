@@ -17,7 +17,7 @@ class Deque
    static constexpr uint32_t COUNT_PER_BLOCK = (HOP_BLK_SIZE_BYTES - sizeof(uint32_t)) / sizeof( T );
    struct Block;
   public:
-
+   using value_type = T;
     /**
     * Iterator Implementation
     */
@@ -121,6 +121,10 @@ class Deque
    };
    // clang-format on
 
+   /**
+    * Actual Deque implementation
+    */
+
    Deque()
    {
        assert( block_allocator::blockSize() >= HOP_BLK_SIZE_BYTES );
@@ -137,6 +141,8 @@ class Deque
       return ( blockCount - 1 ) * COUNT_PER_BLOCK + lastBlockElemCount;
    }
 
+   bool empty() const { return _blocks.empty(); }
+
    const T& operator[]( int64_t idx ) const
    {
       auto divRes = ::div( idx, COUNT_PER_BLOCK );
@@ -149,6 +155,20 @@ class Deque
       return (*_blocks[divRes.quot])[divRes.rem];
    }
 
+   T& back()
+   {
+      Block* lastBlock = _blocks.back();
+      return (*lastBlock)[ lastBlock->elementCount ];
+   }
+
+   const T& back() const
+   {
+      const Block* lastBlock = _blocks.back();
+      return (*lastBlock)[ lastBlock->elementCount ];
+   }
+
+   void append( const T& value ) { append( &value, 1 ); }
+   void push_back( const T& v ) { append( &v, 1 ); }
    void append( const T* const inData, uint32_t count )
    {
       if( _blocks.empty() ) acquireNewBlock();
@@ -162,8 +182,6 @@ class Deque
          data += COUNT_PER_BLOCK;
       }
    }
-
-   void append( const T& value ) { append( &value, 1 ); }
 
    void append( Deque<T>::iterator begin, Deque<T>::iterator end )
    {
@@ -183,6 +201,13 @@ class Deque
       append( &curBlock->data[elId], end._elementId );
    }
 
+   void append( const T* begin, const T* end )
+   {
+      assert( end > begin );
+      const ptrdiff_t elementCount = end - begin;
+      append( begin, elementCount );
+   }
+
    void clear()
    {
       block_allocator::release( (void**)_blocks.data(), _blocks.size() );
@@ -194,7 +219,13 @@ class Deque
       clear();
    }
 
+   iterator begin() const { return iterator( &_blocks ); }
    iterator begin() { return iterator( &_blocks ); }
+   iterator end() const
+   {
+       auto divRes = ::div( (int64_t )size(), (int64_t)COUNT_PER_BLOCK );
+       return iterator( &_blocks, divRes.quot, divRes.rem );
+   }
    iterator end()
    {
        auto divRes = ::div( (int64_t )size(), (int64_t)COUNT_PER_BLOCK );

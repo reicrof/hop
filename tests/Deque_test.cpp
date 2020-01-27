@@ -51,6 +51,9 @@ void testIterators( hop::Deque<T>& deq )
    auto it    = deq.begin();
    auto itEnd = deq.end();
 
+   // Test value_type is defined
+   using DequeType = hop::Deque<T>::value_type;
+
    // Test relational operators
    assert( it == it );
    assert( it != itEnd );
