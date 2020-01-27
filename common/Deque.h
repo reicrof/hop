@@ -6,6 +6,8 @@
 #include <array>
 #include <cassert>
 #include <cstdint>
+#include <cstring> // memcpy
+#include <type_traits>
 #include <iostream>
 #include <vector>
 
@@ -22,18 +24,21 @@ class Deque
     * Iterator Implementation
     */
    // clang-format off
+   template< bool Const = false >
    class iterator : public std::iterator<std::forward_iterator_tag, T>
    {
      public:
+      using value_type = T;
       using difference_type = typename std::iterator<std::random_access_iterator_tag, T>::difference_type;
+      using VectorBlocksPtr = std::conditional_t< Const, const std::vector<Block*>, std::vector<Block*> >;
 
-      std::vector<Block*>* _blocks;
+      VectorBlocksPtr* _blocks;
       uint32_t _blockId;
       uint32_t _elementId;
    
-      iterator( std::vector<Block*>* lb ) : _blocks( lb ), _blockId( 0 ), _elementId( 0 ) {}
+      iterator( VectorBlocksPtr* lb ) : _blocks( lb ), _blockId( 0 ), _elementId( 0 ) {}
       iterator( const iterator& rhs ) : _blocks( rhs._blocks ), _blockId( rhs._blockId ), _elementId( rhs._elementId ) {}
-      iterator( std::vector<Block*>* lb, uint32_t blockId, uint32_t elId ) : _blocks( lb ), _blockId( blockId ), _elementId( elId ) {}
+      iterator( VectorBlocksPtr* lb, uint32_t blockId, uint32_t elId ) : _blocks( lb ), _blockId( blockId ), _elementId( elId ) {}
       inline bool operator==(const iterator& rhs) const { return _blockId == rhs._blockId && _elementId == rhs._elementId; }
       inline bool operator!=(const iterator& rhs) const { return _blockId != rhs._blockId || _elementId != rhs._elementId; }
       inline T& operator*() const
@@ -92,7 +97,7 @@ class Deque
          auto divRes = ::div( val, COUNT_PER_BLOCK );
          assert( (int)_blockId >= divRes.quot );
          _blockId   -= divRes.quot;
-         if( divRes.rem > _elementId )
+         if( divRes.rem > (int)_elementId )
          {
             assert( _blockId > 0 );
             --_blockId;
@@ -183,7 +188,8 @@ class Deque
       }
    }
 
-   void append( Deque<T>::iterator begin, Deque<T>::iterator end )
+   template< bool Const = false >
+   void append( Deque<T>::iterator<Const> begin, Deque<T>::iterator<Const> end )
    {
       assert( begin._blocks == end._blocks );
       std::vector<Block*>* inBlocks = begin._blocks;
@@ -219,17 +225,17 @@ class Deque
       clear();
    }
 
-   iterator begin() const { return iterator( &_blocks ); }
-   iterator begin() { return iterator( &_blocks ); }
-   iterator end() const
+   auto begin() const { return iterator<true>( &_blocks ); }
+   auto begin() { return iterator<false>( &_blocks ); }
+   auto end() const
    {
        auto divRes = ::div( (int64_t )size(), (int64_t)COUNT_PER_BLOCK );
-       return iterator( &_blocks, divRes.quot, divRes.rem );
+       return iterator<true>( &_blocks, divRes.quot, divRes.rem );
    }
-   iterator end()
+   auto end()
    {
        auto divRes = ::div( (int64_t )size(), (int64_t)COUNT_PER_BLOCK );
-       return iterator( &_blocks, divRes.quot, divRes.rem );
+       return iterator<false>( &_blocks, divRes.quot, divRes.rem );
    }
 
    friend std::ostream& operator<<( std::ostream& out, const Deque& bsv )
@@ -293,4 +299,4 @@ class Deque
 
 }  // namespace hop
 
-#endif HOP_DEQUE_H_
+#endif // HOP_DEQUE_H_

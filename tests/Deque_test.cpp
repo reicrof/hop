@@ -10,7 +10,7 @@ std::vector< uint32_t > g_values;
 
 template <typename T>
 static bool testSingleIncrementDecrement(
-    typename hop::Deque<T>::iterator it,
+    T it,
     uint32_t incCount )
 {
    auto it2 = it;
@@ -28,7 +28,7 @@ static bool testSingleIncrementDecrement(
 
 template <typename T>
 static bool testIncrementDecrement(
-    typename hop::Deque<T>::iterator it,
+    T it,
     uint32_t incCount,
     uint32_t incValue )
 {
@@ -51,8 +51,8 @@ void testIterators( hop::Deque<T>& deq )
    auto it    = deq.begin();
    auto itEnd = deq.end();
 
-   // Test value_type is defined
-   using DequeType = hop::Deque<T>::value_type;
+   // Test that value_type is defined
+   (void)sizeof( typename hop::Deque<T>::value_type );
 
    // Test relational operators
    assert( it == it );
@@ -72,14 +72,14 @@ void testIterators( hop::Deque<T>& deq )
    assert( itCopy != itCopyEnd );
 
    // Test increment decrement operations
-   assert( ( testSingleIncrementDecrement<T>( it, 1 ) ) );
-   assert( ( testSingleIncrementDecrement<T>( it, 3 ) ) );
-   assert( ( testSingleIncrementDecrement<T>( it, 2048 - 1 ) ) );
-   assert( ( testSingleIncrementDecrement<T>( it, 2048 * 10 ) ) );
-   assert( ( testIncrementDecrement<T>( it, 1, 1 ) ) );
-   assert( ( testIncrementDecrement<T>( it, 3, 1 ) ) );
-   assert( ( testIncrementDecrement<T>( it, 2048 - 1, 1 ) ) );
-   assert( ( testIncrementDecrement<T>( it, 2048 * 10, 1 ) ) );
+   assert( ( testSingleIncrementDecrement( it, 1 ) ) );
+   assert( ( testSingleIncrementDecrement( it, 3 ) ) );
+   assert( ( testSingleIncrementDecrement( it, 2048 - 1 ) ) );
+   assert( ( testSingleIncrementDecrement( it, 2048 * 10 ) ) );
+   assert( ( testIncrementDecrement( it, 1, 1 ) ) );
+   assert( ( testIncrementDecrement( it, 3, 1 ) ) );
+   assert( ( testIncrementDecrement( it, 2048 - 1, 1 ) ) );
+   assert( ( testIncrementDecrement( it, 2048 * 10, 1 ) ) );
 
    uint32_t i = 0;
    for( ; i < deq.size() - 1; ++i )
