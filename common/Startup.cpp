@@ -1,6 +1,7 @@
-#include "Startup.h"
+#include "common/Startup.h"
+#include "common/Utils.h"
+#include "common/BlockAllocator.h"
 #include "Hop.h"
-#include "Utils.h"
 
 #include <string>
 
@@ -101,5 +102,16 @@ bool verifyPlatform()
    }
    return true;
 }
+
+void initializeBlockAllocator()
+{
+   hop::block_allocator::initialize( HOP_BLK_SIZE_BYTES );
+}
+
+void terminateBlockAllocator()
+{
+   hop::block_allocator::terminate();
+}
+
 
 }

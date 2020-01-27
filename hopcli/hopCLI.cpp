@@ -288,6 +288,8 @@ int main( int argc, char* argv[] )
       exit( err );
    }
 
+   hop::initializeBlockAllocator();
+
    // Use the current working directory and default filename if none is provided
    char defaultSavePath[256];
    if( !opts.saveFilePath )
@@ -346,6 +348,8 @@ int main( int argc, char* argv[] )
    {
       hop::terminateProcess( childProcId );
    }
+
+   hop::terminateBlockAllocator();
 
    // The interpreter thread will leak since we cannot reliably have a std::getline that is either
    // non-blocking or with a timeout. Therefore the thread will not join since it will most likely

@@ -18,6 +18,9 @@ LaunchOptions parseArgs( int argc, char* argv[] );
 
 // Returns true if the current platform supports RDTSC and Invariant TSC
 bool verifyPlatform();
+
+void initializeBlockAllocator();
+void terminateBlockAllocator();
 }
 
 #endif //  HOP_LAUNCH_ARGS_H_

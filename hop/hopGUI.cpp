@@ -178,6 +178,7 @@ int main( int argc, char* argv[] )
       return -2;
    }
 
+   hop::initializeBlockAllocator();
    hop::setupSignalHandlers( terminateCallback );
 
    if ( SDL_Init( SDL_INIT_VIDEO ) != 0 )
@@ -292,6 +293,8 @@ int main( int argc, char* argv[] )
    {
       hop::terminateProcess( childProcId );
    }
+
+   hop::terminateBlockAllocator();
 
    destroyIcon();
 
