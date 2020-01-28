@@ -193,12 +193,12 @@ class Deque
    void append( Deque<T>::iterator<Const> begin, Deque<T>::iterator<Const> end )
    {
       assert( begin._blocks == end._blocks );
-      std::vector<Block*>* inBlocks = begin._blocks;
+      const std::vector<Block*>* inBlocks = begin._blocks;
       uint32_t blkId = begin._blockId;
       uint32_t elId  = begin._elementId;
       for( ; blkId < end._blockId; ++blkId )
       {
-         Block* curBlock = (*inBlocks)[blkId];
+         const Block* curBlock = (*inBlocks)[blkId];
          append( &curBlock->data[elId], COUNT_PER_BLOCK - elId );
          elId = 0; // From now on, we copy whole blocks
       }
