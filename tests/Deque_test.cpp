@@ -119,13 +119,24 @@ void testAppend()
 
    appendDeq.clear();
 
-   // Append data that spans 2 blocks
+   // Append data that spans 2 blocks from source
    valueOffset = 500;
-   appendDeq.append( deq.begin() + valueOffset , deq.begin() + valueOffset + 200 );
-   for( uint32_t i = 0; i < appendDeq.size(); ++i )
+   const uint32_t valueCount  = 250;
+   appendDeq.append( deq.begin() + valueOffset , deq.begin() + valueOffset + valueCount );
+   for( uint32_t i = 0; i < valueCount; ++i )
    {
       auto value = appendDeq[i];
       assert( value == i + valueOffset );
+   }
+
+   appendDeq.clear();
+
+   // Append data that spans 2 blocks in destination
+   appendDeq.append( deq.begin(), deq.end() - 50 );
+   for( uint32_t i = 0; i < appendDeq.size(); ++i )
+   {
+      auto value = appendDeq[i];
+      assert( value == i );
    }
 }
 
@@ -143,9 +154,7 @@ int main()
    std::iota( g_values.begin(), g_values.end(), 0 );
    deq.append( g_values.data(), g_values.size() );
 
-    assert( std::is_sorted( deq.begin(), deq.end() ) );
-
-   //std::cout << deq;
+   assert( std::is_sorted( deq.begin(), deq.end() ) );
 
    testIterators( deq );
    testAppend();

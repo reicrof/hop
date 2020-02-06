@@ -175,18 +175,23 @@ class Deque
 
    void append( const T& value ) { append( &value, 1 ); }
    void push_back( const T& v ) { append( &v, 1 ); }
-   void append( const T* const inData, uint32_t count )
+   void append( const T* const data, uint32_t count )
    {
       if( _blocks.empty() ) acquireNewBlock();
 
       uint32_t remainingWrite = count;
-      const T* data           = inData;
-      while( ( remainingWrite = _blocks.back()->append( data, remainingWrite ) ) )
+      const T* inData         = data;
+      do
       {
-         // Block is full, acquire a new one
-         acquireNewBlock();
-         data += COUNT_PER_BLOCK;
-      }
+         const uint32_t newRemainingWrite = _blocks.back()->append( inData, remainingWrite );
+         if( newRemainingWrite > 0 )
+         {
+            // Block is full, acquire a new one
+            acquireNewBlock();
+            inData += remainingWrite - newRemainingWrite;
+         }
+         remainingWrite = newRemainingWrite;
+      } while( remainingWrite > 0 );
    }
 
    template< bool Const = false >
@@ -203,9 +208,14 @@ class Deque
          elId = 0; // From now on, we copy whole blocks
       }
 
-      // Copy incomplete block
-      Block* curBlock = (*inBlocks)[blkId];
-      append( &curBlock->data[elId], end._elementId );
+      // Copy incomplete block. We need to take into account the fact that the last
+      // iterator is pointning to a block that might not yet be allocated (one past
+      // the end)
+      if( blkId < inBlocks->size() )
+      {
+         Block* curBlock = (*inBlocks)[blkId];
+         append( &curBlock->data[elId], end._elementId );
+      }
    }
 
    void append( const T* begin, const T* end )
