@@ -174,57 +174,15 @@ static void handleInput()
    }
 }
 
-int main( int argc, char* argv[] )
+static hop::ProcessID startViewer( SDL_Window* window, const hop::LaunchOptions& opts )
 {
-   // Confirm the platform supports HOP
-   if ( !hop::verifyPlatform() )
-   {
-      return -2;
-   }
-
-   hop::initializeBlockAllocator();
-   hop::setupSignalHandlers( terminateCallback );
-
-   if ( SDL_Init( SDL_INIT_VIDEO ) != 0 )
-   {
-      fprintf( stderr, "Failed SDL initialization : %s \n", SDL_GetError() );
-      return -1;
-   }
-
-   uint32_t createWindowFlags = SDL_WINDOW_OPENGL | SDL_WINDOW_RESIZABLE;
-   if ( hop::options::fullscreen() ) createWindowFlags |= SDL_WINDOW_MAXIMIZED;
-
-   SDL_Window* window = SDL_CreateWindow(
-       "Hop", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, 1600, 1024, createWindowFlags );
-
-   if ( window == NULL )
-   {
-      fprintf( stderr, "Could not create window: %s\n", SDL_GetError() );
-      return -1;
-   }
-
-   sdlImGuiInit();
-
-   SDL_GLContext mainContext = SDL_GL_CreateContext( window );
-   SDL_GL_SetAttribute( SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_CORE );
-   SDL_GL_SetAttribute( SDL_GL_CONTEXT_MAJOR_VERSION, 3 );
-   SDL_GL_SetAttribute( SDL_GL_CONTEXT_MINOR_VERSION, 2 );
-   SDL_GL_SetAttribute( SDL_GL_DOUBLEBUFFER, 1 );
-   SDL_GL_SetSwapInterval( 1 );
-
-   const hop::LaunchOptions opts = hop::parseArgs( argc, argv );
-   hop::options::load();
-
-   createIcon( window );
-
-   HOP_SET_THREAD_NAME( "Main" );
-
    // Setup the LOD granularity based on screen resolution
    SDL_DisplayMode DM;
    SDL_GetCurrentDisplayMode( 0, &DM );
+
+   hop::ProcessID childProcId = -1;
    hop::Viewer viewer( DM.w, DM.h );
 
-   hop::ProcessID childProcId = 0;
    if ( opts.processName )
    {
       // If we want to launch an executable to profile, now is the time to do it
@@ -289,6 +247,57 @@ int main( int argc, char* argv[] )
 
       hop::g_stats.frameTimeMs = duration<double, std::milli>( ( frameEnd - frameStart ) ).count();
    }
+
+   return childProcId;
+}
+
+int main( int argc, char* argv[] )
+{
+   // Confirm the platform supports HOP
+   if ( !hop::verifyPlatform() )
+   {
+      return -2;
+   }
+
+   hop::initializeBlockAllocator();
+   hop::setupSignalHandlers( terminateCallback );
+
+   if ( SDL_Init( SDL_INIT_VIDEO ) != 0 )
+   {
+      fprintf( stderr, "Failed SDL initialization : %s \n", SDL_GetError() );
+      return -1;
+   }
+
+   uint32_t createWindowFlags = SDL_WINDOW_OPENGL | SDL_WINDOW_RESIZABLE;
+   if ( hop::options::fullscreen() ) createWindowFlags |= SDL_WINDOW_MAXIMIZED;
+
+   SDL_Window* window = SDL_CreateWindow(
+       "Hop", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, 1600, 1024, createWindowFlags );
+
+   if ( window == NULL )
+   {
+      fprintf( stderr, "Could not create window: %s\n", SDL_GetError() );
+      return -1;
+   }
+
+   sdlImGuiInit();
+
+   SDL_GLContext mainContext = SDL_GL_CreateContext( window );
+   SDL_GL_SetAttribute( SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_CORE );
+   SDL_GL_SetAttribute( SDL_GL_CONTEXT_MAJOR_VERSION, 3 );
+   SDL_GL_SetAttribute( SDL_GL_CONTEXT_MINOR_VERSION, 2 );
+   SDL_GL_SetAttribute( SDL_GL_DOUBLEBUFFER, 1 );
+   SDL_GL_SetSwapInterval( 1 );
+
+   const hop::LaunchOptions opts = hop::parseArgs( argc, argv );
+   hop::options::load();
+
+   createIcon( window );
+
+   HOP_SET_THREAD_NAME( "Main" );
+
+   // Start the viewer and all its profilers
+   hop::ProcessID childProcId = startViewer( window, opts );
 
    hop::options::save();
 
