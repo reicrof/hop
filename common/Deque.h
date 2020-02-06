@@ -163,14 +163,16 @@ class Deque
 
    T& back()
    {
+      assert( !_blocks.empty() && _blocks.back()->elementCount > 0 );
       Block* lastBlock = _blocks.back();
-      return (*lastBlock)[ lastBlock->elementCount ];
+      return (*lastBlock)[ lastBlock->elementCount - 1 ];
    }
 
    const T& back() const
    {
+      assert( !_blocks.empty() && _blocks.back()->elementCount > 0 );
       const Block* lastBlock = _blocks.back();
-      return (*lastBlock)[ lastBlock->elementCount ];
+      return (*lastBlock)[ lastBlock->elementCount - 1 ];
    }
 
    void append( const T& value ) { append( &value, 1 ); }
@@ -238,6 +240,7 @@ class Deque
 
    auto begin() const { return iterator<true>( &_blocks ); }
    auto begin() { return iterator<false>( &_blocks ); }
+   auto cbegin() const { return iterator<true>( &_blocks ); }
    auto end() const
    {
        auto divRes = ::div( (int64_t )size(), (int64_t)COUNT_PER_BLOCK );
@@ -247,6 +250,11 @@ class Deque
    {
        auto divRes = ::div( (int64_t )size(), (int64_t)COUNT_PER_BLOCK );
        return iterator<false>( &_blocks, divRes.quot, divRes.rem );
+   }
+   auto cend() const
+   {
+      auto divRes = ::div( (int64_t )size(), (int64_t)COUNT_PER_BLOCK );
+      return iterator<true>( &_blocks, divRes.quot, divRes.rem );
    }
 
    friend std::ostream& operator<<( std::ostream& out, const Deque& bsv )

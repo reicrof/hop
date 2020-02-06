@@ -154,6 +154,8 @@ int main()
    std::iota( g_values.begin(), g_values.end(), 0 );
    deq.append( g_values.data(), g_values.size() );
 
+   assert( deq.back() == 1023 );
+
    assert( std::is_sorted( deq.begin(), deq.end() ) );
 
    testIterators( deq );
