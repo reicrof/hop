@@ -161,6 +161,20 @@ class Deque
       return (*_blocks[divRes.quot])[divRes.rem];
    }
 
+   T& front()
+   {
+      assert( !_blocks.empty() && _blocks.front()->elementCount > 0 );
+      Block* firstBlock = _blocks.front();
+      return (*firstBlock)[ 0 ];
+   }
+
+   const T& front() const
+   {
+      assert( !_blocks.empty() && _blocks.front()->elementCount > 0 );
+      Block* firstBlock = _blocks.front();
+      return (*firstBlock)[ 0 ];
+   }
+
    T& back()
    {
       assert( !_blocks.empty() && _blocks.back()->elementCount > 0 );
@@ -175,8 +189,15 @@ class Deque
       return (*lastBlock)[ lastBlock->elementCount - 1 ];
    }
 
+   void push_back( const T& value ) { append( &value, 1 ); }
    void append( const T& value ) { append( &value, 1 ); }
-   void push_back( const T& v ) { append( &v, 1 ); }
+   void append( uint32_t count, const T& value )
+   {
+      for( uint32_t i = 0; i < count; ++i )
+      {
+         append( &value, 1 );
+      }
+   }
    void append( const T* const data, uint32_t count )
    {
       if( _blocks.empty() ) acquireNewBlock();

@@ -2,6 +2,7 @@
 #define TRACE_DATA_H_
 
 #include "Hop.h"
+#include "Deque.h"
 #include <vector>
 #include <deque>
 #include <utility>
@@ -13,9 +14,9 @@ static constexpr size_t INVALID_IDX = std::numeric_limits<size_t>::max();
 
 struct Entries
 {
-   std::deque< TimeStamp > starts;
-   std::deque< TimeStamp > ends;
-   std::deque< Depth_t > depths;
+   hop::Deque< TimeStamp > starts;
+   hop::Deque< TimeStamp > ends;
+   hop::Deque< Depth_t > depths;
 
    void clear();
    void append( const Entries& newEntries );
@@ -40,11 +41,11 @@ struct TraceData
    Entries entries;
 
    //Indexes of the name in the string database
-   std::deque< StrPtr_t > fileNameIds;
-   std::deque< StrPtr_t > fctNameIds;
+   hop::Deque< StrPtr_t > fileNameIds;
+   hop::Deque< StrPtr_t > fctNameIds;
 
-   std::deque< LineNb_t > lineNbs;
-   std::deque< ZoneId_t > zones;
+   hop::Deque< LineNb_t > lineNbs;
+   hop::Deque< ZoneId_t > zones;
 };
 
 struct LockWaitData
@@ -73,7 +74,7 @@ struct CoreEventData
    void clear();
 
    Entries entries;
-   std::deque<Core_t> cores;
+   hop::Deque<Core_t> cores;
 };
 
 // Data serialization

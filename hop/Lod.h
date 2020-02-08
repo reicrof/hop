@@ -2,6 +2,7 @@
 #define LOD_H_
 
 #include "Hop.h"
+#include "common/Deque.h"
 
 #include <array>
 #include <deque>
@@ -25,7 +26,7 @@ struct LodInfo
    bool operator<( const LodInfo& rhs ) const noexcept { return end < rhs.end; }
 };
 
-using LodsArray = std::array< std::deque< LodInfo >, LOD_COUNT >;
+using LodsArray = std::array< hop::Deque< LodInfo >, LOD_COUNT >;
 struct LodsData
 {
    LodsArray lods;
@@ -40,7 +41,7 @@ void appendLods( LodsData& lodData, const Entries& entries );
 void appendCoreEventLods(
     LodsData& lodData,
     const Entries& entries,
-    const std::deque<Core_t>& cores );
+    const hop::Deque<Core_t>& cores );
 
 std::pair<size_t, size_t> visibleIndexSpan(
     const LodsArray& lodsArr,

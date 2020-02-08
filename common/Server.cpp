@@ -306,16 +306,13 @@ size_t Server::handleNewMessage( uint8_t* data, size_t maxSize, TimeStamp minTim
              const Depth_t* depths = (const Depth_t*)( lineNbs + tracesCount );
              const ZoneId_t* zones = (const ZoneId_t*)( depths + tracesCount );
 
-             traceData.entries.ends.insert(
-                 traceData.entries.ends.end(), ends, ends + tracesCount );
-             traceData.entries.starts.insert(
-                 traceData.entries.starts.end(), starts, starts + tracesCount );
-             traceData.entries.depths.insert(
-                 traceData.entries.depths.end(), depths, depths + tracesCount );
+             traceData.entries.ends.append( ends, ends + tracesCount );
+             traceData.entries.starts.append( starts, starts + tracesCount );
+             traceData.entries.depths.append( depths, depths + tracesCount );
              traceData.entries.maxDepth = *std::max_element( depths, depths + tracesCount );
 
-             traceData.lineNbs.insert( traceData.lineNbs.end(), lineNbs, lineNbs + tracesCount );
-             traceData.zones.insert( traceData.zones.end(), zones, zones + tracesCount );
+             traceData.lineNbs.append( lineNbs, lineNbs + tracesCount );
+             traceData.zones.append( zones, zones + tracesCount );
 
              // Process non trivially copiable members
              for ( size_t i = 0; i < tracesCount; ++i )
@@ -412,7 +409,7 @@ size_t Server::handleNewMessage( uint8_t* data, size_t maxSize, TimeStamp minTim
             coresData.entries.starts.push_back( coreEventsPtr[i].start );
             coresData.cores.push_back( coreEventsPtr[i].core );
          }
-         coresData.entries.depths.insert( coresData.entries.depths.end(), newCount, 0 );
+         coresData.entries.depths.append( newCount, 0 );
 
          // TODO: Could lock later when we received all the messages
          std::lock_guard<hop::Mutex> guard( _sharedPendingDataMutex );

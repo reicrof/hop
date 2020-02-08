@@ -17,9 +17,9 @@ void Entries::clear()
 
 void Entries::append( const Entries& newEntries )
 {
-   starts.insert( starts.end(), newEntries.starts.begin(), newEntries.starts.end() );
-   ends.insert( ends.end(), newEntries.ends.begin(), newEntries.ends.end() );
-   depths.insert( depths.end(), newEntries.depths.begin(), newEntries.depths.end() );
+   starts.append( newEntries.starts.begin(), newEntries.starts.end() );
+   ends.append( newEntries.ends.begin(), newEntries.ends.end() );
+   depths.append( newEntries.depths.begin(), newEntries.depths.end() );
 
    maxDepth = std::max( maxDepth, newEntries.maxDepth );
 }
@@ -37,11 +37,10 @@ Entries Entries::copy() const
 void TraceData::append( const TraceData& newTraces )
 {
    entries.append( newTraces.entries );
-   fileNameIds.insert(
-       fileNameIds.end(), newTraces.fileNameIds.begin(), newTraces.fileNameIds.end() );
-   fctNameIds.insert( fctNameIds.end(), newTraces.fctNameIds.begin(), newTraces.fctNameIds.end() );
-   lineNbs.insert( lineNbs.end(), newTraces.lineNbs.begin(), newTraces.lineNbs.end() );
-   zones.insert( zones.end(), newTraces.zones.begin(), newTraces.zones.end() );
+   fileNameIds.append( newTraces.fileNameIds.begin(), newTraces.fileNameIds.end() );
+   fctNameIds.append( newTraces.fctNameIds.begin(), newTraces.fctNameIds.end() );
+   lineNbs.append( newTraces.lineNbs.begin(), newTraces.lineNbs.end() );
+   zones.append( newTraces.zones.begin(), newTraces.zones.end() );
 }
 
 void TraceData::clear()
@@ -97,7 +96,7 @@ void LockWaitData::clear()
 void CoreEventData::append( const CoreEventData& newCoreEvents )
 {
    entries.append( newCoreEvents.entries );
-   cores.insert( cores.end(), newCoreEvents.cores.begin(), newCoreEvents.cores.end() );
+   cores.append( newCoreEvents.cores.begin(), newCoreEvents.cores.end() );
 }
 
 void CoreEventData::clear()

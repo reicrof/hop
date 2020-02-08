@@ -93,7 +93,7 @@ LodsArray computeLods( const Entries& entries, size_t idOffset )
       // Insert the data and sort if necessary
       for ( const auto& l : lods )
       {
-         resLods[lodLvl].insert( resLods[lodLvl].end(), l.begin(), l.end() );
+         resLods[lodLvl].append( l.data(), l.size() );
       }
 
       if( needSorting )
@@ -108,7 +108,7 @@ LodsArray computeLods( const Entries& entries, size_t idOffset )
 
    // Compute the LOD based on the previous LOD levels
    bool needSorting = false;
-   const std::deque<LodInfo>* lastComputedLod = &resLods[lodLvl];
+   const hop::Deque<LodInfo>* lastComputedLod = &resLods[lodLvl];
    for ( lodLvl = 1; lodLvl < LOD_COUNT; ++lodLvl )
    {
       HOP_PROF( "Computing next LOD lvl" );
@@ -139,7 +139,7 @@ LodsArray computeLods( const Entries& entries, size_t idOffset )
 
       for ( const auto& l : lods )
       {
-         resLods[lodLvl].insert( resLods[lodLvl].end(), l.begin(), l.end() );
+         resLods[lodLvl].append( l.data(), l.size() );
       }
       if( needSorting )
          std::sort( resLods[lodLvl].begin(), resLods[lodLvl].end() );
@@ -191,12 +191,12 @@ void appendLods( LodsData& dst, const Entries& entries )
             {
                // Find the last trace that has the same depth as the processed one
                const auto sameDepthIt =
-                   std::find_if( dst.lods[i].rbegin(), dst.lods[i].rend(), [=]( const LodInfo& o ) {
+                   std::find_if( std::make_reverse_iterator( dst.lods[i].begin() ), std::make_reverse_iterator( dst.lods[i].end() ), [=]( const LodInfo& o ) {
                       return o.depth == depthRemaining;
                    } );
 
                // Check if we can merge it if the previous one at the same depth
-               if ( sameDepthIt != dst.lods[i].rend() )
+               if ( sameDepthIt != std::make_reverse_iterator( dst.lods[i].end() ) )
                {
                   const auto timeBetweenTrace = newTraceIt->start - sameDepthIt->end;
                   wasLoded = 
@@ -205,7 +205,7 @@ void appendLods( LodsData& dst, const Entries& entries )
                   {
                      sameDepthIt->end   = newTraceIt->end;
                      sameDepthIt->loded = true;
-                     const long dist    = std::distance( sameDepthIt, dst.lods[i].rend() );
+                     const long dist    = std::distance( sameDepthIt, std::make_reverse_iterator( dst.lods[i].end() ) );
                      sortFromIdx        = std::min( dist, sortFromIdx );
                   }
                }
@@ -220,8 +220,8 @@ void appendLods( LodsData& dst, const Entries& entries )
          }
       }
 
-      dst.lods[i].insert( dst.lods[i].end(), nonLodedInfos.begin(), nonLodedInfos.end() );
-      dst.lods[i].insert( dst.lods[i].end(), newTraceIt, src[i].cend() );
+      dst.lods[i].append( nonLodedInfos.data(), nonLodedInfos.size() );
+      dst.lods[i].append( newTraceIt, src[i].cend() );
 
       std::sort( dst.lods[i].begin() + std::max( 0l, ( sortFromIdx - 1 ) ), dst.lods[i].end() );
 
@@ -235,7 +235,7 @@ void appendLods( LodsData& dst, const Entries& entries )
 }
 
 LodsArray
-computeCoreEventLods( const Entries& entries, const std::deque<Core_t>& cores, size_t idOffset )
+computeCoreEventLods( const Entries& entries, const hop::Deque<Core_t>& cores, size_t idOffset )
 {
    HOP_PROF_FUNC();
 
@@ -252,7 +252,7 @@ computeCoreEventLods( const Entries& entries, const std::deque<Core_t>& cores, s
       }
       else
       {
-         resLods[lodLvl].emplace_back( newEvent );
+         resLods[lodLvl].push_back( newEvent );
       }
    };
 
@@ -275,11 +275,11 @@ computeCoreEventLods( const Entries& entries, const std::deque<Core_t>& cores, s
    }
 
    // Compute the LOD based on the previous LOD levels
-   const std::deque<LodInfo>* lastComputedLod = &resLods[lodLvl];
+   const hop::Deque<LodInfo>* lastComputedLod = &resLods[lodLvl];
    for ( lodLvl = 1; lodLvl < LOD_COUNT; ++lodLvl )
    {
       HOP_PROF( "Computing next LOD lvl" );
-      resLods[lodLvl].emplace_back( lastComputedLod->front() );
+      resLods[lodLvl].push_back( lastComputedLod->front() );
       for ( const auto& l : *lastComputedLod )
       {
          mergeLodInfo( lodLvl, resLods[lodLvl].back(), l, resLods );
@@ -293,7 +293,7 @@ computeCoreEventLods( const Entries& entries, const std::deque<Core_t>& cores, s
    return resLods;
 }
 
-void appendCoreEventLods( LodsData& dst, const Entries& entries, const std::deque<Core_t>& cores )
+void appendCoreEventLods( LodsData& dst, const Entries& entries, const hop::Deque<Core_t>& cores )
 {
    if( entries.ends.size() <= dst.idOffset ) return;
 
@@ -323,8 +323,7 @@ void appendCoreEventLods( LodsData& dst, const Entries& entries, const std::dequ
       }
 
       // Insert all the events except the first on if it has been loded
-      dst.lods[lodLvl].insert(
-            dst.lods[lodLvl].end(), src[lodLvl].cbegin() + (int)loded, src[lodLvl].cend() );
+      dst.lods[lodLvl].append( src[lodLvl].cbegin() + (int)loded, src[lodLvl].cend() );
       if( loded )
       {
          std::sort(
