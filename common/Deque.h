@@ -111,18 +111,25 @@ class Deque
          return *this;
       }
 
-      inline iterator operator+( difference_type val )
+      inline iterator operator+( difference_type val ) const
       {
          iterator tmp(*this);
          tmp.operator+=(val);
          return tmp;
       }
 
-      inline iterator operator-( difference_type val )
+      inline iterator operator-( difference_type val ) const
       {
          iterator tmp(*this);
          tmp.operator-=(val);
          return tmp;
+      }
+
+      inline difference_type operator-( const iterator it2 ) const
+      {
+         difference_type diff = (difference_type)it2._blockId - (difference_type)_blockId;
+         diff += it2._elementId - _elementId;
+         return diff;
       }
    };
    // clang-format on
