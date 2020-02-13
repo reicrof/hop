@@ -5,7 +5,6 @@
 #include "common/Deque.h"
 
 #include <array>
-#include <deque>
 #include <vector>
 
 namespace hop

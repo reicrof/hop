@@ -99,7 +99,7 @@ class Deque
       {
          const difference_type newVal = val + _elementId; 
          _blockId   += newVal / COUNT_PER_BLOCK;
-         _elementId  =  newVal % COUNT_PER_BLOCK;
+         _elementId =  newVal % COUNT_PER_BLOCK;
          return *this;
       }
 

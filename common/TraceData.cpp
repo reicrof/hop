@@ -67,21 +67,20 @@ TraceData TraceData::copy() const
 void LockWaitData::append( const LockWaitData& newLockWaits )
 {
    entries.append( newLockWaits.entries );
-   mutexAddrs.insert( mutexAddrs.end(), newLockWaits.mutexAddrs.begin(), newLockWaits.mutexAddrs.end() );
+   mutexAddrs.append( newLockWaits.mutexAddrs.begin(), newLockWaits.mutexAddrs.end() );
 
    const size_t lockReleaseSize = newLockWaits.lockReleases.size();
    if( lockReleaseSize == 0 )
    {
       // Append 0 for lock releases. They will be filled when the unlock event are received
-      lockReleases.resize(
-          lockReleases.size() + std::distance( newLockWaits.entries.ends.begin(), newLockWaits.entries.ends.end() ),
-          0 );
+      const uint32_t newLockCount = std::distance( newLockWaits.entries.ends.begin(), newLockWaits.entries.ends.end() );
+      lockReleases.append( newLockCount, 0 );
    }
    else
    {
       // We are probably reading from a file since the lockrealse are already processed.
       assert( lockReleaseSize == newLockWaits.entries.ends.size() );
-      lockReleases.insert( lockReleases.end(), newLockWaits.lockReleases.begin(), newLockWaits.lockReleases.end() );
+      lockReleases.append( newLockWaits.lockReleases.begin(), newLockWaits.lockReleases.end() );
    }
 }
 

@@ -4,7 +4,6 @@
 #include "Hop.h"
 #include "Deque.h"
 #include <vector>
-#include <deque>
 #include <utility>
 #include <limits>
 
@@ -59,8 +58,8 @@ struct LockWaitData
    void clear();
 
    Entries entries;
-   std::deque< void* > mutexAddrs;
-   std::deque< TimeStamp > lockReleases;
+   hop::Deque< void* > mutexAddrs;
+   hop::Deque< TimeStamp > lockReleases;
 };
 
 struct CoreEventData
