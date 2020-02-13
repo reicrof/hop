@@ -3,7 +3,7 @@
 
 #include <cstdint>
 
-static constexpr uint32_t HOP_BLK_SIZE_BYTES = 2048;
+static constexpr uint32_t HOP_BLK_SIZE_BYTES = 4 * 1024ULL;
 
 namespace hop
 {

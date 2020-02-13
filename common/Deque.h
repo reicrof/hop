@@ -12,12 +12,22 @@
 #include <iostream>
 #include <vector>
 
+static constexpr uint32_t highBit( uint32_t n )
+{
+   n |= (n >>  1);
+   n |= (n >>  2);
+   n |= (n >>  4);
+   n |= (n >>  8);
+   n |= (n >> 16);
+   return n - (n >> 1);
+}
+
 namespace hop
 {
 template <typename T>
 class Deque
 {
-   static constexpr uint32_t COUNT_PER_BLOCK = (HOP_BLK_SIZE_BYTES - sizeof(uint32_t)) / sizeof( T );
+   static constexpr uint32_t COUNT_PER_BLOCK = highBit( (HOP_BLK_SIZE_BYTES - sizeof(uint32_t)) / sizeof( T ) );
    struct Block;
   public:
    using value_type = T;
@@ -26,7 +36,7 @@ class Deque
     */
    // clang-format off
    template< bool Const = false >
-   class iterator : public std::iterator<std::forward_iterator_tag, T>
+   class iterator : public std::iterator<std::random_access_iterator_tag, T>
    {
      public:
       using value_type = T;
@@ -87,26 +97,27 @@ class Deque
 
       inline iterator& operator+=( difference_type val )
       {
-         auto divRes = ::div( val + _elementId, COUNT_PER_BLOCK );
-         _blockId   += divRes.quot;
-         _elementId = divRes.rem;
+         const difference_type newVal = val + _elementId; 
+         _blockId   += newVal / COUNT_PER_BLOCK;
+         _elementId  =  newVal % COUNT_PER_BLOCK;
          return *this;
       }
 
       inline iterator& operator-=( difference_type val )
       {
-         auto divRes = ::div( val, COUNT_PER_BLOCK );
-         assert( (int)_blockId >= divRes.quot );
-         _blockId   -= divRes.quot;
-         if( divRes.rem > (int)_elementId )
+         const uint32_t quot = val / COUNT_PER_BLOCK;
+         const uint32_t rem  = val % COUNT_PER_BLOCK;
+         assert( _blockId >= quot );
+         _blockId -= quot;
+         if( rem > _elementId )
          {
             assert( _blockId > 0 );
             --_blockId;
-            _elementId = COUNT_PER_BLOCK - divRes.rem;
+            _elementId = COUNT_PER_BLOCK - rem;
          }
          else
          {
-            _elementId -= divRes.rem;
+            _elementId -= rem;
          }
          return *this;
       }
@@ -125,10 +136,11 @@ class Deque
          return tmp;
       }
 
-      inline difference_type operator-( const iterator it2 ) const
+      inline difference_type operator-( const iterator& it2 ) const
       {
-         difference_type diff = (difference_type)it2._blockId - (difference_type)_blockId;
-         diff += it2._elementId - _elementId;
+         difference_type diff = (difference_type)_blockId - (difference_type)it2._blockId;
+         diff *= COUNT_PER_BLOCK;
+         diff += (difference_type)_elementId - (difference_type)it2._elementId;
          return diff;
       }
    };
@@ -158,14 +170,12 @@ class Deque
 
    const T& operator[]( int64_t idx ) const
    {
-      auto divRes = ::div( idx, COUNT_PER_BLOCK );
-      return (*_blocks[divRes.quot])[divRes.rem];
+      return (*_blocks[idx/COUNT_PER_BLOCK])[idx%COUNT_PER_BLOCK];
    }
 
    T& operator[]( int64_t idx )
    {
-      auto divRes = ::div( idx, COUNT_PER_BLOCK );
-      return (*_blocks[divRes.quot])[divRes.rem];
+      return (*_blocks[idx/COUNT_PER_BLOCK])[idx%COUNT_PER_BLOCK];
    }
 
    T& front()
@@ -239,12 +249,12 @@ class Deque
       }
 
       // Copy incomplete block. We need to take into account the fact that the last
-      // iterator is pointning to a block that might not yet be allocated (one past
+      // iterator is pointing to a block that might not yet be allocated (one past
       // the end)
       if( blkId < inBlocks->size() )
       {
          Block* curBlock = (*inBlocks)[blkId];
-         append( &curBlock->data[elId], end._elementId );
+         append( &curBlock->data[0], end._elementId );
       }
    }
 
@@ -271,18 +281,18 @@ class Deque
    auto cbegin() const { return iterator<true>( &_blocks ); }
    auto end() const
    {
-       auto divRes = ::div( (int64_t )size(), (int64_t)COUNT_PER_BLOCK );
-       return iterator<true>( &_blocks, divRes.quot, divRes.rem );
+      const uint64_t sz = size();
+      return iterator<true>( &_blocks, sz / COUNT_PER_BLOCK, sz % COUNT_PER_BLOCK );
    }
    auto end()
    {
-       auto divRes = ::div( (int64_t )size(), (int64_t)COUNT_PER_BLOCK );
-       return iterator<false>( &_blocks, divRes.quot, divRes.rem );
+      const uint64_t sz = size();
+      return iterator<false>( &_blocks, sz / COUNT_PER_BLOCK, sz % COUNT_PER_BLOCK );
    }
    auto cend() const
    {
-      auto divRes = ::div( (int64_t )size(), (int64_t)COUNT_PER_BLOCK );
-      return iterator<true>( &_blocks, divRes.quot, divRes.rem );
+      const uint64_t sz = size();
+      return iterator<true>( &_blocks, sz / COUNT_PER_BLOCK, sz % COUNT_PER_BLOCK );
    }
 
    friend std::ostream& operator<<( std::ostream& out, const Deque& bsv )

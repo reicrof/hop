@@ -322,7 +322,7 @@ void appendCoreEventLods( LodsData& dst, const Entries& entries, const hop::Dequ
          }
       }
 
-      // Insert all the events except the first on if it has been loded
+      // Insert all the events except the first one if it has been loded
       dst.lods[lodLvl].append( src[lodLvl].cbegin() + (int)loded, src[lodLvl].cend() );
       if( loded )
       {
