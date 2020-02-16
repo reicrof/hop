@@ -57,7 +57,6 @@ LodsArray computeLods( const Entries& entries, size_t idOffset )
 
    // Compute first LOD from raw data
    {
-      bool needSorting = false;
       HOP_PROF( "Compute first LOD level" );
       for ( size_t i = idOffset; i < entries.ends.size(); ++i )
       {
@@ -80,8 +79,6 @@ LodsArray computeLods( const Entries& entries, size_t idOffset )
             assert( lastTrace.depth == curDepth );
             lastTrace.end = entries.ends[i];
             lastTrace.loded = true;
-            // Since we have loded at least one trace, we need to sort them
-            needSorting = true;
          }
          else
          {
@@ -96,8 +93,9 @@ LodsArray computeLods( const Entries& entries, size_t idOffset )
          resLods[lodLvl].insert( resLods[lodLvl].end(), l.begin(), l.end() );
       }
 
-      if( needSorting )
-         std::sort( resLods[lodLvl].begin(), resLods[lodLvl].end() );
+      // Even if the input data is sorted, we need to sort it as we have mixed the order
+      // by allocating them by depth
+      std::sort( resLods[lodLvl].begin(), resLods[lodLvl].end() );
    }
 
    // Clear depth lods to reuse them for next lods
@@ -107,7 +105,6 @@ LodsArray computeLods( const Entries& entries, size_t idOffset )
    }
 
    // Compute the LOD based on the previous LOD levels
-   bool needSorting = false;
    const std::deque<LodInfo>* lastComputedLod = &resLods[lodLvl];
    for ( lodLvl = 1; lodLvl < LOD_COUNT; ++lodLvl )
    {
@@ -128,8 +125,6 @@ LodsArray computeLods( const Entries& entries, size_t idOffset )
             assert( lastTrace.depth == curDepth );
             lastTrace.end   = l.end;
             lastTrace.loded = true;
-            // Since we have loded at least one trace, we need to sort themneedSorting
-            needSorting = true;
          }
          else
          {
@@ -141,8 +136,10 @@ LodsArray computeLods( const Entries& entries, size_t idOffset )
       {
          resLods[lodLvl].insert( resLods[lodLvl].end(), l.begin(), l.end() );
       }
-      if( needSorting )
-         std::sort( resLods[lodLvl].begin(), resLods[lodLvl].end() );
+
+      // Even if the input data is sorted, we need to sort it as we have mixed the order
+      // by allocating them by depth
+      std::sort( resLods[lodLvl].begin(), resLods[lodLvl].end() );
 
       // Clear for reuse
       for ( auto& l : lods ) l.clear();
@@ -161,8 +158,6 @@ void appendLods( LodsData& dst, const Entries& entries )
    LodsArray src = computeLods( entries, dst.idOffset );
 
    HOP_PROF_FUNC();
-   std::vector<LodInfo> nonLodedInfos;
-   nonLodedInfos.reserve( src[0].size() );
 
    // Find the deepest depth
    int deepestDepth = 0;
@@ -175,8 +170,7 @@ void appendLods( LodsData& dst, const Entries& entries )
    for ( size_t i = 0; i < src.size(); ++i )
    {
       // First trace to insert
-      auto newTraceIt = src[i].cbegin();
-      long sortFromIdx = dst.lods[i].size();
+      auto newTraceIt = src[i].begin();
 
       // If there is already LOD in the dest, try to merge them
       if ( dst.lods[i].size() > 0 )
@@ -203,31 +197,23 @@ void appendLods( LodsData& dst, const Entries& entries )
                      canBeLoded( i, timeBetweenTrace, delta(*sameDepthIt), delta(*newTraceIt) );
                   if ( wasLoded )
                   {
-                     sameDepthIt->end   = newTraceIt->end;
-                     sameDepthIt->loded = true;
-                     const long dist    = std::distance( sameDepthIt, dst.lods[i].rend() );
-                     sortFromIdx        = std::min( dist, sortFromIdx );
+                     newTraceIt->start = sameDepthIt->start;
+                     newTraceIt->loded = true;
+                     dst.lods[i].erase( (sameDepthIt+1).base() );
                   }
                }
 
                --depthRemaining;
             }
 
-            if ( !wasLoded ) nonLodedInfos.push_back( *newTraceIt );
-
             // Continue inserting
             ++newTraceIt;
          }
       }
 
-      dst.lods[i].insert( dst.lods[i].end(), nonLodedInfos.begin(), nonLodedInfos.end() );
-      dst.lods[i].insert( dst.lods[i].end(), newTraceIt, src[i].cend() );
-
-      std::sort( dst.lods[i].begin() + std::max( 0l, ( sortFromIdx - 1 ) ), dst.lods[i].end() );
+      dst.lods[i].insert( dst.lods[i].end(), src[i].cbegin(), src[i].cend() );
 
       assert_is_sorted( dst.lods[i].begin(), dst.lods[i].end() );
-
-      nonLodedInfos.clear();
    }
 
    // Update to the new offset
