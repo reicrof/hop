@@ -277,7 +277,7 @@ size_t Server::handleNewMessage( uint8_t* data, size_t maxSize, TimeStamp minTim
        case MsgType::PROFILER_STRING_DATA:
        {
           // Copy string and add it to database
-          const size_t strSize = msgInfo->stringData.size;
+          const size_t strSize = msgInfo->count;
           if ( strSize > 0 )
           {
              const char* strDataPtr = (const char*)bufPtr;
@@ -294,7 +294,7 @@ size_t Server::handleNewMessage( uint8_t* data, size_t maxSize, TimeStamp minTim
        }
        case MsgType::PROFILER_TRACE:
        {
-          const size_t tracesCount = msgInfo->traces.count;
+          const size_t tracesCount = msgInfo->count;
           if ( tracesCount > 0 )
           {
              TraceData traceData;
@@ -345,7 +345,7 @@ size_t Server::handleNewMessage( uint8_t* data, size_t maxSize, TimeStamp minTim
       case MsgType::PROFILER_WAIT_LOCK:
       {
          const LockWait* lws = (const LockWait*)bufPtr;
-         const uint32_t lwCount = msgInfo->lockwaits.count;
+         const uint32_t lwCount = msgInfo->count;
 
          LockWaitData lockwaitData;
          Depth_t maxDepth = 0;
@@ -372,7 +372,7 @@ size_t Server::handleNewMessage( uint8_t* data, size_t maxSize, TimeStamp minTim
       }
       case MsgType::PROFILER_UNLOCK_EVENT:
       {
-         const size_t eventCount = msgInfo->unlockEvents.count;
+         const size_t eventCount = msgInfo->count;
          UnlockEvent* eventPtr = (UnlockEvent*)bufPtr;
 
          bufPtr += eventCount * sizeof( UnlockEvent );
@@ -396,7 +396,7 @@ size_t Server::handleNewMessage( uint8_t* data, size_t maxSize, TimeStamp minTim
       }
       case MsgType::PROFILER_CORE_EVENT:
       {
-         const size_t eventCount = msgInfo->coreEvents.count;
+         const size_t eventCount = msgInfo->count;
          CoreEvent* coreEventsPtr = (CoreEvent*)bufPtr;
 
          // Must be done before removing duplicates
@@ -417,6 +417,19 @@ size_t Server::handleNewMessage( uint8_t* data, size_t maxSize, TimeStamp minTim
          // TODO: Could lock later when we received all the messages
          std::lock_guard<hop::Mutex> guard( _sharedPendingDataMutex );
          _sharedPendingData.coreEventsPerThread[threadIndex].append( coresData );
+         return ( size_t )( bufPtr - data );
+      }
+      case MsgType::STATS_EVENT_INT64:
+      {
+         const uint32_t eventCount = msgInfo->count;
+         const StatEvent* statEventsPtr = (StatEvent*)bufPtr;
+
+         bufPtr += eventCount * sizeof( StatEvent );
+         assert( ( size_t )( bufPtr - data ) <= maxSize );
+
+         std::lock_guard<hop::Mutex> guard( _sharedPendingDataMutex );
+         auto& statEvents = _sharedPendingData.statEventsInt64PerThread[threadIndex];
+         statEvents.insert( statEvents.end(), statEventsPtr, statEventsPtr + eventCount );
          return ( size_t )( bufPtr - data );
       }
       default:

@@ -81,6 +81,9 @@ void hop::ProfilerView::draw( float drawPosX, float drawPosY, const TimelineInfo
       TimelineTrackDrawData drawData = { _profiler, tlInfo, _lodLevel, _highlightValue };
       _trackViews.draw( drawData, msgArray );
    }
+
+   static int64_t frameRendered = 0;
+   HOP_STATS_INT64( "Frame Rendered", ++frameRendered );
 }
 
 bool hop::ProfilerView::handleHotkey()
