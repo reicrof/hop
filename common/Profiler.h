@@ -4,6 +4,7 @@
 #include "common/Server.h" // Will include Hop.h with the HOP_VIEWER defined
 #include "common/StringDb.h"
 #include "common/TimelineTrack.h"
+#include "common/TimelineStats.h"
 
 #include <string>
 
@@ -36,6 +37,7 @@ public:
    bool recording() const;
    SharedMemory::ConnectionState connectionState() const;
    const std::vector<TimelineTrack>& timelineTracks() const;
+   const TimelineStats& timelineStats() const;
    const StringDb& stringDb() const;
    TimeStamp earliestTimestamp() const;
    TimeStamp latestTimestamp() const;
@@ -57,6 +59,7 @@ private:
    std::string _name;
    int _pid;
    std::vector<TimelineTrack> _tracks;
+   TimelineStats _timelineStats;
    StringDb _strDb;
    bool _recording{ false };
    SourceType _srcType;

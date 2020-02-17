@@ -299,6 +299,69 @@ static bool drawDeleteTracesButton( const ImVec2& drawPos, bool active )
    return hovering && active && ImGui::IsMouseClicked( 0 );
 }
 
+static bool drawViewTypeButton( const ImVec2& drawPos, const hop::ProfilerView* profView )
+{
+   ImDrawList* DrawList = ImGui::GetWindowDrawList();
+
+   const hop::ProfilerView::Type viewType = profView->type();
+   const auto& mousePos = ImGui::GetMousePos();
+   const bool hovering = ImGui::IsMouseHoveringWindow() && hop::ptInRect(
+                                                               mousePos.x,
+                                                               mousePos.y,
+                                                               drawPos.x,
+                                                               drawPos.y,
+                                                               drawPos.x + TOOLBAR_BUTTON_WIDTH,
+                                                               drawPos.y + TOOLBAR_BUTTON_HEIGHT );
+
+   const ImColor col = hovering ? ImColor( 1.0f, 1.0f, 1.0f ) : ImColor( 0.7f, 0.7f, 0.7f );
+
+   const char* tooltip = "";
+   if( viewType == hop::ProfilerView::Type::PROFILER )
+   {
+      tooltip               = "Change To Stats View";
+      const float lineWidth = 5.0f;
+      ImVec2 bottomPt( drawPos.x, drawPos.y + TOOLBAR_BUTTON_HEIGHT );
+      ImVec2 topPt( drawPos.x, drawPos.y + 0.7f * TOOLBAR_BUTTON_HEIGHT );
+      for( int i = 0; i < 3; ++i )
+      {
+         DrawList->AddLine( bottomPt, topPt, col, lineWidth );
+         bottomPt.x += lineWidth + 2.0f;
+         topPt.x += lineWidth + 2.0f;
+         topPt.y -= 0.3f * TOOLBAR_BUTTON_HEIGHT;   
+      }
+   }
+   else if( viewType == hop::ProfilerView::Type::STATS )
+   {
+      tooltip = "Change To Profiler View";
+      const float lineWidth = 3.0f;
+      float lineOffset      = 0;
+      const ImVec2 topLine( drawPos.x, drawPos.y + lineOffset );
+      const ImVec2 topLineEnd( drawPos.x + TOOLBAR_BUTTON_WIDTH, drawPos.y + lineOffset );
+      lineOffset += lineWidth + 2.0f;
+      const ImVec2 midLine( drawPos.x, drawPos.y + lineOffset );
+      const ImVec2 midLineEnd( drawPos.x + TOOLBAR_BUTTON_WIDTH, drawPos.y + lineOffset );
+      lineOffset += lineWidth + 2.0f;
+      const ImVec2 lastLine1( drawPos.x, drawPos.y + lineOffset );
+      const ImVec2 lastLineEnd1(
+          drawPos.x + TOOLBAR_BUTTON_WIDTH * 0.5 - 2.0f, drawPos.y + lineOffset );
+      const ImVec2 lastLine2( drawPos.x + TOOLBAR_BUTTON_WIDTH * 0.5, drawPos.y + lineOffset );
+      const ImVec2 lastLineEnd2( drawPos.x + TOOLBAR_BUTTON_WIDTH, drawPos.y + lineOffset );
+      DrawList->AddLine( topLine, topLineEnd, col, lineWidth );
+      DrawList->AddLine( midLine, midLineEnd, col, lineWidth );
+      DrawList->AddLine( lastLine1, lastLineEnd1, col, lineWidth );
+      DrawList->AddLine( lastLine2, lastLineEnd2, col, lineWidth );
+   }
+
+   if ( hovering )
+   {
+      ImGui::BeginTooltip();
+      ImGui::Text( "%s", tooltip );
+      ImGui::EndTooltip();
+   }
+
+   return hovering && ImGui::IsMouseClicked( 0 );
+}
+
 static void drawStatusIcon( const ImVec2 drawPos, hop::SharedMemory::ConnectionState state )
 {
    ImColor col( 0.5f, 0.5f, 0.5f );
@@ -345,12 +408,14 @@ static void drawStatusIcon( const ImVec2 drawPos, hop::SharedMemory::ConnectionS
    }
 }
 
-static void drawToolbar( ImVec2 drawPos, float canvasWidth, hop::ProfilerView* profView, hop::Timeline* tl )
+static void drawToolbar( ImVec2 drawPos, float canvasWidth, hop::ProfilerView* profView, hop::Timeline* tl, hop::TimelineMsgArray* msgArray )
 {
+   using namespace hop;
+
    drawPos.x += 5.0f;
    const auto& mousePos   = ImGui::GetMousePos();
    const bool isRecording = profView ? profView->data().recording() : false;
-   const bool isActive    = profView ? profView->data().sourceType() == hop::Profiler::SRC_TYPE_PROCESS : false;
+   const bool isActive    = profView ? profView->data().sourceType() == Profiler::SRC_TYPE_PROCESS : false;
 
    const bool pressed = isRecording ? drawStopButton( drawPos, mousePos, isActive ) :
                                       drawPlayButton( drawPos, mousePos, isActive );
@@ -362,7 +427,19 @@ static void drawToolbar( ImVec2 drawPos, float canvasWidth, hop::ProfilerView* p
    const ImVec2 deleteOffset( ( 2.0f * TOOLBAR_BUTTON_PADDING ) + TOOLBAR_BUTTON_WIDTH, 0.0f );
    if ( drawDeleteTracesButton( drawPos + deleteOffset, isActive && profView->canvasHeight() > 0 ) )
    {
-      hop::displayModalWindow( "Delete all traces?", hop::MODAL_TYPE_YES_NO, [&]() { profView->clear(); } );
+      displayModalWindow( "Delete all traces?", MODAL_TYPE_YES_NO, [&]() { profView->clear(); } );
+   }
+
+   ImVec2 viewTypeButtonPos = drawPos + deleteOffset;
+   viewTypeButtonPos.x += ( 2.0f * TOOLBAR_BUTTON_PADDING ) + TOOLBAR_BUTTON_WIDTH;
+   if( profView && drawViewTypeButton( viewTypeButtonPos, profView ) )
+   {
+      // Save current vertical position
+      profView->setVerticalPos( tl->verticalPosPxl() );
+      // Then change the type and set new vertical position
+      const ProfilerView::Type prevType = profView->type();
+      profView->setType( prevType == ProfilerView::Type::PROFILER ? ProfilerView::Type::STATS : ProfilerView::Type::PROFILER );
+      msgArray->addMoveVerticalPositionMsg( profView->verticalPos(), false );
    }
 
    if( isActive )
@@ -607,9 +684,10 @@ static void drawCanvasContent(
    const hop::TimelineInfo& tlInfo,
    hop::TimelineMsgArray* msgArr )
 {
-   if ( prof && 
+   const bool validProfiler = prof && 
       ( validConnectionState( prof->data().connectionState() ) ||
-        prof->data().sourceType() == hop::Profiler::SRC_TYPE_FILE ) )
+        prof->data().sourceType() == hop::Profiler::SRC_TYPE_FILE );
+   if( validProfiler )
    {
       const ImVec2 curPos = ImGui::GetCursorPos();
       prof->draw( curPos.x, curPos.y, tlInfo, msgArr );
@@ -782,13 +860,14 @@ void Viewer::draw( uint32_t windowWidth, uint32_t windowHeight )
    // We only want to remove the padding for the viewer window and not all of its childrens.
    ImGui::PopStyleVar( 2 );
 
+   TimelineMsgArray msgArray;
+
    // Then draw
    drawMenuBar( this );
    _selectedTab = drawTabs( ImGui::GetCursorPos(), *this, _selectedTab );
    ProfilerView* const selectedProf = _selectedTab >= 0 ? _profilers[_selectedTab].get() : nullptr;
-   drawToolbar( ImGui::GetCursorPos(), ImGui::GetWindowWidth(), selectedProf, &_timeline );
+   drawToolbar( ImGui::GetCursorPos(), ImGui::GetWindowWidth(), selectedProf, &_timeline, &msgArray );
 
-   TimelineMsgArray msgArray;
    _timeline.draw();
    _timeline.beginDrawCanvas( selectedProf ? selectedProf->canvasHeight() : 0.0f );
 
