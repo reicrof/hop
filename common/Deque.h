@@ -235,9 +235,11 @@ class Deque
    }
 
    template< bool Const = false >
-   void append( Deque<T>::iterator<Const> begin, Deque<T>::iterator<Const> end )
+   void append( const Deque<T>::iterator<Const> begin, const Deque<T>::iterator<Const> end )
    {
       assert( begin._blocks == end._blocks );
+      if( begin == end ) return;
+
       const std::vector<Block*>* inBlocks = begin._blocks;
       uint32_t blkId = begin._blockId;
       uint32_t elId  = begin._elementId;
@@ -254,7 +256,8 @@ class Deque
       if( blkId < inBlocks->size() )
       {
          Block* curBlock = (*inBlocks)[blkId];
-         append( &curBlock->data[0], end._elementId );
+         assert( end._elementId > elId );
+         append( &curBlock->data[elId], end._elementId - elId );
       }
    }
 

@@ -6,6 +6,7 @@
 #include <vector>
 #include <cmath>
 
+static constexpr uint32_t BLOCK_SIZE = 4096;
 std::vector< uint32_t > g_values;
 
 template <typename T>
@@ -74,12 +75,12 @@ void testIterators( hop::Deque<T>& deq )
    // Test increment decrement operations
    assert( ( testSingleIncrementDecrement( it, 1 ) ) );
    assert( ( testSingleIncrementDecrement( it, 3 ) ) );
-   assert( ( testSingleIncrementDecrement( it, 2048 - 1 ) ) );
-   assert( ( testSingleIncrementDecrement( it, 2048 * 10 ) ) );
+   assert( ( testSingleIncrementDecrement( it, BLOCK_SIZE - 1 ) ) );
+   assert( ( testSingleIncrementDecrement( it, BLOCK_SIZE * 10 ) ) );
    assert( ( testIncrementDecrement( it, 1, 1 ) ) );
    assert( ( testIncrementDecrement( it, 3, 1 ) ) );
-   assert( ( testIncrementDecrement( it, 2048 - 1, 1 ) ) );
-   assert( ( testIncrementDecrement( it, 2048 * 10, 1 ) ) );
+   assert( ( testIncrementDecrement( it, BLOCK_SIZE - 1, 1 ) ) );
+   assert( ( testIncrementDecrement( it, BLOCK_SIZE * 10, 1 ) ) );
 
    uint32_t i = 0;
    for( ; i < deq.size() - 1; ++i )
@@ -117,6 +118,16 @@ void testAppend()
       assert( value == i + valueOffset );
    }
 
+   // Append a second sub block and make sure we handle the "partial" src block correctly
+   auto newSubBlock = deq.begin() + valueOffset + 50;
+   appendDeq.append( newSubBlock, newSubBlock + 20 );
+   for( uint32_t i = 0; i < appendDeq.size(); ++i )
+   {
+      auto value = appendDeq[i];
+      assert( value == i + valueOffset );
+   }
+
+   // Clear for upcoming tests
    appendDeq.clear();
 
    // Append data that spans 2 blocks from source
@@ -142,7 +153,7 @@ void testAppend()
 
 int main()
 {
-   hop::block_allocator::initialize( 2048, 32 );
+   hop::block_allocator::initialize( BLOCK_SIZE, 32 );
    hop::Deque< uint32_t > deq;
 
    auto it    = deq.begin();
