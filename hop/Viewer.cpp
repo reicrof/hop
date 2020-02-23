@@ -15,10 +15,15 @@
 
 #include "imgui/imgui.h"
 
-#include "noc_file_dialog/noc_file_dialog.h"
-
 #include <thread> // For saving/opening files
 #include <sstream>
+
+// Only use file dialog if requested at build time
+#if HOP_USE_FILE_DIALOG
+#include "noc_file_dialog/noc_file_dialog.h"
+// Filters to use when opening the noc file dialog
+static const char* NOC_DIALOG_EXT_FILTER = "hop\0*.hop\0";
+#endif
 
 extern bool g_run;
 
@@ -28,11 +33,9 @@ static constexpr float TOOLBAR_BUTTON_HEIGHT = 15.0f;
 static constexpr float TOOLBAR_BUTTON_WIDTH = 15.0f;
 static constexpr float TOOLBAR_BUTTON_PADDING = 5.0f;
 
-// Filters to use when opening the noc file dialog
-static const char* NOC_DIALOG_EXT_FILTER = "hop\0*.hop\0";
-
 static void saveProfilerToFile( hop::ProfilerView* prof )
 {
+#if HOP_USE_FILE_DIALOG
    prof->setRecording( false );
    const int flags = NOC_FILE_DIALOG_SAVE | NOC_FILE_DIALOG_OVERWRITE_CONFIRMATION;
    const char* path = noc_file_dialog_open( flags, NOC_DIALOG_EXT_FILTER, nullptr, nullptr );
@@ -51,10 +54,12 @@ static void saveProfilerToFile( hop::ProfilerView* prof )
 
       t.detach();
    }
+#endif
 }
 
 static std::future< hop::ProfilerView* > openProfilerFile()
 {
+#if HOP_USE_FILE_DIALOG
    using namespace hop;
    const char* path =
               noc_file_dialog_open( NOC_FILE_DIALOG_OPEN, NOC_DIALOG_EXT_FILTER, nullptr, nullptr );
@@ -85,7 +90,7 @@ static std::future< hop::ProfilerView* > openProfilerFile()
             return prof;
          }, path );
    }
-
+#endif
    return std::future< hop::ProfilerView* >{};
 }
 
