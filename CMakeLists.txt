@@ -12,25 +12,33 @@ set( default_build_type "Release" )
 set( CMAKE_CXX_STANDARD 14 )
 set(ROOT_DIR ${CMAKE_SOURCE_DIR})
 
+# Option
+option( USE_OS_FILE_DIALOG "Use the OS provided file dialog" ON )
+
 #####################
 ### Platform specific
 #####################
 if(UNIX)
    set( PLATFORM_LINK_FLAGS "-lpthread -ldl" )
    set( CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -Wextra -pedantic -ffast-math -fno-exceptions -fno-rtti -Wstrict-aliasing=2 " )
-
    if(APPLE)
         set( CMAKE_OSX_DEPLOYMENT_TARGET 10.11 )
         set( NOC_IMPL_FILE "noc_file_dialog/noc_file_dialog.mm")
         set( NOC_IMPL_DEFINE "NOC_FILE_DIALOG_OSX" )
    else()
-        find_package( PkgConfig REQUIRED )
-        pkg_check_modules( GTK3 REQUIRED gtk+-3.0 )
-        set( PLATFORM_LINK_FLAGS "${PLATFORM_LINK_FLAGS} -lrt -l${GTK3_LIBRARIES}" )
-        set( NOC_IMPL_FILE "noc_file_dialog/noc_file_dialog.cpp")
-        set( NOC_IMPL_DEFINE "NOC_FILE_DIALOG_GTK" )
-        set( PLATFORM_EXTRA_INCLUDES ${GTK3_INCLUDE_DIRS} )
-   endif()
+      set( PLATFORM_LINK_FLAGS "${PLATFORM_LINK_FLAGS} -lrt" )
+
+      if( USE_OS_FILE_DIALOG )
+         find_package( PkgConfig REQUIRED )
+         pkg_check_modules( GTK3 REQUIRED gtk+-3.0 )
+         if( GTK3_FOUND )
+            set( NOC_IMPL_FILE "noc_file_dialog/noc_file_dialog.cpp")
+            set( NOC_IMPL_DEFINE "NOC_FILE_DIALOG_GTK" )
+            set( PLATFORM_EXTRA_INCLUDES ${GTK3_INCLUDE_DIRS} )
+            set( PLATFORM_LINK_FLAGS "${PLATFORM_LINK_FLAGS} -l${GTK3_LIBRARIES}" )
+         endif()
+      endif()
+   endif()   
 else() # Windows
    set( CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /fp:fast" )
    set( HOP_WRAP_SRC wrap_library/hop_wrap_windows.cpp )
@@ -64,8 +72,14 @@ set( common_src ${common_src} ${viewer_platform_src} )
 file(GLOB hop_gui_src
     "hop/*.cpp"
     "thirdparties/imgui/*.cpp"
-    "thirdparties/${NOC_IMPL_FILE}"
 )
+
+if( USE_OS_FILE_DIALOG )
+   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DHOP_USE_FILE_DIALOG=1")
+   list(APPEND hop_gui_src "thirdparties/${NOC_IMPL_FILE}" )
+else()
+   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DHOP_USE_FILE_DIALOG=0")
+endif()
 
 add_executable(hop ${common_src} ${hop_gui_src} )
 target_compile_definitions( hop PUBLIC HOP_ENABLED )

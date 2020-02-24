@@ -99,7 +99,7 @@ bool hop::ProfilerView::handleHotkey()
            !hop::modalWindowShowing() )
       {
          hop::displayModalWindow(
-             "Delete all traces?", hop::MODAL_TYPE_YES_NO, [&]() { clear(); } );
+             "Delete all traces?", nullptr, hop::MODAL_TYPE_YES_NO, [&]() { clear(); } );
          handled = true;
       }
    }
