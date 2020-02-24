@@ -35,32 +35,91 @@ static constexpr float TOOLBAR_BUTTON_PADDING = 5.0f;
 
 static void saveProfilerToFile( hop::ProfilerView* prof )
 {
-#if HOP_USE_FILE_DIALOG
    prof->setRecording( false );
-   const int flags = NOC_FILE_DIALOG_SAVE | NOC_FILE_DIALOG_OVERWRITE_CONFIRMATION;
+
+   // Functor use to save the file
+   const auto saveToFileFct = []( hop::ProfilerView* prof, std::string path ) {
+      // Spawn a thread so we do not freeze the ui
+      std::thread t(
+          [prof]( std::string path ) {
+             hop::displayModalWindow( "Saving...", hop::MODAL_TYPE_NO_CLOSE );
+             const bool success = prof->saveToFile( path.c_str() );
+             hop::closeModalWindow();
+             if( !success )
+             {
+                hop::displayModalWindow( "Error while saving file", hop::MODAL_TYPE_ERROR );
+             }
+          },
+          path );
+
+      t.detach();
+   };
+
+#if HOP_USE_FILE_DIALOG
+   const int flags  = NOC_FILE_DIALOG_SAVE | NOC_FILE_DIALOG_OVERWRITE_CONFIRMATION;
    const char* path = noc_file_dialog_open( flags, NOC_DIALOG_EXT_FILTER, nullptr, nullptr );
    if( path )
    {
-      // Spawn a thread so we do not freeze the ui
-      std::thread t( [prof]( std::string path ) {
-         hop::displayModalWindow( "Saving...", hop::MODAL_TYPE_NO_CLOSE );
-         const bool success = prof->saveToFile( path.c_str() );
-         hop::closeModalWindow();
-         if( !success )
-         {
-            hop::displayModalWindow( "Error while saving file", hop::MODAL_TYPE_ERROR );
-         }
-      }, path );
-
-      t.detach();
+      saveToFileFct( prof, path );
    }
+#else
+   hop::displayStringInputModalWindow(
+       "Enter full path, filename and extension of the file to save.",
+       [prof, saveToFileFct]( const char* str ) { saveToFileFct( prof, str ); } );
 #endif
 }
 
-static std::future< hop::ProfilerView* > openProfilerFile()
+static void openProfilerFile( std::shared_future< hop::ProfilerView* >& futureProf )
 {
-#if HOP_USE_FILE_DIALOG
    using namespace hop;
+
+   // Functor use to save the file
+   const auto openFileFct = [&futureProf]( const char* str ) {
+      std::string path( str );
+      std::future<hop::ProfilerView*> future = std::async(
+          std::launch::async,
+          []( std::string path ) {
+             ProfilerView* prof = nullptr;
+
+             displayModalWindow( "Loading...", MODAL_TYPE_NO_CLOSE );
+
+             prof = new ProfilerView( Profiler::SRC_TYPE_FILE, -1, path.c_str() );
+             if( prof->openFile( path.c_str() ) )
+             {
+                // Do the first update here to create the LODs. The params does not make
+                // difference in this scenario as they will be updated once we go back to the
+                // main thread
+                prof->update( 16.0f, 5000000000 );
+             }
+             else
+             {
+                displayModalWindow( "Error while opening file", hop::MODAL_TYPE_ERROR );
+             }
+
+             closeModalWindow();
+
+             return prof;
+          },
+          path );
+      futureProf = future.share();
+   };
+
+#if HOP_USE_FILE_DIALOG
+   const char* path =
+       noc_file_dialog_open( NOC_FILE_DIALOG_OPEN, NOC_DIALOG_EXT_FILTER, nullptr, nullptr );
+   openFileFct( path );
+#else
+   hop::displayStringInputModalWindow(
+       "Enter full path of the file to open",
+       [openFileFct]( const char* path ) { openFileFct( path ); } );
+#endif
+
+   // Functor used to open a file
+   /*
+   const auto openFileFunctor = []( hop::ProfilerView* prof, std::string path )
+   {
+   }
+#if HOP_USE_FILE_DIALOG
    const char* path =
               noc_file_dialog_open( NOC_FILE_DIALOG_OPEN, NOC_DIALOG_EXT_FILTER, nullptr, nullptr );
    if( path )
@@ -91,7 +150,7 @@ static std::future< hop::ProfilerView* > openProfilerFile()
          }, path );
    }
 #endif
-   return std::future< hop::ProfilerView* >{};
+*/
 }
 
 static void addNewProfilerByNamePopUp( hop::Viewer* v )
@@ -657,7 +716,7 @@ int Viewer::addNewProfiler( const char* processName, bool startRecording )
 void Viewer::openProfilerFile()
 {
    assert( !_pendingProfilerLoad.valid() );
-   _pendingProfilerLoad = ::openProfilerFile();
+   ::openProfilerFile( _pendingProfilerLoad );
 }
 
 int Viewer::removeProfiler( int index )
@@ -710,6 +769,8 @@ void Viewer::fetchClientsData()
             _profilers.emplace_back( std::move(loadedProf) );
             _selectedTab = _profilers.size() - 1;
          }
+         // Reset the shared_future
+         _pendingProfilerLoad = {};
       }
    }
 }

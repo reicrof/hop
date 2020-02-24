@@ -44,7 +44,7 @@ class Viewer
    std::vector<std::unique_ptr<hop::ProfilerView> > _profilers;
    int _selectedTab;
 
-   std::future< ProfilerView* > _pendingProfilerLoad;
+   std::shared_future< ProfilerView* > _pendingProfilerLoad;
 
    bool _vsyncEnabled;
 };
