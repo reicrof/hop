@@ -1024,7 +1024,7 @@ void TimelineTracksView::drawContextMenu( const TimelineTrackDrawData& data )
           {
              if ( ImGui::Selectable( "Profile Track" ) )
              {
-                 hop::displayModalWindow( "Computing total trace size...", hop::MODAL_TYPE_NO_CLOSE );
+                 hop::displayModalWindow( "Computing total trace size...", nullptr, hop::MODAL_TYPE_NO_CLOSE );
                  const uint32_t tIdx = _contextMenu.threadIndex;
                  std::thread t( [ this, tIdx, dispTrace = data.profiler.timelineTracks()[tIdx]._traces.copy() ]() {
                     _traceDetails = createGlobalTraceDetails( dispTrace, tIdx );

@@ -42,12 +42,12 @@ static void saveProfilerToFile( hop::ProfilerView* prof )
       // Spawn a thread so we do not freeze the ui
       std::thread t(
           [prof]( std::string path ) {
-             hop::displayModalWindow( "Saving...", hop::MODAL_TYPE_NO_CLOSE );
+             hop::displayModalWindow( "Saving...", nullptr, hop::MODAL_TYPE_NO_CLOSE );
              const bool success = prof->saveToFile( path.c_str() );
              hop::closeModalWindow();
              if( !success )
              {
-                hop::displayModalWindow( "Error while saving file", hop::MODAL_TYPE_ERROR );
+                hop::displayModalWindow( "Error while saving file", nullptr, hop::MODAL_TYPE_ERROR );
              }
           },
           path );
@@ -64,7 +64,8 @@ static void saveProfilerToFile( hop::ProfilerView* prof )
    }
 #else
    hop::displayStringInputModalWindow(
-       "Enter full path, filename and extension of the file to save.",
+       "Save to File",
+       "Enter full path, filename and\nextension of the file to save.",
        [prof, saveToFileFct]( const char* str ) { saveToFileFct( prof, str ); } );
 #endif
 }
@@ -81,7 +82,7 @@ static void openProfilerFile( std::shared_future< hop::ProfilerView* >& futurePr
           []( std::string path ) {
              ProfilerView* prof = nullptr;
 
-             displayModalWindow( "Loading...", MODAL_TYPE_NO_CLOSE );
+             displayModalWindow( "Loading...", nullptr, MODAL_TYPE_NO_CLOSE );
 
              prof = new ProfilerView( Profiler::SRC_TYPE_FILE, -1, path.c_str() );
              if( prof->openFile( path.c_str() ) )
@@ -93,7 +94,7 @@ static void openProfilerFile( std::shared_future< hop::ProfilerView* >& futurePr
              }
              else
              {
-                displayModalWindow( "Error while opening file", hop::MODAL_TYPE_ERROR );
+                displayModalWindow( "Error while opening file", nullptr, hop::MODAL_TYPE_ERROR );
              }
 
              closeModalWindow();
@@ -110,54 +111,18 @@ static void openProfilerFile( std::shared_future< hop::ProfilerView* >& futurePr
    openFileFct( path );
 #else
    hop::displayStringInputModalWindow(
+       "Open File",
        "Enter full path of the file to open",
        [openFileFct]( const char* path ) { openFileFct( path ); } );
 #endif
-
-   // Functor used to open a file
-   /*
-   const auto openFileFunctor = []( hop::ProfilerView* prof, std::string path )
-   {
-   }
-#if HOP_USE_FILE_DIALOG
-   const char* path =
-              noc_file_dialog_open( NOC_FILE_DIALOG_OPEN, NOC_DIALOG_EXT_FILTER, nullptr, nullptr );
-   if( path )
-   {
-      return std::async(
-         std::launch::async,
-         []( std::string path )
-         {
-            ProfilerView* prof = nullptr;
-            
-            displayModalWindow( "Loading...", MODAL_TYPE_NO_CLOSE );
-
-            prof = new ProfilerView( Profiler::SRC_TYPE_FILE, -1, path.c_str() );
-            if( prof->openFile( path.c_str() ) )
-            {
-               // Do the first update here to create the LODs. The params does not make difference
-               // in this scenario as they will be updated once we go back to the main thread
-               prof->update( 16.0f, 5000000000 );
-            }
-            else
-            {
-               displayModalWindow( "Error while opening file", hop::MODAL_TYPE_ERROR );
-            }
-
-            closeModalWindow();
-
-            return prof;
-         }, path );
-   }
-#endif
-*/
 }
 
 static void addNewProfilerByNamePopUp( hop::Viewer* v )
 {
-   hop::displayStringInputModalWindow( "Enter name or PID of process", [=]( const char* str ) {
-      v->addNewProfiler( str, false );
-   } );
+   hop::displayStringInputModalWindow(
+       "Add New Profiler", "Enter name or PID of process", [=]( const char* str ) {
+          v->addNewProfiler( str, false );
+       } );
 }
 
 static void setRecording( hop::ProfilerView* profiler, hop::Timeline* timeline, bool recording )
@@ -426,7 +391,7 @@ static void drawToolbar( ImVec2 drawPos, float canvasWidth, hop::ProfilerView* p
    const ImVec2 deleteOffset( ( 2.0f * TOOLBAR_BUTTON_PADDING ) + TOOLBAR_BUTTON_WIDTH, 0.0f );
    if ( drawDeleteTracesButton( drawPos + deleteOffset, isActive && profView->canvasHeight() > 0 ) )
    {
-      hop::displayModalWindow( "Delete all traces?", hop::MODAL_TYPE_YES_NO, [&]() { profView->clear(); } );
+      hop::displayModalWindow( "Delete all traces?", nullptr, hop::MODAL_TYPE_YES_NO, [&]() { profView->clear(); } );
    }
 
    if( isActive )
@@ -700,7 +665,7 @@ int Viewer::addNewProfiler( const char* processName, bool startRecording )
    const int pid = getPIDFromString( processName );
    if( profilerAlreadyExist( _profilers, pid, processName ) )
    {
-      hop::displayModalWindow( "Cannot profile process twice !", hop::MODAL_TYPE_ERROR );
+      hop::displayModalWindow( "Cannot profile process twice !", nullptr, hop::MODAL_TYPE_ERROR );
       return -1;
    }
 
@@ -954,7 +919,7 @@ bool Viewer::handleHotkey( ProfilerView* selectedProf )
          }
          else if ( ImGui::IsKeyPressed( ImGui::GetKeyIndex( ImGuiKey_Escape ) ) )
          {
-            hop::displayModalWindow( "Exit ?", hop::MODAL_TYPE_YES_NO, [&]() { g_run = false; } );
+            hop::displayModalWindow( "Exit ?", nullptr, hop::MODAL_TYPE_YES_NO, [&]() { g_run = false; } );
             handled = true;
          }
       }

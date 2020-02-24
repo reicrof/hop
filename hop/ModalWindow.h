@@ -14,13 +14,13 @@ namespace hop
    };
 
    // Open the modal window
-   void displayModalWindow( const char* message, ModalType type );
+   void displayModalWindow( const char* windowTitle, const char* message, ModalType type );
 
    // Open the modal window and set the callback to call if ok was pressed
-   void displayModalWindow( const char* message, ModalType type, std::function<void()> fctToExec );
+   void displayModalWindow( const char* windowTitle, const char* message, ModalType type, std::function<void()> fctToExec );
 
    // Open the modal window with a text input field and a callback to call with the text
-   void displayStringInputModalWindow( const char* message, std::function<void(const char*)> fctToExec );
+   void displayStringInputModalWindow( const char* windowTitle, const char* message, std::function<void(const char*)> fctToExec );
 
    // Does the actual rendering of the modal window
    void renderModalWindow();
