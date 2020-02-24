@@ -72,18 +72,19 @@ set( common_src ${common_src} ${viewer_platform_src} )
 file(GLOB hop_gui_src
     "hop/*.cpp"
     "thirdparties/imgui/*.cpp"
-    "thirdparties/${NOC_IMPL_FILE}"
 )
+
+if( USE_OS_FILE_DIALOG )
+   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DHOP_USE_FILE_DIALOG=1")
+   list(APPEND hop_gui_src "thirdparties/${NOC_IMPL_FILE}" )
+else()
+   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DHOP_USE_FILE_DIALOG=0")
+endif()
 
 add_executable(hop ${common_src} ${hop_gui_src} )
 target_compile_definitions( hop PUBLIC HOP_ENABLED )
 
 set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -DHOP_DEBUG")
-if( USE_OS_FILE_DIALOG )
-   set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -DHOP_USE_FILE_DIALOG=1")
-else()
-   set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -DHOP_USE_FILE_DIALOG=0")
-endif()
 
 target_compile_definitions( hop PUBLIC HOP_ENABLED ${NOC_IMPL_DEFINE} )
 target_include_directories( hop PRIVATE ${ROOT_DIR} ${ROOT_DIR}/thirdparties ${OPENGL_INCLUDE_DIRS} ${SDL2_INCLUDE_DIR} ${PLATFORM_EXTRA_INCLUDES} )
