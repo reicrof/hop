@@ -8,6 +8,11 @@
 #include <sys/wait.h>
 #include <unistd.h>
 
+/*
+   The comm= and cmd parameter passed to the 'o' argument of the grep acts differently
+   on Linux and on MacOs. Since we want to have the full name of the executable we need
+   to use these 2 versions for each platform
+*/
 #ifdef __APPLE__
 #define HOP_GREP_CMD "comm="
 #else
@@ -58,8 +63,7 @@ ProcessInfo getProcessInfoFromProcessName( const char* name )
        * grep process from the result. On MacOs the process name also contains the path, we
        * thus have to check for a preceding '/'
        */
-      snprintf( cmd, sizeof( cmd ), "ps -Ao pid," HOP_GREP_CMD " | grep -E '[0-9]+ \\.?(?:\\/\\S+)?/%s$'" , name );
-
+      snprintf( cmd, sizeof( cmd ), "ps -Ao pid," HOP_GREP_CMD " | grep -E '[0-9]+ \\.?\\/?\\S*\\/?%s\\b.*'" , name );
       // Get name from PID
       if( FILE* fp = popen( cmd, "r" ) )
       {
