@@ -1,6 +1,6 @@
 # HOP (Header Only Profiler)
 
-![alt text](https://github.com/reicrof/hop/blob/master/images/hop_icon.png)
+![icon](https://github.com/reicrof/hop/blob/master/images/hop_icon.png)
 
 [![Build Status](https://travis-ci.com/reicrof/hop.svg?branch=develop)](https://travis-ci.com/reicrof/hop)
 
