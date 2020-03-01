@@ -151,6 +151,36 @@ void testAppend()
    }
 }
 
+void testErase()
+{
+   hop::Deque< uint32_t > deq;
+   deq.append( g_values.data(), g_values.size() );
+
+   // erase range element than spans 2 blocks
+   {
+      auto erIt = deq.begin() + hop::Deque< uint32_t >::COUNT_PER_BLOCK - 12;
+      deq.erase( erIt, erIt + 50  );
+      assert(std::is_sorted(deq.begin(), deq.end()));
+   }
+
+   /*
+      Need to add test for this kind of scenraio as well
+      [XX--------][--------XX]
+      ->
+      [XXXX------][----------]
+   */
+
+   // erase the last element. Simple case where no moving is performed
+   deq.erase( deq.end()-1 );
+   assert(std::is_sorted(deq.begin(), deq.end()));
+   assert( deq.size() == g_values.size() - 1 );
+
+   // erase the first element. All the block will need to be shifted by 1
+   deq.erase( deq.begin() );
+   assert(std::is_sorted(deq.begin(), deq.end()));
+   assert(deq.size() == g_values.size() - 2);
+}
+
 int main()
 {
    hop::block_allocator::initialize( BLOCK_SIZE, 32 );
@@ -171,6 +201,7 @@ int main()
 
    testIterators( deq );
    testAppend();
+   testErase();
 
    // Testing accessors
    for( size_t i = 0; i < deq.size(); ++i )

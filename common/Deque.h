@@ -27,9 +27,9 @@ namespace hop
 template <typename T>
 class Deque
 {
-   static constexpr uint32_t COUNT_PER_BLOCK = highBit( (HOP_BLK_SIZE_BYTES - sizeof(uint32_t)) / sizeof( T ) );
    struct Block;
   public:
+   static constexpr uint32_t COUNT_PER_BLOCK = highBit( (HOP_BLK_SIZE_BYTES - sizeof(uint32_t)) / sizeof( T ) );
    using value_type = T;
     /**
     * Iterator Implementation
@@ -266,6 +266,70 @@ class Deque
       assert( end > begin );
       const ptrdiff_t elementCount = end - begin;
       append( begin, elementCount );
+   }
+
+   template< bool Const = false >
+   void erase( const Deque<T>::iterator<Const> el )
+   {
+      erase( el, el + 1 );
+   }
+
+   void erase( const Deque<T>::iterator<false> from, const Deque<T>::iterator<false> to )
+   {
+      assert( from._blockId < to._blockId );
+
+      if( to._blockId - from._blockId > 1 )
+      {
+         // Special case where we can remove entire block
+         assert( false );
+      }
+
+      const uint32_t removedElCount = std::distance( from, to );
+
+      Deque<T>::iterator<false> newFrom = from;
+      Deque<T>::iterator<false> newTo   = to;
+      /* Is the range to be removed spanning 2 blocks ? If so, collapse the data from the right block
+       * into the left one to get back to the "normal" scenario
+       * [XXXXXX----] [-----XXXXX] -> [xxxxxxxxxX] [---------X]
+       */
+      if( from._blockId < to._blockId )
+      {
+         const uint32_t leftCnt = COUNT_PER_BLOCK - from._elementId;
+         Block* leftBlk         = _blocks[ from._blockId ];
+         Block* rightBlk        = _blocks[ to._blockId ];
+
+         T* const leftFrom      = &leftBlk->data[from._elementId];
+         T* const rightTo       = &rightBlk->data[to._elementId];
+
+         std::copy( rightTo, rightTo + leftCnt, leftFrom );
+
+         // Updating the iterator will setup us in the "normal" use case
+         newFrom._blockId   = to._blockId;
+         newFrom._elementId = 0;
+         newTo              = to + leftCnt;
+      }
+
+      assert(newFrom._blockId == to._blockId);
+
+      const uint32_t rotateLength = std::distance( newFrom, newTo);
+
+      /* Rotate the block containing the element to leave emtpy space at the end
+         [XXXX----XX] -> [XXXXXX----]
+      */
+      uint32_t curBlkId = newFrom._blockId;
+      Block* curBlock = _blocks[ curBlkId ];
+      std::rotate( &curBlock->data[newFrom._elementId], &curBlock->data[newTo._elementId], &curBlock->data[0] + COUNT_PER_BLOCK );
+      while( curBlkId++ < _blocks.size() -1 )
+      {
+         Block* prevBlock = curBlock;
+         curBlock = _blocks[ curBlkId ];
+         // Copy content over to the previous block
+         std::copy( &curBlock->data[0], &curBlock->data[0] + rotateLength, &prevBlock->data[0] + COUNT_PER_BLOCK - rotateLength);
+         // Update cur block
+         std::rotate( &curBlock->data[0], &curBlock->data[0] + rotateLength, &curBlock->data[0] + COUNT_PER_BLOCK );
+      }
+      
+      curBlock->elementCount -= removedElCount;
    }
 
    void clear()
