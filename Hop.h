@@ -558,7 +558,7 @@ class SharedMemory
    uint8_t* _data{NULL};
    // ----------------
    sem_handle _semaphore{NULL};
-   bool _isConsumer;
+   bool _isConsumer{false};
    shm_handle _sharedMemHandle{};
    HOP_CHAR _sharedMemPath[HOP_SHARED_MEM_MAX_NAME_SIZE];
    HOP_CHAR _sharedSemPath[HOP_SHARED_MEM_MAX_NAME_SIZE + 5];

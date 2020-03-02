@@ -27,14 +27,14 @@ class Viewer
 
    void onNewFrame(
        float deltaMs,
-       int width,
-       int height,
+       float width,
+       float height,
        int mouseX,
        int mouseY,
        bool lmbPressed,
        bool rmbPressed,
        float mouseWheel );
-   void draw( uint32_t windowWidth, uint32_t windowHeight );
+   void draw( float windowWidth, float windowHeight );
 
    bool handleHotkey( ProfilerView* selectedProf );
    bool handleMouse( ProfilerView* selectedProf );
