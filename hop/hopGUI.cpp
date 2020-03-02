@@ -263,12 +263,15 @@ int main( int argc, char* argv[] )
       const auto curTime = ClockType::now();
       const float deltaTime = static_cast<float>(
          duration_cast<milliseconds>( ( curTime - lastFrameTime ) ).count() );
-      viewer.onNewFrame( deltaTime, w, h, x, y, lmb, rmb, g_mouseWheel );
+
+      const float wndWidth = (float)w;
+      const float wndHeight = (float)h;
+      viewer.onNewFrame( deltaTime, wndWidth, wndHeight, x, y, lmb, rmb, g_mouseWheel );
 
       g_mouseWheel = 0;
       lastFrameTime = curTime;
 
-      viewer.draw( w, h );
+      viewer.draw( wndWidth, wndHeight);
 
       auto frameEnd = ClockType::now();
 

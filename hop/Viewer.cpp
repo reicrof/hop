@@ -571,7 +571,7 @@ static void updateProfilers(
     std::vector<std::unique_ptr<hop::ProfilerView> >& profilers,
     int selectedTab )
 {
-   const float globalTimeMs = ImGui::GetTime() * 1000;
+   const float globalTimeMs = ImGui::GetTime() * 1000.0f;
    for ( auto& p : profilers )
    {
       p->update( globalTimeMs, tlDuration );
@@ -742,8 +742,8 @@ void Viewer::fetchClientsData()
 
 void Viewer::onNewFrame(
     float deltaMs,
-    int width,
-    int height,
+    float width,
+    float height,
     int mouseX,
     int mouseY,
     bool lmbPressed,
@@ -790,7 +790,7 @@ void Viewer::onNewFrame(
    updateTimeline( &_timeline, deltaMs, _selectedTab >= 0 ? _profilers[_selectedTab].get() : nullptr );
 }
 
-void Viewer::draw( uint32_t windowWidth, uint32_t windowHeight )
+void Viewer::draw( float windowWidth, float windowHeight )
 {
    const auto drawStart = std::chrono::system_clock::now();
 
@@ -817,7 +817,7 @@ void Viewer::draw( uint32_t windowWidth, uint32_t windowHeight )
    drawMenuBar( this );
    _selectedTab = drawTabs( ImGui::GetCursorPos(), *this, _selectedTab );
    ProfilerView* const selectedProf = _selectedTab >= 0 ? _profilers[_selectedTab].get() : nullptr;
-   drawToolbar( ImGui::GetCursorPos(), ImGui::GetWindowWidth(), selectedProf, &_timeline );
+   drawToolbar( ImGui::GetCursorPos(), windowWidth, selectedProf, &_timeline );
 
    TimelineMsgArray msgArray;
    _timeline.draw();
