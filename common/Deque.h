@@ -4,6 +4,7 @@
 #include "common/BlockAllocator.h"
 
 #include <array>
+#include <algorithm>
 #include <cassert>
 #include <cstdint>
 #include <cstring> // memcpy
@@ -276,7 +277,7 @@ class Deque
 
    void erase( const Deque<T>::iterator<false> from, const Deque<T>::iterator<false> to )
    {
-      assert( from._blockId < to._blockId );
+      assert( from._blockId <= to._blockId );
 
       if( to._blockId - from._blockId > 1 )
       {
@@ -294,19 +295,44 @@ class Deque
        */
       if( from._blockId < to._blockId )
       {
-         const uint32_t leftCnt = COUNT_PER_BLOCK - from._elementId;
          Block* leftBlk         = _blocks[ from._blockId ];
          Block* rightBlk        = _blocks[ to._blockId ];
 
-         T* const leftFrom      = &leftBlk->data[from._elementId];
-         T* const rightTo       = &rightBlk->data[to._elementId];
+         /* Empty spaces in the left block after removal */
+         const uint32_t emptyLeftCnt = COUNT_PER_BLOCK - from._elementId;
+         /* Remaining valid values in the right block to be copied into left block */
+         const uint32_t validRightCnt = COUNT_PER_BLOCK - to._elementId;
 
-         std::copy( rightTo, rightTo + leftCnt, leftFrom );
+         T* const copyDst = &leftBlk->data[from._elementId];
+         T* const copyFrom = &rightBlk->data[to._elementId];
+         const uint32_t elemCopied = std::min( emptyLeftCnt, validRightCnt );
+         T* const copyUntil = copyFrom + elemCopied;
+
+         // Copy data from right block into left one
+         std::copy( copyFrom, copyUntil, copyDst );
+
+         // If there was more empty slot in the left block than valid one in the right
+         // continue filling from the next block to the right, if any and remove rightblock
+         if( emptyLeftCnt >= validRightCnt )
+         {
+            // Erase the now empty right block front the list
+            _blocks.erase( _blocks.begin() + to._blockId );
+
+            // Fill empty slots with next blocks, if any
+            const uint32_t slotsRemaining = emptyLeftCnt - validRightCnt;
+            if( _blocks.size() > to._blockId && slotsRemaining > 0 )
+            {
+               std::copy(
+                   &_blocks[to._blockId]->data[0],
+                   &_blocks[to._blockId]->data[slotsRemaining],
+                   copyDst + validRightCnt );
+            }
+         }
 
          // Updating the iterator will setup us in the "normal" use case
          newFrom._blockId   = to._blockId;
          newFrom._elementId = 0;
-         newTo              = to + leftCnt;
+         newTo              = to + emptyLeftCnt;
       }
 
       assert(newFrom._blockId == to._blockId);
