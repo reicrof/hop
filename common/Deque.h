@@ -293,7 +293,7 @@ class Deque
        * into the left one to get back to the "normal" scenario
        * [XXXXXX----] [-----XXXXX] -> [xxxxxxxxxX] [---------X]
        */
-      if( from._blockId < to._blockId )
+      if( const bool multiBlock = from._elementId + removedElCount > COUNT_PER_BLOCK )
       {
          Block* leftBlk         = _blocks[ from._blockId ];
          Block* rightBlk        = _blocks[ to._blockId ];
@@ -327,6 +327,15 @@ class Deque
                    &_blocks[to._blockId]->data[slotsRemaining],
                    copyDst + validRightCnt );
             }
+            else
+            {
+               assert( slotsRemaining < COUNT_PER_BLOCK );
+               // There is nothing left to copy/move. Adjust the leftBlk
+               // element count
+               leftBlk->elementCount -= COUNT_PER_BLOCK - slotsRemaining;
+               return;
+            }
+            
          }
 
          // Updating the iterator will setup us in the "normal" use case
@@ -335,27 +344,28 @@ class Deque
          newTo              = to + emptyLeftCnt;
       }
 
-      assert(newFrom._blockId == to._blockId);
-
-      const uint32_t rotateLength = std::distance( newFrom, newTo);
+      const uint32_t rotateLength = std::distance( newFrom, newTo );
 
       /* Rotate the block containing the element to leave emtpy space at the end
          [XXXX----XX] -> [XXXXXX----]
       */
       uint32_t curBlkId = newFrom._blockId;
-      Block* curBlock = _blocks[ curBlkId ];
-      std::rotate( &curBlock->data[newFrom._elementId], &curBlock->data[newTo._elementId], &curBlock->data[0] + COUNT_PER_BLOCK );
-      while( curBlkId++ < _blocks.size() -1 )
+      if( curBlkId < _blocks.size() )
       {
-         Block* prevBlock = curBlock;
-         curBlock = _blocks[ curBlkId ];
-         // Copy content over to the previous block
-         std::copy( &curBlock->data[0], &curBlock->data[0] + rotateLength, &prevBlock->data[0] + COUNT_PER_BLOCK - rotateLength);
-         // Update cur block
-         std::rotate( &curBlock->data[0], &curBlock->data[0] + rotateLength, &curBlock->data[0] + COUNT_PER_BLOCK );
+         Block* curBlock = _blocks[ curBlkId ];
+         std::rotate( &curBlock->data[newFrom._elementId], &curBlock->data[newFrom._elementId] + rotateLength, &curBlock->data[0] + COUNT_PER_BLOCK );
+         while( curBlkId++ < _blocks.size() -1 )
+         {
+            Block* prevBlock = curBlock;
+            curBlock = _blocks[ curBlkId ];
+            // Copy content over to the previous block
+            std::copy( &curBlock->data[0], &curBlock->data[0] + rotateLength, &prevBlock->data[0] + COUNT_PER_BLOCK - rotateLength);
+            // Update cur block
+            std::rotate( &curBlock->data[0], &curBlock->data[0] + rotateLength, &curBlock->data[0] + COUNT_PER_BLOCK );
+         }
+         
+         curBlock->elementCount -= removedElCount;
       }
-      
-      curBlock->elementCount -= removedElCount;
    }
 
    void clear()

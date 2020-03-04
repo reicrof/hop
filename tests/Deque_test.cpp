@@ -153,32 +153,89 @@ void testAppend()
 
 void testErase()
 {
-   hop::Deque< uint32_t > deq;
+   hop::Deque<uint32_t> deq;
    deq.append( g_values.data(), g_values.size() );
 
-   // erase range element than spans 2 blocks
+   uint32_t removedCount = 0;
+
+   // Erase nothing
+   deq.erase( deq.begin(), deq.begin() );
+   assert( std::is_sorted( deq.begin(), deq.end() ) );
+   assert( deq.size() == g_values.size() - removedCount );
+
+   // Erase nothing
+   deq.erase( deq.end(), deq.end() );
+   assert( std::is_sorted( deq.begin(), deq.end() ) );
+   assert( deq.size() == g_values.size() - removedCount );
+
+   // Erase nothing
+   deq.erase( deq.begin() + 10, deq.begin() + 10 );
+   assert( std::is_sorted( deq.begin(), deq.end() ) );
+   assert( deq.size() == g_values.size() - removedCount );
+
+   // Erase the last element. Simple case where no moving is performed
+   removedCount += 1;
+   deq.erase( deq.end() - 1 );
+   assert( std::is_sorted( deq.begin(), deq.end() ) );
+   assert( deq.size() == g_values.size() - removedCount );
+
+   // Erase the first element. All the block will need to be shifted by 1
+   removedCount += 1;
+   deq.erase( deq.begin() );
+   assert( std::is_sorted( deq.begin(), deq.end() ) );
+   assert( deq.size() == g_values.size() - removedCount );
+
+   /*  Erase range element than spans 2 blocks with the right one
+    * having enough remaining elements to fill the left one
+    * [XXXX------][--XXXXXXXX]
+    * ->
+    * [XXXXXXXXXX][--------XX]
+    * ->
+    * [XXXXXXXXXX][XX--------]
+    */
    {
-      auto erIt = deq.begin() + hop::Deque< uint32_t >::COUNT_PER_BLOCK - 12;
-      deq.erase( erIt, erIt + 50  );
-      assert(std::is_sorted(deq.begin(), deq.end()));
+      removedCount += 50;
+      auto erIt = deq.begin() + hop::Deque<uint32_t>::COUNT_PER_BLOCK - 12;
+      deq.erase( erIt, erIt + 50 );
+      assert( std::is_sorted( deq.begin(), deq.end() ) );
+      assert( deq.size() == g_values.size() - removedCount );
    }
 
    /*
-      Need to add test for this kind of scenraio as well
-      [XX--------][--------XX]
-      ->
-      [XXXX------][----------]
-   */
+    * Test removing a range that spans 2 blocks, with the right one
+    * not having enough element to fill the left and no more block
+    * after that
+    * [XX--------][--------XX]
+    * ->
+    * [XXXX------][----------]
+    * ->
+    * [XXXX------]
+    */
+   {
+      deq.clear();
+      deq.append( g_values.data(), g_values.size() );
+      removedCount = hop::Deque<uint32_t>::COUNT_PER_BLOCK + hop::Deque<uint32_t>::COUNT_PER_BLOCK / 2;
+      auto errFrom = deq.begin() + 10;
+      auto errTo   = errFrom + removedCount;
+      deq.erase( errFrom, errTo  );
+      assert( std::is_sorted( deq.begin(), deq.end() ) );
+      assert( deq.size() == g_values.size() - removedCount );
+   }
 
-   // erase the last element. Simple case where no moving is performed
-   deq.erase( deq.end()-1 );
-   assert(std::is_sorted(deq.begin(), deq.end()));
-   assert( deq.size() == g_values.size() - 1 );
-
-   // erase the first element. All the block will need to be shifted by 1
-   deq.erase( deq.begin() );
-   assert(std::is_sorted(deq.begin(), deq.end()));
-   assert(deq.size() == g_values.size() - 2);
+   /*
+    * Test removing a range that spans 2 blocks, with the right one
+    * not having enough element to fill the left, but with a next
+    * block having enough
+    * [XX--------][--------XX][XXXXXXXXXX]
+    * ->
+    * [XXXX------][----------][XXXXXXXXXX]
+    * ->
+    * [XXXX------][XXXXXXXXXX]
+    * ->
+    * [XXXXXXXXXX][------XXXX]
+    * ->
+    * [XXXXXXXXXX][XXXX------]
+    */
 }
 
 int main()

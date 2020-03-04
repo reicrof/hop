@@ -15,6 +15,6 @@ TabWidth: '3'
 UseTab: Never
 SortIncludes: 'false'
 FixNamespaceComments: 'true'
-AlignConsecutiveAssignments: 'true
-SpaceBeforeParens: Never
+AlignConsecutiveAssignments: 'true'
+SpaceBeforeParens: 'Never'
 ...
