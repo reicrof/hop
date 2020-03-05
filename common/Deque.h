@@ -285,7 +285,7 @@ class Deque
          assert( false );
       }
 
-      const uint32_t removedElCount = std::distance( from, to );
+      uint32_t removedElCount = std::distance( from, to );
 
       Deque<T>::iterator<false> newFrom = from;
       Deque<T>::iterator<false> newTo   = to;
@@ -299,7 +299,7 @@ class Deque
          Block* rightBlk        = _blocks[ to._blockId ];
 
          /* Empty spaces in the left block after removal */
-         const uint32_t emptyLeftCnt = COUNT_PER_BLOCK - from._elementId;
+         uint32_t emptyLeftCnt = COUNT_PER_BLOCK - from._elementId;
          /* Remaining valid values in the right block to be copied into left block */
          const uint32_t validRightCnt = COUNT_PER_BLOCK - to._elementId;
 
@@ -317,55 +317,41 @@ class Deque
          {
             // Erase the now empty right block front the list
             _blocks.erase( _blocks.begin() + to._blockId );
+            removedElCount -= elemCopied;
 
             // Fill empty slots with next blocks, if any
-            const uint32_t slotsRemaining = emptyLeftCnt - validRightCnt;
-            if( _blocks.size() > to._blockId && slotsRemaining > 0 )
+            emptyLeftCnt -= validRightCnt;
+            if( _blocks.size() > to._blockId && emptyLeftCnt > 0 )
             {
                std::copy(
                    &_blocks[to._blockId]->data[0],
-                   &_blocks[to._blockId]->data[slotsRemaining],
+                   &_blocks[to._blockId]->data[emptyLeftCnt],
                    copyDst + validRightCnt );
             }
             else
             {
-               assert( slotsRemaining < COUNT_PER_BLOCK );
+               assert( emptyLeftCnt < COUNT_PER_BLOCK );
                // There is nothing left to copy/move. Adjust the leftBlk
                // element count
-               leftBlk->elementCount -= COUNT_PER_BLOCK - slotsRemaining;
+               leftBlk->elementCount = COUNT_PER_BLOCK - emptyLeftCnt;
                return;
             }
-            
+
+            // Updating the iterator will setup us in the "normal" use case
+            newFrom._blockId   = to._blockId;
+            newFrom._elementId = 0;
+            newTo              = newFrom + emptyLeftCnt;
          }
-
-         // Updating the iterator will setup us in the "normal" use case
-         newFrom._blockId   = to._blockId;
-         newFrom._elementId = 0;
-         newTo              = to + emptyLeftCnt;
-      }
-
-      const uint32_t rotateLength = std::distance( newFrom, newTo );
-
-      /* Rotate the block containing the element to leave emtpy space at the end
-         [XXXX----XX] -> [XXXXXX----]
-      */
-      uint32_t curBlkId = newFrom._blockId;
-      if( curBlkId < _blocks.size() )
-      {
-         Block* curBlock = _blocks[ curBlkId ];
-         std::rotate( &curBlock->data[newFrom._elementId], &curBlock->data[newFrom._elementId] + rotateLength, &curBlock->data[0] + COUNT_PER_BLOCK );
-         while( curBlkId++ < _blocks.size() -1 )
+         else
          {
-            Block* prevBlock = curBlock;
-            curBlock = _blocks[ curBlkId ];
-            // Copy content over to the previous block
-            std::copy( &curBlock->data[0], &curBlock->data[0] + rotateLength, &prevBlock->data[0] + COUNT_PER_BLOCK - rotateLength);
-            // Update cur block
-            std::rotate( &curBlock->data[0], &curBlock->data[0] + rotateLength, &curBlock->data[0] + COUNT_PER_BLOCK );
+            // Updating the iterator will setup us in the "normal" use case
+            newFrom._blockId   = to._blockId;
+            newFrom._elementId = 0;
+            newTo              = to + emptyLeftCnt;
          }
-         
-         curBlock->elementCount -= removedElCount;
       }
+
+      eraseWithinSingleBlock( newFrom, newTo );
    }
 
    void clear()
@@ -421,6 +407,46 @@ class Deque
         Block* newBlock = (Block*) block_allocator::acquire();
         newBlock->elementCount = 0;
         _blocks.push_back( newBlock );
+    }
+
+    /* Rotate the block containing the element to leave emtpy space at the end
+          [XXXX----XX] -> [XXXXXX----]
+       */
+    void eraseWithinSingleBlock(
+        const Deque<T>::iterator<false> from,
+        const Deque<T>::iterator<false> to )
+    {
+       const uint32_t removedElCount = std::distance( from, to );
+
+       // Assert we are in the same block
+       assert( from._elementId + removedElCount <= COUNT_PER_BLOCK );
+
+       uint32_t curBlkId = from._blockId;
+       if( curBlkId < _blocks.size() )
+       {
+          Block* curBlock = _blocks[curBlkId];
+          std::rotate(
+              &curBlock->data[from._elementId],
+              &curBlock->data[from._elementId] + removedElCount,
+              &curBlock->data[0] + COUNT_PER_BLOCK );
+          while( curBlkId++ < _blocks.size() - 1 )
+          {
+             Block* prevBlock = curBlock;
+             curBlock         = _blocks[curBlkId];
+             // Copy content over to the previous block
+             std::copy(
+                 &curBlock->data[0],
+                 &curBlock->data[0] + removedElCount,
+                 &prevBlock->data[0] + COUNT_PER_BLOCK - removedElCount );
+             // Update cur block
+             std::rotate(
+                 &curBlock->data[0],
+                 &curBlock->data[0] + removedElCount,
+                 &curBlock->data[0] + COUNT_PER_BLOCK );
+          }
+
+          curBlock->elementCount -= removedElCount;
+       }
     }
 
     struct Block

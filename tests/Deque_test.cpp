@@ -222,6 +222,45 @@ void testErase()
       assert( deq.size() == g_values.size() - removedCount );
    }
 
+      /*
+    * Test removing a range ends directly on the end of the block
+    * block having enough
+    * [XXX-------][XXXXXXXXXX]
+    * ->
+    * [XXXXXXXXXX][-------XXX]
+    */
+   {
+      deq.clear();
+      deq.append( g_values.data(), g_values.size() );
+      removedCount      = hop::Deque<uint32_t>::COUNT_PER_BLOCK / 2;
+      auto errFrom      = deq.begin() + removedCount/2;
+      auto errTo        = errFrom + removedCount;
+      deq.erase( errFrom, errTo );
+      assert( std::is_sorted( deq.begin(), deq.end() ) );
+      assert( deq.size() == g_values.size() - removedCount );
+   }
+
+   /*
+    * Test removing a range that spans 2 blocks, with the right one
+    * fitting exactly the gap created in the left one
+    * block having enough
+    * [XXX-------][---XXXXXXX]
+    * ->
+    * [XXXXXXXXXX][----------]
+    * ->
+    * [XXXXXXXXXX]
+    */
+   {
+      deq.clear();
+      deq.append( g_values.data(), g_values.size() );
+      removedCount      = hop::Deque<uint32_t>::COUNT_PER_BLOCK;
+      auto errFrom      = deq.begin() + removedCount/2;
+      auto errTo        = errFrom + removedCount;
+      deq.erase( errFrom, errTo );
+      assert( std::is_sorted( deq.begin(), deq.end() ) );
+      assert( deq.size() == g_values.size() - removedCount );
+   }
+
    /*
     * Test removing a range that spans 2 blocks, with the right one
     * not having enough element to fill the left, but with a next
@@ -236,6 +275,18 @@ void testErase()
     * ->
     * [XXXXXXXXXX][XXXX------]
     */
+   {
+      deq.clear();
+      std::vector<uint32_t> veryLargeValues( g_values.size() * 2 );
+      std::iota( veryLargeValues.begin(), veryLargeValues.end(), 0 );
+      deq.append( veryLargeValues.data(), veryLargeValues.size() );
+      removedCount = hop::Deque<uint32_t>::COUNT_PER_BLOCK + hop::Deque<uint32_t>::COUNT_PER_BLOCK / 2;
+      auto errFrom = deq.begin() + 10;
+      auto errTo   = errFrom + removedCount;
+      deq.erase( errFrom, errTo  );
+      assert( std::is_sorted( deq.begin(), deq.end() ) );
+      assert( deq.size() == veryLargeValues.size() - removedCount );
+   }
 }
 
 int main()
