@@ -275,83 +275,18 @@ class Deque
       erase( el, el + 1 );
    }
 
-   void erase( const Deque<T>::iterator<false> from, const Deque<T>::iterator<false> to )
+   void erase( Deque<T>::iterator<false> from, Deque<T>::iterator<false> to )
    {
       assert( from._blockId <= to._blockId );
 
-      if( to._blockId - from._blockId > 1 )
-      {
-         // Special case where we can remove entire block
-         assert( false );
-      }
+      /* [XXXXXX----] [----------] [----XXXXXX] -> [XXXXXX----] [----XXXXXX]*/
+      eraseEntireBlocks( from, to );
 
-      uint32_t removedElCount = std::distance( from, to );
+      /* [XXXXXX----] [----XXXXXX] -> [xxxxxxxxxX] [--------XX] */
+      erase2BlockSpans( from, to );
 
-      Deque<T>::iterator<false> newFrom = from;
-      Deque<T>::iterator<false> newTo   = to;
-      /* Is the range to be removed spanning 2 blocks ? If so, collapse the data from the right block
-       * into the left one to get back to the "normal" scenario
-       * [XXXXXX----] [-----XXXXX] -> [xxxxxxxxxX] [---------X]
-       */
-      if( const bool multiBlock = from._elementId + removedElCount > COUNT_PER_BLOCK )
-      {
-         Block* leftBlk         = _blocks[ from._blockId ];
-         Block* rightBlk        = _blocks[ to._blockId ];
-
-         /* Empty spaces in the left block after removal */
-         uint32_t emptyLeftCnt = COUNT_PER_BLOCK - from._elementId;
-         /* Remaining valid values in the right block to be copied into left block */
-         const uint32_t validRightCnt = COUNT_PER_BLOCK - to._elementId;
-
-         T* const copyDst = &leftBlk->data[from._elementId];
-         T* const copyFrom = &rightBlk->data[to._elementId];
-         const uint32_t elemCopied = std::min( emptyLeftCnt, validRightCnt );
-         T* const copyUntil = copyFrom + elemCopied;
-
-         // Copy data from right block into left one
-         std::copy( copyFrom, copyUntil, copyDst );
-
-         // If there was more empty slot in the left block than valid one in the right
-         // continue filling from the next block to the right, if any and remove rightblock
-         if( emptyLeftCnt >= validRightCnt )
-         {
-            // Erase the now empty right block front the list
-            _blocks.erase( _blocks.begin() + to._blockId );
-            removedElCount -= elemCopied;
-
-            // Fill empty slots with next blocks, if any
-            emptyLeftCnt -= validRightCnt;
-            if( _blocks.size() > to._blockId && emptyLeftCnt > 0 )
-            {
-               std::copy(
-                   &_blocks[to._blockId]->data[0],
-                   &_blocks[to._blockId]->data[emptyLeftCnt],
-                   copyDst + validRightCnt );
-            }
-            else
-            {
-               assert( emptyLeftCnt < COUNT_PER_BLOCK );
-               // There is nothing left to copy/move. Adjust the leftBlk
-               // element count
-               leftBlk->elementCount = COUNT_PER_BLOCK - emptyLeftCnt;
-               return;
-            }
-
-            // Updating the iterator will setup us in the "normal" use case
-            newFrom._blockId   = to._blockId;
-            newFrom._elementId = 0;
-            newTo              = newFrom + emptyLeftCnt;
-         }
-         else
-         {
-            // Updating the iterator will setup us in the "normal" use case
-            newFrom._blockId   = to._blockId;
-            newFrom._elementId = 0;
-            newTo              = to + emptyLeftCnt;
-         }
-      }
-
-      eraseWithinSingleBlock( newFrom, newTo );
+      /* [xxxxxxxxxX] [--------XX] -> [xxxxxxxxxX] [XX--------] ... until fully propagated */
+      eraseWithinSingleBlock( from, to );
    }
 
    void clear()
@@ -409,6 +344,13 @@ class Deque
         _blocks.push_back( newBlock );
     }
 
+    template< typename IT >
+    void releaseBlocks( IT from, IT to )
+    {
+       block_allocator::release( (void**)&(*from), std::distance( from, to ) );
+       _blocks.erase( from, to );
+    }
+
     /* Rotate the block containing the element to leave emtpy space at the end
           [XXXX----XX] -> [XXXXXX----]
        */
@@ -446,6 +388,92 @@ class Deque
           }
 
           curBlock->elementCount -= removedElCount;
+       }
+    }
+
+    /* Handle case where the range to remove spans 2 blocks. If so, collapse the data from the right block
+     * into the left one to get back to the single block scenario
+     * [XXXXXX----] [-----XXXXX] -> [xxxxxxxxxX] [---------X]
+     */
+    void erase2BlockSpans( Deque<T>::iterator<false>& from, Deque<T>::iterator<false>& to )
+    {
+       uint32_t removedElCount = std::distance( from, to );
+       if( const bool multiBlock = from._elementId + removedElCount > COUNT_PER_BLOCK )
+       {
+          Block* leftBlk  = _blocks[from._blockId];
+          Block* rightBlk = _blocks[to._blockId];
+
+          /* Empty spaces in the left block after removal */
+          uint32_t emptyLeftCnt = COUNT_PER_BLOCK - from._elementId;
+          /* Remaining valid values in the right block to be copied into left block */
+          const uint32_t validRightCnt = COUNT_PER_BLOCK - to._elementId;
+
+          T* const copyDst          = &leftBlk->data[from._elementId];
+          T* const copyFrom         = &rightBlk->data[to._elementId];
+          const uint32_t elemCopied = std::min( emptyLeftCnt, validRightCnt );
+          T* const copyUntil        = copyFrom + elemCopied;
+
+          // Copy data from right block into left one
+          std::copy( copyFrom, copyUntil, copyDst );
+
+          // If there was more empty slot in the left block than valid one in the right
+          // continue filling from the next block to the right, if any and remove rightblock
+          if( emptyLeftCnt >= validRightCnt )
+          {
+             // Erase the now empty right block front the list
+             releaseBlocks( _blocks.begin() + to._blockId, _blocks.begin() + to._blockId + 1 );
+             removedElCount -= elemCopied;
+
+             // Fill empty slots with next blocks, if any
+             emptyLeftCnt -= validRightCnt;
+             if( _blocks.size() > to._blockId && emptyLeftCnt > 0 )
+             {
+                std::copy(
+                    &_blocks[to._blockId]->data[0],
+                    &_blocks[to._blockId]->data[emptyLeftCnt],
+                    copyDst + validRightCnt );
+             }
+             else
+             {
+                assert( emptyLeftCnt < COUNT_PER_BLOCK );
+                // There is nothing left to copy/move. Adjust the leftBlk
+                // element count, and modify the from to signal we are done
+                leftBlk->elementCount = COUNT_PER_BLOCK - emptyLeftCnt;
+                from = to;
+                return;
+             }
+
+             // Updating the iterator will setup us in the "normal" use case
+             from._blockId   = to._blockId;
+             from._elementId = 0;
+             to              = from + emptyLeftCnt;
+          }
+          else
+          {
+             // Updating the iterator will setup us in the "normal" use case
+             from._blockId   = to._blockId;
+             from._elementId = 0;
+             to              = to + emptyLeftCnt;
+          }
+       }
+    }
+
+    /*
+     * Handle erasure of "full blocks"
+     * [XXXXXX----] [----------] [-----XXXXX]-> [XXXXXX----] [-----XXXXX]
+     */
+    void eraseEntireBlocks(
+        Deque<T>::iterator<false>& from,
+        Deque<T>::iterator<false>& to )
+    {
+       const int32_t fullBlocksToRemove = to._blockId - from._blockId;
+       if( fullBlocksToRemove > 1 )
+       {
+          // Special case where we can remove entire block
+          auto removeFrom = _blocks.begin() + from._blockId + 1;
+          auto removeTo   = removeFrom + fullBlocksToRemove - 1;
+          releaseBlocks( removeFrom, removeTo );
+          to._blockId -= fullBlocksToRemove - 1;
        }
     }
 

@@ -287,6 +287,32 @@ void testErase()
       assert( std::is_sorted( deq.begin(), deq.end() ) );
       assert( deq.size() == veryLargeValues.size() - removedCount );
    }
+
+   /*
+    * Remove multiple blocks
+    */
+    {
+      deq.clear();
+      std::vector<uint32_t> veryLargeValues( g_values.size() * 2 );
+      std::iota( veryLargeValues.begin(), veryLargeValues.end(), 0 );
+      deq.append( veryLargeValues.data(), veryLargeValues.size() );
+      removedCount = g_values.size();
+      auto errFrom = deq.begin() + 10;
+      auto errTo   = errFrom + removedCount;
+      deq.erase( errFrom, errTo  );
+      assert( std::is_sorted( deq.begin(), deq.end() ) );
+      assert( deq.size() == veryLargeValues.size() - removedCount );
+   }
+
+   /*
+    * Remove everything, by using iterators
+    */
+    {
+      deq.clear();
+      deq.append( g_values.data(), g_values.size() );
+      deq.erase( deq.begin(), deq.end() );
+      assert( deq.size() == 0 );
+   }
 }
 
 int main()
