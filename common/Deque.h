@@ -470,8 +470,8 @@ class Deque
        if( fullBlocksToRemove > 1 )
        {
           // Special case where we can remove entire block
-          auto removeFrom = _blocks.begin() + from._blockId + 1;
-          auto removeTo   = removeFrom + fullBlocksToRemove - 1;
+          auto removeFrom = _blocks.begin() + (from._blockId + 1);
+          auto removeTo   = removeFrom + (fullBlocksToRemove - 1);
           releaseBlocks( removeFrom, removeTo );
           to._blockId -= fullBlocksToRemove - 1;
        }
