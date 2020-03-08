@@ -68,6 +68,10 @@ void* acquire()
 void release( void** block, uint32_t count )
 {
    std::lock_guard< std::mutex > g( g_allocator.mutex );
+#ifdef HOP_DEBUG
+   for( uint32_t i = 0; i < count; ++i )
+      memset( block[i], 42, g_allocator.blkSize );
+#endif
    g_allocator._freeBlocks.insert( g_allocator._freeBlocks.end(), block, block + count );
 }
 

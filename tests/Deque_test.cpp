@@ -105,6 +105,25 @@ void testIterators( hop::Deque<T>& deq )
    assert( it42 == deq.begin() + 42 );
 }
 
+void testCopy()
+{
+   hop::Deque< uint32_t > deq;
+   deq.append( g_values.data(), g_values.size() );
+
+   hop::Deque< uint32_t > deq2( deq );
+   assert( deq.size() == deq2.size() );
+
+   deq.erase( deq.begin() + 20, deq.begin() + 100 );
+   deq2 = deq;
+   assert( deq.size() == deq2.size() );
+   assert( std::is_sorted( deq.begin(), deq.end() ) );
+
+   deq.erase(deq.begin(), deq.begin() + hop::Deque<uint32_t>::COUNT_PER_BLOCK + 50);
+   deq2 = deq;
+   assert(deq.size() == deq2.size());
+   assert(std::is_sorted(deq.begin(), deq.end()));
+}
+
 void testAppend()
 {
    hop::Deque< uint32_t > deq, appendDeq;
@@ -313,6 +332,16 @@ void testErase()
       deq.erase( deq.begin(), deq.end() );
       assert( deq.size() == 0 );
    }
+   
+   {
+      deq.clear();
+      deq.append( g_values.data(), g_values.size() );
+      deq.erase( deq.begin() + 20, deq.begin() + 100 );
+      assert( std::is_sorted( deq.begin(), deq.end() ) );
+
+      deq.erase(deq.begin(), deq.begin() + hop::Deque<uint32_t>::COUNT_PER_BLOCK + 50);
+      assert(std::is_sorted(deq.begin(), deq.end()));  
+   }
 }
 
 int main()
@@ -336,6 +365,7 @@ int main()
    testIterators( deq );
    testAppend();
    testErase();
+   testCopy();
 
    // Testing accessors
    for( size_t i = 0; i < deq.size(); ++i )

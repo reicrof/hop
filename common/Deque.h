@@ -156,6 +156,38 @@ class Deque
        assert( block_allocator::blockSize() >= HOP_BLK_SIZE_BYTES );
    }
 
+   Deque( const Deque& rhs )
+   {
+      this->operator=( rhs );
+   }
+
+   Deque& operator=( const Deque& rhs )
+   {
+      const int32_t originalSize = (int32_t)_blocks.size();
+      const int32_t newSize      = (int32_t)rhs._blocks.size();
+      const int32_t deltaBlocks  = originalSize - newSize; 
+      if( deltaBlocks > 0 )
+      {
+         // Erase unused blocks
+         erase( begin() + newSize, end() );
+      }
+      else
+      {
+         // Allocate new blocks
+         const uint32_t newBlockCount = newSize - originalSize;
+         for( uint32_t i = 0; i < newBlockCount; ++i )
+            acquireNewBlock();
+      }
+      
+      assert( _blocks.size() == rhs._blocks.size() );
+
+      // Copy the data
+      for( int32_t i = 0; i < newSize; ++i )
+         *_blocks[i] = *rhs._blocks[i];
+
+      return *this;
+   }
+
    uint64_t size() const
    {
       const size_t blockCount = _blocks.size();
@@ -291,8 +323,11 @@ class Deque
 
    void clear()
    {
-      block_allocator::release( (void**)_blocks.data(), _blocks.size() );
-      _blocks.clear();
+      if( _blocks.size() > 0 )
+      {
+         block_allocator::release( (void**)_blocks.data(), _blocks.size() );
+         _blocks.clear();
+      }
    }
 
    ~Deque()
