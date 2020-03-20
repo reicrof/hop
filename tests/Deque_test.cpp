@@ -333,6 +333,11 @@ void testErase()
       assert( deq.size() == 0 );
    }
    
+   /*
+    * Create a partial right block by removing some in the first block,
+    * then remove a span larger than 1 block so we test the span accross
+    * an incomplete block
+    */
    {
       deq.clear();
       deq.append( g_values.data(), g_values.size() );

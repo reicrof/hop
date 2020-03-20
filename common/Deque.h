@@ -41,6 +41,7 @@ class Deque
    {
      public:
       using value_type = T;
+      using reference  = T&;
       using difference_type = typename std::iterator<std::random_access_iterator_tag, T>::difference_type;
       using VectorBlocksPtr = typename std::conditional< Const, const std::vector<Block*>, std::vector<Block*> >::type;
 
@@ -53,7 +54,8 @@ class Deque
       iterator( VectorBlocksPtr* lb, uint32_t blockId, uint32_t elId ) : _blocks( lb ), _blockId( blockId ), _elementId( elId ) {}
       inline bool operator==(const iterator& rhs) const { return _blockId == rhs._blockId && _elementId == rhs._elementId; }
       inline bool operator!=(const iterator& rhs) const { return _blockId != rhs._blockId || _elementId != rhs._elementId; }
-      inline T& operator*() const
+      inline reference operator[]( size_t idx ) { return *(this->operator+( idx ) ); }
+      inline reference operator*() const
       {
          assert( _blockId < _blocks->size() && _elementId < COUNT_PER_BLOCK );
          return (*_blocks)[_blockId]->data[_elementId];
