@@ -270,7 +270,7 @@ class Deque
    }
 
    template< bool Const = false >
-   void append( const Deque<T>::iterator<Const> begin, const Deque<T>::iterator<Const> end )
+   void append( const Deque<T>::iterator<Const>& begin, const Deque<T>::iterator<Const>& end )
    {
       assert( begin._blocks == end._blocks );
       if( begin == end ) return;
@@ -291,7 +291,7 @@ class Deque
       if( blkId < inBlocks->size() )
       {
          Block* curBlock = (*inBlocks)[blkId];
-         assert( end._elementId > elId );
+         assert( end._elementId >= elId );
          append( &curBlock->data[elId], end._elementId - elId );
       }
    }
@@ -304,7 +304,7 @@ class Deque
    }
 
    template< bool Const = false >
-   void erase( const Deque<T>::iterator<Const> el )
+   void erase( const Deque<T>::iterator<Const>& el )
    {
       erase( el, el + 1 );
    }
@@ -382,7 +382,7 @@ class Deque
     }
 
     template< typename IT >
-    void releaseBlocks( IT from, IT to )
+    void releaseBlocks( const IT& from, const IT& to )
     {
        block_allocator::release( (void**)&(*from), std::distance( from, to ) );
        _blocks.erase( from, to );
@@ -392,8 +392,8 @@ class Deque
           [XXXX----XX] -> [XXXXXX----]
        */
     void eraseWithinSingleBlock(
-        const Deque<T>::iterator<false> from,
-        const Deque<T>::iterator<false> to )
+        const Deque<T>::iterator<false>& from,
+        const Deque<T>::iterator<false>& to )
     {
        const uint32_t removedElCount = std::distance( from, to );
 
@@ -424,7 +424,13 @@ class Deque
                  &curBlock->data[0] + COUNT_PER_BLOCK );
           }
 
+          assert( curBlock->elementCount >= removedElCount );
+          // If it so happens that we removed all elements of the last block, let's release it.
           curBlock->elementCount -= removedElCount;
+          if( curBlock->elementCount == 0 )
+          {
+             releaseBlocks( _blocks.end()-1, _blocks.end() );
+          }
        }
     }
 

@@ -168,6 +168,12 @@ void testAppend()
       auto value = appendDeq[i];
       assert( value == i );
    }
+
+   { // Append a full block than a smaller one
+      appendDeq.clear();
+      appendDeq.append( deq.begin(),deq.begin() + hop::Deque<uint32_t>::COUNT_PER_BLOCK );
+      appendDeq.append( deq.begin(),deq.begin() + 25 );
+   }
 }
 
 void testErase()
@@ -331,6 +337,17 @@ void testErase()
       deq.append( g_values.data(), g_values.size() );
       deq.erase( deq.begin(), deq.end() );
       assert( deq.size() == 0 );
+   }
+
+    /*
+    * Push one block + 1 element and remove the last element
+    */
+    {
+      deq.clear();
+      deq.append( g_values.data(), hop::Deque<uint32_t>::COUNT_PER_BLOCK );
+      deq.append( g_values.data(), 1 );
+      deq.erase( deq.end() -1, deq.end() );
+      assert( deq.size() == hop::Deque<uint32_t>::COUNT_PER_BLOCK );
    }
    
    /*
