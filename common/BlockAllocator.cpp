@@ -2,6 +2,7 @@
 
 #include <assert.h>
 #include <stdlib.h>
+#include <string.h> // memset
 #include <mutex>
 #include <vector>
 

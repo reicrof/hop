@@ -441,7 +441,7 @@ class Deque
           /* Empty spaces in the left block after removal */
           uint32_t emptyLeftCnt = COUNT_PER_BLOCK - from._elementId;
           /* Remaining valid values in the right block to be copied into left block */
-          const uint32_t validRightCnt = COUNT_PER_BLOCK - to._elementId;
+          const uint32_t validRightCnt = rightBlk->elementCount - to._elementId;
 
           T* const copyDst          = &leftBlk->data[from._elementId];
           T* const copyFrom         = &rightBlk->data[to._elementId];
