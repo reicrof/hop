@@ -52,57 +52,14 @@ LodsArray computeLods( const Entries& entries, size_t idOffset )
    std::vector<ssize_t> lastTraceAtDepth( entries.maxDepth + 1, -1 );
    int lodLvl = 0;
 
-   // Compute first LOD from raw data
+   // First LOD is usually never worth merging as they are too small
    {
-      HOP_PROF( "Compute first LOD level" );
-      for ( size_t i = idOffset; i < entries.ends.size(); ++i )
+      HOP_PROF( "Copying first LOD level" );
+      for( size_t i = idOffset; i < entries.ends.size(); ++i )
       {
-         ssize_t lodedTraceIdx = -1;
-         const Depth_t depth = entries.depths[i];
-         if( lastTraceAtDepth[depth] >= 0 )
-         {
-            const ssize_t lastTraceAtDepthIndex = lastTraceAtDepth[depth];
-            auto& lastTrace = resLods[lodLvl][lastTraceAtDepthIndex];
-            const TimeDuration timeBetweenTrace = entries.starts[i] - lastTrace.end;
-            if( canBeLoded(
-                    lodLvl,
-                    timeBetweenTrace,
-                    delta( lastTrace ),
-                    entries.ends[i] - entries.starts[i] ) )
-            {
-               assert( lastTrace.depth == depth );
-               lodedTraceIdx = lastTraceAtDepthIndex;
-
-               // Update idx since we are about the remove a trace from the list
-               for( auto& idx : lastTraceAtDepth )
-               {
-                  if( idx > lastTraceAtDepthIndex )
-                     --idx;
-               }
-
-               resLods[lodLvl].erase(
-                   resLods[lodLvl].begin() + lastTraceAtDepthIndex,
-                   resLods[lodLvl].begin() + lastTraceAtDepthIndex + 1 );
-
-               // New last trace at depth is the next insertion that was merged with
-               // the previous last trace
-               lastTraceAtDepth[depth] = resLods[lodLvl].size();
-               resLods[lodLvl].push_back(
-                   LodInfo{lastTrace.start, entries.ends[i], i, depth, true} );
-            }
-         }
-
-         // If it was not loded, insert it and keep index
-         if( lodedTraceIdx == -1 )
-         {
-            // Save idx of the last entry at specific depth
-            lastTraceAtDepth[depth] = resLods[lodLvl].size();
-            resLods[lodLvl].push_back(
-                LodInfo{entries.starts[i], entries.ends[i], i, depth, false} );
-         }
+         resLods[0].push_back(
+             LodInfo{entries.starts[i], entries.ends[i], i, entries.depths[i], false} );
       }
-
-      assert_is_sorted( resLods[lodLvl].begin(), resLods[lodLvl].end() );
    }
 
    // Compute the LOD based on the previous LOD levels
