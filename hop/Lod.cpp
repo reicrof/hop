@@ -10,8 +10,6 @@ static constexpr float MIN_GAP_PXL = 5.0f;
 static hop::TimeDuration LOD_MIN_GAP_CYCLES[hop::LOD_COUNT] = {0};
 static hop::TimeDuration LOD_MIN_TRACE_LENGTH_CYCLES[hop::LOD_COUNT] = {0};
 
-#define HOP_USE_INSERTION_SORT 0
-
 static bool canBeLoded(
     int lodLevel,
     hop::TimeDuration timeBetweenTrace,
@@ -51,8 +49,7 @@ LodsArray computeLods( const Entries& entries, size_t idOffset )
 
    LodsArray resLods;
 
-   // Compute LODs.
-   std::vector<std::vector<LodInfo> > lods( entries.maxDepth + 1 );
+   std::vector<ssize_t> lastTraceAtDepth( entries.maxDepth + 1, -1 );
    int lodLvl = 0;
 
    // Compute first LOD from raw data
@@ -60,50 +57,52 @@ LodsArray computeLods( const Entries& entries, size_t idOffset )
       HOP_PROF( "Compute first LOD level" );
       for ( size_t i = idOffset; i < entries.ends.size(); ++i )
       {
-         const Depth_t curDepth = entries.depths[i];
-         if ( lods[curDepth].empty() )
+         ssize_t lodedTraceIdx = -1;
+         const Depth_t depth = entries.depths[i];
+         if( lastTraceAtDepth[depth] >= 0 )
          {
-            lods[curDepth].push_back(
-                LodInfo{entries.starts[i], entries.ends[i], i, curDepth, false} );
-            continue;
+            const ssize_t lastTraceAtDepthIndex = lastTraceAtDepth[depth];
+            auto& lastTrace = resLods[lodLvl][lastTraceAtDepthIndex];
+            const TimeDuration timeBetweenTrace = entries.starts[i] - lastTrace.end;
+            if( canBeLoded(
+                    lodLvl,
+                    timeBetweenTrace,
+                    delta( lastTrace ),
+                    entries.ends[i] - entries.starts[i] ) )
+            {
+               assert( lastTrace.depth == depth );
+               lodedTraceIdx = lastTraceAtDepthIndex;
+
+               // Update idx since we are about the remove a trace from the list
+               for( auto& idx : lastTraceAtDepth )
+               {
+                  if( idx > lastTraceAtDepthIndex )
+                     --idx;
+               }
+
+               resLods[lodLvl].erase(
+                   resLods[lodLvl].begin() + lastTraceAtDepthIndex,
+                   resLods[lodLvl].begin() + lastTraceAtDepthIndex + 1 );
+
+               // New last trace at depth is the next insertion that was merged with
+               // the previous last trace
+               lastTraceAtDepth[depth] = resLods[lodLvl].size();
+               resLods[lodLvl].push_back(
+                   LodInfo{lastTrace.start, entries.ends[i], i, depth, true} );
+            }
          }
 
-         auto& lastTrace = lods[curDepth].back();
-         const TimeDuration timeBetweenTrace = entries.starts[i] - lastTrace.end;
-         if( canBeLoded(
-                 lodLvl,
-                 timeBetweenTrace,
-                 delta( lastTrace ),
-                 entries.ends[i] - entries.starts[i] ) )
+         // If it was not loded, insert it and keep index
+         if( lodedTraceIdx == -1 )
          {
-            assert( lastTrace.depth == curDepth );
-            lastTrace.end = entries.ends[i];
-            lastTrace.loded = true;
-         }
-         else
-         {
-            lods[curDepth].push_back(
-                LodInfo{entries.starts[i], entries.ends[i], i, curDepth, false} );
+            // Save idx of the last entry at specific depth
+            lastTraceAtDepth[depth] = resLods[lodLvl].size();
+            resLods[lodLvl].push_back(
+                LodInfo{entries.starts[i], entries.ends[i], i, depth, false} );
          }
       }
-
-      // Insert the data and sort if necessary
-      for ( const auto& l : lods )
-      {
-         resLods[lodLvl].append( l.data(), l.size() );
-      }
-
-      // Even if the input data is sorted, we need to sort it as we have mixed the order
-      // by allocating them by depth
-      std::sort( resLods[lodLvl].begin(), resLods[lodLvl].end() );
 
       assert_is_sorted( resLods[lodLvl].begin(), resLods[lodLvl].end() );
-   }
-
-   // Clear depth lods to reuse them for next lods
-   for ( auto& l : lods )
-   {
-      l.clear();
    }
 
    // Compute the LOD based on the previous LOD levels
@@ -111,39 +110,53 @@ LodsArray computeLods( const Entries& entries, size_t idOffset )
    for ( lodLvl = 1; lodLvl < LOD_COUNT; ++lodLvl )
    {
       HOP_PROF( "Computing next LOD lvl" );
+
+      std::fill( lastTraceAtDepth.begin(), lastTraceAtDepth.end(), -1 );
+      
       for ( const auto& l : *lastComputedLod )
       {
-         const Depth_t curDepth = l.depth;
-         if ( lods[curDepth].empty() )
+         ssize_t lodedTraceIdx = -1;
+         const Depth_t depth = l.depth;
+         if( lastTraceAtDepth[depth] >= 0 )
          {
-            lods[curDepth].emplace_back( l );
-            continue;
+            const ssize_t lastTraceAtDepthIndex = lastTraceAtDepth[depth];
+            auto& lastTrace = resLods[lodLvl][lastTraceAtDepthIndex];
+            const TimeDuration timeBetweenTrace = l.start - lastTrace.end;
+            if( canBeLoded( lodLvl, timeBetweenTrace, delta( lastTrace ), delta(l) ) )
+            {
+               assert( lastTrace.depth == depth );
+               lodedTraceIdx = lastTraceAtDepthIndex;
+
+               // Update idx since we are about the remove a trace from the list
+               for( auto& idx : lastTraceAtDepth )
+               {
+                  if( idx > lastTraceAtDepthIndex )
+                     --idx;
+               }
+
+               const TimeStamp newStartTime = lastTrace.start;  // Keep around as it will be
+               resLods[lodLvl].erase(
+                   resLods[lodLvl].begin() + lastTraceAtDepthIndex,
+                   resLods[lodLvl].begin() + lastTraceAtDepthIndex + 1 );
+
+               // New last trace at depth is the next insertion that was merged with
+               // the previous last trace
+               assert( newStartTime < l.end );
+               lastTraceAtDepth[depth] = resLods[lodLvl].size();
+               resLods[lodLvl].push_back( LodInfo{newStartTime, l.end, l.index, depth, true} );
+            }
          }
 
-         auto& lastTrace = lods[curDepth].back();
-         const auto timeBetweenTrace = l.start - lastTrace.end;
-         if ( canBeLoded( lodLvl, timeBetweenTrace, delta(lastTrace), delta(l) ) )
+         // If it was not loded, insert it and keep index
+         if( lodedTraceIdx == -1 )
          {
-            assert( lastTrace.depth == curDepth );
-            lastTrace.end   = l.end;
-            lastTrace.loded = true;
-         }
-         else
-         {
-            lods[curDepth].emplace_back( l );
+            // Save idx of the last entry at specific depth
+            lastTraceAtDepth[depth] = resLods[lodLvl].size();
+            resLods[lodLvl].push_back( LodInfo{l.start, l.end, l.index, l.depth, false} );
          }
       }
-
-      for ( const auto& l : lods )
-      {
-         resLods[lodLvl].append( l.data(), l.size() );
-      }
-      std::sort( resLods[lodLvl].begin(), resLods[lodLvl].end() );
 
       assert_is_sorted( resLods[lodLvl].begin(), resLods[lodLvl].end() );
-
-      // Clear for reuse
-      for ( auto& l : lods ) l.clear();
 
       // Update the last compute lod ptr
       lastComputedLod = &resLods[lodLvl];
