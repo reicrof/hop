@@ -593,7 +593,7 @@ TraceDetailDrawResult drawTraceDetails(
 
 void drawTraceStats( TraceStats& stats, const StringDb& strDb, bool drawAsCycles )
 {
-   if ( stats.open > 0 )
+   if ( stats.open )
    {
       if (stats.focus)
       {

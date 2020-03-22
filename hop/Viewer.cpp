@@ -15,10 +15,15 @@
 
 #include "imgui/imgui.h"
 
-#include "noc_file_dialog/noc_file_dialog.h"
-
 #include <thread> // For saving/opening files
 #include <sstream>
+
+// Only use file dialog if requested at build time
+#if HOP_USE_FILE_DIALOG
+#include "noc_file_dialog/noc_file_dialog.h"
+// Filters to use when opening the noc file dialog
+static const char* NOC_DIALOG_EXT_FILTER = "hop\0*.hop\0";
+#endif
 
 extern bool g_run;
 
@@ -28,72 +33,96 @@ static constexpr float TOOLBAR_BUTTON_HEIGHT = 15.0f;
 static constexpr float TOOLBAR_BUTTON_WIDTH = 15.0f;
 static constexpr float TOOLBAR_BUTTON_PADDING = 5.0f;
 
-// Filters to use when opening the noc file dialog
-static const char* NOC_DIALOG_EXT_FILTER = "hop\0*.hop\0";
-
 static void saveProfilerToFile( hop::ProfilerView* prof )
 {
    prof->setRecording( false );
-   const int flags = NOC_FILE_DIALOG_SAVE | NOC_FILE_DIALOG_OVERWRITE_CONFIRMATION;
+
+   // Functor use to save the file
+   const auto saveToFileFct = []( hop::ProfilerView* prof, std::string path ) {
+      // Spawn a thread so we do not freeze the ui
+      std::thread t(
+          [prof]( std::string path ) {
+             hop::displayModalWindow( "Saving...", nullptr, hop::MODAL_TYPE_NO_CLOSE );
+             const bool success = prof->saveToFile( path.c_str() );
+             hop::closeModalWindow();
+             if( !success )
+             {
+                hop::displayModalWindow( "Error while saving file", nullptr, hop::MODAL_TYPE_ERROR );
+             }
+          },
+          path );
+
+      t.detach();
+   };
+
+#if HOP_USE_FILE_DIALOG
+   const int flags  = NOC_FILE_DIALOG_SAVE | NOC_FILE_DIALOG_OVERWRITE_CONFIRMATION;
    const char* path = noc_file_dialog_open( flags, NOC_DIALOG_EXT_FILTER, nullptr, nullptr );
    if( path )
    {
-      // Spawn a thread so we do not freeze the ui
-      std::thread t( [prof]( std::string path ) {
-         hop::displayModalWindow( "Saving...", hop::MODAL_TYPE_NO_CLOSE );
-         const bool success = prof->saveToFile( path.c_str() );
-         hop::closeModalWindow();
-         if( !success )
-         {
-            hop::displayModalWindow( "Error while saving file", hop::MODAL_TYPE_ERROR );
-         }
-      }, path );
-
-      t.detach();
+      saveToFileFct( prof, path );
    }
+#else
+   hop::displayStringInputModalWindow(
+       "Save to File",
+       "Enter full path, filename and\nextension of the file to save.",
+       [prof, saveToFileFct]( const char* str ) { saveToFileFct( prof, str ); } );
+#endif
 }
 
-static std::future< hop::ProfilerView* > openProfilerFile()
+static void openProfilerFile( std::shared_future< hop::ProfilerView* >& futureProf )
 {
    using namespace hop;
+
+   // Functor use to save the file
+   const auto openFileFct = [&futureProf]( const char* str ) {
+      std::string path( str );
+      std::future<hop::ProfilerView*> future = std::async(
+          std::launch::async,
+          []( std::string path ) {
+             ProfilerView* prof = nullptr;
+
+             displayModalWindow( "Loading...", nullptr, MODAL_TYPE_NO_CLOSE );
+
+             prof = new ProfilerView( Profiler::SRC_TYPE_FILE, -1, path.c_str() );
+             if( prof->openFile( path.c_str() ) )
+             {
+                // Do the first update here to create the LODs. The params does not make
+                // difference in this scenario as they will be updated once we go back to the
+                // main thread
+                prof->update( 16.0f, 5000000000 );
+             }
+             else
+             {
+                displayModalWindow( "Error while opening file", nullptr, hop::MODAL_TYPE_ERROR );
+             }
+
+             closeModalWindow();
+
+             return prof;
+          },
+          path );
+      futureProf = future.share();
+   };
+
+#if HOP_USE_FILE_DIALOG
    const char* path =
-              noc_file_dialog_open( NOC_FILE_DIALOG_OPEN, NOC_DIALOG_EXT_FILTER, nullptr, nullptr );
-   if( path )
-   {
-      return std::async(
-         std::launch::async,
-         []( std::string path )
-         {
-            ProfilerView* prof = nullptr;
-            
-            displayModalWindow( "Loading...", MODAL_TYPE_NO_CLOSE );
-
-            prof = new ProfilerView( Profiler::SRC_TYPE_FILE, -1, path.c_str() );
-            if( prof->openFile( path.c_str() ) )
-            {
-               // Do the first update here to create the LODs. The params does not make difference
-               // in this scenario as they will be updated once we go back to the main thread
-               prof->update( 16.0f, 5000000000 );
-            }
-            else
-            {
-               displayModalWindow( "Error while opening file", hop::MODAL_TYPE_ERROR );
-            }
-
-            closeModalWindow();
-
-            return prof;
-         }, path );
-   }
-
-   return std::future< hop::ProfilerView* >{};
+       noc_file_dialog_open( NOC_FILE_DIALOG_OPEN, NOC_DIALOG_EXT_FILTER, nullptr, nullptr );
+   openFileFct( path );
+#else
+   hop::displayStringInputModalWindow(
+       "Open File",
+       "Enter full path of the file to open",
+       [openFileFct]( const char* path ) { openFileFct( path ); } );
+#endif
 }
 
 static void addNewProfilerByNamePopUp( hop::Viewer* v )
 {
-   hop::displayStringInputModalWindow( "Enter name or PID of process", [=]( const char* str ) {
-      v->addNewProfiler( str, false );
-   } );
+   hop::displayStringInputModalWindow(
+       "Add New Profiler", "Enter name or PID of process", [=]( const char* str ) {
+          v->addNewProfiler( str, false );
+       } );
 }
 
 static void setRecording( hop::ProfilerView* profiler, hop::Timeline* timeline, bool recording )
@@ -362,7 +391,7 @@ static void drawToolbar( ImVec2 drawPos, float canvasWidth, hop::ProfilerView* p
    const ImVec2 deleteOffset( ( 2.0f * TOOLBAR_BUTTON_PADDING ) + TOOLBAR_BUTTON_WIDTH, 0.0f );
    if ( drawDeleteTracesButton( drawPos + deleteOffset, isActive && profView->canvasHeight() > 0 ) )
    {
-      hop::displayModalWindow( "Delete all traces?", hop::MODAL_TYPE_YES_NO, [&]() { profView->clear(); } );
+      hop::displayModalWindow( "Delete all traces?", nullptr, hop::MODAL_TYPE_YES_NO, [&]() { profView->clear(); } );
    }
 
    if( isActive )
@@ -542,7 +571,7 @@ static void updateProfilers(
     std::vector<std::unique_ptr<hop::ProfilerView> >& profilers,
     int selectedTab )
 {
-   const float globalTimeMs = ImGui::GetTime() * 1000;
+   const float globalTimeMs = ImGui::GetTime() * 1000.0f;
    for ( auto& p : profilers )
    {
       p->update( globalTimeMs, tlDuration );
@@ -636,7 +665,7 @@ int Viewer::addNewProfiler( const char* processName, bool startRecording )
    const int pid = getPIDFromString( processName );
    if( profilerAlreadyExist( _profilers, pid, processName ) )
    {
-      hop::displayModalWindow( "Cannot profile process twice !", hop::MODAL_TYPE_ERROR );
+      hop::displayModalWindow( "Cannot profile process twice !", nullptr, hop::MODAL_TYPE_ERROR );
       return -1;
    }
 
@@ -652,7 +681,7 @@ int Viewer::addNewProfiler( const char* processName, bool startRecording )
 void Viewer::openProfilerFile()
 {
    assert( !_pendingProfilerLoad.valid() );
-   _pendingProfilerLoad = ::openProfilerFile();
+   ::openProfilerFile( _pendingProfilerLoad );
 }
 
 int Viewer::removeProfiler( int index )
@@ -705,14 +734,16 @@ void Viewer::fetchClientsData()
             _profilers.emplace_back( std::move(loadedProf) );
             _selectedTab = _profilers.size() - 1;
          }
+         // Reset the shared_future
+         _pendingProfilerLoad = {};
       }
    }
 }
 
 void Viewer::onNewFrame(
     float deltaMs,
-    int width,
-    int height,
+    float width,
+    float height,
     int mouseX,
     int mouseY,
     bool lmbPressed,
@@ -759,7 +790,7 @@ void Viewer::onNewFrame(
    updateTimeline( &_timeline, deltaMs, _selectedTab >= 0 ? _profilers[_selectedTab].get() : nullptr );
 }
 
-void Viewer::draw( uint32_t windowWidth, uint32_t windowHeight )
+void Viewer::draw( float windowWidth, float windowHeight )
 {
    const auto drawStart = std::chrono::system_clock::now();
 
@@ -786,7 +817,7 @@ void Viewer::draw( uint32_t windowWidth, uint32_t windowHeight )
    drawMenuBar( this );
    _selectedTab = drawTabs( ImGui::GetCursorPos(), *this, _selectedTab );
    ProfilerView* const selectedProf = _selectedTab >= 0 ? _profilers[_selectedTab].get() : nullptr;
-   drawToolbar( ImGui::GetCursorPos(), ImGui::GetWindowWidth(), selectedProf, &_timeline );
+   drawToolbar( ImGui::GetCursorPos(), windowWidth, selectedProf, &_timeline );
 
    TimelineMsgArray msgArray;
    _timeline.draw();
@@ -888,7 +919,7 @@ bool Viewer::handleHotkey( ProfilerView* selectedProf )
          }
          else if ( ImGui::IsKeyPressed( ImGui::GetKeyIndex( ImGuiKey_Escape ) ) )
          {
-            hop::displayModalWindow( "Exit ?", hop::MODAL_TYPE_YES_NO, [&]() { g_run = false; } );
+            hop::displayModalWindow( "Exit ?", nullptr, hop::MODAL_TYPE_YES_NO, [&]() { g_run = false; } );
             handled = true;
          }
       }
