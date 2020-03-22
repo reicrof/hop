@@ -343,7 +343,7 @@ static size_t drawEntries(
 
    const float windowWidthPxl = ImGui::GetWindowWidth();
 
-   const auto lodStartIt = lodsData.lods[data.lodLevel].begin() + spanIndex.first;
+   auto lodStartIt = lodsData.lods[data.lodLevel].begin() + spanIndex.first;
    createDrawData( lodStartIt, traceCount, absoluteStart, timelineRange / windowWidthPxl, startPosPxl.data(), deltaPxl.data() );
 
    const ImVec2 mousePos    = ImGui::GetMousePos();

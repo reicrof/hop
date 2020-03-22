@@ -10,8 +10,6 @@ static constexpr float MIN_GAP_PXL = 5.0f;
 static hop::TimeDuration LOD_MIN_GAP_CYCLES[hop::LOD_COUNT] = {0};
 static hop::TimeDuration LOD_MIN_TRACE_LENGTH_CYCLES[hop::LOD_COUNT] = {0};
 
-#define HOP_USE_INSERTION_SORT 0
-
 static bool canBeLoded(
     int lodLevel,
     hop::TimeDuration timeBetweenTrace,
@@ -51,98 +49,71 @@ LodsArray computeLods( const Entries& entries, size_t idOffset )
 
    LodsArray resLods;
 
-   // Compute LODs.
-   std::vector<std::vector<LodInfo> > lods( entries.maxDepth + 1 );
+   std::vector<ssize_t> lastTraceAtDepth( entries.maxDepth + 1, -1 );
    int lodLvl = 0;
 
-   // Compute first LOD from raw data
+   // First LOD is usually never worth merging as they are too small
    {
-      HOP_PROF( "Compute first LOD level" );
-      for ( size_t i = idOffset; i < entries.ends.size(); ++i )
+      HOP_PROF( "Copying first LOD level" );
+      for( size_t i = idOffset; i < entries.ends.size(); ++i )
       {
-         const Depth_t curDepth = entries.depths[i];
-         if ( lods[curDepth].empty() )
-         {
-            lods[curDepth].push_back(
-                LodInfo{entries.starts[i], entries.ends[i], i, curDepth, false} );
-            continue;
-         }
-
-         auto& lastTrace = lods[curDepth].back();
-         const TimeDuration timeBetweenTrace = entries.starts[i] - lastTrace.end;
-         if( canBeLoded(
-                 lodLvl,
-                 timeBetweenTrace,
-                 delta( lastTrace ),
-                 entries.ends[i] - entries.starts[i] ) )
-         {
-            assert( lastTrace.depth == curDepth );
-            lastTrace.end = entries.ends[i];
-            lastTrace.loded = true;
-         }
-         else
-         {
-            lods[curDepth].push_back(
-                LodInfo{entries.starts[i], entries.ends[i], i, curDepth, false} );
-         }
+         resLods[0].push_back(
+             LodInfo{entries.starts[i], entries.ends[i], i, entries.depths[i], false} );
       }
-
-      // Insert the data and sort if necessary
-      for ( const auto& l : lods )
-      {
-         resLods[lodLvl].insert( resLods[lodLvl].end(), l.begin(), l.end() );
-      }
-
-      // Even if the input data is sorted, we need to sort it as we have mixed the order
-      // by allocating them by depth
-      std::sort( resLods[lodLvl].begin(), resLods[lodLvl].end() );
-   }
-
-   // Clear depth lods to reuse them for next lods
-   for ( auto& l : lods )
-   {
-      l.clear();
    }
 
    // Compute the LOD based on the previous LOD levels
-   const std::deque<LodInfo>* lastComputedLod = &resLods[lodLvl];
+   const hop::Deque<LodInfo>* lastComputedLod = &resLods[lodLvl];
    for ( lodLvl = 1; lodLvl < LOD_COUNT; ++lodLvl )
    {
       HOP_PROF( "Computing next LOD lvl" );
+
+      std::fill( lastTraceAtDepth.begin(), lastTraceAtDepth.end(), -1 );
+      
       for ( const auto& l : *lastComputedLod )
       {
-         const Depth_t curDepth = l.depth;
-         if ( lods[curDepth].empty() )
+         ssize_t lodedTraceIdx = -1;
+         const Depth_t depth = l.depth;
+         if( lastTraceAtDepth[depth] >= 0 )
          {
-            lods[curDepth].emplace_back( l );
-            continue;
+            const ssize_t lastTraceAtDepthIndex = lastTraceAtDepth[depth];
+            auto& lastTrace = resLods[lodLvl][lastTraceAtDepthIndex];
+            const TimeDuration timeBetweenTrace = l.start - lastTrace.end;
+            if( canBeLoded( lodLvl, timeBetweenTrace, delta( lastTrace ), delta(l) ) )
+            {
+               assert( lastTrace.depth == depth );
+               lodedTraceIdx = lastTraceAtDepthIndex;
+
+               // Update idx since we are about the remove a trace from the list
+               for( auto& idx : lastTraceAtDepth )
+               {
+                  if( idx > lastTraceAtDepthIndex )
+                     --idx;
+               }
+
+               const TimeStamp newStartTime = lastTrace.start;  // Keep around as it will be
+               resLods[lodLvl].erase(
+                   resLods[lodLvl].begin() + lastTraceAtDepthIndex,
+                   resLods[lodLvl].begin() + lastTraceAtDepthIndex + 1 );
+
+               // New last trace at depth is the next insertion that was merged with
+               // the previous last trace
+               assert( newStartTime < l.end );
+               lastTraceAtDepth[depth] = resLods[lodLvl].size();
+               resLods[lodLvl].push_back( LodInfo{newStartTime, l.end, l.index, depth, true} );
+            }
          }
 
-         auto& lastTrace = lods[curDepth].back();
-         const auto timeBetweenTrace = l.start - lastTrace.end;
-         if ( canBeLoded( lodLvl, timeBetweenTrace, delta(lastTrace), delta(l) ) )
+         // If it was not loded, insert it and keep index
+         if( lodedTraceIdx == -1 )
          {
-            assert( lastTrace.depth == curDepth );
-            lastTrace.end   = l.end;
-            lastTrace.loded = true;
-         }
-         else
-         {
-            lods[curDepth].emplace_back( l );
+            // Save idx of the last entry at specific depth
+            lastTraceAtDepth[depth] = resLods[lodLvl].size();
+            resLods[lodLvl].push_back( LodInfo{l.start, l.end, l.index, l.depth, false} );
          }
       }
 
-      for ( const auto& l : lods )
-      {
-         resLods[lodLvl].insert( resLods[lodLvl].end(), l.begin(), l.end() );
-      }
-
-      // Even if the input data is sorted, we need to sort it as we have mixed the order
-      // by allocating them by depth
-      std::sort( resLods[lodLvl].begin(), resLods[lodLvl].end() );
-
-      // Clear for reuse
-      for ( auto& l : lods ) l.clear();
+      assert_is_sorted( resLods[lodLvl].begin(), resLods[lodLvl].end() );
 
       // Update the last compute lod ptr
       lastComputedLod = &resLods[lodLvl];
@@ -170,7 +141,7 @@ void appendLods( LodsData& dst, const Entries& entries )
    for ( size_t i = 0; i < src.size(); ++i )
    {
       // First trace to insert
-      auto newTraceIt = src[i].begin();
+      auto newTraceIt = src[i].cbegin();
 
       // If there is already LOD in the dest, try to merge them
       if ( dst.lods[i].size() > 0 )
@@ -180,26 +151,23 @@ void appendLods( LodsData& dst, const Entries& entries )
          int depthRemaining = deepestDepth;
          while ( depthRemaining >= 0 && newTraceIt != src[i].cend() )
          {
-            bool wasLoded = false;
             if ( newTraceIt->depth == depthRemaining )
             {
-               // Find the last trace that has the same depth as the processed one
-               const auto sameDepthIt =
-                   std::find_if( dst.lods[i].rbegin(), dst.lods[i].rend(), [=]( const LodInfo& o ) {
-                      return o.depth == depthRemaining;
-                   } );
+               // Reverse search to find the last trace that has the same depth as the processed one
+               auto sameDepthIt = dst.lods[i].end() -1;
+               while( sameDepthIt > dst.lods[i].begin() && sameDepthIt->depth != depthRemaining )
+               {
+                  --sameDepthIt;
+               }
 
-               // Check if we can merge it if the previous one at the same depth
-               if ( sameDepthIt != dst.lods[i].rend() )
+               if ( sameDepthIt != dst.lods[i].begin() )
                {
                   const auto timeBetweenTrace = newTraceIt->start - sameDepthIt->end;
-                  wasLoded = 
-                     canBeLoded( i, timeBetweenTrace, delta(*sameDepthIt), delta(*newTraceIt) );
-                  if ( wasLoded )
+                  if ( canBeLoded( i, timeBetweenTrace, delta(*sameDepthIt), delta(*newTraceIt) ) )
                   {
                      newTraceIt->start = sameDepthIt->start;
                      newTraceIt->loded = true;
-                     dst.lods[i].erase( (sameDepthIt+1).base() );
+                     dst.lods[i].erase( sameDepthIt );
                   }
                }
 
@@ -211,9 +179,7 @@ void appendLods( LodsData& dst, const Entries& entries )
          }
       }
 
-      dst.lods[i].insert( dst.lods[i].end(), src[i].cbegin(), src[i].cend() );
-
-      assert_is_sorted( dst.lods[i].begin(), dst.lods[i].end() );
+      dst.lods[i].append( src[i].cbegin(), src[i].cend() );
    }
 
    // Update to the new offset
@@ -221,7 +187,7 @@ void appendLods( LodsData& dst, const Entries& entries )
 }
 
 LodsArray
-computeCoreEventLods( const Entries& entries, const std::deque<Core_t>& cores, size_t idOffset )
+computeCoreEventLods( const Entries& entries, const hop::Deque<Core_t>& cores, size_t idOffset )
 {
    HOP_PROF_FUNC();
 
@@ -238,7 +204,7 @@ computeCoreEventLods( const Entries& entries, const std::deque<Core_t>& cores, s
       }
       else
       {
-         resLods[lodLvl].emplace_back( newEvent );
+         resLods[lodLvl].push_back( newEvent );
       }
    };
 
@@ -261,11 +227,11 @@ computeCoreEventLods( const Entries& entries, const std::deque<Core_t>& cores, s
    }
 
    // Compute the LOD based on the previous LOD levels
-   const std::deque<LodInfo>* lastComputedLod = &resLods[lodLvl];
+   const hop::Deque<LodInfo>* lastComputedLod = &resLods[lodLvl];
    for ( lodLvl = 1; lodLvl < LOD_COUNT; ++lodLvl )
    {
       HOP_PROF( "Computing next LOD lvl" );
-      resLods[lodLvl].emplace_back( lastComputedLod->front() );
+      resLods[lodLvl].push_back( lastComputedLod->front() );
       for ( const auto& l : *lastComputedLod )
       {
          mergeLodInfo( lodLvl, resLods[lodLvl].back(), l, resLods );
@@ -279,7 +245,7 @@ computeCoreEventLods( const Entries& entries, const std::deque<Core_t>& cores, s
    return resLods;
 }
 
-void appendCoreEventLods( LodsData& dst, const Entries& entries, const std::deque<Core_t>& cores )
+void appendCoreEventLods( LodsData& dst, const Entries& entries, const hop::Deque<Core_t>& cores )
 {
    if( entries.ends.size() <= dst.idOffset ) return;
 
@@ -308,9 +274,8 @@ void appendCoreEventLods( LodsData& dst, const Entries& entries, const std::dequ
          }
       }
 
-      // Insert all the events except the first on if it has been loded
-      dst.lods[lodLvl].insert(
-            dst.lods[lodLvl].end(), src[lodLvl].cbegin() + (int)loded, src[lodLvl].cend() );
+      // Insert all the events except the first one if it has been loded
+      dst.lods[lodLvl].append( src[lodLvl].cbegin() + (int)loded, src[lodLvl].cend() );
       if( loded )
       {
          std::sort(
