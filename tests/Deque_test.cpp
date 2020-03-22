@@ -1,7 +1,7 @@
 #include "common/Deque.h"
+#include "tests/TestUtils.h"
 
 #include <algorithm>
-#include <cassert>
 #include <numeric>
 #include <vector>
 #include <cmath>
@@ -56,53 +56,53 @@ void testIterators( hop::Deque<T>& deq )
    (void)sizeof( typename hop::Deque<T>::value_type );
 
    // Test relational operators
-   assert( it == it );
-   assert( it != itEnd );
-   assert( it < itEnd );
-   assert( itEnd > it );
-   assert( !( it < it ) );
-   assert( !( it > it ) );
-   assert( it >= it );
-   assert( it <= it );
+   HOP_TEST_ASSERT( it == it );
+   HOP_TEST_ASSERT( it != itEnd );
+   HOP_TEST_ASSERT( it < itEnd );
+   HOP_TEST_ASSERT( itEnd > it );
+   HOP_TEST_ASSERT( !( it < it ) );
+   HOP_TEST_ASSERT( !( it > it ) );
+   HOP_TEST_ASSERT( it >= it );
+   HOP_TEST_ASSERT( it <= it );
 
    // Test copy operation
    auto itCopy    = it;
    auto itCopyEnd = itEnd;
-   assert( itCopy == it );
-   assert( itCopyEnd == itEnd );
-   assert( itCopy != itCopyEnd );
+   HOP_TEST_ASSERT( itCopy == it );
+   HOP_TEST_ASSERT( itCopyEnd == itEnd );
+   HOP_TEST_ASSERT( itCopy != itCopyEnd );
 
    // Test increment decrement operations
-   assert( ( testSingleIncrementDecrement( it, 1 ) ) );
-   assert( ( testSingleIncrementDecrement( it, 3 ) ) );
-   assert( ( testSingleIncrementDecrement( it, BLOCK_SIZE - 1 ) ) );
-   assert( ( testSingleIncrementDecrement( it, BLOCK_SIZE * 10 ) ) );
-   assert( ( testIncrementDecrement( it, 1, 1 ) ) );
-   assert( ( testIncrementDecrement( it, 3, 1 ) ) );
-   assert( ( testIncrementDecrement( it, BLOCK_SIZE - 1, 1 ) ) );
-   assert( ( testIncrementDecrement( it, BLOCK_SIZE * 10, 1 ) ) );
+   HOP_TEST_ASSERT( ( testSingleIncrementDecrement( it, 1 ) ) );
+   HOP_TEST_ASSERT( ( testSingleIncrementDecrement( it, 3 ) ) );
+   HOP_TEST_ASSERT( ( testSingleIncrementDecrement( it, BLOCK_SIZE - 1 ) ) );
+   HOP_TEST_ASSERT( ( testSingleIncrementDecrement( it, BLOCK_SIZE * 10 ) ) );
+   HOP_TEST_ASSERT( ( testIncrementDecrement( it, 1, 1 ) ) );
+   HOP_TEST_ASSERT( ( testIncrementDecrement( it, 3, 1 ) ) );
+   HOP_TEST_ASSERT( ( testIncrementDecrement( it, BLOCK_SIZE - 1, 1 ) ) );
+   HOP_TEST_ASSERT( ( testIncrementDecrement( it, BLOCK_SIZE * 10, 1 ) ) );
 
    uint32_t i = 0;
    for( ; i < deq.size() - 1; ++i )
    {
       ++it;
-      assert( it != itEnd );
+      HOP_TEST_ASSERT( it != itEnd );
    }
    ++it;
-   assert( it == itEnd );
+   HOP_TEST_ASSERT( it == itEnd );
 
    // Test lower_bound algorithm on d
    auto pastEnd = std::lower_bound( deq.begin(), deq.end(), 9999 );
-   assert( pastEnd == itEnd );
+   HOP_TEST_ASSERT( pastEnd == itEnd );
 
    auto first = std::lower_bound( deq.begin(), deq.end(), 0 );
-   assert( first == deq.begin() );
+   HOP_TEST_ASSERT( first == deq.begin() );
 
    auto it9 = std::lower_bound( deq.begin(), deq.end(), 9 );
-   assert( it9 == deq.begin() + 9 );
+   HOP_TEST_ASSERT( it9 == deq.begin() + 9 );
 
    auto it42 = std::lower_bound( deq.begin(), deq.end(), 42 );
-   assert( it42 == deq.begin() + 42 );
+   HOP_TEST_ASSERT( it42 == deq.begin() + 42 );
 }
 
 void testCopy()
@@ -111,17 +111,17 @@ void testCopy()
    deq.append( g_values.data(), g_values.size() );
 
    hop::Deque< uint32_t > deq2( deq );
-   assert( deq.size() == deq2.size() );
+   HOP_TEST_ASSERT( deq.size() == deq2.size() );
 
    deq.erase( deq.begin() + 20, deq.begin() + 100 );
    deq2 = deq;
-   assert( deq.size() == deq2.size() );
-   assert( std::is_sorted( deq.begin(), deq.end() ) );
+   HOP_TEST_ASSERT( deq.size() == deq2.size() );
+   HOP_TEST_ASSERT( std::is_sorted( deq.begin(), deq.end() ) );
 
    deq.erase(deq.begin(), deq.begin() + hop::Deque<uint32_t>::COUNT_PER_BLOCK + 50);
    deq2 = deq;
-   assert(deq.size() == deq2.size());
-   assert(std::is_sorted(deq.begin(), deq.end()));
+   HOP_TEST_ASSERT(deq.size() == deq2.size());
+   HOP_TEST_ASSERT(std::is_sorted(deq.begin(), deq.end()));
 }
 
 void testAppend()
@@ -134,7 +134,7 @@ void testAppend()
    for( uint32_t i = 0; i < appendDeq.size(); ++i )
    {
       auto value = appendDeq[i];
-      assert( value == i + valueOffset );
+      HOP_TEST_ASSERT( value == i + valueOffset );
    }
 
    // Append a second sub block and make sure we handle the "partial" src block correctly
@@ -143,7 +143,7 @@ void testAppend()
    for( uint32_t i = 0; i < appendDeq.size(); ++i )
    {
       auto value = appendDeq[i];
-      assert( value == i + valueOffset );
+      HOP_TEST_ASSERT( value == i + valueOffset );
    }
 
    // Clear for upcoming tests
@@ -156,7 +156,7 @@ void testAppend()
    for( uint32_t i = 0; i < valueCount; ++i )
    {
       auto value = appendDeq[i];
-      assert( value == i + valueOffset );
+      HOP_TEST_ASSERT( value == i + valueOffset );
    }
 
    appendDeq.clear();
@@ -166,7 +166,7 @@ void testAppend()
    for( uint32_t i = 0; i < appendDeq.size(); ++i )
    {
       auto value = appendDeq[i];
-      assert( value == i );
+      HOP_TEST_ASSERT( value == i );
    }
 
    { // Append a full block than a smaller one
@@ -185,30 +185,30 @@ void testErase()
 
    // Erase nothing
    deq.erase( deq.begin(), deq.begin() );
-   assert( std::is_sorted( deq.begin(), deq.end() ) );
-   assert( deq.size() == g_values.size() - removedCount );
+   HOP_TEST_ASSERT( std::is_sorted( deq.begin(), deq.end() ) );
+   HOP_TEST_ASSERT( deq.size() == g_values.size() - removedCount );
 
    // Erase nothing
    deq.erase( deq.end(), deq.end() );
-   assert( std::is_sorted( deq.begin(), deq.end() ) );
-   assert( deq.size() == g_values.size() - removedCount );
+   HOP_TEST_ASSERT( std::is_sorted( deq.begin(), deq.end() ) );
+   HOP_TEST_ASSERT( deq.size() == g_values.size() - removedCount );
 
    // Erase nothing
    deq.erase( deq.begin() + 10, deq.begin() + 10 );
-   assert( std::is_sorted( deq.begin(), deq.end() ) );
-   assert( deq.size() == g_values.size() - removedCount );
+   HOP_TEST_ASSERT( std::is_sorted( deq.begin(), deq.end() ) );
+   HOP_TEST_ASSERT( deq.size() == g_values.size() - removedCount );
 
    // Erase the last element. Simple case where no moving is performed
    removedCount += 1;
    deq.erase( deq.end() - 1 );
-   assert( std::is_sorted( deq.begin(), deq.end() ) );
-   assert( deq.size() == g_values.size() - removedCount );
+   HOP_TEST_ASSERT( std::is_sorted( deq.begin(), deq.end() ) );
+   HOP_TEST_ASSERT( deq.size() == g_values.size() - removedCount );
 
    // Erase the first element. All the block will need to be shifted by 1
    removedCount += 1;
    deq.erase( deq.begin() );
-   assert( std::is_sorted( deq.begin(), deq.end() ) );
-   assert( deq.size() == g_values.size() - removedCount );
+   HOP_TEST_ASSERT( std::is_sorted( deq.begin(), deq.end() ) );
+   HOP_TEST_ASSERT( deq.size() == g_values.size() - removedCount );
 
    /*  Erase range element than spans 2 blocks with the right one
     * having enough remaining elements to fill the left one
@@ -222,8 +222,8 @@ void testErase()
       removedCount += 50;
       auto erIt = deq.begin() + hop::Deque<uint32_t>::COUNT_PER_BLOCK - 12;
       deq.erase( erIt, erIt + 50 );
-      assert( std::is_sorted( deq.begin(), deq.end() ) );
-      assert( deq.size() == g_values.size() - removedCount );
+      HOP_TEST_ASSERT( std::is_sorted( deq.begin(), deq.end() ) );
+      HOP_TEST_ASSERT( deq.size() == g_values.size() - removedCount );
    }
 
    /*
@@ -243,8 +243,8 @@ void testErase()
       auto errFrom = deq.begin() + 10;
       auto errTo   = errFrom + removedCount;
       deq.erase( errFrom, errTo  );
-      assert( std::is_sorted( deq.begin(), deq.end() ) );
-      assert( deq.size() == g_values.size() - removedCount );
+      HOP_TEST_ASSERT( std::is_sorted( deq.begin(), deq.end() ) );
+      HOP_TEST_ASSERT( deq.size() == g_values.size() - removedCount );
    }
 
       /*
@@ -261,8 +261,8 @@ void testErase()
       auto errFrom      = deq.begin() + removedCount/2;
       auto errTo        = errFrom + removedCount;
       deq.erase( errFrom, errTo );
-      assert( std::is_sorted( deq.begin(), deq.end() ) );
-      assert( deq.size() == g_values.size() - removedCount );
+      HOP_TEST_ASSERT( std::is_sorted( deq.begin(), deq.end() ) );
+      HOP_TEST_ASSERT( deq.size() == g_values.size() - removedCount );
    }
 
    /*
@@ -282,8 +282,8 @@ void testErase()
       auto errFrom      = deq.begin() + removedCount/2;
       auto errTo        = errFrom + removedCount;
       deq.erase( errFrom, errTo );
-      assert( std::is_sorted( deq.begin(), deq.end() ) );
-      assert( deq.size() == g_values.size() - removedCount );
+      HOP_TEST_ASSERT( std::is_sorted( deq.begin(), deq.end() ) );
+      HOP_TEST_ASSERT( deq.size() == g_values.size() - removedCount );
    }
 
    /*
@@ -309,8 +309,8 @@ void testErase()
       auto errFrom = deq.begin() + 10;
       auto errTo   = errFrom + removedCount;
       deq.erase( errFrom, errTo  );
-      assert( std::is_sorted( deq.begin(), deq.end() ) );
-      assert( deq.size() == veryLargeValues.size() - removedCount );
+      HOP_TEST_ASSERT( std::is_sorted( deq.begin(), deq.end() ) );
+      HOP_TEST_ASSERT( deq.size() == veryLargeValues.size() - removedCount );
    }
 
    /*
@@ -325,8 +325,8 @@ void testErase()
       auto errFrom = deq.begin() + 10;
       auto errTo   = errFrom + removedCount;
       deq.erase( errFrom, errTo  );
-      assert( std::is_sorted( deq.begin(), deq.end() ) );
-      assert( deq.size() == veryLargeValues.size() - removedCount );
+      HOP_TEST_ASSERT( std::is_sorted( deq.begin(), deq.end() ) );
+      HOP_TEST_ASSERT( deq.size() == veryLargeValues.size() - removedCount );
    }
 
    /*
@@ -336,7 +336,7 @@ void testErase()
       deq.clear();
       deq.append( g_values.data(), g_values.size() );
       deq.erase( deq.begin(), deq.end() );
-      assert( deq.size() == 0 );
+      HOP_TEST_ASSERT( deq.size() == 0 );
    }
 
     /*
@@ -347,7 +347,7 @@ void testErase()
       deq.append( g_values.data(), hop::Deque<uint32_t>::COUNT_PER_BLOCK );
       deq.append( g_values.data(), 1 );
       deq.erase( deq.end() -1, deq.end() );
-      assert( deq.size() == hop::Deque<uint32_t>::COUNT_PER_BLOCK );
+      HOP_TEST_ASSERT( deq.size() == hop::Deque<uint32_t>::COUNT_PER_BLOCK );
    }
    
    /*
@@ -359,10 +359,10 @@ void testErase()
       deq.clear();
       deq.append( g_values.data(), g_values.size() );
       deq.erase( deq.begin() + 20, deq.begin() + 100 );
-      assert( std::is_sorted( deq.begin(), deq.end() ) );
+      HOP_TEST_ASSERT( std::is_sorted( deq.begin(), deq.end() ) );
 
       deq.erase(deq.begin(), deq.begin() + hop::Deque<uint32_t>::COUNT_PER_BLOCK + 50);
-      assert(std::is_sorted(deq.begin(), deq.end()));  
+      HOP_TEST_ASSERT(std::is_sorted(deq.begin(), deq.end()));  
    }
 }
 
@@ -373,16 +373,16 @@ int main()
 
    auto it    = deq.begin();
    auto itEnd = deq.end();
-   assert( it == itEnd );
-   assert( deq.size() == 0 );
+   HOP_TEST_ASSERT( it == itEnd );
+   HOP_TEST_ASSERT( deq.size() == 0 );
 
    g_values.resize(1024);
    std::iota( g_values.begin(), g_values.end(), 0 );
    deq.append( g_values.data(), g_values.size() );
 
-   assert( deq.back() == 1023 );
+   HOP_TEST_ASSERT( deq.back() == 1023 );
 
-   assert( std::is_sorted( deq.begin(), deq.end() ) );
+   HOP_TEST_ASSERT( std::is_sorted( deq.begin(), deq.end() ) );
 
    testIterators( deq );
    testAppend();
@@ -393,11 +393,11 @@ int main()
    for( size_t i = 0; i < deq.size(); ++i )
    {
       auto value = deq[i];
-      assert( value == i );
+      HOP_TEST_ASSERT( value == i );
    }
 
    deq.clear();
-   assert( deq.size() == 0 );
+   HOP_TEST_ASSERT( deq.size() == 0 );
 
    hop::block_allocator::terminate();
 }
