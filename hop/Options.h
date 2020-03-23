@@ -17,6 +17,7 @@ namespace options
    void enableOptionWindow();
 
    float traceHeight();
+   float traceTextAlignment();
    float windowOpacity();
    bool showDebugWindow();
    bool showCoreInfo();
