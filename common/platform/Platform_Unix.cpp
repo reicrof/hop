@@ -34,7 +34,7 @@ ProcessInfo getProcessInfoFromPID( ProcessID pid )
    ProcessInfo info = {};
 
    char cmd[128] = {};
-   snprintf( cmd, sizeof( cmd ), "ps -p %" PRId64 " -o comm= | xargs basename | tr -d '\n'", pid );
+   snprintf( cmd, sizeof( cmd ), "ps -p %" PRId64 " -o comm= | xargs -r basename | tr -d '\n'", pid );
 
    // Get name from PID
    if( FILE* fp = popen( cmd, "r" ) )

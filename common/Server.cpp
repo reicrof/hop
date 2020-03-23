@@ -53,9 +53,27 @@ static int mergeAndRemoveDuplicates( hop::CoreEvent* coreEvents, uint32_t count,
    return std::distance( coreEvents, newEnd );
 }
 
+static hop::SharedMemory::ConnectionState updateConnectionState(
+   const hop::SharedMemory& sharedMem, 
+   const hop::TimeStamp curTimestamp,
+   const hop::TimeStamp prevSignalTimeStamp )
+{
+   hop::SharedMemory::ConnectionState state =hop::SharedMemory::CONNECTED;
+   const bool producerLost =
+       !sharedMem.hasConnectedProducer() || curTimestamp - prevSignalTimeStamp > 3000000000;
+   if( producerLost )
+   {
+      // We have lost the producer. Check if it is becaused the process was terminated or
+      // if it is simply not feeling chatty
+      state = hop::processAlive( sharedMem.pid() ) ? hop::SharedMemory::CONNECTED_NO_CLIENT
+                                                   : hop::SharedMemory::NOT_CONNECTED;
+   }
+   return state;
+}
+
 namespace hop
 {
-bool Server::start( int processId, const char* name )
+bool Server::start( int inPid, const char* name )
 {
    assert( name != nullptr );
 
@@ -64,10 +82,7 @@ bool Server::start( int processId, const char* name )
    _state.processName = name;
    _state.connectionState = SharedMemory::NOT_CONNECTED;
 
-   // Swap for ptr owned by the state
-   name = _state.processName.c_str();
-
-   _thread = std::thread( [this, processId, name]() {
+   _thread = std::thread( [this, inPid]() {
       TimeStamp lastSignalTime = getTimeStamp();
       SharedMemory::ConnectionState prevConnectionState = SharedMemory::NOT_CONNECTED;
 
@@ -79,9 +94,9 @@ bool Server::start( int processId, const char* name )
          if ( !_sharedMem.valid() )
          {
             HOP_PROF( "Trying to open process..." );
-            const hop::ProcessInfo procInfo = processId != -1
-                                                  ? hop::getProcessInfoFromPID( processId )
-                                                  : hop::getProcessInfoFromProcessName( name );
+            const hop::ProcessInfo procInfo =
+                inPid != -1 ? hop::getProcessInfoFromPID( inPid )
+                            : hop::getProcessInfoFromProcessName( _state.processName.c_str() );
             SharedMemory::ConnectionState state =
                 _sharedMem.create( procInfo.pid, 0 /*will be define in shared metadata*/, true );
 
@@ -110,6 +125,7 @@ bool Server::start( int processId, const char* name )
             _state.pid             = procInfo.pid;
             _state.processName     = std::string( procInfo.name );
             prevConnectionState    = state;
+            lastSignalTime         = getTimeStamp();
 
             // Set HOP thread name
             char serverName[64];
@@ -124,10 +140,9 @@ bool Server::start( int processId, const char* name )
 
          // Check if its been a while since we have been signaleds
          const TimeStamp curTime = getTimeStamp();
-         const bool producerLost =
-             !_sharedMem.hasConnectedProducer() || curTime - lastSignalTime > 3000000000;
          const auto newConnectionState =
-             producerLost ? SharedMemory::CONNECTED_NO_CLIENT : SharedMemory::CONNECTED;
+             updateConnectionState( _sharedMem, curTime, lastSignalTime );
+         const bool clientAlive = newConnectionState != SharedMemory::NOT_CONNECTED;
 
          // Check and update current server state
          {
@@ -153,6 +168,13 @@ bool Server::start( int processId, const char* name )
                prevConnectionState    = newConnectionState;
                _state.connectionState = newConnectionState;
             }
+
+            if( !clientAlive )
+            {
+               _state.pid = -1;
+               _sharedMem.destroy();
+               continue;
+            }
          }
 
          if ( !wasSignaled )
@@ -163,8 +185,7 @@ bool Server::start( int processId, const char* name )
             // not very productive or is being debuged. If we do not have a producer, it means the
             // app was closed.
             using namespace std::chrono;
-            const auto timeToSleep =
-                _sharedMem.hasConnectedProducer() ? milliseconds( 100 ) : milliseconds( 1000 );
+            const auto timeToSleep = clientAlive ? milliseconds( 100 ) : milliseconds( 1000 );
             std::this_thread::sleep_for( timeToSleep );
             continue;
          }
