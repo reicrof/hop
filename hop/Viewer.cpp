@@ -624,11 +624,6 @@ static bool profilerAlreadyExist(
    return alreadyExist;
 }
 
-static bool validConnectionState( hop::SharedMemory::ConnectionState state )
-{
-   return state == hop::SharedMemory::CONNECTED || state == hop::SharedMemory::CONNECTED_NO_CLIENT;
-}
-
 static void drawCanvasContent(
    float wndWidth,
    float wndHeight,
@@ -636,9 +631,7 @@ static void drawCanvasContent(
    const hop::TimelineInfo& tlInfo,
    hop::TimelineMsgArray* msgArr )
 {
-   if ( prof && 
-      ( validConnectionState( prof->data().connectionState() ) ||
-        prof->data().sourceType() == hop::Profiler::SRC_TYPE_FILE ) )
+   if ( prof )
    {
       const ImVec2 curPos = ImGui::GetCursorPos();
       prof->draw( curPos.x, curPos.y, tlInfo, msgArr );
@@ -669,10 +662,7 @@ int Viewer::addNewProfiler( const char* processName, bool startRecording )
       return -1;
    }
 
-   const hop::ProcessInfo procInfo = pid != -1 ? hop::getProcessInfoFromPID( pid )
-                                               : hop::getProcessInfoFromProcessName( processName );
-
-   _profilers.emplace_back( new hop::ProfilerView( Profiler::SRC_TYPE_PROCESS, procInfo.pid, processName ) );
+   _profilers.emplace_back( new hop::ProfilerView( Profiler::SRC_TYPE_PROCESS, pid, processName ) );
    setRecording( _profilers.back().get(), &_timeline, startRecording );
    _selectedTab = _profilers.size() - 1;
    return _selectedTab;

@@ -55,7 +55,6 @@ public:
 
 private:
    std::string _name;
-   int _pid;
    std::vector<TimelineTrack> _tracks;
    StringDb _strDb;
    bool _recording{ false };

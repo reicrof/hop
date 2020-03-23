@@ -11,19 +11,17 @@ namespace hop
 {
 Profiler::Profiler( SourceType type, int processId, const char* str )
     : _name( str ),
-      _pid( processId ),
       _srcType( type ),
       _earliestTimeStamp( 0 ),
       _latestTimeStamp( 0 )
 {
    if( type == Profiler::SRC_TYPE_PROCESS )
-      _server.start( _pid , _name.c_str());
+      _server.start( processId , _name.c_str());
 }
 
 const char* Profiler::nameAndPID( int* processId ) const
 {
-   if( processId ) *processId = _pid;
-   return _name.c_str();
+   return _server.processInfo( processId );
 }
 
 Profiler::SourceType Profiler::sourceType() const { return _srcType; }

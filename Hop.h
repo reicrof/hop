@@ -545,6 +545,7 @@ class SharedMemory
    ringbuf_t* ringbuffer() const HOP_NOEXCEPT;
    uint8_t* data() const HOP_NOEXCEPT;
    bool valid() const HOP_NOEXCEPT;
+   int pid() const HOP_NOEXCEPT;
    sem_handle semaphore() const HOP_NOEXCEPT;
    bool tryWaitSemaphore() const HOP_NOEXCEPT;
    void signalSemaphore() const HOP_NOEXCEPT;
@@ -560,6 +561,7 @@ class SharedMemory
    sem_handle _semaphore{NULL};
    bool _isConsumer{false};
    shm_handle _sharedMemHandle{};
+   int _pid;
    HOP_CHAR _sharedMemPath[HOP_SHARED_MEM_MAX_NAME_SIZE];
    HOP_CHAR _sharedSemPath[HOP_SHARED_MEM_MAX_NAME_SIZE + 5];
    std::atomic<bool> _valid{false};
@@ -959,6 +961,7 @@ SharedMemory::create( int pid, size_t requestedSize, bool isConsumer )
 
       isConsumer ? setConnectedConsumer( true ) : setConnectedProducer( true );
       _valid.store( true );
+      _pid = pid;
    }
 
    return state;
@@ -1032,6 +1035,8 @@ uint8_t* SharedMemory::data() const HOP_NOEXCEPT { return _data; }
 
 bool SharedMemory::valid() const HOP_NOEXCEPT { return _valid; }
 
+int SharedMemory::pid() const HOP_NOEXCEPT { return _pid; }
+
 ringbuf_t* SharedMemory::ringbuffer() const HOP_NOEXCEPT { return _ringbuf; }
 
 sem_handle SharedMemory::semaphore() const HOP_NOEXCEPT { return _semaphore; }
@@ -1083,10 +1088,11 @@ void SharedMemory::destroy()
          _sharedMetaData->~SharedMetaInfo();
       }
 
-      _data      = NULL;
-      _ringbuf   = NULL;
-      _semaphore = NULL;
-      _valid     = false;
+      _data           = NULL;
+      _ringbuf        = NULL;
+      _semaphore      = NULL;
+      _sharedMetaData = NULL;
+      _valid          = false;
       g_done.store( true );
    }
 }
