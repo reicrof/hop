@@ -8,12 +8,13 @@
 #include <fstream>
 
 static const char* startFullScreenToken = "start_full_screen";
-static const char* traceHeightsToken = "trace_height";
-static const char* windowOpacityToken = "window_opacity";
-static const char* zoneColorsToken = "zone_colors";
-static const char* debugWindowToken = "show_debug_window";
-static const char* showCoreInfoToken = "show_core_info";
-static const char* vsyncOnToken = "vsync_on";
+static const char* traceHeightsToken    = "trace_height";
+static const char* traceTextAlignToken  = "trace_text_alignment";
+static const char* windowOpacityToken   = "window_opacity";
+static const char* zoneColorsToken      = "zone_colors";
+static const char* debugWindowToken     = "show_debug_window";
+static const char* showCoreInfoToken    = "show_core_info";
+static const char* vsyncOnToken         = "vsync_on";
 
 static const uint32_t DEFAULT_COLORS[] = {
     0xffe6194b, 0xff3cb44b, 0xffffe119, 0xff0082c8, 0xfff58231, 0xff911eb4, 0xff46f0f0, 0xfff032e6,
@@ -25,6 +26,7 @@ namespace hop
 struct Options
 {
    float traceHeight{20.0f};
+   float traceTextAlignment{0.5f};
    float windowOpacity{0.8f};
    bool startFullScreen{true};
    bool vsyncOn{true};
@@ -37,6 +39,11 @@ struct Options
 float options::traceHeight()
 {
    return g_options.traceHeight;
+}
+
+float options::traceTextAlignment()
+{
+   return g_options.traceTextAlignment;
 }
 
 float options::windowOpacity()
@@ -89,6 +96,9 @@ bool options::save()
       // Trace height option
       outOptions << traceHeightsToken << " " << g_options.traceHeight << '\n';
 
+      // Trace text alignement inside the rectangle
+      outOptions << traceTextAlignToken << " " << g_options.traceTextAlignment << '\n';
+
       // Opacity of the window
       outOptions << windowOpacityToken << " " << g_options.windowOpacity << '\n';
 
@@ -140,6 +150,10 @@ bool options::load()
          {
             inOptions >> g_options.traceHeight;
          }
+         else if( strcmp( token.c_str(), traceTextAlignToken ) == 0 )
+         {
+            inOptions >> g_options.traceTextAlignment;
+         }
          else if( strcmp( token.c_str(), windowOpacityToken ) == 0 )
          {
             inOptions >> g_options.windowOpacity;
@@ -179,6 +193,7 @@ void options::draw()
       ImGui::Checkbox("Show Core Information", &g_options.showCoreInfo );
       ImGui::Checkbox("Vsync Enabled", &g_options.vsyncOn );
       ImGui::SliderFloat( "Trace Height", &g_options.traceHeight, 15.0f, 50.0f );
+      ImGui::SliderFloat( "Trace Text Alignment", &g_options.traceTextAlignment, 0.0f, 1.0f );
       ImGui::SliderFloat( "Window Opacity", &g_options.windowOpacity, 0.0f, 1.0f );
 
       ImGui::Spacing();

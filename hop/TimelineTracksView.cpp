@@ -424,7 +424,10 @@ static size_t drawLockWaits(
 {
    const auto drawStart = std::chrono::system_clock::now();
 
-   DrawEntriesInfo drawInfo = {lockwaitLabelWithTime, getLockWaitColor, ImVec2( 0.0f, 0.5f ), 0.0f, false};
+   const float textAlignment = hop::options::traceTextAlignment();
+
+   DrawEntriesInfo drawInfo = {
+       lockwaitLabelWithTime, getLockWaitColor, ImVec2( textAlignment, 0.5f ), 0.0f, false};
    const size_t hoveredIdx  = drawEntries( drawPos, threadIdx, data, lodsData, drawInfo );
 
    const auto drawEnd = std::chrono::system_clock::now();
@@ -442,7 +445,10 @@ static size_t drawTraces(
 {
    const auto drawStart = std::chrono::system_clock::now();
 
-   DrawEntriesInfo drawInfo = {traceLabelWithTime, getTraceColor, ImVec2( 0.0f, 0.5f ), 0.0f, false};
+   const float textAlignment = hop::options::traceTextAlignment();
+
+   DrawEntriesInfo drawInfo = {
+       traceLabelWithTime, getTraceColor, ImVec2( textAlignment, 0.5f ), 0.0f, false};
    // Draw the lock waits  entries (before traces so that they are not hiding them)
    const size_t hoveredIdx = drawEntries( drawPos, threadIdx, data, lodsData, drawInfo );
 
