@@ -25,6 +25,7 @@ ProcessID startChildProcess( const char* path, char** )
       return (ProcessID)-1;
    }
    newProcess = (ProcessID)pi.hProcess;
+   CloseHandle( pi.hThread );
    return newProcess;
 }
 
@@ -61,7 +62,7 @@ ProcessInfo getProcessInfoFromProcessName( const char* name )
    {
       while( Process32Next( snapshot, &entry ) == TRUE )
       {
-         if( stricmp( entry.szExeFile, name ) == 0 )
+         if( _stricmp( entry.szExeFile, name ) == 0 )
          {
             info.pid = entry.th32ProcessID;
             strncpy( info.name, name, sizeof( info.name ) - 1 );

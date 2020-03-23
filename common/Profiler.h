@@ -1,5 +1,5 @@
-#ifndef PROFILER_H_
-#define PROFILER_H_
+#ifndef HOP_PROFILER_H_
+#define HOP_PROFILER_H_
 
 #include "common/Server.h" // Will include Hop.h with the HOP_VIEWER defined
 #include "common/StringDb.h"
@@ -72,4 +72,4 @@ private:
 
 }  // namespace hop
 
-#endif // PROFILER_H_
+#endif // HOP_PROFILER_H_

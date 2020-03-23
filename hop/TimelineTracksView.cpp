@@ -349,7 +349,7 @@ static size_t drawEntries(
 
    const float windowWidthPxl = ImGui::GetWindowWidth();
 
-   const auto lodStartIt = lodsData.lods[data.lodLevel].begin() + spanIndex.first;
+   auto lodStartIt = lodsData.lods[data.lodLevel].begin() + spanIndex.first;
    createDrawData( lodStartIt, traceCount, absoluteStart, timelineRange / windowWidthPxl, startPosPxl.data(), deltaPxl.data() );
 
    const ImVec2 mousePos    = ImGui::GetMousePos();
@@ -430,7 +430,10 @@ static size_t drawLockWaits(
 {
    const auto drawStart = std::chrono::system_clock::now();
 
-   DrawEntriesInfo drawInfo = {lockwaitLabelWithTime, getLockWaitColor, ImVec2( 0.0f, 0.5f ), 0.0f, false};
+   const float textAlignment = hop::options::traceTextAlignment();
+
+   DrawEntriesInfo drawInfo = {
+       lockwaitLabelWithTime, getLockWaitColor, ImVec2( textAlignment, 0.5f ), 0.0f, false};
    const size_t hoveredIdx  = drawEntries( drawPos, threadIdx, data, lodsData, drawInfo );
 
    const auto drawEnd = std::chrono::system_clock::now();
@@ -448,7 +451,10 @@ static size_t drawTraces(
 {
    const auto drawStart = std::chrono::system_clock::now();
 
-   DrawEntriesInfo drawInfo = {traceLabelWithTime, getTraceColor, ImVec2( 0.0f, 0.5f ), 0.0f, false};
+   const float textAlignment = hop::options::traceTextAlignment();
+
+   DrawEntriesInfo drawInfo = {
+       traceLabelWithTime, getTraceColor, ImVec2( textAlignment, 0.5f ), 0.0f, false};
    // Draw the lock waits  entries (before traces so that they are not hiding them)
    const size_t hoveredIdx = drawEntries( drawPos, threadIdx, data, lodsData, drawInfo );
 
@@ -1043,7 +1049,7 @@ void TimelineTracksView::drawContextMenu( const TimelineTrackDrawData& data )
           {
              if ( ImGui::Selectable( "Profile Track" ) )
              {
-                 hop::displayModalWindow( "Computing total trace size...", hop::MODAL_TYPE_NO_CLOSE );
+                 hop::displayModalWindow( "Computing total trace size...", nullptr, hop::MODAL_TYPE_NO_CLOSE );
                  const uint32_t tIdx = _contextMenu.threadIndex;
                  std::thread t( [ this, tIdx, dispTrace = data.profiler.timelineTracks()[tIdx]._traces.copy() ]() {
                     _traceDetails = createGlobalTraceDetails( dispTrace, tIdx );
