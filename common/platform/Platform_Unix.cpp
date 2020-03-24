@@ -15,8 +15,12 @@
 */
 #ifdef __APPLE__
 #define HOP_GREP_CMD "comm="
+// By default the xargs does not complai non Mac
+#define HOP_XARGS_NO_RUN_EMPTY ""
 #else
 #define HOP_GREP_CMD "cmd"
+// On linnux xargs complains if it receives and empty string
+#define HOP_XARGS_NO_RUN_EMPTY "-r"
 #endif
 
 namespace hop
@@ -34,7 +38,7 @@ ProcessInfo getProcessInfoFromPID( ProcessID pid )
    ProcessInfo info = {};
 
    char cmd[128] = {};
-   snprintf( cmd, sizeof( cmd ), "ps -p %" PRId64 " -o comm= | xargs -r basename | tr -d '\n'", pid );
+   snprintf( cmd, sizeof( cmd ), "ps -p %" PRId64 " -o comm= | xargs " HOP_XARGS_NO_RUN_EMPTY " basename | tr -d '\n'", pid );
 
    // Get name from PID
    if( FILE* fp = popen( cmd, "r" ) )
