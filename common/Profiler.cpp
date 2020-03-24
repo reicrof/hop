@@ -12,10 +12,7 @@ namespace hop
 {
 Profiler::Profiler( SourceType type, int processId, const char* str )
     : _name( str ),
-<<<<<<< HEAD
       _recording( false ),
-=======
->>>>>>> d545a61551bcc2e96e1ecb19524d0035cbe7ba53
       _srcType( type ),
       _loadedFileCpuFreqGHz( 0 ),
       _earliestTimeStamp( 0 ),
@@ -28,7 +25,6 @@ Profiler::Profiler( SourceType type, int processId, const char* str )
 const char* Profiler::nameAndPID( int* processId ) const
 {
    return _server.processInfo( processId );
-<<<<<<< HEAD
 }
 
 float Profiler::cpuFreqGHz() const
@@ -40,8 +36,6 @@ float Profiler::cpuFreqGHz() const
 
    // If we are not profiling a process, we have opened a file, and we should return the value read
    return _loadedFileCpuFreqGHz;
-=======
->>>>>>> d545a61551bcc2e96e1ecb19524d0035cbe7ba53
 }
 
 Profiler::SourceType Profiler::sourceType() const { return _srcType; }
