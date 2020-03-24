@@ -20,7 +20,7 @@ option( USE_OS_FILE_DIALOG "Use the OS provided file dialog" ON )
 #####################
 if(UNIX)
    set( PLATFORM_LINK_FLAGS "-lpthread -ldl" )
-   set( CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -Wextra -pedantic -ffast-math -fno-exceptions -fno-rtti -Wstrict-aliasing=2 " )
+   set( CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -Wextra -pedantic -Werror=switch -ffast-math -fno-exceptions -fno-rtti -Wstrict-aliasing=2 " )
    if(APPLE)
         set( CMAKE_OSX_DEPLOYMENT_TARGET 10.11 )
         set( NOC_IMPL_FILE "noc_file_dialog/noc_file_dialog.mm")

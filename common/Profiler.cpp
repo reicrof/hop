@@ -12,7 +12,6 @@ namespace hop
 {
 Profiler::Profiler( SourceType type, int processId, const char* str )
     : _name( str ),
-      _pid( processId ),
       _recording( false ),
       _srcType( type ),
       _loadedFileCpuFreqGHz( 0 ),
@@ -20,13 +19,12 @@ Profiler::Profiler( SourceType type, int processId, const char* str )
       _latestTimeStamp( 0 )
 {
    if( type == Profiler::SRC_TYPE_PROCESS )
-      _server.start( _pid , _name.c_str());
+      _server.start( processId , _name.c_str());
 }
 
 const char* Profiler::nameAndPID( int* processId ) const
 {
-   if( processId ) *processId = _pid;
-   return _name.c_str();
+   return _server.processInfo( processId );
 }
 
 float Profiler::cpuFreqGHz() const

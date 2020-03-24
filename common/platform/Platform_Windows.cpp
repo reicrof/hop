@@ -66,6 +66,7 @@ ProcessInfo getProcessInfoFromProcessName( const char* name )
          {
             info.pid = entry.th32ProcessID;
             strncpy( info.name, name, sizeof( info.name ) - 1 );
+            break;
          }
       }
    }

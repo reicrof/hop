@@ -262,7 +262,6 @@ int main( int argc, char* argv[] )
       return -2;
    }
 
-   hop::initializeBlockAllocator();
    hop::setupSignalHandlers( terminateCallback );
 
    if ( SDL_Init( SDL_INIT_VIDEO ) != 0 )
@@ -282,6 +281,8 @@ int main( int argc, char* argv[] )
       fprintf( stderr, "Could not create window: %s\n", SDL_GetError() );
       return -1;
    }
+
+   hop::initializeBlockAllocator();
 
    sdlImGuiInit();
 
