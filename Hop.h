@@ -532,6 +532,7 @@ class SharedMemory
       CONNECTED,
       CONNECTED_NO_CLIENT,
       PERMISSION_DENIED,
+      INVALID_VERSION,
       UNKNOWN_CONNECTION_ERROR
    };
 
@@ -950,7 +951,7 @@ SharedMemory::create( int pid, size_t requestedSize, bool isConsumer )
                 static_cast<double>( metaInfo->clientVersion ),
                 static_cast<double>( HOP_VERSION ) );
             destroy();
-            exit( 0 );
+            return INVALID_VERSION;
          }
       }
 

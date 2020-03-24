@@ -156,7 +156,7 @@ static void drawBackground( float windowWidth, float windowHeight )
 
 static bool drawHelpMenu()
 {
-   ImGui::Text( "Hop version %.1f\n", HOP_VERSION );
+   ImGui::Text( "Hop version : %.2f\n", HOP_VERSION );
    static bool rdtscpSupported = hop::supportsRDTSCP();
    static bool constantTscSupported = hop::supportsConstantTSC();
    ImGui::Text(
@@ -166,14 +166,16 @@ static bool drawHelpMenu()
 
    const char* helpTxt =
        "- Press 'R' to start/stop recording\n"
-       "- Right mouse click to get traces details\n"
-       "- Double click on a trace to focus it\n"
+       "- Left mouse drag to pan\n"
+       "- Left double click on a trace to focus it\n"
+       "- Left mouse drag + ctrl to measure time in region\n"
        "- Right mouse drag to zoom on a region\n"
-       "- Left mouse drag to measure time in region\n"
+       "- Right mouse click to get traces details\n"
        "- Right click on the timeline to create a bookmark\n"
-       "- Use arrow keys <-/-> to navigate bookmarks\n"
        "- Use CTRL+F to search traces\n"
-       "- Use Del to delete traces\n";
+       "- Use arrow keys <-/-> to navigate bookmarks\n"
+       "- Use Del to delete all recorded traces\n";
+   ImGui::Separator();       
    ImGui::Text( "%s", helpTxt );
    ImGui::Spacing();
    return ImGui::Button( "Close", ImVec2( 120, 0 ) );
@@ -204,13 +206,13 @@ static void drawMenuBar( hop::Viewer* v )
          {
             v->openProfilerFile();
          }
-         if( ImGui::MenuItem( menuHelp, NULL ) )
-         {
-            menuAction = menuHelp;
-         }
          if ( ImGui::MenuItem( "Options", NULL ) )
          {
             hop::options::enableOptionWindow();
+         }
+         if( ImGui::MenuItem( menuHelp, NULL ) )
+         {
+            menuAction = menuHelp;
          }
          ImGui::Separator();
          if ( ImGui::MenuItem( "Exit", NULL ) )
@@ -353,6 +355,10 @@ static void drawStatusIcon( const ImVec2 drawPos, hop::SharedMemory::ConnectionS
       case hop::SharedMemory::PERMISSION_DENIED:
          col = ImColor( 0.6f, 0.2f, 0.0f );
          msg = "Permission to shared memory or semaphore denied";
+         break;
+      case hop::SharedMemory::INVALID_VERSION:
+         col = ImColor( 0.6f, 0.2f, 0.0f );
+         msg = "Client version does not match viewer version";
          break;
       case hop::SharedMemory::UNKNOWN_CONNECTION_ERROR:
          col = ImColor( 0.4f, 0.0f, 0.0f );
