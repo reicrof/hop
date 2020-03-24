@@ -7,7 +7,7 @@
 namespace hop
 {
 
-static uint64_t estimateCpuFreqMhz()
+static float estimateCpuFreqHz()
 {
    using namespace std::chrono;
    uint32_t cpu;
@@ -33,12 +33,12 @@ static uint64_t estimateCpuFreqMhz()
    return deltaCycles * countPerSec;
 }
 
-uint64_t getCpuFreqHz()
+float getCpuFreqGHz()
 {
-   thread_local uint64_t cpuFreq = 0;
+   static float cpuFreq = 0;
    if( cpuFreq == 0 )
    {
-      cpuFreq = estimateCpuFreqMhz();
+      cpuFreq = estimateCpuFreqHz() / 1000000000.0;
    }
 
    return cpuFreq;
@@ -58,7 +58,12 @@ bool supportsConstantTSC()
    return reg[3] & (1 << 8);
 }
 
-int formatCyclesDurationToDisplay( uint64_t duration, char* str, size_t strSize, bool asCycles )
+int formatCyclesDurationToDisplay(
+    uint64_t duration,
+    char* str,
+    size_t strSize,
+    bool asCycles,
+    float cpuFreqGHz )
 {
    if( asCycles )
    {
@@ -66,7 +71,7 @@ int formatCyclesDurationToDisplay( uint64_t duration, char* str, size_t strSize,
    }
    else
    {
-      const auto durationInNs = hop::cyclesToNanos( duration );
+      const auto durationInNs = hop::cyclesToNanos( duration, cpuFreqGHz );
       if( durationInNs < 1000 )
       {
          return snprintf( str, strSize, "%" PRIu64 " ns", durationInNs );
@@ -91,7 +96,8 @@ int formatCyclesTimepointToDisplay(
     uint64_t totalCyclesInScreen,
     char* str,
     size_t strSize,
-    bool asCycles )
+    bool asCycles,
+    float cpuFreqGHz )
 {
    if( asCycles )
    {
@@ -99,8 +105,8 @@ int formatCyclesTimepointToDisplay(
    }
    else
    {
-      const auto timepointInNs = hop::cyclesToNanos( timepoint );
-      const auto nanosInScreen = hop::cyclesToNanos( totalCyclesInScreen );
+      const auto timepointInNs = hop::cyclesToNanos( timepoint, cpuFreqGHz );
+      const auto nanosInScreen = hop::cyclesToNanos( totalCyclesInScreen, cpuFreqGHz );
       if( nanosInScreen < 1000 )
       {
          return snprintf( str, strSize, "%" PRId64 " ns", timepointInNs );

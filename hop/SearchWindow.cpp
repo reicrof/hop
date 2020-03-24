@@ -109,7 +109,8 @@ SearchSelection drawSearchResult(
    SearchResult& searchRes,
    const StringDb& strDb,
    const TimelineInfo& tlInfo,
-   const std::vector<hop::TimelineTrack>& tracks )
+   const std::vector<hop::TimelineTrack>& tracks,
+   float cpuFreqGHz )
 {
    HOP_PROF_FUNC();
 
@@ -242,7 +243,8 @@ SearchSelection drawSearchResult(
                 tlInfo.duration,
                 traceTime,
                 sizeof( traceTime ),
-                tlInfo.useCycles );
+                tlInfo.useCycles,
+                cpuFreqGHz );
             if ( ImGui::Selectable(
                      traceTime, selectedId == i, ImGuiSelectableFlags_SpanAllColumns ) )
             {
@@ -257,7 +259,7 @@ SearchSelection drawSearchResult(
             ImGui::Text( "%s", strDb.getString( ti._traces.fctNameIds[traceId] ) );
             ImGui::NextColumn();
             hop::formatCyclesDurationToDisplay(
-                delta, traceDuration, sizeof( traceDuration ), tlInfo.useCycles );
+                delta, traceDuration, sizeof( traceDuration ), tlInfo.useCycles, cpuFreqGHz );
             ImGui::Text( "%s", traceDuration );
             ImGui::NextColumn();
             ImGui::PopID();

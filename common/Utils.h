@@ -22,16 +22,22 @@ bool supportsRDTSCP();
 
 bool supportsConstantTSC();
 
-uint64_t getCpuFreqHz();
+float getCpuFreqGHz();
 
-int formatCyclesDurationToDisplay( uint64_t duration, char* str, size_t strSize, bool asCycles );
+int formatCyclesDurationToDisplay(
+    uint64_t duration,
+    char* str,
+    size_t strSize,
+    bool asCycles,
+    float cpuFreqGHz );
 
 int formatCyclesTimepointToDisplay(
     int64_t timepoint,
     uint64_t totalCyclesInScreen,
     char* str,
     size_t strSize,
-    bool asCycles );
+    bool asCycles,
+    float cpuFreqGHz );
 
 void formatSizeInBytesToDisplay( size_t sizeInBytes, char* str, size_t strSize );
 
@@ -71,16 +77,14 @@ inline T pxlToCycles( double windowWidth, uint64_t timelineRange, double pxl )
    return static_cast<T>( cyclesPerPxl * pxl );
 }
 
-inline int64_t cyclesToNanos( int64_t cycles )
+inline int64_t cyclesToNanos( int64_t cycles, float cpuFreqGHz )
 {
-   static const double cpuFreqGhz = getCpuFreqHz() / 1000000000.0;
-   return llround( cycles / cpuFreqGhz);
+   return llround( cycles / cpuFreqGHz);
 }
 
-   inline uint64_t nanosToCycles( uint64_t nanos )
+inline uint64_t nanosToCycles( uint64_t nanos, float cpuFreqGHz )
 {
-   static const double cpuFreqGhz = getCpuFreqHz() / 1000000000.0;
-   return llround(nanos * cpuFreqGhz);
+   return llround(nanos * cpuFreqGHz);
 }
 
 inline bool ptInRect( float ptx, float pty, float ax, float ay, float bx, float by )

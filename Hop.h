@@ -59,13 +59,20 @@ For more information, please refer to <http://unlicense.org/>
 #endif
 
 // Minimum cycles for a lock to be considered in the profiled data
+#if !defined( HOP_MIN_LOCK_CYCLES )
 #define HOP_MIN_LOCK_CYCLES 1000
+#endif
 
-// Default zone is always 0
-#define HOP_ZONE_DEFAULT 0
-
-// This is the max value for a zone. Zones are stored as unsigned char
-#define HOP_ZONE_MAX  255
+// By default HOP will use a call to RDTSCP to get the current timestamp of the
+// CPU. A mismatch in synchronization was noted on some machine having multiple
+// physical CPUs. This would show up in the viewer as infinitly long traces or
+// traces that overlaps each-other. The std::chrono library seems to handle
+// this use case correctly. You can therefore enable the use of std::chrono
+// by setting this variable to 1. This will also increase the over-head of
+// HOP in your application.
+#if !defined( HOP_USE_STD_CHRONO )
+#define HOP_USE_STD_CHRONO 0
+#endif
 
 ///////////////////////////////////////////////////////////////
 /////       THESE ARE THE MACROS YOU SHOULD USE     ///////////
@@ -94,6 +101,7 @@ For more information, please refer to <http://unlicense.org/>
 // is being unlocked.
 #define HOP_PROF_MUTEX_UNLOCK( x ) HOP_MUTEX_UNLOCK_EVENT( x )
 
+// The zone id specified must be between 0-255, where the default zone is 0
 #define HOP_ZONE( x ) HOP_ZONE_GUARD( __LINE__, ( x ) )
 
 // Set the name of the current thread in the profiler. Only the first call will
@@ -134,13 +142,20 @@ For more information, please refer to <http://unlicense.org/>
                        | __ | (_) |  _/
                        |_||_|\___/|_|
 */
-#include <stdint.h>
 
 // Useful macros
-#define HOP_VERSION 0.9f
+#define HOP_VERSION 0.91f
+#define HOP_ZONE_MAX  255
+#define HOP_ZONE_DEFAULT 0
 #define HOP_CONSTEXPR constexpr
 #define HOP_NOEXCEPT noexcept
 #define HOP_STATIC_ASSERT static_assert
+
+#include <stdint.h>
+
+#ifdef HOP_USE_STD_CHRONO
+   #include <chrono>
+#endif
 
 /* Windows specific macros and defines */
 #if defined( _MSC_VER )
@@ -209,10 +224,17 @@ inline TimeStamp rdtscp( uint32_t& aux )
 
 inline TimeStamp getTimeStamp( Core_t& core )
 {
-   // We return the tsc with the first bit set to 0. We do not require this last cycle
+   // We return the timestamp with the first bit set to 0. We do not require this last cycle/nanosec
    // of precision. It will instead be used to flag if a trace uses dynamic strings or not in its
    // start time. See hop::StartProfileDynString
+#if HOP_USE_STD_CHRONO != 0
+   using namespace std::chrono;
+   core = 0;
+   return (TimeStamp)duration_cast<nanoseconds>( steady_clock::now().time_since_epoch() ).count() &
+          ~1ULL;
+#else
    return rdtscp( core ) & ~1ULL;
+#endif
 }
 
 inline TimeStamp getTimeStamp()
@@ -528,6 +550,7 @@ class SharedMemory
       float clientVersion{0.0f};
       uint32_t maxThreadNb{0};
       size_t requestedSize{0};
+      bool usingStdChronoTimeStamps{false};
       std::atomic<TimeStamp> lastResetTimeStamp{0};
       std::atomic<TimeStamp> lastHeartbeatTimeStamp{0};
    };
@@ -896,10 +919,11 @@ SharedMemory::create( int pid, size_t requestedSize, bool isConsumer )
       if( !isConsumer )
       {
          // Set client's info in the shared memory for the viewer to access
-         metaInfo->clientVersion      = HOP_VERSION;
-         metaInfo->maxThreadNb        = HOP_MAX_THREAD_NB;
-         metaInfo->requestedSize      = HOP_SHARED_MEM_SIZE;
-         metaInfo->lastResetTimeStamp = getTimeStamp();
+         metaInfo->clientVersion             = HOP_VERSION;
+         metaInfo->maxThreadNb               = HOP_MAX_THREAD_NB;
+         metaInfo->requestedSize             = HOP_SHARED_MEM_SIZE;
+         metaInfo->usingStdChronoTimeStamps  = HOP_USE_STD_CHRONO;
+         metaInfo->lastResetTimeStamp        = getTimeStamp();
 
          // Take a local copy as we do not want to expose the ring buffer before it is
          // actually initialized

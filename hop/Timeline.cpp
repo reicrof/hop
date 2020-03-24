@@ -75,16 +75,19 @@ static void drawTextPositionsCycles( const TimelineTextPositions& textPos )
    }
 }
 
-static void drawTextPositionsTime( const TimelineTextPositions& textPos, uint64_t tlDuration )
+static void drawTextPositionsTime(
+    const TimelineTextPositions& textPos,
+    uint64_t tlDuration,
+    float cpuFreqGHz )
 {
-   const uint64_t tlDurationNs = hop::cyclesToNanos( tlDuration );
+   const uint64_t tlDurationNs = hop::cyclesToNanos( tlDuration, cpuFreqGHz );
    if ( tlDurationNs < 1000 )
    {
       // print as nanoseconds
       for ( const auto& pos : textPos )
       {
          ImGui::SetCursorScreenPos( pos.first );
-         ImGui::Text( "%" PRId64 " ns", hop::cyclesToNanos( pos.second ) );
+         ImGui::Text( "%" PRId64 " ns", hop::cyclesToNanos( pos.second, cpuFreqGHz ) );
       }
    }
    else if ( tlDurationNs < 1000000 )
@@ -93,7 +96,7 @@ static void drawTextPositionsTime( const TimelineTextPositions& textPos, uint64_
       for ( const auto& pos : textPos )
       {
          ImGui::SetCursorScreenPos( pos.first );
-         ImGui::Text( "%.3f us", (double)(  hop::cyclesToNanos( pos.second ) ) / 1000.0f );
+         ImGui::Text( "%.3f us", (double)(  hop::cyclesToNanos( pos.second, cpuFreqGHz ) ) / 1000.0f );
       }
    }
    else if ( tlDurationNs < 1000000000 )
@@ -102,7 +105,7 @@ static void drawTextPositionsTime( const TimelineTextPositions& textPos, uint64_
       for ( const auto& pos : textPos )
       {
          ImGui::SetCursorScreenPos( pos.first );
-         ImGui::Text( "%.3f ms", (double)(  hop::cyclesToNanos( pos.second ) ) / 1000000.0f );
+         ImGui::Text( "%.3f ms", (double)(  hop::cyclesToNanos( pos.second, cpuFreqGHz ) ) / 1000000.0f );
       }
    }
    else if ( tlDurationNs < 1000000000000 )
@@ -111,7 +114,7 @@ static void drawTextPositionsTime( const TimelineTextPositions& textPos, uint64_
       for ( const auto& pos : textPos )
       {
          ImGui::SetCursorScreenPos( pos.first );
-         ImGui::Text( "%.3f s", (double)(  hop::cyclesToNanos( pos.second ) ) / 1000000000.0f );
+         ImGui::Text( "%.3f s", (double)(  hop::cyclesToNanos( pos.second, cpuFreqGHz ) ) / 1000000000.0f );
       }
    }
 }
@@ -291,7 +294,7 @@ void Timeline::draw()
          drawTextPositionsCycles( textPos );
          break;
       case DISPLAY_TIMES:
-         drawTextPositionsTime( textPos, _duration );
+         drawTextPositionsTime( textPos, _duration, _cpuFreqGHz );
          break;
    }
 
@@ -361,7 +364,12 @@ void Timeline::drawOverlay()
           _timelineStart +
           pxlToCycles( ImGui::GetWindowWidth(), _duration, _timelineHoverPos - startDrawPos.x );
       hop::formatCyclesTimepointToDisplay(
-          hoveredNano, _duration, text, sizeof( text ), _displayType == DISPLAY_CYCLES );
+          hoveredNano,
+          _duration,
+          text,
+          sizeof( text ),
+          _displayType == DISPLAY_CYCLES,
+          _cpuFreqGHz );
       drawHoveringTimelineLine( _timelineHoverPos, startDrawPos.y, text );
    }
 
@@ -412,7 +420,8 @@ void Timeline::drawOverlay()
           deltaCycles,
           durationText,
           sizeof( durationText ),
-          _displayType == DISPLAY_CYCLES );
+          _displayType == DISPLAY_CYCLES,
+          _cpuFreqGHz );
       drawRangeSelection( startPxl, startPxl + durationPxl, canvasPosY(), durationText );
    }
 }
@@ -613,6 +622,11 @@ void Timeline::handleDeferredActions( const TimelineMsgArray& messages )
             break;
       }
    }
+}
+
+void Timeline::setCpuFreqGHz( float cpuFreqGHz )
+{
+   _cpuFreqGHz = cpuFreqGHz;
 }
 
 void Timeline::setDisplayType( DisplayType type )

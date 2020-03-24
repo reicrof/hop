@@ -1,4 +1,5 @@
-#include "Profiler.h"
+#include "common/Profiler.h"
+#include "common/Utils.h"
 
 #include "miniz.h"
 
@@ -12,7 +13,9 @@ namespace hop
 Profiler::Profiler( SourceType type, int processId, const char* str )
     : _name( str ),
       _pid( processId ),
+      _recording( false ),
       _srcType( type ),
+      _loadedFileCpuFreqGHz( 0 ),
       _earliestTimeStamp( 0 ),
       _latestTimeStamp( 0 )
 {
@@ -24,6 +27,17 @@ const char* Profiler::nameAndPID( int* processId ) const
 {
    if( processId ) *processId = _pid;
    return _name.c_str();
+}
+
+float Profiler::cpuFreqGHz() const
+{
+   if( _srcType == Profiler::SRC_TYPE_PROCESS )
+   {
+      return _server.cpuFreqGHz();
+   }
+
+   // If we are not profiling a process, we have opened a file, and we should return the value read
+   return _loadedFileCpuFreqGHz;
 }
 
 Profiler::SourceType Profiler::sourceType() const { return _srcType; }
@@ -222,8 +236,9 @@ const uint32_t MAGIC_NUMBER = 1095780676;  // "DIPA"
 struct SaveFileHeader
 {
    uint32_t magicNumber;
-   uint32_t version;
-   size_t uncompressedSize;
+   float    version;
+   float    cpuFreqGHz;
+   uint64_t uncompressedSize;
    uint32_t strDbSize;
    uint32_t threadCount;
 };
@@ -268,8 +283,12 @@ bool hop::Profiler::saveToFile( const char* savePath )
    std::ofstream of( savePath, std::ofstream::binary );
    if( of.is_open() )
    {
-      SaveFileHeader header = {
-         MAGIC_NUMBER, 1, totalSerializedSize, (uint32_t)dbSerializedSize, (uint32_t)_tracks.size()};
+      SaveFileHeader header = {MAGIC_NUMBER,
+                               HOP_VERSION,
+                               cpuFreqGHz(),
+                               totalSerializedSize,
+                               (uint32_t)dbSerializedSize,
+                               (uint32_t)_tracks.size()};
       of.write( (const char*)&header, sizeof( header ) );
       of.write( &compressedData[0], compressedSize );
    }
@@ -291,6 +310,17 @@ bool hop::Profiler::openFile( const char* path )
    SaveFileHeader* header = (SaveFileHeader*)&data[0];
    if( header->magicNumber != MAGIC_NUMBER )
    {
+      fprintf(stderr, "Magic number does not match\n" );
+      return false;
+   }
+
+   if( header->version != HOP_VERSION )
+   {
+      fprintf(
+          stderr,
+          "Hop file version %f does not match viewer version %f\n",
+          header->version,
+          HOP_VERSION );
       return false;
    }
 
@@ -310,6 +340,8 @@ bool hop::Profiler::openFile( const char* path )
    }
 
    HOP_PROF_SPLIT( "Updating data" );
+
+   _loadedFileCpuFreqGHz = header->cpuFreqGHz;
 
    size_t i            = 0;
    const size_t dbSize = deserialize( &uncompressedData[i], _strDb );

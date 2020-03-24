@@ -592,6 +592,7 @@ static void updateTimeline( hop::Timeline* tl, float deltaMs, const hop::Profile
       const hop::Profiler& profData = selectedProf->data();
       tl->setGlobalStartTime( profData.earliestTimestamp() );
       tl->setGlobalEndTime( profData.latestTimestamp() );
+      tl->setCpuFreqGHz( profData.cpuFreqGHz() );
    }
 }
 

@@ -406,7 +406,8 @@ TraceDetailDrawResult drawTraceDetails(
     TraceDetails& details,
     const std::vector<TimelineTrack>& tracks,
     const StringDb& strDb,
-    bool drawAsCycles )
+    bool drawAsCycles,
+    float cpuFreqGHz )
 {
    HOP_PROF_FUNC();
 
@@ -560,7 +561,8 @@ TraceDetailDrawResult drawTraceDetails(
                 details.details[i].inclusiveTimeInNanos,
                 traceDuration,
                 sizeof( traceDuration ),
-                drawAsCycles );
+                drawAsCycles,
+                cpuFreqGHz );
             ImGui::Text( "%s", traceDuration );
             ImGui::NextColumn();
             ImGui::Text( "%3.2f", details.details[i].exclusivePct * 100.0f );
@@ -569,7 +571,8 @@ TraceDetailDrawResult drawTraceDetails(
                 details.details[i].exclusiveTimeInNanos,
                 traceDuration,
                 sizeof( traceDuration ),
-                drawAsCycles );
+                drawAsCycles,
+                cpuFreqGHz );
             ImGui::Text( "%s", traceDuration );
             ImGui::NextColumn();
             ImGui::Text( "%zu", details.details[i].traceIds.size() );
@@ -591,7 +594,7 @@ TraceDetailDrawResult drawTraceDetails(
    return result;
 }
 
-void drawTraceStats( TraceStats& stats, const StringDb& strDb, bool drawAsCycles )
+void drawTraceStats( TraceStats& stats, const StringDb& strDb, bool drawAsCycles, float cpuFreqGHz )
 {
    if ( stats.open )
    {
@@ -609,9 +612,9 @@ void drawTraceStats( TraceStats& stats, const StringDb& strDb, bool drawAsCycles
          char minStr[32] = {};
          char maxStr[32] = {};
          char medianStr[32] = {};
-         formatCyclesDurationToDisplay( stats.max, maxStr, sizeof( maxStr ), drawAsCycles );
-         formatCyclesDurationToDisplay( stats.min, minStr, sizeof( minStr ), drawAsCycles );
-         formatCyclesDurationToDisplay( stats.median, medianStr, sizeof( medianStr ), drawAsCycles );
+         formatCyclesDurationToDisplay( stats.max, maxStr, sizeof( maxStr ), drawAsCycles, cpuFreqGHz );
+         formatCyclesDurationToDisplay( stats.min, minStr, sizeof( minStr ), drawAsCycles, cpuFreqGHz );
+         formatCyclesDurationToDisplay( stats.median, medianStr, sizeof( medianStr ), drawAsCycles, cpuFreqGHz );
          ImGui::Text("Function : %s\nCount    : %zu\nMin      : %s\nMax      : %s\nMedian   : %s", strDb.getString(stats.fctNameId), stats.count, minStr, maxStr, medianStr );
          ImGui::PlotLines( "", stats.displayableDurations.data(), stats.displayableDurations.size() );
       }

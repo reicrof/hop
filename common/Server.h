@@ -25,6 +25,7 @@ class Server
    const char* processInfo( int* processId ) const;
    SharedMemory::ConnectionState connectionState() const;
    size_t sharedMemorySize() const;
+   float cpuFreqGHz() const;
 
    struct PendingData
    {
@@ -53,6 +54,7 @@ class Server
    SharedMemory _sharedMem;
    StringDb _stringDb;
 
+   mutable float _cpuFreqGHz{0};
    mutable hop::Mutex _stateMutex;
    struct ServerState
    {

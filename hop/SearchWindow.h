@@ -27,8 +27,18 @@ namespace hop
       uint32_t hoveredThreadIdx;
    };
 
-   void findTraces( const char* string, const StringDb& strDb, const std::vector<TimelineTrack>& tracks, SearchResult& result );
-   SearchSelection drawSearchResult( SearchResult& searchRes, const StringDb& strDb, const TimelineInfo& tlInfo, const std::vector<TimelineTrack>& tracks );
+   void findTraces(
+       const char* string,
+       const StringDb& strDb,
+       const std::vector<TimelineTrack>& tracks,
+       SearchResult& result );
+
+   SearchSelection drawSearchResult(
+       SearchResult& searchRes,
+       const StringDb& strDb,
+       const TimelineInfo& tlInfo,
+       const std::vector<TimelineTrack>& tracks,
+       float cpuFreqGHz );
    void clearSearchResult( SearchResult& res );
 }
 

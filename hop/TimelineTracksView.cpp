@@ -194,7 +194,7 @@ static int traceLabelWithTime( const hop::TimelineTrackDrawData& data, uint32_t 
    const char* label = data.profiler.stringDb().getString( tracesData.fctNameIds[entryIdx] );
 
    char fmtTime[32];
-   hop::formatCyclesDurationToDisplay( duration, fmtTime, sizeof(fmtTime), data.timeline.useCycles );
+   hop::formatCyclesDurationToDisplay( duration, fmtTime, sizeof(fmtTime), data.timeline.useCycles, data.profiler.cpuFreqGHz() );
 
    return snprintf( arr, arrSize, "%s (%s)", label, fmtTime );
 }
@@ -265,13 +265,14 @@ static void drawHoveredLockWaitPopup(
     const void* mutexAddr,
     hop::TimeDuration duration,
     const std::vector<LockOwnerInfo>& locksInfo,
-    bool drawAsCycles )
+    bool drawAsCycles,
+    float cpuFreqGHz )
 {
    char buffer[512];
    snprintf( buffer, sizeof( buffer ), "Waiting lock 0x%p for ", mutexAddr );
    int charWritten = strlen( buffer );
    charWritten += hop::formatCyclesDurationToDisplay(
-       duration, buffer + charWritten, sizeof( buffer ) - charWritten, drawAsCycles );
+       duration, buffer + charWritten, sizeof( buffer ) - charWritten, drawAsCycles, cpuFreqGHz );
 
    if( !locksInfo.empty() )
    {
@@ -280,7 +281,12 @@ static void drawHoveredLockWaitPopup(
       for( const auto& i : locksInfo )
       {
          hop::formatCyclesDurationToDisplay(
-             i.lockDuration, formattedLockTime, sizeof( formattedLockTime ), drawAsCycles );
+             i.lockDuration,
+             formattedLockTime,
+             sizeof( formattedLockTime ),
+             drawAsCycles,
+             cpuFreqGHz );
+
          charWritten += snprintf(
              buffer + charWritten,
              sizeof( buffer ) - charWritten,
@@ -626,7 +632,11 @@ static void handleHoveredLockWait(
 
       ImGui::BeginTooltip();
       drawHoveredLockWaitPopup(
-          highlightedMutexAddr, end - start, lockOwnerInfo, data.timeline.useCycles );
+          highlightedMutexAddr,
+          end - start,
+          lockOwnerInfo,
+          data.timeline.useCycles,
+          data.profiler.cpuFreqGHz() );
       ImGui::EndTooltip();
 
       // Handle mouse interaction
@@ -756,7 +766,7 @@ void TimelineTracksView::draw( const TimelineTrackDrawData& data, TimelineMsgArr
 
    drawTraceDetailsWindow( data, highlightInfo, msgArray );
    drawSearchWindow( data, highlightInfo, msgArray );
-   drawTraceStats( _traceStats, data.profiler.stringDb(), data.timeline.useCycles );
+   drawTraceStats( _traceStats, data.profiler.stringDb(), data.timeline.useCycles, data.profiler.cpuFreqGHz() );
 
    ImGui::SetCursorScreenPos( ImVec2( data.timeline.canvasPosX, data.timeline.canvasPosY ) );
 
@@ -876,7 +886,12 @@ void TimelineTracksView::drawSearchWindow(
    using namespace hop;
 
    const auto& tracksData = data.profiler.timelineTracks();
-   const SearchSelection selection = drawSearchResult( _searchResult, data.profiler.stringDb(), data.timeline, tracksData );
+   const SearchSelection selection = drawSearchResult(
+       _searchResult,
+       data.profiler.stringDb(),
+       data.timeline,
+       tracksData,
+       data.profiler.cpuFreqGHz() );
 
    if( selection.hoveredThreadIdx != (uint32_t)hop::INVALID_IDX && selection.hoveredTraceIdx != hop::INVALID_IDX )
    {
@@ -911,8 +926,12 @@ void TimelineTracksView::drawTraceDetailsWindow(
    std::vector<HighlightInfo>& traceToHighlight,
    hop::TimelineMsgArray* msgArray )
 {
-   const TraceDetailDrawResult traceDetailRes =
-       drawTraceDetails( _traceDetails, data.profiler.timelineTracks(), data.profiler.stringDb(), data.timeline.useCycles );
+   const TraceDetailDrawResult traceDetailRes = drawTraceDetails(
+       _traceDetails,
+       data.profiler.timelineTracks(),
+       data.profiler.stringDb(),
+       data.timeline.useCycles,
+       data.profiler.cpuFreqGHz() );
 
    if( traceDetailRes.hoveredTraceIds.empty() ) return; // Nothing to draw or check
 
