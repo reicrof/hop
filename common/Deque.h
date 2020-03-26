@@ -13,16 +13,6 @@
 #include <iostream>
 #include <vector>
 
-static constexpr uint32_t highBit( uint32_t n )
-{
-   n |= (n >>  1);
-   n |= (n >>  2);
-   n |= (n >>  4);
-   n |= (n >>  8);
-   n |= (n >> 16);
-   return n - (n >> 1);
-}
-
 namespace hop
 {
 template <typename T>
@@ -30,7 +20,7 @@ class Deque
 {
    struct Block;
   public:
-   static constexpr uint32_t COUNT_PER_BLOCK = highBit( (HOP_BLK_SIZE_BYTES - sizeof(uint32_t)) / sizeof( T ) );
+   static constexpr uint32_t COUNT_PER_BLOCK = (HOP_BLK_SIZE_BYTES - sizeof(uint32_t)) / sizeof( T );
    using value_type = T;
     /**
     * Iterator Implementation
@@ -170,8 +160,8 @@ class Deque
       const int32_t deltaBlocks  = originalSize - newSize; 
       if( deltaBlocks > 0 )
       {
-         // Erase unused blocks
-         erase( begin() + newSize, end() );
+         // Release unused blocks
+         releaseBlocks( _blocks.begin() + newSize, _blocks.end() );
       }
       else
       {

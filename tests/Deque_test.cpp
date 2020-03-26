@@ -1,4 +1,5 @@
 #include "common/Deque.h"
+#include "common/BlockAllocator.h"
 #include "tests/TestUtils.h"
 
 #include <algorithm>
@@ -6,7 +7,6 @@
 #include <vector>
 #include <cmath>
 
-static constexpr uint32_t BLOCK_SIZE = 4096;
 std::vector< uint32_t > g_values;
 
 template <typename T>
@@ -75,12 +75,12 @@ void testIterators( hop::Deque<T>& deq )
    // Test increment decrement operations
    HOP_TEST_ASSERT( ( testSingleIncrementDecrement( it, 1 ) ) );
    HOP_TEST_ASSERT( ( testSingleIncrementDecrement( it, 3 ) ) );
-   HOP_TEST_ASSERT( ( testSingleIncrementDecrement( it, BLOCK_SIZE - 1 ) ) );
-   HOP_TEST_ASSERT( ( testSingleIncrementDecrement( it, BLOCK_SIZE * 10 ) ) );
+   HOP_TEST_ASSERT( ( testSingleIncrementDecrement( it, HOP_BLK_SIZE_BYTES - 1 ) ) );
+   HOP_TEST_ASSERT( ( testSingleIncrementDecrement( it, HOP_BLK_SIZE_BYTES * 10 ) ) );
    HOP_TEST_ASSERT( ( testIncrementDecrement( it, 1, 1 ) ) );
    HOP_TEST_ASSERT( ( testIncrementDecrement( it, 3, 1 ) ) );
-   HOP_TEST_ASSERT( ( testIncrementDecrement( it, BLOCK_SIZE - 1, 1 ) ) );
-   HOP_TEST_ASSERT( ( testIncrementDecrement( it, BLOCK_SIZE * 10, 1 ) ) );
+   HOP_TEST_ASSERT( ( testIncrementDecrement( it, HOP_BLK_SIZE_BYTES - 1, 1 ) ) );
+   HOP_TEST_ASSERT( ( testIncrementDecrement( it, HOP_BLK_SIZE_BYTES * 10, 1 ) ) );
 
    uint32_t i = 0;
    for( ; i < deq.size() - 1; ++i )
@@ -92,7 +92,7 @@ void testIterators( hop::Deque<T>& deq )
    HOP_TEST_ASSERT( it == itEnd );
 
    // Test lower_bound algorithm on d
-   auto pastEnd = std::lower_bound( deq.begin(), deq.end(), 9999 );
+   auto pastEnd = std::lower_bound( deq.begin(), deq.end(), deq.size() + 1 );
    HOP_TEST_ASSERT( pastEnd == itEnd );
 
    auto first = std::lower_bound( deq.begin(), deq.end(), 0 );
@@ -368,7 +368,7 @@ void testErase()
 
 int main()
 {
-   hop::block_allocator::initialize( BLOCK_SIZE, 32 );
+   hop::block_allocator::initialize( 32 );
    hop::Deque< uint32_t > deq;
 
    auto it    = deq.begin();
@@ -376,11 +376,12 @@ int main()
    HOP_TEST_ASSERT( it == itEnd );
    HOP_TEST_ASSERT( deq.size() == 0 );
 
-   g_values.resize(1024);
+   const size_t valueCount = hop::Deque<uint32_t>::COUNT_PER_BLOCK * 4;
+   g_values.resize( valueCount );
    std::iota( g_values.begin(), g_values.end(), 0 );
    deq.append( g_values.data(), g_values.size() );
 
-   HOP_TEST_ASSERT( deq.back() == 1023 );
+   HOP_TEST_ASSERT( deq.back() == valueCount -1 );
 
    HOP_TEST_ASSERT( std::is_sorted( deq.begin(), deq.end() ) );
 

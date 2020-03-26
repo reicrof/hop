@@ -105,7 +105,7 @@ bool verifyPlatform()
 
 void initializeBlockAllocator()
 {
-   hop::block_allocator::initialize( HOP_BLK_SIZE_BYTES );
+   hop::block_allocator::initialize( 512 );
 }
 
 void terminateBlockAllocator()
