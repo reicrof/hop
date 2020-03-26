@@ -18,15 +18,15 @@ namespace
 
 } // anonymous namespace
 
-static void allocateBlocks( Allocator* alloc, uint64_t blockSize, uint64_t blockCount )
+static void allocateBlocks( Allocator* alloc, uint64_t blockCount )
 {
-   void* newAlloc = malloc(blockCount * blockSize);
+   void* newAlloc = malloc(blockCount * HOP_BLK_SIZE_BYTES);
    alloc->_allocations.push_back( newAlloc );
 
    const size_t prevSize = alloc->_freeBlocks.size();
    alloc->_freeBlocks.resize( prevSize + blockCount );
    for (uint32_t i = 0; i < blockCount; ++i)
-        alloc->_freeBlocks[prevSize + i] = (unsigned char*)newAlloc + (i * alloc->blkSize);
+        alloc->_freeBlocks[prevSize + i] = (unsigned char*)newAlloc + (i * HOP_BLK_SIZE_BYTES);
 }
 
 namespace hop
@@ -35,29 +35,26 @@ namespace hop
 namespace block_allocator
 {
 
-void initialize( uint64_t blockSize, uint64_t startingBlockCount /*= 128*/ )
+void initialize( uint64_t startingBlockCount /*= 128*/ )
 {
-   assert( blockSize > 8 && g_allocator._freeBlocks.empty() && g_allocator._allocations.empty() ); // Make sure we only init once
+   assert( g_allocator._freeBlocks.empty() && g_allocator._allocations.empty() ); // Make sure we only init once
 
-   g_allocator.blkSize = blockSize;
    g_allocator._allocations.reserve( 32 );
    g_allocator._freeBlocks.reserve( 1024 );
 
-   allocateBlocks( &g_allocator, blockSize, startingBlockCount );
+   allocateBlocks( &g_allocator, startingBlockCount );
 }
 
 uint32_t blockSize()
 {
-   return g_allocator.blkSize;
+   return HOP_BLK_SIZE_BYTES;
 }
 
 void* acquire()
 {
-   assert( g_allocator.blkSize > 0 && "Allocator not initialized" );
-
    std::lock_guard< std::mutex > g( g_allocator.mutex );
    if( g_allocator._freeBlocks.empty() )
-      allocateBlocks( &g_allocator, g_allocator.blkSize, g_allocator._allocations.size() );
+      allocateBlocks( &g_allocator, g_allocator._allocations.size() );
 
    assert( !g_allocator._freeBlocks.empty()  );
 
@@ -71,7 +68,7 @@ void release( void** block, uint32_t count )
    std::lock_guard< std::mutex > g( g_allocator.mutex );
 #ifdef HOP_DEBUG
    for( uint32_t i = 0; i < count; ++i )
-      memset( block[i], 42, g_allocator.blkSize );
+      memset( block[i], 42, HOP_BLK_SIZE_BYTES );
 #endif
    g_allocator._freeBlocks.insert( g_allocator._freeBlocks.end(), block, block + count );
 }

@@ -9,7 +9,7 @@ namespace hop
 {
 namespace block_allocator
 {
-   void initialize( uint64_t blockSize, uint64_t startingBlockCount = 128 );
+   void initialize( uint64_t startingBlockCount = 128 );
    uint32_t blockSize();
    void* acquire();
    void release( void** block, uint32_t count );

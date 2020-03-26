@@ -24,15 +24,15 @@ void testBlockAllocator()
 
 int main()
 {
-   hop::block_allocator::initialize( 256, 1 );
+   hop::block_allocator::initialize( 1 );
    testBlockAllocator();
    hop::block_allocator::terminate();
 
-   hop::block_allocator::initialize( 1024, 16 );
+   hop::block_allocator::initialize( 16 );
    testBlockAllocator();
    hop::block_allocator::terminate();
 
-   hop::block_allocator::initialize( 2048, 133 );
+   hop::block_allocator::initialize( 133 );
    testBlockAllocator();
    hop::block_allocator::terminate();
 }
