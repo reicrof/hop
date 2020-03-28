@@ -368,7 +368,7 @@ void testErase()
 
 int main()
 {
-   hop::block_allocator::initialize( 32 );
+   hop::block_allocator::initialize();
    hop::Deque< uint32_t > deq;
 
    auto it    = deq.begin();

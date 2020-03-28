@@ -24,6 +24,9 @@ bool processAlive( hop::ProcessID id );
 void terminateProcess( hop::ProcessID id );
 void setupSignalHandlers( void (*terminateCB)(int) );
 
+void* virtualAlloc( size_t size );
+void virtualFree( void* memory );
+
 uint32_t getTempFolderPath( char* buffer, uint32_t size );
 uint32_t getWorkingDirectory( char* buffer, uint32_t size );
 

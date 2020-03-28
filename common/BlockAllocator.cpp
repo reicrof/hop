@@ -1,31 +1,32 @@
 #include "common/BlockAllocator.h"
 
+#include "common/platform/Platform.h"
+
 #include <assert.h>
 #include <stdlib.h>
 #include <string.h> // memset
 #include <mutex>
 #include <vector>
 
-namespace
+struct Allocator
 {
-   struct Allocator
-   {
-      uint64_t blkSize = 0;
-      std::vector<void*> _freeBlocks;
-      std::vector<void*> _allocations;
-      std::mutex mutex;
-   } g_allocator;
+   uint64_t blkSize = 0;
+   std::vector<void*> _freeBlocks;
+   std::vector<void*> _allocations;
+   std::mutex mutex;
+} g_allocator;
 
-} // anonymous namespace
+static constexpr uint64_t VIRT_MEM_BLK_SIZE = 1024 * 1024 * 1024ULL;
+static constexpr uint32_t BLK_COUNT         = VIRT_MEM_BLK_SIZE / HOP_BLK_SIZE_BYTES;
 
-static void allocateBlocks( Allocator* alloc, uint64_t blockCount )
+static void allocateBlocks( Allocator* alloc )
 {
-   void* newAlloc = malloc(blockCount * HOP_BLK_SIZE_BYTES);
+   void* newAlloc = hop::virtualAlloc( VIRT_MEM_BLK_SIZE );
    alloc->_allocations.push_back( newAlloc );
 
    const size_t prevSize = alloc->_freeBlocks.size();
-   alloc->_freeBlocks.resize( prevSize + blockCount );
-   for (uint32_t i = 0; i < blockCount; ++i)
+   alloc->_freeBlocks.resize( prevSize + BLK_COUNT );
+   for (uint32_t i = 0; i < BLK_COUNT; ++i)
         alloc->_freeBlocks[prevSize + i] = (unsigned char*)newAlloc + (i * HOP_BLK_SIZE_BYTES);
 }
 
@@ -35,14 +36,14 @@ namespace hop
 namespace block_allocator
 {
 
-void initialize( uint64_t startingBlockCount /*= 128*/ )
+void initialize()
 {
    assert( g_allocator._freeBlocks.empty() && g_allocator._allocations.empty() ); // Make sure we only init once
 
-   g_allocator._allocations.reserve( 32 );
-   g_allocator._freeBlocks.reserve( 1024 );
+   g_allocator._allocations.reserve( 16 );
+   g_allocator._freeBlocks.reserve( BLK_COUNT );
 
-   allocateBlocks( &g_allocator, startingBlockCount );
+   allocateBlocks( &g_allocator );
 }
 
 uint32_t blockSize()
@@ -54,7 +55,7 @@ void* acquire()
 {
    std::lock_guard< std::mutex > g( g_allocator.mutex );
    if( g_allocator._freeBlocks.empty() )
-      allocateBlocks( &g_allocator, g_allocator._allocations.size() );
+      allocateBlocks( &g_allocator );
 
    assert( !g_allocator._freeBlocks.empty()  );
 
@@ -76,7 +77,7 @@ void release( void** block, uint32_t count )
 void terminate()
 {
    for (void* a : g_allocator._allocations)
-      free(a);
+      hop::virtualFree( a );
 
    g_allocator._allocations.clear();
    g_allocator._freeBlocks.clear();

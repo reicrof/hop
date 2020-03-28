@@ -103,15 +103,4 @@ bool verifyPlatform()
    return true;
 }
 
-void initializeBlockAllocator()
-{
-   hop::block_allocator::initialize( 512 );
-}
-
-void terminateBlockAllocator()
-{
-   hop::block_allocator::terminate();
-}
-
-
 }

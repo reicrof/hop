@@ -9,6 +9,7 @@ void testBlockAllocator()
    for( int i = 0; i < 1025; ++i )
    {
       void* b = block_allocator::acquire();
+      ((int*)b)[0] = 12; // Touch the memory
       block_allocator::release( &b, 1 );
    }
 
@@ -24,15 +25,7 @@ void testBlockAllocator()
 
 int main()
 {
-   hop::block_allocator::initialize( 1 );
-   testBlockAllocator();
-   hop::block_allocator::terminate();
-
-   hop::block_allocator::initialize( 16 );
-   testBlockAllocator();
-   hop::block_allocator::terminate();
-
-   hop::block_allocator::initialize( 133 );
+   hop::block_allocator::initialize();
    testBlockAllocator();
    hop::block_allocator::terminate();
 }

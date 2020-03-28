@@ -97,6 +97,16 @@ void setupSignalHandlers( void (*terminateCB)(int) )
    signal( SIGTERM, terminateCB );
 }
 
+void* virtualAlloc( size_t size )
+{
+   return VirtualAlloc( nullptr, size, MEM_COMMIT | MEM_RESERVE, PAGE_READWRITE );
+}
+
+void virtualFree( void* memory )
+{
+   VirtualFree( memory, 0, MEM_RELEASE );
+}
+
 uint32_t getTempFolderPath( char* buffer, uint32_t size )
 {
    return GetTempPathA( size, buffer );

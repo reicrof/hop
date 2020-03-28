@@ -15,9 +15,9 @@ target_compile_definitions( Tsc_test PUBLIC HOP_ENABLED )
 
 add_executable (Pid_test Pid_test.cpp ${platform_src} )
 
-add_executable (BlockAllocator_test BlockAllocator_test.cpp ${ROOT_DIR}/common/BlockAllocator.cpp )
+add_executable (BlockAllocator_test BlockAllocator_test.cpp ${ROOT_DIR}/common/BlockAllocator.cpp ${platform_src} )
 
-add_executable (Deque_test Deque_test.cpp ${ROOT_DIR}/common/BlockAllocator.cpp )
+add_executable (Deque_test Deque_test.cpp ${ROOT_DIR}/common/BlockAllocator.cpp ${platform_src} )
 
 add_test (NAME TscTest COMMAND Tsc_test)
 add_test (NAME PidTest COMMAND Pid_test)
