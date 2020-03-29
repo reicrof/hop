@@ -2,87 +2,112 @@
 
 #include "common/platform/Platform.h"
 
+#include "Hop.h"
+
 #include <assert.h>
+#include <atomic>
 #include <stdlib.h>
-#include <string.h> // memset
-#include <mutex>
-#include <vector>
+#include <stdio.h>
+#include <string.h>  // memset
+
+struct MemoryBlock
+{
+   MemoryBlock* next;
+};
 
 struct Allocator
 {
-   uint64_t blkSize = 0;
-   std::vector<void*> _freeBlocks;
-   std::vector<void*> _allocations;
-   std::mutex mutex;
+   void* _baseAlloc;                       // Base pointer of the alloc
+   std::atomic<MemoryBlock*> _freeBlocks;  // Free list
+   std::atomic<uint8_t*> _end;             // Points to the block past the last allocated one
 } g_allocator;
 
-static constexpr uint64_t VIRT_MEM_BLK_SIZE = 1024 * 1024 * 1024ULL;
-static constexpr uint32_t BLK_COUNT         = VIRT_MEM_BLK_SIZE / HOP_BLK_SIZE_BYTES;
-
-static void allocateBlocks( Allocator* alloc )
-{
-   void* newAlloc = hop::virtualAlloc( VIRT_MEM_BLK_SIZE );
-   alloc->_allocations.push_back( newAlloc );
-
-   const size_t prevSize = alloc->_freeBlocks.size();
-   alloc->_freeBlocks.resize( prevSize + BLK_COUNT );
-   for (uint32_t i = 0; i < BLK_COUNT; ++i)
-        alloc->_freeBlocks[prevSize + i] = (unsigned char*)newAlloc + (i * HOP_BLK_SIZE_BYTES);
-}
+static constexpr uint64_t VIRT_MEM_BLK_SIZE   = 8 * 1024 * 1024 * 1024ULL;
+static constexpr uint32_t BLK_AND_HEADER_SIZE = HOP_BLK_SIZE_BYTES + sizeof( MemoryBlock );
 
 namespace hop
 {
-
 namespace block_allocator
 {
-
 void initialize()
 {
-   assert( g_allocator._freeBlocks.empty() && g_allocator._allocations.empty() ); // Make sure we only init once
+   //g_allocator._baseAlloc = hop::virtualAlloc( VIRT_MEM_BLK_SIZE );
+   g_allocator._baseAlloc = malloc( VIRT_MEM_BLK_SIZE );
+   if( !g_allocator._baseAlloc )
+   {
+      fprintf( stderr, "Fatal Error : Failed to allocate enough virtual memory\n" );
+      exit( 2 );
+   }
 
-   g_allocator._allocations.reserve( 16 );
-   g_allocator._freeBlocks.reserve( BLK_COUNT );
+   g_allocator._freeBlocks = (MemoryBlock*)g_allocator._baseAlloc;
 
-   allocateBlocks( &g_allocator );
+   MemoryBlock* curBlockAddr = g_allocator._freeBlocks;
+   for( uint32_t i = 0; i < 511; ++i )
+   {
+      curBlockAddr->next = (MemoryBlock*)( (uint8_t*)curBlockAddr + BLK_AND_HEADER_SIZE );
+      curBlockAddr       = curBlockAddr->next;
+   }
+   curBlockAddr->next = nullptr;
+   g_allocator._end = (uint8_t*)curBlockAddr + BLK_AND_HEADER_SIZE;
 }
 
-uint32_t blockSize()
-{
-   return HOP_BLK_SIZE_BYTES;
-}
+uint32_t blockSize() { return HOP_BLK_SIZE_BYTES; }
 
 void* acquire()
 {
-   std::lock_guard< std::mutex > g( g_allocator.mutex );
-   if( g_allocator._freeBlocks.empty() )
-      allocateBlocks( &g_allocator );
+   HOP_PROF_FUNC();
+   MemoryBlock* availBlock = nullptr;
+   MemoryBlock* root       = g_allocator._freeBlocks.load();
 
-   assert( !g_allocator._freeBlocks.empty()  );
+   while (root && !std::atomic_compare_exchange_weak(&g_allocator._freeBlocks, &root, root->next))
+   {
+   }
 
-   void* block = g_allocator._freeBlocks.back();
-   g_allocator._freeBlocks.pop_back();
-   return block;
+   if( root )
+   {
+      availBlock = root;
+   }
+   else
+   {
+      // Bump the last pointer one block further
+      availBlock = (MemoryBlock*)g_allocator._end.fetch_add( BLK_AND_HEADER_SIZE );
+   }
+
+   // Out of memory
+   assert( (ptrdiff_t)availBlock < (ptrdiff_t)g_allocator._baseAlloc + VIRT_MEM_BLK_SIZE );
+   assert( availBlock );
+
+   return (uint8_t*)availBlock + sizeof( MemoryBlock );
 }
 
 void release( void** block, uint32_t count )
 {
-   std::lock_guard< std::mutex > g( g_allocator.mutex );
-#ifdef HOP_DEBUG
-   for( uint32_t i = 0; i < count; ++i )
-      memset( block[i], 42, HOP_BLK_SIZE_BYTES );
-#endif
-   g_allocator._freeBlocks.insert( g_allocator._freeBlocks.end(), block, block + count );
+   assert( count > 0 );
+
+   MemoryBlock* blocks = (MemoryBlock*)( (uint8_t*)block[0] - sizeof( MemoryBlock ) );
+
+   assert( ( (ptrdiff_t)blocks & 8 ) == 0 );
+
+   // Chain all the freed blocks together
+   MemoryBlock* curBlock = blocks;
+   for( uint32_t i = 1; i < count; ++i )
+   {
+      curBlock->next = (MemoryBlock*)((uint8_t*)block[i] - sizeof( MemoryBlock ));
+      curBlock       = curBlock->next;
+   }
+
+   curBlock->next = std::atomic_exchange( &g_allocator._freeBlocks, blocks );
+   assert( ( (ptrdiff_t)g_allocator._freeBlocks.load() & 8 ) == 0 );
 }
 
 void terminate()
 {
-   for (void* a : g_allocator._allocations)
-      hop::virtualFree( a );
-
-   g_allocator._allocations.clear();
-   g_allocator._freeBlocks.clear();
+   //hop::virtualFree( g_allocator._baseAlloc );
+   free( g_allocator._baseAlloc );
+   g_allocator._baseAlloc = nullptr;
+   g_allocator._freeBlocks.store( nullptr );
 }
 
-} // namespace block_allocator
+}  // namespace block_allocator
 
-} // namespace hop
+}  // namespace hop

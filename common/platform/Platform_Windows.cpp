@@ -99,7 +99,13 @@ void setupSignalHandlers( void (*terminateCB)(int) )
 
 void* virtualAlloc( size_t size )
 {
-   return VirtualAlloc( nullptr, size, MEM_COMMIT | MEM_RESERVE, PAGE_READWRITE );
+#ifdef HOP_DEBUG
+   const LPVOID basePtr = (LPVOID)0x80000000LL;
+#else
+   const LPVOID basePtr = nullptr;
+#endif
+   
+   return VirtualAlloc( basePtr, size, MEM_COMMIT | MEM_RESERVE, PAGE_READWRITE );
 }
 
 void virtualFree( void* memory )

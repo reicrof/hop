@@ -47,8 +47,6 @@ void renderDrawlist( ImDrawData* draw_data )
    // We are using the OpenGL fixed pipeline to make the example code simpler to read!
    // Setup render state: alpha-blending enabled, no face culling, no depth testing, scissor
    // enabled, vertex/texcoord/color pointers.
-   GLint last_texture;
-   glGetIntegerv( GL_TEXTURE_BINDING_2D, &last_texture );
    GLint last_viewport[4];
    glGetIntegerv( GL_VIEWPORT, last_viewport );
    GLint last_scissor_box[4];
@@ -128,7 +126,6 @@ void renderDrawlist( ImDrawData* draw_data )
    glDisableClientState( GL_COLOR_ARRAY );
    glDisableClientState( GL_TEXTURE_COORD_ARRAY );
    glDisableClientState( GL_VERTEX_ARRAY );
-   glBindTexture( GL_TEXTURE_2D, (GLuint)last_texture );
    glMatrixMode( GL_MODELVIEW );
    glPopMatrix();
    glMatrixMode( GL_PROJECTION );
@@ -158,8 +155,6 @@ void createResources()
                                     // memory.
 
    // Upload texture to graphics system
-   GLint last_texture;
-   glGetIntegerv( GL_TEXTURE_BINDING_2D, &last_texture );
    glGenTextures( 1, &g_FontTexture );
    glBindTexture( GL_TEXTURE_2D, g_FontTexture );
    glTexParameteri( GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR );
@@ -168,9 +163,6 @@ void createResources()
 
    // Store our identifier
    io.Fonts->TexID = (void*)(intptr_t)g_FontTexture;
-
-   // Restore state
-   glBindTexture( GL_TEXTURE_2D, last_texture );
 }
 
 void setVSync( bool on )
