@@ -397,7 +397,7 @@ class Deque
           std::rotate(
               &curBlock->data[from._elementId],
               &curBlock->data[from._elementId] + removedElCount,
-              &curBlock->data[0] + COUNT_PER_BLOCK );
+              curBlock->end() );
           while( curBlkId++ < _blocks.size() - 1 )
           {
              Block* prevBlock = curBlock;
@@ -411,7 +411,7 @@ class Deque
              std::rotate(
                  &curBlock->data[0],
                  &curBlock->data[0] + removedElCount,
-                 &curBlock->data[0] + COUNT_PER_BLOCK );
+                 curBlock->end() );
           }
 
           assert( curBlock->elementCount >= removedElCount );
@@ -537,6 +537,11 @@ class Deque
       {
          assert( idx < elementCount );
          return data[idx];
+      }
+
+      inline T* end()
+      {
+         return &data[0] + elementCount;
       }
 
        uint32_t elementCount;
