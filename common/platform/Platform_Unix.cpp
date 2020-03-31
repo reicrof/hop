@@ -5,6 +5,7 @@
 #include <string.h>
 #include <stdlib.h>
 #include <stdio.h>
+#include <sys/mman.h>
 #include <sys/wait.h>
 #include <unistd.h>
 
@@ -128,6 +129,21 @@ void setupSignalHandlers( void (*terminateCB)(int) )
    signal( SIGINT, terminateCB );
    signal( SIGTERM, terminateCB );
    signal( SIGCHLD, SIG_IGN );
+}
+
+void* virtualAlloc( uint64_t size )
+{
+#ifdef HOP_DEBUG
+   void* basePtr = (void*)0x80000000LL;
+#else
+   void* basePtr = nullptr;
+#endif
+   return mmap( basePtr, size, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0 );
+}
+
+void virtualFree( void* memory, uint64_t size )
+{
+   munmap( memory, size );
 }
 
 uint32_t getTempFolderPath( char* buffer, uint32_t size )

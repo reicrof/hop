@@ -1285,7 +1285,7 @@ class Client
          HOP_STRNCPY(
              &tl_threadNameBuffer[0],
              reinterpret_cast<const char*>( name ),
-             sizeof( tl_threadNameBuffer ) );
+             sizeof( tl_threadNameBuffer ) - 1 );
          tl_threadNameBuffer[sizeof( tl_threadNameBuffer ) - 1] = '\0';
          tl_threadName = addDynamicStringToDb( tl_threadNameBuffer );
       }

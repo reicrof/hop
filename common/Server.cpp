@@ -118,14 +118,15 @@ bool Server::start( int inPid, const char* name )
 
             // Clear any remaining messages from previous execution now
             clearPendingMessages();
-            _sharedMem.setListeningConsumer( _state.recording );
 
-            std::lock_guard<hop::Mutex> guard( _stateMutex );
+            std::lock_guard<hop::Mutex> guard( _stateMutex );            
             _state.connectionState = state;
             _state.pid             = procInfo.pid;
             _state.processName     = std::string( procInfo.name );
             prevConnectionState    = state;
             lastSignalTime         = getTimeStamp();
+
+            _sharedMem.setListeningConsumer( _state.recording );
 
             // Set HOP thread name
             char serverName[64];
