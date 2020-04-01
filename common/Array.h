@@ -4,6 +4,7 @@
 #include "common/BlockAllocator.h"
 
 #include <assert.h>
+#include <algorithm>
 
 namespace hop
 {
