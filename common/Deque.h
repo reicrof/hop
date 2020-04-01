@@ -2,6 +2,7 @@
 #define HOP_DEQUE_H_
 
 #include "common/BlockAllocator.h"
+#include "common/Array.h"
 
 #include <array>
 #include <algorithm>
@@ -11,7 +12,6 @@
 #include <cstddef>
 #include <type_traits>
 #include <iostream>
-#include <vector>
 
 namespace hop
 {
@@ -33,15 +33,15 @@ class Deque
       using value_type = T;
       using reference  = T&;
       using difference_type = typename std::iterator<std::random_access_iterator_tag, T>::difference_type;
-      using VectorBlocksPtr = typename std::conditional< Const, const std::vector<Block*>, std::vector<Block*> >::type;
+      using BlockArrayPtr = typename std::conditional< Const, const hop::Array<Block*>, hop::Array<Block*> >::type;
 
-      VectorBlocksPtr* _blocks;
+      BlockArrayPtr* _blocks;
       uint32_t _blockId;
       uint32_t _elementId;
    
-      iterator( VectorBlocksPtr* lb ) : _blocks( lb ), _blockId( 0 ), _elementId( 0 ) {}
+      iterator( BlockArrayPtr* lb ) : _blocks( lb ), _blockId( 0 ), _elementId( 0 ) {}
       iterator( const iterator& rhs ) : _blocks( rhs._blocks ), _blockId( rhs._blockId ), _elementId( rhs._elementId ) {}
-      iterator( VectorBlocksPtr* lb, uint32_t blockId, uint32_t elId ) : _blocks( lb ), _blockId( blockId ), _elementId( elId ) {}
+      iterator( BlockArrayPtr* lb, uint32_t blockId, uint32_t elId ) : _blocks( lb ), _blockId( blockId ), _elementId( elId ) {}
       inline bool operator==(const iterator& rhs) const { return _blockId == rhs._blockId && _elementId == rhs._elementId; }
       inline bool operator!=(const iterator& rhs) const { return _blockId != rhs._blockId || _elementId != rhs._elementId; }
       inline reference operator[]( size_t idx ) { return *(this->operator+( idx ) ); }
@@ -161,7 +161,7 @@ class Deque
       if( deltaBlocks > 0 )
       {
          // Release unused blocks
-         releaseBlocks( _blocks.begin() + newSize, _blocks.end() );
+         releaseBlocks( newSize, _blocks.size() );
       }
       else
       {
@@ -191,7 +191,7 @@ class Deque
       return ( blockCount - 1 ) * COUNT_PER_BLOCK + lastBlockElemCount;
    }
 
-   bool empty() const { return _blocks.empty(); }
+   bool empty() const { return _blocks.size() == 0; }
 
    const T& operator[]( int64_t idx ) const
    {
@@ -205,28 +205,28 @@ class Deque
 
    T& front()
    {
-      assert( !_blocks.empty() && _blocks.front()->elementCount > 0 );
+      assert( _blocks.size() > 0 && _blocks.front()->elementCount > 0 );
       Block* firstBlock = _blocks.front();
       return (*firstBlock)[ 0 ];
    }
 
    const T& front() const
    {
-      assert( !_blocks.empty() && _blocks.front()->elementCount > 0 );
+      assert( _blocks.size() > 0 && _blocks.front()->elementCount > 0 );
       Block* firstBlock = _blocks.front();
       return (*firstBlock)[ 0 ];
    }
 
    T& back()
    {
-      assert( !_blocks.empty() && _blocks.back()->elementCount > 0 );
+      assert( _blocks.size() > 0 && _blocks.back()->elementCount > 0 );
       Block* lastBlock = _blocks.back();
       return (*lastBlock)[ lastBlock->elementCount - 1 ];
    }
 
    const T& back() const
    {
-      assert( !_blocks.empty() && _blocks.back()->elementCount > 0 );
+      assert( _blocks.size() > 0 && _blocks.back()->elementCount > 0 );
       const Block* lastBlock = _blocks.back();
       return (*lastBlock)[ lastBlock->elementCount - 1 ];
    }
@@ -242,7 +242,7 @@ class Deque
    }
    void append( const T* const data, uint32_t count )
    {
-      if( _blocks.empty() ) acquireNewBlock();
+      if( _blocks.size() == 0 ) acquireNewBlock();
 
       uint32_t remainingWrite = count;
       const T* inData         = data;
@@ -265,7 +265,7 @@ class Deque
       assert( begin._blocks == end._blocks );
       if( begin == end ) return;
 
-      const std::vector<Block*>* inBlocks = begin._blocks;
+      const hop::Array<Block*>* inBlocks = begin._blocks;
       uint32_t blkId = begin._blockId;
       uint32_t elId  = begin._elementId;
       for( ; blkId < end._blockId; ++blkId )
@@ -371,10 +371,10 @@ class Deque
         _blocks.push_back( newBlock );
     }
 
-    template< typename IT >
-    void releaseBlocks( const IT& from, const IT& to )
+    void releaseBlocks( uint32_t from, uint32_t to )
     {
-       block_allocator::release( (void**)&(*from), std::distance( from, to ) );
+       assert( to > from );
+       block_allocator::release( (void**)&_blocks[from], to - from );
        _blocks.erase( from, to );
     }
 
@@ -419,7 +419,7 @@ class Deque
           curBlock->elementCount -= removedElCount;
           if( curBlock->elementCount == 0 )
           {
-             releaseBlocks( _blocks.end()-1, _blocks.end() );
+             releaseBlocks( _blocks.size()-1, _blocks.size() );
           }
        }
     }
@@ -454,7 +454,7 @@ class Deque
           if( emptyLeftCnt >= validRightCnt )
           {
              // Erase the now empty right block front the list
-             releaseBlocks( _blocks.begin() + to._blockId, _blocks.begin() + to._blockId + 1 );
+             releaseBlocks( to._blockId, to._blockId + 1 );
              removedElCount -= elemCopied;
 
              // Fill empty slots with next blocks, if any
@@ -503,9 +503,7 @@ class Deque
        if( fullBlocksToRemove > 1 )
        {
           // Special case where we can remove entire block
-          auto removeFrom = _blocks.begin() + (from._blockId + 1);
-          auto removeTo   = removeFrom + (fullBlocksToRemove - 1);
-          releaseBlocks( removeFrom, removeTo );
+          releaseBlocks( from._blockId + 1, from._blockId + fullBlocksToRemove );
           to._blockId -= fullBlocksToRemove - 1;
        }
     }
@@ -548,7 +546,7 @@ class Deque
        std::array<T, COUNT_PER_BLOCK> data;
     };
 
-   std::vector<Block*> _blocks;
+   hop::Array<Block*> _blocks;
 };
 
 }  // namespace hop
