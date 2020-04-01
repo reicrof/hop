@@ -143,7 +143,7 @@ class Deque
     * Actual Deque implementation
     */
 
-   Deque()
+   Deque() : _size( 0 )
    {
        assert( block_allocator::blockSize() >= HOP_BLK_SIZE_BYTES );
    }
@@ -174,24 +174,16 @@ class Deque
       assert( _blocks.size() == rhs._blocks.size() );
 
       // Copy the data
+      _size = rhs._size;
       for( int32_t i = 0; i < newSize; ++i )
          *_blocks[i] = *rhs._blocks[i];
 
       return *this;
    }
 
-   uint64_t size() const
-   {
-      const size_t blockCount = _blocks.size();
-      if( blockCount == 0 ) return 0;
+   uint64_t size() const { return _size; }
 
-      const uint32_t lastBlockElemCount = _blocks.back()->elementCount;
-      if( blockCount == 1 ) return lastBlockElemCount;
-
-      return ( blockCount - 1 ) * COUNT_PER_BLOCK + lastBlockElemCount;
-   }
-
-   bool empty() const { return _blocks.size() == 0; }
+   bool empty() const { return _size == 0; }
 
    const T& operator[]( int64_t idx ) const
    {
@@ -257,6 +249,7 @@ class Deque
          }
          remainingWrite = newRemainingWrite;
       } while( remainingWrite > 0 );
+      _size += count;
    }
 
    template< bool Const = false >
@@ -311,6 +304,10 @@ class Deque
 
       /* [xxxxxxxxxX] [--------XX] -> [xxxxxxxxxX] [XX--------] ... until fully propagated */
       eraseWithinSingleBlock( from, to );
+
+      const uint64_t removedCount = std::distance( from, to );
+      assert( _size >= removedCount );
+      _size -= removedCount;
    }
 
    void clear()
@@ -320,6 +317,7 @@ class Deque
          block_allocator::release( (void**)_blocks.data(), _blocks.size() );
          _blocks.clear();
       }
+      _size = 0;
    }
 
    ~Deque()
@@ -546,6 +544,7 @@ class Deque
        std::array<T, COUNT_PER_BLOCK> data;
     };
 
+   uint64_t _size;
    hop::Array<Block*> _blocks;
 };
 
