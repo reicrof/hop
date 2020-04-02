@@ -44,6 +44,7 @@ class Server
    void getPendingData(PendingData& data);
 
   private:
+   SharedMemory::ConnectionState tryConnect( int32_t pid, uint32_t& reconnectTimeoutMs );
    // Returns the number of bytes processed
    size_t handleNewMessage( uint8_t* data, size_t maxSize, TimeStamp minTimestamp );
    bool addUniqueThreadName( uint32_t threadIndex, StrPtr_t name );
