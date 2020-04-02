@@ -86,53 +86,20 @@ bool Server::start( int inPid, const char* name )
       TimeStamp lastSignalTime = getTimeStamp();
       SharedMemory::ConnectionState prevConnectionState = SharedMemory::NOT_CONNECTED;
 
-      const uint32_t MAX_RECONNECT_TIMEOUT_MS = 500;
       uint32_t reconnectTimeoutMs = 10;
       while ( true )
       {
          // Try to get the shared memory
          if ( !_sharedMem.valid() )
          {
-            HOP_PROF( "Trying to open process..." );
-            const hop::ProcessInfo procInfo =
-                inPid != -1 ? hop::getProcessInfoFromPID( inPid )
-                            : hop::getProcessInfoFromProcessName( _state.processName.c_str() );
-            SharedMemory::ConnectionState state =
-                _sharedMem.create( procInfo.pid, 0 /*will be define in shared metadata*/, true );
-
-            if ( state != SharedMemory::CONNECTED )
+            prevConnectionState = tryConnect( inPid, reconnectTimeoutMs );
+            if( prevConnectionState != SharedMemory::CONNECTED )
             {
-               { // Update state then go to sleep a few MS
-                  std::lock_guard<hop::Mutex> guard( _stateMutex );
-                  _state.connectionState = state;
-                  if( !_state.running )
-                     return;  // We are done without even opening the shared mem :(
-               }
-
-               prevConnectionState = state;
-               // Sleep few ms before retrying. Increase timeout time each try
-               std::this_thread::sleep_for( std::chrono::milliseconds( reconnectTimeoutMs ) );
-               reconnectTimeoutMs = std::min( reconnectTimeoutMs + 10, MAX_RECONNECT_TIMEOUT_MS );
-               continue;
+               continue; // No connection, let's retry
             }
-
-            // Clear any remaining messages from previous execution now
-            clearPendingMessages();
-            _sharedMem.setListeningConsumer( _state.recording );
-
-            std::lock_guard<hop::Mutex> guard( _stateMutex );
-            _state.connectionState = state;
-            _state.pid             = procInfo.pid;
-            _state.processName     = std::string( procInfo.name );
-            prevConnectionState    = state;
-            lastSignalTime         = getTimeStamp();
-
-            // Set HOP thread name
-            char serverName[64];
-            snprintf( serverName, sizeof( serverName ), "%s [Producer]", _state.processName.c_str() );
-            HOP_SET_THREAD_NAME( serverName );
-
+            
             printf( "Connection to shared data successful.\n" );
+            lastSignalTime = getTimeStamp();
          }
 
          HOP_PROF_FUNC();
@@ -211,6 +178,49 @@ bool Server::start( int inPid, const char* name )
    } );
 
    return true;
+}
+
+SharedMemory::ConnectionState Server::tryConnect( int32_t pid, uint32_t& reconnectTimeoutMs )
+{
+   HOP_PROF_FUNC();
+
+   const uint32_t MAX_RECONNECT_TIMEOUT_MS = 500;
+
+   const hop::ProcessInfo procInfo =
+       pid != -1 ? hop::getProcessInfoFromPID( pid )
+                   : hop::getProcessInfoFromProcessName( _state.processName.c_str() );
+   SharedMemory::ConnectionState state =
+       _sharedMem.create( procInfo.pid, 0 /*will be define in shared metadata*/, true );
+
+   if( state != SharedMemory::CONNECTED )
+   {
+      {  // Update state then go to sleep a few MS
+         std::lock_guard<hop::Mutex> guard( _stateMutex );
+         _state.connectionState = state;
+         if( !_state.running ) return state;  // We are done without even opening the shared mem :(
+      }
+
+      // Sleep few ms before retrying. Increase timeout time each try
+      std::this_thread::sleep_for( std::chrono::milliseconds( reconnectTimeoutMs ) );
+      reconnectTimeoutMs = std::min( reconnectTimeoutMs + 10, MAX_RECONNECT_TIMEOUT_MS );
+      return state;
+   }
+
+   // Clear any remaining messages from previous execution now
+   clearPendingMessages();
+   _sharedMem.setListeningConsumer( _state.recording );
+
+   std::lock_guard<hop::Mutex> guard( _stateMutex );
+   _state.connectionState = state;
+   _state.pid             = procInfo.pid;
+   _state.processName     = std::string( procInfo.name );
+
+   // Set HOP thread name
+   char serverName[64];
+   snprintf( serverName, sizeof( serverName ), "%s [Producer]", _state.processName.c_str() );
+   HOP_SET_THREAD_NAME( serverName );
+
+   return state;
 }
 
 const char* Server::processInfo( int* processId ) const
