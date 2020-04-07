@@ -170,8 +170,7 @@ For more information, please refer to <http://unlicense.org/>
 #endif
 
 #include <tchar.h>
-#include <intrin.h>  // __rdtscp
-typedef void* sem_handle;  // HANDLE is a void*
+#include <intrin.h>        // __rdtscp
 typedef void* shm_handle;  // HANDLE is a void*
 typedef TCHAR HOP_CHAR;
 
@@ -184,8 +183,7 @@ typedef TCHAR HOP_CHAR;
 
 #else /* Unix (Linux & MacOs) specific macros and defines */
 
-#include <semaphore.h>
-typedef sem_t* sem_handle;
+#include <sys/types.h> // ssize_t
 typedef int shm_handle;
 typedef char HOP_CHAR;
 
@@ -570,9 +568,6 @@ class SharedMemory
    uint8_t* data() const HOP_NOEXCEPT;
    bool valid() const HOP_NOEXCEPT;
    int pid() const HOP_NOEXCEPT;
-   sem_handle semaphore() const HOP_NOEXCEPT;
-   bool tryWaitSemaphore() const HOP_NOEXCEPT;
-   void signalSemaphore() const HOP_NOEXCEPT;
    const SharedMetaInfo* sharedMetaInfo() const HOP_NOEXCEPT;
    ~SharedMemory();
 
@@ -582,12 +577,10 @@ class SharedMemory
    ringbuf_t* _ringbuf{NULL};
    uint8_t* _data{NULL};
    // ----------------
-   sem_handle _semaphore{NULL};
    bool _isConsumer{false};
    shm_handle _sharedMemHandle{};
    int _pid;
    HOP_CHAR _sharedMemPath[HOP_SHARED_MEM_MAX_NAME_SIZE];
-   HOP_CHAR _sharedSemPath[HOP_SHARED_MEM_MAX_NAME_SIZE + 5];
    std::atomic<bool> _valid{false};
    std::mutex _creationMutex;
 };
@@ -622,7 +615,6 @@ class SharedMemory
 #include <unistd.h>    // ftruncate
 
 const HOP_CHAR HOP_SHARED_MEM_PREFIX[] = "/hop_";
-const HOP_CHAR HOP_SHARED_SEM_SUFFIX[] = "_sem";
 #define HOP_STRLEN( str ) strlen( ( str ) )
 #define HOP_STRNCPYW( dst, src, count ) strncpy( ( dst ), ( src ), ( count ) )
 #define HOP_STRNCATW( dst, src, count ) strncat( ( dst ), ( src ), ( count ) )
@@ -643,7 +635,6 @@ inline int HOP_GET_PID() HOP_NOEXCEPT{ return getpid(); }
 #include <windows.h>
 
 const HOP_CHAR HOP_SHARED_MEM_PREFIX[] = _T("/hop_");
-const HOP_CHAR HOP_SHARED_SEM_SUFFIX[] = _T("_sem");
 #define HOP_STRLEN( str ) _tcslen( ( str ) )
 #define HOP_STRNCPYW( dst, src, count ) _tcsncpy_s( ( dst ), ( count ), ( src ), ( count ) )
 #define HOP_STRNCATW( dst, src, count ) _tcsncat_s( ( dst ), ( src ), ( count ) )
@@ -672,41 +663,6 @@ hop::SharedMemory::ConnectionState errorToConnectionState( uint32_t err )
    if( err == ENOENT ) return hop::SharedMemory::NOT_CONNECTED;
    if( err == EACCES ) return hop::SharedMemory::PERMISSION_DENIED;
    return hop::SharedMemory::UNKNOWN_CONNECTION_ERROR;
-#endif
-}
-
-sem_handle openSemaphore( const HOP_CHAR* name, hop::SharedMemory::ConnectionState* state )
-{
-   sem_handle sem{NULL};
-#if defined( _MSC_VER )
-   sem = CreateSemaphore( NULL, 0, LONG_MAX, name );
-   if( !sem )
-   {
-      *state = errorToConnectionState( GetLastError() );
-   }
-#else
-   sem = sem_open( name, O_CREAT, S_IRUSR | S_IWUSR, 1 );
-   if( !sem && state )
-   {
-      *state = errorToConnectionState( errno );
-   }
-#endif
-   return sem;
-}
-
-void closeSemaphore( sem_handle sem, const HOP_CHAR* semName )
-{
-#if defined( _MSC_VER )
-   CloseHandle( sem );
-#else
-   if( sem_close( sem ) != 0 )
-   {
-      perror( "HOP - Could not close semaphore" );
-   }
-   if( sem_unlink( semName ) < 0 )
-   {
-      perror( "HOP - Could not unlink semaphore" );
-   }
 #endif
 }
 
@@ -881,19 +837,6 @@ SharedMemory::create( int pid, size_t requestedSize, bool isConsumer )
           pidStr,
           HOP_SHARED_MEM_MAX_NAME_SIZE - HOP_STRLEN( HOP_SHARED_MEM_PREFIX ) - 1 );
 
-      HOP_STRNCPYW( _sharedSemPath, _sharedMemPath, HOP_SHARED_MEM_MAX_NAME_SIZE );
-      HOP_STRNCATW(
-          _sharedSemPath,
-          HOP_SHARED_SEM_SUFFIX,
-          HOP_SHARED_MEM_MAX_NAME_SIZE - HOP_STRLEN( _sharedSemPath ) - 1 );
-
-      // Open semaphore
-      _semaphore = openSemaphore( _sharedSemPath, &state );
-      if( _semaphore == NULL )
-      {
-         return state;
-      }
-
       // Try to open shared memory
       uint64_t totalSize = 0;
       uint8_t* sharedMem = reinterpret_cast<uint8_t*>(
@@ -912,7 +855,6 @@ SharedMemory::create( int pid, size_t requestedSize, bool isConsumer )
 
       if( !sharedMem )
       {
-         closeSemaphore( _semaphore, _sharedSemPath );
          return state;
       }
 
@@ -938,7 +880,6 @@ SharedMemory::create( int pid, size_t requestedSize, bool isConsumer )
          {
             assert( false && "Ring buffer creation failed" );
             closeSharedMemory( _sharedMemPath, _sharedMemHandle, sharedMem );
-            closeSemaphore( _semaphore, _sharedSemPath );
             return UNKNOWN_CONNECTION_ERROR;
          }
       }
@@ -1064,26 +1005,6 @@ int SharedMemory::pid() const HOP_NOEXCEPT { return _pid; }
 
 ringbuf_t* SharedMemory::ringbuffer() const HOP_NOEXCEPT { return _ringbuf; }
 
-sem_handle SharedMemory::semaphore() const HOP_NOEXCEPT { return _semaphore; }
-
-bool SharedMemory::tryWaitSemaphore() const HOP_NOEXCEPT
-{
-#if defined( _MSC_VER )
-   return WaitForSingleObject( _semaphore, 0 ) == WAIT_OBJECT_0;
-#else
-   return sem_trywait( _semaphore ) == 0;
-#endif
-}
-
-void SharedMemory::signalSemaphore() const HOP_NOEXCEPT
-{
-#if defined( _MSC_VER )
-   ReleaseSemaphore( _semaphore, 1, NULL );
-#else
-   sem_post( _semaphore );
-#endif
-}
-
 const SharedMemory::SharedMetaInfo* SharedMemory::sharedMetaInfo() const HOP_NOEXCEPT
 {
    return _sharedMetaData;
@@ -1108,14 +1029,12 @@ void SharedMemory::destroy()
             ( SharedMetaInfo::CONNECTED_PRODUCER | SharedMetaInfo::CONNECTED_CONSUMER ) ) == 0 )
       {
          printf( "HOP - Cleaning up shared memory...\n" );
-         closeSemaphore( _semaphore, _sharedSemPath );
          closeSharedMemory( _sharedMemPath, _sharedMemHandle, _sharedMetaData );
          _sharedMetaData->~SharedMetaInfo();
       }
 
       _data           = NULL;
       _ringbuf        = NULL;
-      _semaphore      = NULL;
       _sharedMetaData = NULL;
       _valid          = false;
       g_done.store( true );
@@ -1638,13 +1557,11 @@ class Client
    void flushToConsumer()
    {
       const TimeStamp timeStamp = getTimeStamp();
-      bool signalConsumer = false;
 
       // If we have a consumer, send life signal
       if( ClientManager::HasConnectedConsumer() && ClientManager::ShouldSendHeartbeat( timeStamp ) )
       {
          sendHeartbeat( timeStamp );
-         signalConsumer = true;
       }
 
       // If no one is there to listen, no need to send any data
@@ -1663,19 +1580,16 @@ class Client
             return;
          }
 
-         signalConsumer |= sendStringData( timeStamp );  // Always send string data first
-         signalConsumer |= sendTraces( timeStamp );
-         signalConsumer |= sendLockWaits( timeStamp );
-         signalConsumer |= sendUnlockEvents( timeStamp );
-         signalConsumer |= sendCores( timeStamp );
+         sendStringData( timeStamp );  // Always send string data first
+         sendTraces( timeStamp );
+         sendLockWaits( timeStamp );
+         sendUnlockEvents( timeStamp );
+         sendCores( timeStamp );
       }
       else
       {
          resetPendingTraces();
       }
-
-      if( signalConsumer )
-         ClientManager::sharedMemory().signalSemaphore();
    }
 
    Traces _traces;

@@ -354,7 +354,7 @@ static void drawStatusIcon( const ImVec2 drawPos, hop::SharedMemory::ConnectionS
          break;
       case hop::SharedMemory::PERMISSION_DENIED:
          col = ImColor( 0.6f, 0.2f, 0.0f );
-         msg = "Permission to shared memory or semaphore denied";
+         msg = "Permission to shared memory denied";
          break;
       case hop::SharedMemory::INVALID_VERSION:
          col = ImColor( 0.6f, 0.2f, 0.0f );
