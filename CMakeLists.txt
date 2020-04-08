@@ -108,3 +108,14 @@ add_subdirectory(test_clients)
 #####################
 enable_testing ()
 add_subdirectory (tests)
+
+#####################
+### Execute the tests after building
+#####################
+add_custom_command(
+     TARGET hop
+     COMMENT "Run tests"
+     POST_BUILD 
+     WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
+     COMMAND ctest
+)
