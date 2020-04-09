@@ -288,7 +288,7 @@ int main( int argc, char* argv[] )
       exit( err );
    }
 
-   hop::block_allocator::initialize();
+   hop::block_allocator::initialize( hop::VIRT_MEM_BLK_SIZE );
 
    // Use the current working directory and default filename if none is provided
    char defaultSavePath[256];

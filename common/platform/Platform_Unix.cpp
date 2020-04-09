@@ -138,7 +138,12 @@ void* virtualAlloc( uint64_t size )
 #else
    void* basePtr = nullptr;
 #endif
-   return mmap( basePtr, size, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0 );
+   void* mem = mmap( basePtr, size, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0 );
+   if( mem == (void *)-1 )
+   {
+      mem = nullptr;
+   }
+   return mem;
 }
 
 void virtualFree( void* memory, uint64_t size )

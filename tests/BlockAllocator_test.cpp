@@ -25,7 +25,7 @@ void testBlockAllocator()
 
 int main()
 {
-   hop::block_allocator::initialize();
+   hop::block_allocator::initialize( 2048 * HOP_BLK_SIZE_BYTES );
    testBlockAllocator();
    hop::block_allocator::terminate();
 }

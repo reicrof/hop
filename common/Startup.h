@@ -1,8 +1,11 @@
 #ifndef HOP_LAUNCH_ARGS_H_
 #define HOP_LAUNCH_ARGS_H_
 
+#include <stdint.h>
+
 namespace hop
 {
+static constexpr uint64_t VIRT_MEM_BLK_SIZE = 16 * 1024 * 1024 * 1024ULL;
 
 struct LaunchOptions
 {

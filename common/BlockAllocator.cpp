@@ -4,6 +4,7 @@
 
 #include <assert.h>
 #include <atomic>
+#include <errno.h>
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>  // memset
@@ -22,29 +23,35 @@ struct BlockListHead
 struct Allocator
 {
    void* _baseAlloc;                        // Base pointer of the alloc
+   uint64_t _vmAllocSize;                   // Size of the allocated VM
    std::atomic<BlockListHead> _freeBlocks;  // Free list
    std::atomic<uint8_t*> _end;              // Points to the block past the last allocated one
 } g_allocator;
 
-static constexpr uint64_t VIRT_MEM_BLK_SIZE   = 16 * 1024 * 1024 * 1024ULL;
 static constexpr uint32_t BLK_AND_HEADER_SIZE = HOP_BLK_SIZE_BYTES + sizeof( MemoryBlock );
-
-// Make sure a block filled with pointers can express the whole range of allocated memory
-static_assert(
-    ( HOP_BLK_SIZE_BYTES / sizeof( void* ) ) * HOP_BLK_SIZE_BYTES >= VIRT_MEM_BLK_SIZE,
-    "A pointer of blocks would not be able to express the whole virtual allocation" );
 
 namespace hop
 {
 namespace block_allocator
 {
-void initialize()
+void initialize( uint64_t vmAllocSize )
 {
-   g_allocator._baseAlloc = hop::virtualAlloc( VIRT_MEM_BLK_SIZE );
+   g_allocator._baseAlloc = hop::virtualAlloc( vmAllocSize );
    if( !g_allocator._baseAlloc )
    {
-      fprintf( stderr, "Fatal Error : Failed to allocate enough virtual memory\n" );
-      exit( 2 );
+      fprintf(
+          stderr,
+          "Fatal Error! Failed to allocate enough virtual memory : %s\n",
+          strerror( errno ) );
+      exit( errno );
+   }
+
+   g_allocator._vmAllocSize = vmAllocSize;
+   // Make sure a block filled with pointers can express the whole range of allocated memory
+   if( ( HOP_BLK_SIZE_BYTES / sizeof( void* ) ) * HOP_BLK_SIZE_BYTES >= vmAllocSize )
+   {
+      fprintf(
+          stderr, "Warning! Block size won't be able to cover whole range of allocated memory!\n" );
    }
 
    MemoryBlock* firstBlock = (MemoryBlock*)g_allocator._baseAlloc;
@@ -80,8 +87,8 @@ void* acquire()
    acquiredBlk->next = nullptr;
 
    // Out of memory
-   assert( (uint64_t)acquiredBlk < (uint64_t)g_allocator._baseAlloc + VIRT_MEM_BLK_SIZE );
-   if( (uint64_t)acquiredBlk >= (uint64_t)g_allocator._baseAlloc + VIRT_MEM_BLK_SIZE )
+   assert( (uint64_t)acquiredBlk < (uint64_t)g_allocator._baseAlloc + g_allocator._vmAllocSize );
+   if( (uint64_t)acquiredBlk >= (uint64_t)g_allocator._baseAlloc + g_allocator._vmAllocSize )
    {
       printf( "No more memory. Exiting..." );
       exit( -2 );
@@ -116,7 +123,7 @@ void release( void** block, uint32_t count )
 
 void terminate()
 {
-   hop::virtualFree( g_allocator._baseAlloc, VIRT_MEM_BLK_SIZE );
+   hop::virtualFree( g_allocator._baseAlloc, g_allocator._vmAllocSize );
    g_allocator._baseAlloc = nullptr;
 }
 

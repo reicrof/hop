@@ -110,12 +110,14 @@ enable_testing ()
 add_subdirectory (tests)
 
 #####################
-### Execute the tests after building
+### Execute the tests after building when not under windows
 #####################
+if(UNIX)
 add_custom_command(
      TARGET hop
      COMMENT "Run tests"
      POST_BUILD 
      WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
-     COMMAND ctest
+     COMMAND ctest --verbose
 )
+endif()

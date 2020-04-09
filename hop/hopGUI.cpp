@@ -283,7 +283,7 @@ int main( int argc, char* argv[] )
       return -1;
    }
 
-   hop::block_allocator::initialize();
+   hop::block_allocator::initialize( hop::VIRT_MEM_BLK_SIZE );
 
    sdlImGuiInit();
 
