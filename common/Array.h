@@ -16,7 +16,7 @@ struct Array
       _count         = 0;
       _data.memblock = (T*)block_allocator::acquire();
    }
-   ~Array() { block_allocator::release( (void**)&_data.memblock, 1 ); }
+   ~Array() { block_allocator::release( &_data.memblock, 1 ); }
 
    uint32_t size() const { return _count; }
 
@@ -48,7 +48,7 @@ struct Array
       }
       else
       {
-         std::rotate( _data.data[from], _data.data[to], _data.data[_count] );
+         std::rotate( &_data.data[from], &_data.data[to], &_data.data[_count] );
          assert( _count >= removeCount );
          _count -= removeCount;
       }

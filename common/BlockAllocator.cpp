@@ -26,7 +26,7 @@ struct Allocator
    std::atomic<uint8_t*> _end;              // Points to the block past the last allocated one
 } g_allocator;
 
-static constexpr uint64_t VIRT_MEM_BLK_SIZE   = 8 * 1024 * 1024 * 1024ULL;
+static constexpr uint64_t VIRT_MEM_BLK_SIZE   = 16 * 1024 * 1024 * 1024ULL;
 static constexpr uint32_t BLK_AND_HEADER_SIZE = HOP_BLK_SIZE_BYTES + sizeof( MemoryBlock );
 
 // Make sure a block filled with pointers can express the whole range of allocated memory

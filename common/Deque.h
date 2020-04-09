@@ -19,6 +19,7 @@ template <typename T>
 class Deque
 {
    struct Block;
+   using BlockPtrContainer = hop::Array<Block*>;
   public:
    static constexpr uint32_t COUNT_PER_BLOCK = (HOP_BLK_SIZE_BYTES - sizeof(uint32_t)) / sizeof( T );
    using value_type = T;
@@ -33,7 +34,7 @@ class Deque
       using value_type = T;
       using reference  = T&;
       using difference_type = typename std::iterator<std::random_access_iterator_tag, T>::difference_type;
-      using BlockArrayPtr = typename std::conditional< Const, const hop::Array<Block*>, hop::Array<Block*> >::type;
+      using BlockArrayPtr = typename std::conditional< Const, const BlockPtrContainer, BlockPtrContainer >::type;
 
       BlockArrayPtr* _blocks;
       uint32_t _blockId;
@@ -258,7 +259,7 @@ class Deque
       assert( begin._blocks == end._blocks );
       if( begin == end ) return;
 
-      const hop::Array<Block*>* inBlocks = begin._blocks;
+      const BlockPtrContainer* inBlocks = begin._blocks;
       uint32_t blkId = begin._blockId;
       uint32_t elId  = begin._elementId;
       for( ; blkId < end._blockId; ++blkId )
@@ -295,6 +296,8 @@ class Deque
    void erase( Deque<T>::iterator<false> from, Deque<T>::iterator<false> to )
    {
       assert( from._blockId <= to._blockId );
+      const uint64_t removedCount = std::distance( from, to );
+      assert( _size >= removedCount );
 
       /* [XXXXXX----] [----------] [----XXXXXX] -> [XXXXXX----] [----XXXXXX]*/
       eraseEntireBlocks( from, to );
@@ -305,8 +308,6 @@ class Deque
       /* [xxxxxxxxxX] [--------XX] -> [xxxxxxxxxX] [XX--------] ... until fully propagated */
       eraseWithinSingleBlock( from, to );
 
-      const uint64_t removedCount = std::distance( from, to );
-      assert( _size >= removedCount );
       _size -= removedCount;
    }
 
@@ -545,7 +546,7 @@ class Deque
     };
 
    uint64_t _size;
-   hop::Array<Block*> _blocks;
+   BlockPtrContainer _blocks;
 };
 
 }  // namespace hop
