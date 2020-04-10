@@ -26,7 +26,7 @@ if(UNIX)
         set( NOC_IMPL_FILE "noc_file_dialog/noc_file_dialog.mm")
         set( NOC_IMPL_DEFINE "NOC_FILE_DIALOG_OSX" )
    else()
-      set( PLATFORM_LINK_FLAGS "${PLATFORM_LINK_FLAGS} -lrt" )
+      set( PLATFORM_LINK_FLAGS "${PLATFORM_LINK_FLAGS} -lrt -latomic" )
 
       if( USE_OS_FILE_DIALOG )
          find_package( PkgConfig REQUIRED )
@@ -108,3 +108,16 @@ add_subdirectory(test_clients)
 #####################
 enable_testing ()
 add_subdirectory (tests)
+
+#####################
+### Execute the tests after building when not under windows
+#####################
+if(UNIX)
+add_custom_command(
+     TARGET hop
+     COMMENT "Run tests"
+     POST_BUILD 
+     WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
+     COMMAND ctest --verbose
+)
+endif()

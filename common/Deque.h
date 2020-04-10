@@ -2,6 +2,7 @@
 #define HOP_DEQUE_H_
 
 #include "common/BlockAllocator.h"
+#include "common/Array.h"
 
 #include <array>
 #include <algorithm>
@@ -11,7 +12,6 @@
 #include <cstddef>
 #include <type_traits>
 #include <iostream>
-#include <vector>
 
 namespace hop
 {
@@ -19,6 +19,7 @@ template <typename T>
 class Deque
 {
    struct Block;
+   using BlockPtrContainer = hop::Array<Block*>;
   public:
    static constexpr uint32_t COUNT_PER_BLOCK = (HOP_BLK_SIZE_BYTES - sizeof(uint32_t)) / sizeof( T );
    using value_type = T;
@@ -33,15 +34,15 @@ class Deque
       using value_type = T;
       using reference  = T&;
       using difference_type = typename std::iterator<std::random_access_iterator_tag, T>::difference_type;
-      using VectorBlocksPtr = typename std::conditional< Const, const std::vector<Block*>, std::vector<Block*> >::type;
+      using BlockArrayPtr = typename std::conditional< Const, const BlockPtrContainer, BlockPtrContainer >::type;
 
-      VectorBlocksPtr* _blocks;
+      BlockArrayPtr* _blocks;
       uint32_t _blockId;
       uint32_t _elementId;
    
-      iterator( VectorBlocksPtr* lb ) : _blocks( lb ), _blockId( 0 ), _elementId( 0 ) {}
+      iterator( BlockArrayPtr* lb ) : _blocks( lb ), _blockId( 0 ), _elementId( 0 ) {}
       iterator( const iterator& rhs ) : _blocks( rhs._blocks ), _blockId( rhs._blockId ), _elementId( rhs._elementId ) {}
-      iterator( VectorBlocksPtr* lb, uint32_t blockId, uint32_t elId ) : _blocks( lb ), _blockId( blockId ), _elementId( elId ) {}
+      iterator( BlockArrayPtr* lb, uint32_t blockId, uint32_t elId ) : _blocks( lb ), _blockId( blockId ), _elementId( elId ) {}
       inline bool operator==(const iterator& rhs) const { return _blockId == rhs._blockId && _elementId == rhs._elementId; }
       inline bool operator!=(const iterator& rhs) const { return _blockId != rhs._blockId || _elementId != rhs._elementId; }
       inline reference operator[]( size_t idx ) { return *(this->operator+( idx ) ); }
@@ -143,7 +144,7 @@ class Deque
     * Actual Deque implementation
     */
 
-   Deque()
+   Deque() : _size( 0 )
    {
        assert( block_allocator::blockSize() >= HOP_BLK_SIZE_BYTES );
    }
@@ -161,7 +162,7 @@ class Deque
       if( deltaBlocks > 0 )
       {
          // Release unused blocks
-         releaseBlocks( _blocks.begin() + newSize, _blocks.end() );
+         releaseBlocks( newSize, _blocks.size() );
       }
       else
       {
@@ -174,24 +175,16 @@ class Deque
       assert( _blocks.size() == rhs._blocks.size() );
 
       // Copy the data
+      _size = rhs._size;
       for( int32_t i = 0; i < newSize; ++i )
          *_blocks[i] = *rhs._blocks[i];
 
       return *this;
    }
 
-   uint64_t size() const
-   {
-      const size_t blockCount = _blocks.size();
-      if( blockCount == 0 ) return 0;
+   uint64_t size() const { return _size; }
 
-      const uint32_t lastBlockElemCount = _blocks.back()->elementCount;
-      if( blockCount == 1 ) return lastBlockElemCount;
-
-      return ( blockCount - 1 ) * COUNT_PER_BLOCK + lastBlockElemCount;
-   }
-
-   bool empty() const { return _blocks.empty(); }
+   bool empty() const { return _size == 0; }
 
    const T& operator[]( int64_t idx ) const
    {
@@ -205,28 +198,28 @@ class Deque
 
    T& front()
    {
-      assert( !_blocks.empty() && _blocks.front()->elementCount > 0 );
+      assert( _blocks.size() > 0 && _blocks.front()->elementCount > 0 );
       Block* firstBlock = _blocks.front();
       return (*firstBlock)[ 0 ];
    }
 
    const T& front() const
    {
-      assert( !_blocks.empty() && _blocks.front()->elementCount > 0 );
+      assert( _blocks.size() > 0 && _blocks.front()->elementCount > 0 );
       Block* firstBlock = _blocks.front();
       return (*firstBlock)[ 0 ];
    }
 
    T& back()
    {
-      assert( !_blocks.empty() && _blocks.back()->elementCount > 0 );
+      assert( _blocks.size() > 0 && _blocks.back()->elementCount > 0 );
       Block* lastBlock = _blocks.back();
       return (*lastBlock)[ lastBlock->elementCount - 1 ];
    }
 
    const T& back() const
    {
-      assert( !_blocks.empty() && _blocks.back()->elementCount > 0 );
+      assert( _blocks.size() > 0 && _blocks.back()->elementCount > 0 );
       const Block* lastBlock = _blocks.back();
       return (*lastBlock)[ lastBlock->elementCount - 1 ];
    }
@@ -242,7 +235,7 @@ class Deque
    }
    void append( const T* const data, uint32_t count )
    {
-      if( _blocks.empty() ) acquireNewBlock();
+      if( _blocks.size() == 0 ) acquireNewBlock();
 
       uint32_t remainingWrite = count;
       const T* inData         = data;
@@ -257,6 +250,7 @@ class Deque
          }
          remainingWrite = newRemainingWrite;
       } while( remainingWrite > 0 );
+      _size += count;
    }
 
    template< bool Const = false >
@@ -265,7 +259,7 @@ class Deque
       assert( begin._blocks == end._blocks );
       if( begin == end ) return;
 
-      const std::vector<Block*>* inBlocks = begin._blocks;
+      const BlockPtrContainer* inBlocks = begin._blocks;
       uint32_t blkId = begin._blockId;
       uint32_t elId  = begin._elementId;
       for( ; blkId < end._blockId; ++blkId )
@@ -302,6 +296,8 @@ class Deque
    void erase( Deque<T>::iterator<false> from, Deque<T>::iterator<false> to )
    {
       assert( from._blockId <= to._blockId );
+      const uint64_t removedCount = std::distance( from, to );
+      assert( _size >= removedCount );
 
       /* [XXXXXX----] [----------] [----XXXXXX] -> [XXXXXX----] [----XXXXXX]*/
       eraseEntireBlocks( from, to );
@@ -311,6 +307,8 @@ class Deque
 
       /* [xxxxxxxxxX] [--------XX] -> [xxxxxxxxxX] [XX--------] ... until fully propagated */
       eraseWithinSingleBlock( from, to );
+
+      _size -= removedCount;
    }
 
    void clear()
@@ -320,6 +318,7 @@ class Deque
          block_allocator::release( (void**)_blocks.data(), _blocks.size() );
          _blocks.clear();
       }
+      _size = 0;
    }
 
    ~Deque()
@@ -371,10 +370,10 @@ class Deque
         _blocks.push_back( newBlock );
     }
 
-    template< typename IT >
-    void releaseBlocks( const IT& from, const IT& to )
+    void releaseBlocks( uint32_t from, uint32_t to )
     {
-       block_allocator::release( (void**)&(*from), std::distance( from, to ) );
+       assert( to > from );
+       block_allocator::release( (void**)&_blocks[from], to - from );
        _blocks.erase( from, to );
     }
 
@@ -397,7 +396,7 @@ class Deque
           std::rotate(
               &curBlock->data[from._elementId],
               &curBlock->data[from._elementId] + removedElCount,
-              &curBlock->data[0] + COUNT_PER_BLOCK );
+              curBlock->end() );
           while( curBlkId++ < _blocks.size() - 1 )
           {
              Block* prevBlock = curBlock;
@@ -411,7 +410,7 @@ class Deque
              std::rotate(
                  &curBlock->data[0],
                  &curBlock->data[0] + removedElCount,
-                 &curBlock->data[0] + COUNT_PER_BLOCK );
+                 curBlock->end() );
           }
 
           assert( curBlock->elementCount >= removedElCount );
@@ -419,7 +418,7 @@ class Deque
           curBlock->elementCount -= removedElCount;
           if( curBlock->elementCount == 0 )
           {
-             releaseBlocks( _blocks.end()-1, _blocks.end() );
+             releaseBlocks( _blocks.size()-1, _blocks.size() );
           }
        }
     }
@@ -454,7 +453,7 @@ class Deque
           if( emptyLeftCnt >= validRightCnt )
           {
              // Erase the now empty right block front the list
-             releaseBlocks( _blocks.begin() + to._blockId, _blocks.begin() + to._blockId + 1 );
+             releaseBlocks( to._blockId, to._blockId + 1 );
              removedElCount -= elemCopied;
 
              // Fill empty slots with next blocks, if any
@@ -503,9 +502,7 @@ class Deque
        if( fullBlocksToRemove > 1 )
        {
           // Special case where we can remove entire block
-          auto removeFrom = _blocks.begin() + (from._blockId + 1);
-          auto removeTo   = removeFrom + (fullBlocksToRemove - 1);
-          releaseBlocks( removeFrom, removeTo );
+          releaseBlocks( from._blockId + 1, from._blockId + fullBlocksToRemove );
           to._blockId -= fullBlocksToRemove - 1;
        }
     }
@@ -539,11 +536,17 @@ class Deque
          return data[idx];
       }
 
+      inline T* end()
+      {
+         return &data[0] + elementCount;
+      }
+
        uint32_t elementCount;
        std::array<T, COUNT_PER_BLOCK> data;
     };
 
-   std::vector<Block*> _blocks;
+   uint64_t _size;
+   BlockPtrContainer _blocks;
 };
 
 }  // namespace hop

@@ -97,6 +97,22 @@ void setupSignalHandlers( void (*terminateCB)(int) )
    signal( SIGTERM, terminateCB );
 }
 
+void* virtualAlloc( size_t size )
+{
+#ifdef HOP_DEBUG
+   const LPVOID basePtr = (LPVOID)0x80000000LL;
+#else
+   const LPVOID basePtr = nullptr;
+#endif
+   
+   return VirtualAlloc( basePtr, size, MEM_COMMIT | MEM_RESERVE, PAGE_READWRITE );
+}
+
+void virtualFree( void* memory, uint64_t size )
+{
+   VirtualFree( memory, size, MEM_RELEASE );
+}
+
 uint32_t getTempFolderPath( char* buffer, uint32_t size )
 {
    return GetTempPathA( size, buffer );

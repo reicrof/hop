@@ -1,8 +1,11 @@
 #ifndef HOP_LAUNCH_ARGS_H_
 #define HOP_LAUNCH_ARGS_H_
 
+#include <stdint.h>
+
 namespace hop
 {
+static constexpr uint64_t VIRT_MEM_BLK_SIZE = 16 * 1024 * 1024 * 1024ULL;
 
 struct LaunchOptions
 {
@@ -19,8 +22,6 @@ LaunchOptions parseArgs( int argc, char* argv[] );
 // Returns true if the current platform supports RDTSC and Invariant TSC
 bool verifyPlatform();
 
-void initializeBlockAllocator();
-void terminateBlockAllocator();
 }
 
 #endif //  HOP_LAUNCH_ARGS_H_

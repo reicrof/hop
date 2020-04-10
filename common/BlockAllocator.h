@@ -3,13 +3,13 @@
 
 #include <cstdint>
 
-static constexpr uint32_t HOP_BLK_SIZE_BYTES = 4 * 1024ULL;
+static constexpr uint32_t HOP_BLK_SIZE_BYTES  = 512 * 1024ULL - sizeof( void* );
 
 namespace hop
 {
 namespace block_allocator
 {
-   void initialize( uint64_t startingBlockCount = 128 );
+   void initialize( uint64_t vmAllocSize );
    uint32_t blockSize();
    void* acquire();
    void release( void** block, uint32_t count );

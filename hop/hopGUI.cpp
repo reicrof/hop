@@ -6,6 +6,7 @@
 #include "hop_icon_raster.inline"
 
 #include "common/miniz.h"
+#include "common/BlockAllocator.h"
 #include "common/Utils.h"
 #include "common/Startup.h"
 #include "common/platform/Platform.h"
@@ -282,7 +283,7 @@ int main( int argc, char* argv[] )
       return -1;
    }
 
-   hop::initializeBlockAllocator();
+   hop::block_allocator::initialize( hop::VIRT_MEM_BLK_SIZE );
 
    sdlImGuiInit();
 
@@ -311,7 +312,7 @@ int main( int argc, char* argv[] )
       hop::terminateProcess( childProcId );
    }
 
-   hop::terminateBlockAllocator();
+   hop::block_allocator::terminate();
 
    destroyIcon();
 
