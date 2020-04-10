@@ -48,7 +48,7 @@ void initialize( uint64_t vmAllocSize )
 
    g_allocator._vmAllocSize = vmAllocSize;
    // Make sure a block filled with pointers can express the whole range of allocated memory
-   if( ( HOP_BLK_SIZE_BYTES / sizeof( void* ) ) * HOP_BLK_SIZE_BYTES >= vmAllocSize )
+   if( ( HOP_BLK_SIZE_BYTES / sizeof( void* ) ) * HOP_BLK_SIZE_BYTES < vmAllocSize )
    {
       fprintf(
           stderr, "Warning! Block size won't be able to cover whole range of allocated memory!\n" );
