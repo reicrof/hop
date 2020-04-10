@@ -10,6 +10,8 @@
 #include <algorithm>
 #include <chrono>
 
+static constexpr int POLL_COUNT_FAIL_DISCONNECTION = 20;
+
 template <typename T, class BinaryPredicate, class MergeFct>
 static T merge_consecutive( T first, T last, BinaryPredicate pred, MergeFct merge )
 {
@@ -54,13 +56,12 @@ static int mergeAndRemoveDuplicates( hop::CoreEvent* coreEvents, uint32_t count,
 }
 
 static hop::SharedMemory::ConnectionState updateConnectionState(
-   const hop::SharedMemory& sharedMem, 
-   const hop::TimeStamp curTimestamp,
-   const hop::TimeStamp prevSignalTimeStamp )
+    const hop::SharedMemory& sharedMem,
+    int pollFailCount )
 {
-   hop::SharedMemory::ConnectionState state =hop::SharedMemory::CONNECTED;
+   hop::SharedMemory::ConnectionState state = hop::SharedMemory::CONNECTED;
    const bool producerLost =
-       !sharedMem.hasConnectedProducer() || curTimestamp - prevSignalTimeStamp > 3000000000;
+       !sharedMem.hasConnectedProducer() || pollFailCount > POLL_COUNT_FAIL_DISCONNECTION;
    if( producerLost )
    {
       // We have lost the producer. Check if it is becaused the process was terminated or
@@ -83,66 +84,35 @@ bool Server::start( int inPid, const char* name )
    _state.connectionState = SharedMemory::NOT_CONNECTED;
 
    _thread = std::thread( [this, inPid]() {
-      TimeStamp lastSignalTime = getTimeStamp();
+      int pollFailedCount = 0;
       SharedMemory::ConnectionState prevConnectionState = SharedMemory::NOT_CONNECTED;
 
-      const uint32_t MAX_RECONNECT_TIMEOUT_MS = 500;
       uint32_t reconnectTimeoutMs = 10;
       while ( true )
       {
          // Try to get the shared memory
          if ( !_sharedMem.valid() )
          {
-            HOP_PROF( "Trying to open process..." );
-            const hop::ProcessInfo procInfo =
-                inPid != -1 ? hop::getProcessInfoFromPID( inPid )
-                            : hop::getProcessInfoFromProcessName( _state.processName.c_str() );
-            SharedMemory::ConnectionState state =
-                _sharedMem.create( procInfo.pid, 0 /*will be define in shared metadata*/, true );
-
-            if ( state != SharedMemory::CONNECTED )
+            if( tryConnect( inPid, prevConnectionState ) )
             {
-               { // Update state then go to sleep a few MS
-                  std::lock_guard<hop::Mutex> guard( _stateMutex );
-                  _state.connectionState = state;
-                  if( !_state.running )
-                     return;  // We are done without even opening the shared mem :(
-               }
-
-               prevConnectionState = state;
                // Sleep few ms before retrying. Increase timeout time each try
                std::this_thread::sleep_for( std::chrono::milliseconds( reconnectTimeoutMs ) );
+               static constexpr uint32_t MAX_RECONNECT_TIMEOUT_MS = 500;
                reconnectTimeoutMs = std::min( reconnectTimeoutMs + 10, MAX_RECONNECT_TIMEOUT_MS );
-               continue;
+               continue; // No connection, let's retry
             }
 
-            // Clear any remaining messages from previous execution now
-            clearPendingMessages();
-
-            std::lock_guard<hop::Mutex> guard( _stateMutex );            
-            _state.connectionState = state;
-            _state.pid             = procInfo.pid;
-            _state.processName     = std::string( procInfo.name );
-            prevConnectionState    = state;
-            lastSignalTime         = getTimeStamp();
-
-            _sharedMem.setListeningConsumer( _state.recording );
-
-            // Set HOP thread name
-            char serverName[64];
-            snprintf( serverName, sizeof( serverName ), "%s [Producer]", _state.processName.c_str() );
-            HOP_SET_THREAD_NAME( serverName );
-
+            if( prevConnectionState != SharedMemory::CONNECTED  )
+               break; // No connection was found and we should not retry.
+            
             printf( "Connection to shared data successful.\n" );
          }
 
          HOP_PROF_FUNC();
-         const bool wasSignaled = _sharedMem.tryWaitSemaphore();
 
          // Check if its been a while since we have been signaleds
-         const TimeStamp curTime = getTimeStamp();
          const auto newConnectionState =
-             updateConnectionState( _sharedMem, curTime, lastSignalTime );
+             updateConnectionState( _sharedMem, pollFailedCount );
          const bool clientAlive = newConnectionState != SharedMemory::NOT_CONNECTED;
 
          // Check and update current server state
@@ -178,27 +148,12 @@ bool Server::start( int inPid, const char* name )
             }
          }
 
-         if ( !wasSignaled )
-         {
-            // We timed out.
-
-            // If we have a connected producer and we timed out, it simply means the app is either
-            // not very productive or is being debuged. If we do not have a producer, it means the
-            // app was closed.
-            using namespace std::chrono;
-            const auto timeToSleep = clientAlive ? milliseconds( 100 ) : milliseconds( 1000 );
-            std::this_thread::sleep_for( timeToSleep );
-            continue;
-         }
-
-         // We were signaled
-         lastSignalTime = curTime;
-
          size_t offset = 0;
          const size_t bytesToRead = ringbuf_consume( _sharedMem.ringbuffer(), &offset );
          if ( bytesToRead > 0 )
          {
             HOP_PROF( "Server - Handling new messages" );
+            pollFailedCount = 0;
             const TimeStamp minTimestamp = _sharedMem.lastResetTimestamp();
             size_t bytesRead = 0;
             while ( bytesRead < bytesToRead )
@@ -208,10 +163,70 @@ bool Server::start( int inPid, const char* name )
             }
             ringbuf_release( _sharedMem.ringbuffer(), bytesToRead );
          }
+         else
+         {
+            // Nothing was sent
+            ++pollFailedCount;
+            HOP_PROF( "Nothing send..." );
+
+            // If we have a connected producer and we timed out, it simply means the app is either
+            // not very productive or is being debuged. If we do not have a producer, it means the
+            // app was closed.
+            using namespace std::chrono;
+            if( clientAlive )
+            {
+               // Relax our polling after a few attemps
+               std::this_thread::sleep_for( microseconds( 500 ) * std::min( pollFailedCount, 10 ) );
+            }
+            else
+            {
+               std::this_thread::sleep_for( milliseconds( 500 ) );
+            }
+         }
       }
    } );
 
    return true;
+}
+
+bool Server::tryConnect( int32_t pid, SharedMemory::ConnectionState& newState )
+{
+   HOP_PROF_FUNC();
+
+   const hop::ProcessInfo procInfo =
+       pid != -1 ? hop::getProcessInfoFromPID( pid )
+                   : hop::getProcessInfoFromProcessName( _state.processName.c_str() );
+   newState = _sharedMem.create( procInfo.pid, 0 /*will be define in shared metadata*/, true );
+
+   if( newState != SharedMemory::CONNECTED )
+   {
+      {  // Update state then go to sleep a few MS
+         std::lock_guard<hop::Mutex> guard( _stateMutex );
+         _state.connectionState = newState;
+         if( !_state.running ) return false;  // We are done without even opening the shared mem :(
+      }
+
+      // Signal we should retry
+      return true;
+   }
+
+   // Clear any remaining messages from previous execution now
+   clearPendingMessages();
+
+   std::lock_guard<hop::Mutex> guard( _stateMutex );
+   _sharedMem.setListeningConsumer( _state.recording );
+
+   _state.connectionState = newState;
+   _state.pid             = procInfo.pid;
+   _state.processName     = std::string( procInfo.name );
+
+   // Set HOP thread name
+   char serverName[64];
+   snprintf( serverName, sizeof( serverName ), "%s [Producer]", _state.processName.c_str() );
+   HOP_SET_THREAD_NAME( serverName );
+
+   // Got the connection, signal that we should to retry
+   return false;
 }
 
 const char* Server::processInfo( int* processId ) const
@@ -498,11 +513,7 @@ void Server::stop()
          _sharedMem.setListeningConsumer( false );
          _sharedMem.setConnectedConsumer( false );
       }
-      // Wake up semaphore to close properly
-      if( _sharedMem.valid() && _sharedMem.semaphore() )
-      {
-         _sharedMem.signalSemaphore();
-      }
+
       if( _thread.joinable() )
       {
          _thread.join();

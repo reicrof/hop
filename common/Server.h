@@ -44,6 +44,9 @@ class Server
    void getPendingData(PendingData& data);
 
   private:
+   // Return wether or not we should retry to connect and fill the connection state
+   bool tryConnect( int32_t pid, SharedMemory::ConnectionState& newState );
+
    // Returns the number of bytes processed
    size_t handleNewMessage( uint8_t* data, size_t maxSize, TimeStamp minTimestamp );
    bool addUniqueThreadName( uint32_t threadIndex, StrPtr_t name );
