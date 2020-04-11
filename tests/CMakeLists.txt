@@ -24,8 +24,13 @@ target_link_libraries( Deque_test PUBLIC ${PLATFORM_LINK_FLAGS} )
 add_executable (HashSet_test HashSet_test.cpp ${ROOT_DIR}/common/HashSet.c )
 target_link_libraries( HashSet_test PUBLIC ${PLATFORM_LINK_FLAGS} )
 
+add_executable (c_test c_test.c )
+target_compile_definitions( c_test PUBLIC HOP_ENABLED )
+target_link_libraries( c_test PUBLIC ${PLATFORM_LINK_FLAGS} )
+
 add_test (NAME TscTest COMMAND Tsc_test)
 add_test (NAME PidTest COMMAND Pid_test)
 add_test (NAME BlockAllocatorTest COMMAND BlockAllocator_test)
 add_test (NAME DequeTest COMMAND Deque_test)
 add_test (NAME HashSetTest COMMAND HashSet_test)
+add_test (NAME cTest COMMAND c_test)
