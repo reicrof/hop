@@ -472,6 +472,12 @@ class ZoneGuard
 
 }  // namespace hop
 
+typedef struct hop_hash_set* hop_hash_set_t;
+hop_hash_set_t hop_hash_set_create();
+void hop_hash_set_destroy( hop_hash_set_t set );
+void hop_hash_set_clear( hop_hash_set_t set );
+int hop_hash_set_insert( hop_hash_set_t set, const void* value );
+
 /*
  * Copyright (c) 2016 Mindaugas Rasiukevicius <rmind at noxt eu>
  * All rights reserved.
@@ -597,7 +603,6 @@ class SharedMemory
 #include <algorithm>
 #include <cassert>
 #include <memory>
-#include <unordered_set>
 #include <vector>
 
 #define HOP_MIN( a, b ) ( ( ( a ) < ( b ) ) ? ( a ) : ( b ) )
@@ -799,6 +804,7 @@ void closeSharedMemory( const HOP_CHAR* name, shm_handle handle, void* dataPtr )
    if( shm_unlink( name ) != 0 ) perror( " HOP - Could not unlink shared memory" );
 #endif
 }
+
 }  // namespace
 
 namespace hop
@@ -1163,13 +1169,18 @@ class Client
       _cores.reserve( 64 );
       _lockWaits.reserve( 64 );
       _unlockEvents.reserve( 64 );
-      _stringPtr.reserve( 256 );
       _stringData.reserve( 256 * 32 );
+
+      _stringPtrSet = hop_hash_set_create();
 
       resetStringData();
    }
 
-   ~Client() { freeTraces( &_traces ); }
+   ~Client()
+   {
+      freeTraces( &_traces );
+      hop_hash_set_destroy( _stringPtrSet );
+   }
 
    void addProfilingTrace(
        StrPtr_t fileName,
@@ -1218,11 +1229,10 @@ class Client
       const size_t strLen = strlen( dynStr );
 
       const StrPtr_t hash = cStringHash( dynStr, strLen );
-
-      auto res = _stringPtr.insert( hash );
+      bool inserted = (bool)hop_hash_set_insert( _stringPtrSet, (void*)hash );
       // If the string was inserted (meaning it was not already there),
       // add it to the database, otherwise return its hash
-      if( res.second )
+      if( inserted )
       {
          const size_t newEntryPos = _stringData.size();
          assert( ( newEntryPos & 7 ) == 0 );  // Make sure we are 8 byte aligned
@@ -1242,10 +1252,10 @@ class Client
       // Early return on NULL
       if( strId == 0 ) return false;
 
-      auto res = _stringPtr.insert( strId );
+      const bool inserted = (bool)hop_hash_set_insert( _stringPtrSet, (void*)strId );
       // If the string was inserted (meaning it was not already there),
       // add it to the database, otherwise do nothing
-      if( res.second )
+      if( inserted )
       {
          const size_t newEntryPos = _stringData.size();
          assert( ( newEntryPos & 7 ) == 0 );  // Make sure we are 8 byte aligned
@@ -1262,12 +1272,12 @@ class Client
              alignedStrLen );
       }
 
-      return res.second;
+      return inserted;
    }
 
    void resetStringData()
    {
-      _stringPtr.clear();
+      hop_hash_set_clear( _stringPtrSet );
       _stringData.clear();
       _sentStringDataSize   = 0;
       _clientResetTimeStamp = ClientManager::sharedMemory().lastResetTimestamp();
@@ -1596,7 +1606,7 @@ class Client
    std::vector<CoreEvent> _cores;
    std::vector<LockWait> _lockWaits;
    std::vector<UnlockEvent> _unlockEvents;
-   std::unordered_set<StrPtr_t> _stringPtr;
+   hop_hash_set_t _stringPtrSet;
    std::vector<char> _stringData;
    TimeStamp _clientResetTimeStamp{0};
    ringbuf_worker_t* _worker{NULL};
@@ -1763,6 +1773,130 @@ SharedMemory& ClientManager::sharedMemory() HOP_NOEXCEPT
 }
 
 }  // end of namespace hop
+
+/**
+ * Start of hop hash set implementation
+ */
+
+static const uint32_t DEFAULT_TABLE_SIZE = 1 << 8U;  // Required to be a power of 2 !
+static const float MAX_LOAD_FACTOR       = 0.4f;
+
+typedef struct hop_hash_set
+{
+   const void** table;
+   uint32_t capacity;
+   uint32_t count;
+} hop_hash_set;
+
+static inline float load_factor( hop_hash_set_t set ) { return (float)set->count / set->capacity; }
+
+static inline uint64_t hash_func( hop_hash_set_t set, const void* value )
+{
+   return ( (uint64_t)value >> 3 ) % set->capacity;
+}
+
+static inline uint32_t quad_probe( uint64_t hash_value, uint32_t it, uint32_t table_size )
+{
+   // Using quadratic probing function (x^2 + x) / 2
+   return ( hash_value + ( ( it * it + it ) >> 2 ) ) % table_size;
+}
+
+// Insert value inside the hash set without incrementing the count. Used while rehashing as
+// well as within the public insert function
+static int insert_internal( hop_hash_set_t hs, const void* value )
+{
+   const uint64_t hash_value = hash_func( hs, value );
+   uint32_t iteration        = 0;
+   while( iteration < hs->capacity )
+   {
+      const uint32_t idx         = quad_probe( hash_value, iteration++, hs->capacity );
+      const void* existing_value = hs->table[idx];
+      if( existing_value == value )
+      {
+         return 0;  // Value already inserted. Return insertion failure
+      }
+      else if( existing_value == NULL )
+      {
+         hs->table[idx] = value;
+         return 1;
+      }
+   }
+
+   return 0;
+}
+
+static void rehash( hop_hash_set_t hs )
+{
+   const void** prev_table            = hs->table;
+   const uint32_t prev_capacity = hs->capacity;
+
+   hs->capacity = prev_capacity * 2;
+   hs->table    = (const void**)calloc( hs->capacity, sizeof( const void* ) );
+
+   for( uint32_t i = 0; i < prev_capacity; ++i )
+   {
+      if( prev_table[i] != NULL ) insert_internal( hs, prev_table[i] );
+   }
+
+   free( prev_table );
+}
+
+hop_hash_set_t hop_hash_set_create()
+{
+   hop_hash_set* hs = (hop_hash_set*)calloc( 1, sizeof( hop_hash_set ) );
+   if( !hs ) return NULL;
+
+   hs->table = (const void**)calloc( DEFAULT_TABLE_SIZE, sizeof( const void* ) );
+   if( !hs->table )
+   {
+      free( hs );
+      return NULL;
+   }
+
+   hs->capacity = DEFAULT_TABLE_SIZE;
+   return hs;
+}
+
+void hop_hash_set_destroy( hop_hash_set_t set )
+{
+   if( set )
+   {
+      free( set->table );
+   }
+   free( set );
+}
+
+int hop_hash_set_insert( hop_hash_set_t hs, const void* value )
+{
+   const int inserted = insert_internal( hs, value );
+   if( inserted )
+   {
+      ++hs->count;
+      if( load_factor( hs ) > MAX_LOAD_FACTOR )
+      {
+         rehash( hs );
+      }
+   }
+   return inserted;
+}
+
+int hop_hash_set_count( hop_hash_set_t set ) { return set->count; }
+
+void hop_hash_set_clear( hop_hash_set_t set )
+{
+   if( set )
+   {
+      set->count = 0;
+      if( set->table )
+      {
+         memset( set->table, 0, set->capacity * sizeof( const void* ) );
+      }
+   }
+}
+
+/**
+ * Start of Mindaugas Rasiukevicius <rmind at noxt eu> ringbuffer implementation
+ */
 
 #include <stdio.h>
 #include <stdlib.h>

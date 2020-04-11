@@ -13,10 +13,4 @@ if( !(x) ) {                                                      \
    fprintf(stderr, "Test Failed at %s:%u\n", __FILE__, __LINE__); \
 }
 
-#define HOP_TEST_ASSERT_RND( x, seed )                                                       \
-if( !(x) ) {                                                                                 \
-   assert( (x) );                                                                            \
-   fprintf(stderr, "Test with random seed %u Failed at %s:%u\n", seed, __FILE__, __LINE__);  \
-}
-
 #endif //HOP_TEST_UTILS_H
