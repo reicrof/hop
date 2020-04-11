@@ -1790,9 +1790,9 @@ typedef struct hop_hash_set
 
 static inline float load_factor( hop_hash_set_t set ) { return (float)set->count / set->capacity; }
 
-static inline uint64_t hash_func( hop_hash_set_t set, const void* value )
+static inline uint64_t hash_func( const void* value )
 {
-   return ( (uint64_t)value >> 3 ) % set->capacity;
+   return (uint64_t)value;
 }
 
 static inline uint32_t quad_probe( uint64_t hash_value, uint32_t it, uint32_t table_size )
@@ -1805,7 +1805,7 @@ static inline uint32_t quad_probe( uint64_t hash_value, uint32_t it, uint32_t ta
 // well as within the public insert function
 static int insert_internal( hop_hash_set_t hs, const void* value )
 {
-   const uint64_t hash_value = hash_func( hs, value );
+   const uint64_t hash_value = hash_func( value );
    uint32_t iteration        = 0;
    while( iteration < hs->capacity )
    {
