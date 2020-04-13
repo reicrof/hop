@@ -193,11 +193,11 @@ typedef char HOP_CHAR;
 
 // typedef _Thread_local hop_thread_local;
 //#define hop_thread_local    _Thread_local
-//#define hop_atomic_uint32   atomic_uint_least32_t
+//#define hop_atomic_uint32   atomic_uint
 //#define hop_atomic_uint64   atomic_uint_least64_t
 #define hop_thread_local    _Thread_local
-#define hop_atomic_uint32   uint32_t
-#define hop_atomic_uint64   uint64_t
+#define hop_atomic_uint64   volatile uint64_t
+#define hop_atomic_uint32   volatile uint32_t
 
 typedef int      hop_bool_t;
 enum { hop_false, hop_true };
@@ -378,6 +378,8 @@ typedef enum hop_connection_state
    HOP_UNKNOWN_CONNECTION_ERROR
 } hop_connection_state;
 
+static hop_shared_memory g_sharedMemory;
+
 hop_connection_state
 hop_create_shared_memory( int pid, uint64_t requestedSize, hop_bool_t isConsumer );
 void hop_destroy_shared_memory();
@@ -402,12 +404,12 @@ void hop_destroy_shared_memory()
    // {
    //    if( _isConsumer )
    //    {
-   //       setListeningConsumer( false );
-   //       setConnectedConsumer( false );
+   //       set_listening_consumer( &g_sharedMemory, false );
+   //       set_connected_consumer( &g_sharedMemory, false );
    //    }
    //    else
    //    {
-   //       setConnectedProducer( false );
+   //       set_connected_producer( &g_sharedMemory, false );
    //    }
 
    //    // If we are the last one accessing the shared memory, clean it.
@@ -437,9 +439,9 @@ void hop_terminate()
 
 typedef enum hop_shared_memory_state_bits
 {
-   CONNECTED_PRODUCER = 1 << 0,
-   CONNECTED_CONSUMER = 1 << 1,
-   LISTENING_CONSUMER = 1 << 2
+   HOP_CONNECTED_PRODUCER = 1 << 0,
+   HOP_CONNECTED_CONSUMER = 1 << 1,
+   HOP_LISTENING_CONSUMER = 1 << 2
 } hop_shared_memory_state_bits;
 typedef uint32_t hop_shared_memory_state;
 
@@ -511,6 +513,58 @@ void ringbuf_produce(ringbuf_t*, ringbuf_worker_t*);
 size_t ringbuf_consume(ringbuf_t*, size_t*);
 void ringbuf_release(ringbuf_t*, size_t);
 
+typedef uint64_t	ringbuf_off_t;
+
+/*
+ * Atomic operations and memory barriers.  If C11 API is not available,
+ * then wrap the GCC builtin routines.
+ *
+ * Note: This atomic_compare_exchange_weak does not do the C11 thing of
+ * filling *(expected) with the actual value, because we don't need
+ * that here.
+ */
+#ifndef atomic_compare_exchange_weak
+#define	atomic_compare_exchange_weak(ptr, expected, desired) \
+    __sync_bool_compare_and_swap(ptr, *(expected), desired)
+#endif
+
+#ifndef atomic_thread_fence
+#define	memory_order_relaxed	__ATOMIC_RELAXED
+#define	memory_order_acquire	__ATOMIC_ACQUIRE
+#define	memory_order_release	__ATOMIC_RELEASE
+#define	memory_order_seq_cst	__ATOMIC_SEQ_CST
+#define	atomic_thread_fence(m)	__atomic_thread_fence(m)
+#endif
+#ifndef atomic_store_explicit
+#define	atomic_store_explicit	__atomic_store_n
+#endif
+#ifndef atomic_load_explicit
+#define	atomic_load_explicit	__atomic_load_n
+#endif
+
+struct ringbuf_worker {
+   volatile ringbuf_off_t	seen_off;
+   int			registered;
+};
+
+struct ringbuf {
+   /* Ring buffer space. */
+   size_t			space;
+
+   /*
+    * The NEXT hand is atomically updated by the producer.
+    * WRAP_LOCK_BIT is set in case of wrap-around; in such case,
+    * the producer can update the 'end' offset.
+    */
+   volatile ringbuf_off_t	next;
+   ringbuf_off_t		end;
+
+   /* The following are updated by the consumer. */
+   ringbuf_off_t		written;
+   unsigned		nworkers;
+   ringbuf_worker_t	workers[];
+};
+
 /* -------------------------------------------------------
                   End of declaration
 -------------------------------------------------------  */
@@ -530,15 +584,22 @@ static void* create_ipc_memory(
     uint64_t size,
     shm_handle* handle,
     hop_connection_state* state );
-void close_ipc_memory( const HOP_CHAR* name, shm_handle handle, void* dataPtr );
+static void close_ipc_memory( const HOP_CHAR* name, shm_handle handle, void* dataPtr );
 
-static hop_shared_memory g_sharedMemory;
+static uint32_t atomic_set_bit( hop_atomic_uint32* value, uint32_t bitToSet );
+static uintptr_t atomic_clear_bit( hop_atomic_uint32* value, uint32_t bitToSet );
+
+static hop_bool_t has_connected_producer( hop_shared_memory* mem );
+static void set_connected_producer( hop_shared_memory* mem, hop_bool_t );
+static hop_bool_t has_connected_consumer( hop_shared_memory* mem );
+static void set_connected_consumer( hop_shared_memory* mem, hop_bool_t );
+static hop_bool_t has_listening_consumer( hop_shared_memory* mem );
+static void set_listening_consumer( hop_shared_memory* mem, hop_bool_t );
+static void set_reset_timestamp( hop_shared_memory* mem, hop_timestamp_t t );
+
 hop_connection_state hop_create_shared_memory( int pid, uint64_t requestedSize, hop_bool_t isConsumer )
 {
    assert( !g_sharedMemory.valid );
-
-   g_sharedMemory.valid      = hop_true;
-   g_sharedMemory.isConsumer = isConsumer;
 
    char pidStr[16];
    snprintf( pidStr, sizeof( pidStr ), "%d", pid );
@@ -558,35 +619,42 @@ hop_connection_state hop_create_shared_memory( int pid, uint64_t requestedSize, 
    uint8_t* baseSharedPtr     = (uint8_t*)open_ipc_memory(
        g_sharedMemory.sharedMemPath, &g_sharedMemory.sharedMemHandle, &totalSize, &state );
 
-   // If we are the producer and we were not able to open the shared memory, we create it
-   if( !isConsumer && !baseSharedPtr )
+   // If we are unable to open the shared memory
+   if( !baseSharedPtr )
    {
-      size_t ringBufSize;
-      ringbuf_get_sizes( HOP_MAX_THREAD_NB, &ringBufSize, NULL );
-      totalSize = ringBufSize + requestedSize + sizeof( hop_shared_memory_header );
-      baseSharedPtr = (uint8_t*)create_ipc_memory(
-          g_sharedMemory.sharedMemPath, totalSize, &g_sharedMemory.sharedMemHandle, &state );
+      // If we are not a consumer, we need to create it
+      if( !isConsumer )
+      {
+         size_t ringBufSize;
+         ringbuf_get_sizes( HOP_MAX_THREAD_NB, &ringBufSize, NULL );
+         totalSize     = ringBufSize + requestedSize + sizeof( hop_shared_memory_header );
+         baseSharedPtr = (uint8_t*)create_ipc_memory(
+             g_sharedMemory.sharedMemPath, totalSize, &g_sharedMemory.sharedMemHandle, &state );
+      }
    }
 
+   // If we still are not able to get the shared memory, return failure state
    if( !baseSharedPtr )
    {
       return state;
    }
 
-   hop_shared_memory_header* metaInfo = (hop_shared_memory_header*)baseSharedPtr;
+   hop_shared_memory_header* header = (hop_shared_memory_header*)baseSharedPtr;
    if( !isConsumer )
    {
       // Set client's info in the shared memory for the viewer to access
-      metaInfo->clientVersion            = HOP_VERSION;
-      metaInfo->maxThreadNb              = HOP_MAX_THREAD_NB;
-      metaInfo->requestedSize            = HOP_SHARED_MEM_SIZE;
-      metaInfo->usingStdChronoTimeStamps = HOP_USE_STD_CHRONO;
-      metaInfo->lastResetTimeStamp       = hop_get_timestamp_no_core();
+      header->clientVersion            = HOP_VERSION;
+      header->maxThreadNb              = HOP_MAX_THREAD_NB;
+      header->requestedSize            = HOP_SHARED_MEM_SIZE;
+      header->usingStdChronoTimeStamps = HOP_USE_STD_CHRONO;
+      header->lastResetTimeStamp       = hop_get_timestamp_no_core();
 
       // Take a local copy as we do not want to expose the ring buffer before it is
       // actually initialized
-      ringbuf_t* localRingBuf = (ringbuf_t*)( baseSharedPtr + sizeof( hop_shared_memory_header ) );
-      if( ringbuf_setup( localRingBuf, HOP_MAX_THREAD_NB, requestedSize ) < 0 )
+      g_sharedMemory.sharedSegment.ringbuf =
+          (ringbuf_t*)( baseSharedPtr + sizeof( hop_shared_memory_header ) );
+      if( ringbuf_setup( g_sharedMemory.sharedSegment.ringbuf, HOP_MAX_THREAD_NB, requestedSize ) <
+          0 )
       {
          close_ipc_memory(
              g_sharedMemory.sharedMemPath, g_sharedMemory.sharedMemHandle, baseSharedPtr );
@@ -595,56 +663,49 @@ hop_connection_state hop_create_shared_memory( int pid, uint64_t requestedSize, 
    }
    else  // Check if client has compatible version
    {
-      if( fabsf( metaInfo->clientVersion - HOP_VERSION ) > 0.001f )
+      if( fabsf( header->clientVersion - HOP_VERSION ) > 0.001f )
       {
          printf(
              "HOP - Client's version (%f) does not match HOP viewer version (%f)\n",
-             metaInfo->clientVersion,
+             header->clientVersion,
              HOP_VERSION );
          hop_destroy_shared_memory();
          return HOP_INVALID_VERSION;
       }
    }
 
-   /*
-      // Create the shared data if it was not already created
-      if( !_sharedMetaData )
+   // Get the size needed for the ringbuf struct
+   size_t ringBufSize;
+   ringbuf_get_sizes( header->maxThreadNb, &ringBufSize, NULL );
+
+   // Get pointers inside the shared memory once it has been initialized
+   g_sharedMemory.sharedSegment.header = header;
+   g_sharedMemory.sharedSegment.data   = g_sharedMemory.sharedSegment.ringbuf + ringBufSize;
+   g_sharedMemory.pid                  = pid;
+   g_sharedMemory.valid                = hop_true;
+   g_sharedMemory.isConsumer           = isConsumer;
+
+   if( isConsumer )
+   {
+      set_reset_timestamp( &g_sharedMemory, hop_get_timestamp_no_core() );
+      // We can only have one consumer
+      if( has_connected_consumer( &g_sharedMemory ) )
       {
-
-         // Get the size needed for the ringbuf struct
-         size_t ringBufSize;
-         ringbuf_get_sizes( metaInfo->maxThreadNb, &ringBufSize, NULL );
-
-         // Get pointers inside the shared memory once it has been initialized
-         _sharedMetaData = reinterpret_cast<SharedMetaInfo*>( sharedMem );
-         _ringbuf        = reinterpret_cast<ringbuf_t*>( sharedMem + sizeof( SharedMetaInfo ) );
-         _data           = sharedMem + sizeof( SharedMetaInfo ) + ringBufSize;
-
-         if( isConsumer )
-         {
-            setResetTimestamp( getTimeStamp() );
-            // We can only have one consumer
-            if( hasConnectedConsumer() )
-            {
-               printf(
-                   "/!\\ HOP WARNING /!\\ \n"
-                   "Cannot have more than one instance of the consumer at a time."
-                   " You might be trying to run the consumer application twice or"
-                   " have a dangling shared memory segment. hop might be unstable"
-                   " in this state. You could consider manually removing the shared"
-                   " memory, or restart this excutable cleanly.\n\n" );
-               // Force resetting the listening state as this could cause crash. The side
-               // effect would simply be that other consumer would stop listening. Not a
-               // big deal as there should not be any other consumer...
-               _sharedMetaData->flags &= ~( SharedMetaInfo::LISTENING_CONSUMER );
-            }
-         }
-
-         isConsumer ? setConnectedConsumer( true ) : setConnectedProducer( true );
-         _valid.store( true );
-         _pid = pid;
+         printf(
+             "/!\\ HOP WARNING /!\\ \n"
+             "Cannot have more than one instance of the consumer at a time."
+             " You might be trying to run the consumer application twice or"
+             " have a dangling shared memory segment. hop might be unstable"
+             " in this state. You could consider manually removing the shared"
+             " memory, or restart this excutable cleanly.\n\n" );
+         // Force resetting the listening state as this could cause crash. The side
+         // effect would simply be that other consumer would stop listening. Not a
+         // big deal as there should not be any other consumer...
+         atomic_clear_bit( &g_sharedMemory.sharedSegment.header->state, HOP_LISTENING_CONSUMER );
       }
-   */
+   }
+
+   isConsumer ? set_connected_consumer( &g_sharedMemory, hop_true ) : set_connected_producer( &g_sharedMemory, hop_true );
    return state;
 }
 
@@ -794,7 +855,83 @@ static hop_connection_state err_to_connection_state( uint32_t err )
 #endif
 }
 
+static uint32_t atomic_set_bit( hop_atomic_uint32* value, uint32_t bitToSet )
+{
+   uint32_t origValue = atomic_load_explicit( value, memory_order_seq_cst );
+   while( !atomic_compare_exchange_weak( value, &origValue, origValue | bitToSet ) )
+      ;
+   return origValue;  // return value before change
+}
 
+static uintptr_t atomic_clear_bit( hop_atomic_uint32* value, uint32_t bitToSet )
+{
+   const uint32_t mask = ~bitToSet;
+   uint32_t origValue = atomic_load_explicit( value, memory_order_seq_cst );
+   while( !atomic_compare_exchange_weak( value, &origValue, origValue & mask ) )
+      ;
+   return origValue;  // return value before change
+}
+
+static hop_bool_t has_connected_producer( hop_shared_memory* mem )
+{
+   return ( mem->sharedSegment.header->state & HOP_CONNECTED_PRODUCER ) > 0;
+}
+
+static void set_connected_producer( hop_shared_memory* mem, hop_bool_t connected )
+{
+   if( connected )
+      atomic_set_bit( &mem->sharedSegment.header->state, HOP_CONNECTED_PRODUCER );
+   else
+      atomic_clear_bit( &mem->sharedSegment.header->state, HOP_CONNECTED_PRODUCER );
+}
+
+static hop_bool_t has_connected_consumer( hop_shared_memory* mem )
+{
+   return ( mem->sharedSegment.header->state & HOP_CONNECTED_CONSUMER ) > 0;
+}
+
+static void set_connected_consumer( hop_shared_memory* mem, hop_bool_t connected )
+{
+   if( connected )
+      atomic_set_bit( &mem->sharedSegment.header->state, HOP_CONNECTED_CONSUMER );
+   else
+      atomic_clear_bit( &mem->sharedSegment.header->state, HOP_CONNECTED_CONSUMER );
+}
+
+static hop_bool_t has_listening_consumer( hop_shared_memory* mem )
+{
+   const uint32_t mask = HOP_CONNECTED_CONSUMER | HOP_LISTENING_CONSUMER;
+   return ( mem->sharedSegment.header->state & mask ) == mask;
+}
+
+static void set_listening_consumer( hop_shared_memory* mem, hop_bool_t listening )
+{
+   if( listening )
+      atomic_set_bit( &mem->sharedSegment.header->state, HOP_LISTENING_CONSUMER );
+   else
+      atomic_clear_bit( &mem->sharedSegment.header->state, HOP_LISTENING_CONSUMER );
+}
+
+static void set_reset_timestamp( hop_shared_memory* mem, hop_timestamp_t t )
+{
+   atomic_store_explicit( &mem->sharedSegment.header->lastResetTimeStamp, t, memory_order_seq_cst );
+}
+
+static hop_bool_t should_send_heartbeat( hop_shared_memory* mem, hop_timestamp_t curTimestamp )
+{
+   // When a profiled app is open, in the viewer but not listed to, we would spam
+   // unnecessary heartbeats every time a trace stack was sent. This make sure we only
+   // send them every few milliseconds
+   static const uint64_t cyclesBetweenHB = 100000000;
+   const int64_t lastHb                  = atomic_load_explicit(
+       &mem->sharedSegment.header->lastHeartbeatTimeStamp, memory_order_seq_cst );
+   return curTimestamp - lastHb > cyclesBetweenHB;
+}
+
+static void set_last_heartbeat( hop_shared_memory* mem, hop_timestamp_t t )
+{
+   atomic_store_explicit( &mem->sharedSegment.header->lastHeartbeatTimeStamp, t, memory_order_seq_cst );
+}
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -811,33 +948,6 @@ static hop_connection_state err_to_connection_state( uint32_t err )
 #ifndef __predict_true
 #define	__predict_true(x)	__builtin_expect((x) != 0, 1)
 #define	__predict_false(x)	__builtin_expect((x) != 0, 0)
-#endif
-
- /*
-  * Atomic operations and memory barriers.  If C11 API is not available,
-  * then wrap the GCC builtin routines.
-  *
-  * Note: This atomic_compare_exchange_weak does not do the C11 thing of
-  * filling *(expected) with the actual value, because we don't need
-  * that here.
-  */
-#ifndef atomic_compare_exchange_weak
-#define	atomic_compare_exchange_weak(ptr, expected, desired) \
-    __sync_bool_compare_and_swap(ptr, *(expected), desired)
-#endif
-
-#ifndef atomic_thread_fence
-#define	memory_order_relaxed	__ATOMIC_RELAXED
-#define	memory_order_acquire	__ATOMIC_ACQUIRE
-#define	memory_order_release	__ATOMIC_RELEASE
-#define	memory_order_seq_cst	__ATOMIC_SEQ_CST
-#define	atomic_thread_fence(m)	__atomic_thread_fence(m)
-#endif
-#ifndef atomic_store_explicit
-#define	atomic_store_explicit	__atomic_store_n
-#endif
-#ifndef atomic_load_explicit
-#define	atomic_load_explicit	__atomic_load_n
 #endif
 
   /*
@@ -866,31 +976,6 @@ do {								\
 
 #define	WRAP_COUNTER	(0x7fffffff00000000UL)
 #define	WRAP_INCR(x)	(((x) + 0x100000000UL) & WRAP_COUNTER)
-
-typedef uint64_t	ringbuf_off_t;
-
-struct ringbuf_worker {
-   volatile ringbuf_off_t	seen_off;
-   int			registered;
-};
-
-struct ringbuf {
-   /* Ring buffer space. */
-   size_t			space;
-
-   /*
-    * The NEXT hand is atomically updated by the producer.
-    * WRAP_LOCK_BIT is set in case of wrap-around; in such case,
-    * the producer can update the 'end' offset.
-    */
-   volatile ringbuf_off_t	next;
-   ringbuf_off_t		end;
-
-   /* The following are updated by the consumer. */
-   ringbuf_off_t		written;
-   unsigned		nworkers;
-   ringbuf_worker_t	workers[];
-};
 
 /*
  * ringbuf_setup: initialise a new ring buffer of a given length.
@@ -1270,11 +1355,7 @@ class HOP_API ClientManager
    static void UnlockEvent( void* mutexAddr, hop_timestamp_t time );
    static void SetThreadName( const char* name ) HOP_NOEXCEPT;
    static hop_zone_t PushNewZone( hop_zone_t newZone );
-   static bool HasConnectedConsumer() HOP_NOEXCEPT;
-   static bool HasListeningConsumer() HOP_NOEXCEPT;
-   static bool ShouldSendHeartbeat( hop_timestamp_t curTimestamp ) HOP_NOEXCEPT;
-   static void SetLastHeartbeatTimestamp( hop_timestamp_t t ) HOP_NOEXCEPT;
-
+   
    static SharedMemory& sharedMemory() HOP_NOEXCEPT;
 };
 
@@ -1453,29 +1534,6 @@ class SharedMemory
    ConnectionState create( int pid, size_t size, bool isConsumer );
    void destroy();
 
-   struct SharedMetaInfo
-   {
-      enum Flags
-      {
-         CONNECTED_PRODUCER = 1 << 0,
-         CONNECTED_CONSUMER = 1 << 1,
-         LISTENING_CONSUMER = 1 << 2,
-      };
-      std::atomic<uint32_t> flags{0};
-      float clientVersion{0.0f};
-      uint32_t maxThreadNb{0};
-      size_t requestedSize{0};
-      bool usingStdChronoTimeStamps{false};
-      std::atomic<hop_timestamp_t> lastResetTimeStamp{0};
-      std::atomic<hop_timestamp_t> lastHeartbeatTimeStamp{0};
-   };
-
-   bool hasConnectedProducer() const HOP_NOEXCEPT;
-   void setConnectedProducer( bool ) HOP_NOEXCEPT;
-   bool hasConnectedConsumer() const HOP_NOEXCEPT;
-   void setConnectedConsumer( bool ) HOP_NOEXCEPT;
-   bool hasListeningConsumer() const HOP_NOEXCEPT;
-   void setListeningConsumer( bool ) HOP_NOEXCEPT;
    bool shouldSendHeartbeat( hop_timestamp_t t ) const HOP_NOEXCEPT;
    void setLastHeartbeatTimestamp( hop_timestamp_t t ) HOP_NOEXCEPT;
    hop_timestamp_t lastResetTimestamp() const HOP_NOEXCEPT;
@@ -1718,70 +1776,6 @@ static thread_local hop_str_ptr_t tl_threadName  = 0;
 static std::atomic<bool> g_done{false};  // Was the shared memory destroyed? (Are we done?)
 
 
-bool SharedMemory::hasConnectedProducer() const HOP_NOEXCEPT
-{
-   return ( sharedMetaInfo()->flags & SharedMetaInfo::CONNECTED_PRODUCER ) > 0;
-}
-
-void SharedMemory::setConnectedProducer( bool connected ) HOP_NOEXCEPT
-{
-   if( connected )
-      _sharedMetaData->flags |= SharedMetaInfo::CONNECTED_PRODUCER;
-   else
-      _sharedMetaData->flags &= ~SharedMetaInfo::CONNECTED_PRODUCER;
-}
-
-bool SharedMemory::hasConnectedConsumer() const HOP_NOEXCEPT
-{
-   return ( sharedMetaInfo()->flags & SharedMetaInfo::CONNECTED_CONSUMER ) > 0;
-}
-
-bool SharedMemory::shouldSendHeartbeat( hop_timestamp_t curTimestamp ) const HOP_NOEXCEPT
-{
-   // When a profiled app is open, in the viewer but not listed to, we would spam
-   // unnecessary heartbeats every time a trace stack was sent. This make sure we only
-   // send them every few milliseconds
-   static const uint64_t cyclesBetweenHB = 100000000;
-   return curTimestamp - _sharedMetaData->lastHeartbeatTimeStamp.load() > cyclesBetweenHB;
-}
-
-void SharedMemory::setLastHeartbeatTimestamp( hop_timestamp_t t ) HOP_NOEXCEPT
-{
-   _sharedMetaData->lastHeartbeatTimeStamp.store( t );
-}
-
-void SharedMemory::setConnectedConsumer( bool connected ) HOP_NOEXCEPT
-{
-   if( connected )
-      _sharedMetaData->flags |= SharedMetaInfo::CONNECTED_CONSUMER;
-   else
-      _sharedMetaData->flags &= ~SharedMetaInfo::CONNECTED_CONSUMER;
-}
-
-bool SharedMemory::hasListeningConsumer() const HOP_NOEXCEPT
-{
-   const uint32_t mask = SharedMetaInfo::CONNECTED_CONSUMER | SharedMetaInfo::LISTENING_CONSUMER;
-   return ( sharedMetaInfo()->flags.load() & mask ) == mask;
-}
-
-void SharedMemory::setListeningConsumer( bool listening ) HOP_NOEXCEPT
-{
-   if( listening )
-      _sharedMetaData->flags |= SharedMetaInfo::LISTENING_CONSUMER;
-   else
-      _sharedMetaData->flags &= ~( SharedMetaInfo::LISTENING_CONSUMER );
-}
-
-hop_timestamp_t SharedMemory::lastResetTimestamp() const HOP_NOEXCEPT
-{
-   return _sharedMetaData->lastResetTimeStamp.load();
-}
-
-void SharedMemory::setResetTimestamp( hop_timestamp_t t ) HOP_NOEXCEPT
-{
-   _sharedMetaData->lastResetTimeStamp.store( t );
-}
-
 uint8_t* SharedMemory::data() const HOP_NOEXCEPT { return _data; }
 
 bool SharedMemory::valid() const HOP_NOEXCEPT { return _valid; }
@@ -1801,12 +1795,12 @@ void SharedMemory::destroy()
    {
       if( _isConsumer )
       {
-         setListeningConsumer( false );
-         setConnectedConsumer( false );
+         set_listening_consumer( false );
+         set_connected_consumer( false );
       }
       else
       {
-         setConnectedProducer( false );
+         set_connected_producer( false );
       }
 
       // If we are the last one accessing the shared memory, clean it.
@@ -2348,13 +2342,13 @@ class Client
       const hop_timestamp_t timeStamp = getTimeStamp();
 
       // If we have a consumer, send life signal
-      if( ClientManager::HasConnectedConsumer() && ClientManager::ShouldSendHeartbeat( timeStamp ) )
+      if( ClientManager::has_connected_consumer() && ClientManager::ShouldSendHeartbeat( timeStamp ) )
       {
          sendHeartbeat( timeStamp );
       }
 
       // If no one is there to listen, no need to send any data
-      if( ClientManager::HasListeningConsumer() )
+      if( ClientManager::has_listening_consumer() )
       {
          // If the shared memory reset timestamp more recent than our local one
          // it means we need to clear our string table. Otherwise it means we
@@ -2522,17 +2516,7 @@ hop_zone_t ClientManager::PushNewZone( hop_zone_t newZone )
    return prevZone;
 }
 
-bool ClientManager::HasConnectedConsumer() HOP_NOEXCEPT
-{
-   return ClientManager::sharedMemory().valid() &&
-          ClientManager::sharedMemory().hasConnectedConsumer();
-}
 
-bool ClientManager::HasListeningConsumer() HOP_NOEXCEPT
-{
-   return ClientManager::sharedMemory().valid() &&
-          ClientManager::sharedMemory().hasListeningConsumer();
-}
 
 bool ClientManager::ShouldSendHeartbeat( hop_timestamp_t t ) HOP_NOEXCEPT
 {
@@ -2671,395 +2655,6 @@ void hop_hash_set_clear( hop_hash_set_t set )
          memset( set->table, 0, set->capacity * sizeof( const void* ) );
       }
    }
-}
-
-/**
- * Start of Mindaugas Rasiukevicius <rmind at noxt eu> ringbuffer implementation
- */
-
-#include <stdio.h>
-#include <stdlib.h>
-#include <stddef.h>
-#include <inttypes.h>
-#include <string.h>
-#include <assert.h>
-#include <algorithm>
-
-/*
- * Exponential back-off for the spinning paths.
- */
-#define SPINLOCK_BACKOFF_MIN 4
-#define SPINLOCK_BACKOFF_MAX 128
-#if defined( __x86_64__ ) || defined( __i386__ )
-#define SPINLOCK_BACKOFF_HOOK __asm volatile( "pause" ::: "memory" )
-#else
-#define SPINLOCK_BACKOFF_HOOK
-#endif
-#define SPINLOCK_BACKOFF( count )                                    \
-   do                                                                \
-   {                                                                 \
-      for( int __i = ( count ); __i != 0; __i-- )                    \
-      {                                                              \
-         SPINLOCK_BACKOFF_HOOK;                                      \
-      }                                                              \
-      if( ( count ) < SPINLOCK_BACKOFF_MAX ) ( count ) += ( count ); \
-   } while( /* CONSTCOND */ 0 );
-
-#define RBUF_OFF_MASK ( 0x00000000ffffffffUL )
-#define WRAP_LOCK_BIT ( 0x8000000000000000UL )
-#define RBUF_OFF_MAX ( UINT64_MAX & ~WRAP_LOCK_BIT )
-
-#define WRAP_COUNTER ( 0x7fffffff00000000UL )
-#define WRAP_INCR( x ) ( ( ( x ) + 0x100000000UL ) & WRAP_COUNTER )
-
-typedef uint64_t ringbuf_off_t;
-
-struct ringbuf_worker
-{
-   volatile ringbuf_off_t seen_off;
-   int registered;
-};
-
-#if defined( _MSC_VER )
-#pragma warning( push )
-#pragma warning( disable : 4200 )  // Warning C4200 nonstandard extension used: zero-sized array in
-                                   // struct/union
-#endif
-struct ringbuf
-{
-   /* Ring buffer space. */
-   size_t space;
-
-   /*
-    * The NEXT hand is atomically updated by the producer.
-    * WRAP_LOCK_BIT is set in case of wrap-around; in such case,
-    * the producer can update the 'end' offset.
-    */
-   std::atomic<ringbuf_off_t> next;
-   ringbuf_off_t end;
-
-   /* The following are updated by the consumer. */
-   ringbuf_off_t written;
-   unsigned nworkers;
-   ringbuf_worker_t workers[];
-};
-#if defined( _MSC_VER )
-#pragma warning( pop )
-#endif
-
-/*
- * ringbuf_setup: initialise a new ring buffer of a given length.
- */
-int ringbuf_setup( ringbuf_t* rbuf, unsigned nworkers, size_t length )
-{
-   if( length >= RBUF_OFF_MASK )
-   {
-      return -1;
-   }
-   rbuf->next.store(0);
-   rbuf->written  = 0;
-   rbuf->space    = length;
-   rbuf->end      = RBUF_OFF_MAX;
-   rbuf->nworkers = nworkers;
-   return 0;
-}
-
-/*
- * ringbuf_get_sizes: return the sizes of the ringbuf_t and ringbuf_worker_t.
- */
-void ringbuf_get_sizes( const unsigned nworkers, size_t* ringbuf_size, size_t* ringbuf_worker_size )
-{
-   if( ringbuf_size )
-   {
-      *ringbuf_size = offsetof( ringbuf_t, workers ) + sizeof( ringbuf_worker_t ) * nworkers;
-   }
-   if( ringbuf_worker_size )
-   {
-      *ringbuf_worker_size = sizeof( ringbuf_worker_t );
-   }
-}
-
-/*
- * ringbuf_register: register the worker (thread/process) as a producer
- * and pass the pointer to its local store.
- */
-ringbuf_worker_t* ringbuf_register( ringbuf_t* rbuf, unsigned i )
-{
-   ringbuf_worker_t* w = &rbuf->workers[i];
-
-   w->seen_off = RBUF_OFF_MAX;
-   std::atomic_thread_fence( std::memory_order_release );
-   w->registered = true;
-   return w;
-}
-
-void ringbuf_unregister( ringbuf_t*, ringbuf_worker_t* w ) { w->registered = false; }
-
-/*
- * stable_nextoff: capture and return a stable value of the 'next' offset.
- */
-static inline ringbuf_off_t stable_nextoff( ringbuf_t* rbuf )
-{
-   unsigned count = SPINLOCK_BACKOFF_MIN;
-   ringbuf_off_t next;
-
-   while( ( next = rbuf->next ) & WRAP_LOCK_BIT )
-   {
-      SPINLOCK_BACKOFF( count );
-   }
-   std::atomic_thread_fence( std::memory_order_acquire );
-   assert( ( next & RBUF_OFF_MASK ) < rbuf->space );
-   return next;
-}
-
-/*
- * ringbuf_acquire: request a space of a given length in the ring buffer.
- *
- * => On success: returns the offset at which the space is available.
- * => On failure: returns -1.
- */
-ssize_t ringbuf_acquire( ringbuf_t* rbuf, ringbuf_worker_t* w, size_t len )
-{
-   ringbuf_off_t seen, next, target;
-
-   assert( len > 0 && len <= rbuf->space );
-   assert( w->seen_off == RBUF_OFF_MAX );
-
-   do
-   {
-      ringbuf_off_t written;
-
-      /*
-       * Get the stable 'next' offset.  Save the observed 'next'
-       * value (i.e. the 'seen' offset), but mark the value as
-       * unstable (set WRAP_LOCK_BIT).
-       *
-       * Note: CAS will issue a std::memory_order_release for us and
-       * thus ensures that it reaches global visibility together
-       * with new 'next'.
-       */
-      seen = stable_nextoff( rbuf );
-      next = seen & RBUF_OFF_MASK;
-      assert( next < rbuf->space );
-      w->seen_off = next | WRAP_LOCK_BIT;
-
-      /*
-       * Compute the target offset.  Key invariant: we cannot
-       * go beyond the WRITTEN offset or catch up with it.
-       */
-      target  = next + len;
-      written = rbuf->written;
-      if( unlikely( next < written && target >= written ) )
-      {
-         /* The producer must wait. */
-         w->seen_off = RBUF_OFF_MAX;
-         return -1;
-      }
-
-      if( unlikely( target >= rbuf->space ) )
-      {
-         const bool exceed = target > rbuf->space;
-
-         /*
-          * Wrap-around and start from the beginning.
-          *
-          * If we would exceed the buffer, then attempt to
-          * acquire the WRAP_LOCK_BIT and use the space in
-          * the beginning.  If we used all space exactly to
-          * the end, then reset to 0.
-          *
-          * Check the invariant again.
-          */
-         target = exceed ? ( WRAP_LOCK_BIT | len ) : 0;
-         if( ( target & RBUF_OFF_MASK ) >= written )
-         {
-            w->seen_off = RBUF_OFF_MAX;
-            return -1;
-         }
-         /* Increment the wrap-around counter. */
-         target |= WRAP_INCR( seen & WRAP_COUNTER );
-      }
-      else
-      {
-         /* Preserve the wrap-around counter. */
-         target |= seen & WRAP_COUNTER;
-      }
-   } while( !std::atomic_compare_exchange_weak( &rbuf->next, &seen, target ) );
-
-   /*
-    * Acquired the range.  Clear WRAP_LOCK_BIT in the 'seen' value
-    * thus indicating that it is stable now.
-    */
-   w->seen_off &= ~WRAP_LOCK_BIT;
-
-   /*
-    * If we set the WRAP_LOCK_BIT in the 'next' (because we exceed
-    * the remaining space and need to wrap-around), then save the
-    * 'end' offset and release the lock.
-    */
-   if( unlikely( target & WRAP_LOCK_BIT ) )
-   {
-      /* Cannot wrap-around again if consumer did not catch-up. */
-      assert( rbuf->written <= next );
-      assert( rbuf->end == RBUF_OFF_MAX );
-      rbuf->end = next;
-      next      = 0;
-
-      /*
-       * Unlock: ensure the 'end' offset reaches global
-       * visibility before the lock is released.
-       */
-      std::atomic_thread_fence( std::memory_order_release );
-      rbuf->next = ( target & ~WRAP_LOCK_BIT );
-   }
-   assert( ( target & RBUF_OFF_MASK ) <= rbuf->space );
-   return static_cast<ssize_t>( next );
-}
-
-/*
- * ringbuf_produce: indicate the acquired range in the buffer is produced
- * and is ready to be consumed.
- */
-void ringbuf_produce( ringbuf_t*, ringbuf_worker_t* w )
-{
-   assert( w->registered );
-   assert( w->seen_off != RBUF_OFF_MAX );
-   std::atomic_thread_fence( std::memory_order_release );
-   w->seen_off = RBUF_OFF_MAX;
-}
-
-/*
- * ringbuf_consume: get a contiguous range which is ready to be consumed.
- */
-size_t ringbuf_consume( ringbuf_t* rbuf, size_t* offset )
-{
-   ringbuf_off_t written = rbuf->written, next, ready;
-   size_t towrite;
-retry:
-   /*
-    * Get the stable 'next' offset.  Note: stable_nextoff() issued
-    * a load memory barrier.  The area between the 'written' offset
-    * and the 'next' offset will be the *preliminary* target buffer
-    * area to be consumed.
-    */
-   next = stable_nextoff( rbuf ) & RBUF_OFF_MASK;
-   if( written == next )
-   {
-      /* If producers did not advance, then nothing to do. */
-      return 0;
-   }
-
-   /*
-    * Observe the 'ready' offset of each producer.
-    *
-    * At this point, some producer might have already triggered the
-    * wrap-around and some (or all) seen 'ready' values might be in
-    * the range between 0 and 'written'.  We have to skip them.
-    */
-   ready = RBUF_OFF_MAX;
-
-   for( unsigned i = 0; i < rbuf->nworkers; i++ )
-   {
-      ringbuf_worker_t* w = &rbuf->workers[i];
-      unsigned count      = SPINLOCK_BACKOFF_MIN;
-      ringbuf_off_t seen_off;
-
-      /* Skip if the worker has not registered. */
-      if( !w->registered )
-      {
-         continue;
-      }
-
-      /*
-       * Get a stable 'seen' value.  This is necessary since we
-       * want to discard the stale 'seen' values.
-       */
-      while( ( seen_off = w->seen_off ) & WRAP_LOCK_BIT )
-      {
-         SPINLOCK_BACKOFF( count );
-      }
-
-      /*
-       * Ignore the offsets after the possible wrap-around.
-       * We are interested in the smallest seen offset that is
-       * not behind the 'written' offset.
-       */
-      if( seen_off >= written )
-      {
-         ready = HOP_MIN( seen_off, ready );
-      }
-      assert( ready >= written );
-   }
-
-   /*
-    * Finally, we need to determine whether wrap-around occurred
-    * and deduct the safe 'ready' offset.
-    */
-   if( next < written )
-   {
-      const ringbuf_off_t end = HOP_MIN( static_cast<ringbuf_off_t>( rbuf->space ), rbuf->end );
-
-      /*
-       * Wrap-around case.  Check for the cut off first.
-       *
-       * Reset the 'written' offset if it reached the end of
-       * the buffer or the 'end' offset (if set by a producer).
-       * However, we must check that the producer is actually
-       * done (the observed 'ready' offsets are clear).
-       */
-      if( ready == RBUF_OFF_MAX && written == end )
-      {
-         /*
-          * Clear the 'end' offset if was set.
-          */
-         if( rbuf->end != RBUF_OFF_MAX )
-         {
-            rbuf->end = RBUF_OFF_MAX;
-            std::atomic_thread_fence( std::memory_order_release );
-         }
-         /* Wrap-around the consumer and start from zero. */
-         rbuf->written = written = 0;
-         goto retry;
-      }
-
-      /*
-       * We cannot wrap-around yet; there is data to consume at
-       * the end.  The ready range is smallest of the observed
-       * 'ready' or the 'end' offset.  If neither is set, then
-       * the actual end of the buffer.
-       */
-      assert( ready > next );
-      ready = HOP_MIN( ready, end );
-      assert( ready >= written );
-   }
-   else
-   {
-      /*
-       * Regular case.  Up to the observed 'ready' (if set)
-       * or the 'next' offset.
-       */
-      ready = HOP_MIN( ready, next );
-   }
-   towrite = ready - written;
-   *offset = written;
-
-   assert( ready >= written );
-   assert( towrite <= rbuf->space );
-   return towrite;
-}
-
-/*
- * ringbuf_release: indicate that the consumed range can now be released.
- */
-void ringbuf_release( ringbuf_t* rbuf, size_t nbytes )
-{
-   const size_t nwritten = rbuf->written + nbytes;
-
-   assert( rbuf->written <= rbuf->space );
-   assert( rbuf->written <= rbuf->end );
-   assert( nwritten <= rbuf->space );
-
-   rbuf->written = ( nwritten == rbuf->space ) ? 0 : nwritten;
 }
 
 #endif  // end HOP_IMPLEMENTATION
