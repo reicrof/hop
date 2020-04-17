@@ -17,7 +17,7 @@ int main()
    hop_hash_set_t hs = hop_hash_set_create();
    std::unordered_set< void* > reference;
 
-   const size_t itCount = 50000000;
+   const size_t itCount = 1000000;
    std::vector< uint64_t > randNums( itCount );
    for( size_t i = 0; i < itCount; ++i )
    {

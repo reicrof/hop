@@ -192,9 +192,6 @@ typedef char HOP_CHAR;
 #endif
 
 // typedef _Thread_local hop_thread_local;
-//#define hop_thread_local    _Thread_local
-//#define hop_atomic_uint32   atomic_uint
-//#define hop_atomic_uint64   atomic_uint_least64_t
 #define hop_thread_local    _Thread_local
 #define hop_atomic_uint64   volatile uint64_t
 #define hop_atomic_uint32   volatile uint32_t
@@ -272,7 +269,7 @@ typedef struct hop_core_event
    hop_core_t core;
 } hop_core_event;
 
-inline hop_timestamp_t hop_rdtscp( uint32_t* aux )
+hop_timestamp_t hop_rdtscp( uint32_t* aux )
 {
 #if defined( _MSC_VER )
    return __rdtscp( aux );
@@ -283,7 +280,7 @@ inline hop_timestamp_t hop_rdtscp( uint32_t* aux )
 #endif
 }
 
-inline hop_timestamp_t hop_get_timestamp( hop_core_t* core )
+hop_timestamp_t hop_get_timestamp( hop_core_t* core )
 {
    // We return the timestamp with the first bit set to 0. We do not require this last cycle/nanosec
    // of precision. It will instead be used to flag if a trace uses dynamic strings or not in its
@@ -299,7 +296,7 @@ inline hop_timestamp_t hop_get_timestamp( hop_core_t* core )
    //#endif
 }
 
-inline hop_timestamp_t hop_get_timestamp_no_core()
+hop_timestamp_t hop_get_timestamp_no_core()
 {
    hop_core_t dummyCore;
    return hop_get_timestamp( &dummyCore );
@@ -311,12 +308,19 @@ void hop_terminate();
 /* End of declarations */
 
 #include <assert.h>
+#include <string.h>
 
 #define HOP_MIN( a, b ) ( ( ( a ) < ( b ) ) ? ( a ) : ( b ) )
 #define HOP_MAX( a, b ) ( ( ( a ) > ( b ) ) ? ( a ) : ( b ) )
 #define HOP_UNUSED( x ) (void)( x )
+#define HOP_MALLOC( x ) malloc( (x) )
+#define HOP_REALLOC( ptr, size ) realloc( (ptr), (size) )
+#define HOP_FREE( x )   free( (x) )
+#define HOP_ASSERT( x ) assert( (x) )
 
 #if !defined( _MSC_VER )
+#include <unistd.h>    // ftruncate, getpid
+
 const HOP_CHAR HOP_SHARED_MEM_PREFIX[] = "/hop_";
 
 #define HOP_STRLEN( str ) strlen( ( str ) )
@@ -324,6 +328,7 @@ const HOP_CHAR HOP_SHARED_MEM_PREFIX[] = "/hop_";
 #define HOP_STRNCATW( dst, src, count ) strncat( ( dst ), ( src ), ( count ) )
 #define HOP_STRNCPY( dst, src, count ) strncpy( ( dst ), ( src ), ( count ) )
 #define HOP_STRNCAT( dst, src, count ) strncat( ( dst ), ( src ), ( count ) )
+
 /*
 // Unix shared memory includes
 #include <fcntl.h>     // O_CREAT
@@ -331,7 +336,6 @@ const HOP_CHAR HOP_SHARED_MEM_PREFIX[] = "/hop_";
 #include <pthread.h>   // pthread_self
 #include <sys/mman.h>  // shm_open
 #include <sys/stat.h>  // stat
-#include <unistd.h>    // ftruncate
 
 #define likely( x ) __builtin_expect( !!( x ), 1 )
 #define unlikely( x ) __builtin_expect( !!( x ), 0 )
@@ -339,7 +343,7 @@ const HOP_CHAR HOP_SHARED_MEM_PREFIX[] = "/hop_";
 #define HOP_GET_THREAD_ID() reinterpret_cast<size_t>( pthread_self() )
 #define HOP_SLEEP_MS( x ) usleep( x * 1000 )
 */
-inline int HOP_GET_PID() { return getpid(); }
+int HOP_GET_PID() { return getpid(); }
 
 #else  // !defined( _MSC_VER )
 
@@ -378,7 +382,7 @@ typedef enum hop_connection_state
    HOP_UNKNOWN_CONNECTION_ERROR
 } hop_connection_state;
 
-static hop_shared_memory g_sharedMemory;
+static struct hop_shared_memory* g_sharedMemory;
 
 hop_connection_state
 hop_create_shared_memory( int pid, uint64_t requestedSize, hop_bool_t isConsumer );
@@ -398,40 +402,9 @@ hop_bool_t hop_initialize()
    return hop_true;
 }
 
-void hop_destroy_shared_memory()
-{
-   // if( valid() )
-   // {
-   //    if( _isConsumer )
-   //    {
-   //       set_listening_consumer( &g_sharedMemory, false );
-   //       set_connected_consumer( &g_sharedMemory, false );
-   //    }
-   //    else
-   //    {
-   //       set_connected_producer( &g_sharedMemory, false );
-   //    }
-
-   //    // If we are the last one accessing the shared memory, clean it.
-   //    if( ( _sharedMetaData->flags.load() &
-   //          ( SharedMetaInfo::CONNECTED_PRODUCER | SharedMetaInfo::CONNECTED_CONSUMER ) ) == 0 )
-   //    {
-   //       printf( "HOP - Cleaning up shared memory...\n" );
-   //       closeSharedMemory( _sharedMemPath, _sharedMemHandle, _sharedMetaData );
-   //       _sharedMetaData->~SharedMetaInfo();
-   //    }
-
-   //    _data           = NULL;
-   //    _ringbuf        = NULL;
-   //    _sharedMetaData = NULL;
-   //    _valid          = false;
-   //    g_done.store( true );
-   // }
-}
-
 void hop_terminate()
 {
-   assert( 0 );
+   hop_destroy_shared_memory();
 }
 
 /*Viewer declaration*/
@@ -445,32 +418,53 @@ typedef enum hop_shared_memory_state_bits
 } hop_shared_memory_state_bits;
 typedef uint32_t hop_shared_memory_state;
 
-typedef struct hop_shared_memory_header
+typedef uint64_t	ringbuf_off_t;
+
+struct ringbuf_worker {
+   volatile ringbuf_off_t	seen_off;
+   int			registered;
+};
+
+struct ringbuf {
+   /* Ring buffer space. */
+   size_t			space;
+
+   /*
+    * The NEXT hand is atomically updated by the producer.
+    * WRAP_LOCK_BIT is set in case of wrap-around; in such case,
+    * the producer can update the 'end' offset.
+    */
+   volatile ringbuf_off_t	next;
+   ringbuf_off_t		end;
+
+   /* The following are updated by the consumer. */
+   ringbuf_off_t		written;
+   unsigned		nworkers;
+   ringbuf_worker_t	workers[];
+};
+
+typedef struct hop_ipc_segment
 {
-    hop_atomic_uint32 state;
-    hop_atomic_uint64 lastResetTimeStamp;
-    hop_atomic_uint64 lastHeartbeatTimeStamp;
-    float clientVersion;
-    uint32_t maxThreadNb;
-    uint64_t requestedSize;
-    hop_bool_t usingStdChronoTimeStamps;
-} hop_shared_memory_header;
+   float clientVersion;
+   uint32_t maxThreadNb;
+   uint64_t requestedSize;
+   hop_atomic_uint64 lastResetTimeStamp;
+   hop_atomic_uint64 lastHeartbeatTimeStamp;
+   hop_atomic_uint32 state;
+   hop_bool_t usingStdChronoTimeStamps;
+
+   ringbuf_t ringbuf;
+   uint8_t* data;
+} hop_ipc_segment;
 
 typedef struct hop_shared_memory
 {
-   struct shared_segment
-   {
-      // Pointers inside the actual shared memory
-      hop_shared_memory_header* header;
-      ringbuf_t* ringbuf;
-      uint8_t* data;
-   } sharedSegment;
+   hop_ipc_segment* ipcSegment;
 
    HOP_CHAR sharedMemPath[HOP_SHARED_MEM_MAX_NAME_SIZE];
    shm_handle sharedMemHandle;
    int pid;
    hop_bool_t isConsumer;
-   hop_bool_t valid;
 } hop_shared_memory;
 
 
@@ -513,8 +507,6 @@ void ringbuf_produce(ringbuf_t*, ringbuf_worker_t*);
 size_t ringbuf_consume(ringbuf_t*, size_t*);
 void ringbuf_release(ringbuf_t*, size_t);
 
-typedef uint64_t	ringbuf_off_t;
-
 /*
  * Atomic operations and memory barriers.  If C11 API is not available,
  * then wrap the GCC builtin routines.
@@ -542,34 +534,19 @@ typedef uint64_t	ringbuf_off_t;
 #define	atomic_load_explicit	__atomic_load_n
 #endif
 
-struct ringbuf_worker {
-   volatile ringbuf_off_t	seen_off;
-   int			registered;
-};
-
-struct ringbuf {
-   /* Ring buffer space. */
-   size_t			space;
-
-   /*
-    * The NEXT hand is atomically updated by the producer.
-    * WRAP_LOCK_BIT is set in case of wrap-around; in such case,
-    * the producer can update the 'end' offset.
-    */
-   volatile ringbuf_off_t	next;
-   ringbuf_off_t		end;
-
-   /* The following are updated by the consumer. */
-   ringbuf_off_t		written;
-   unsigned		nworkers;
-   ringbuf_worker_t	workers[];
-};
-
 /* -------------------------------------------------------
                   End of declaration
 -------------------------------------------------------  */
 
+#include <errno.h>
+#include <math.h>
 
+#if !defined( _MSC_VER )
+#include <fcntl.h>     // O_CREAT
+#include <pthread.h>   // pthread_self
+#include <sys/mman.h>  // shm_open
+#include <sys/stat.h>  // stat
+#endif
 
 /*Viewer implementation*/
 
@@ -599,75 +576,73 @@ static void set_reset_timestamp( hop_shared_memory* mem, hop_timestamp_t t );
 
 hop_connection_state hop_create_shared_memory( int pid, uint64_t requestedSize, hop_bool_t isConsumer )
 {
-   assert( !g_sharedMemory.valid );
+   assert( !g_sharedMemory );
+   
+   g_sharedMemory = (hop_shared_memory*) HOP_MALLOC( sizeof(hop_shared_memory) );
 
    char pidStr[16];
    snprintf( pidStr, sizeof( pidStr ), "%d", pid );
    // Create shared mem name
    HOP_STRNCPYW(
-       g_sharedMemory.sharedMemPath,
+       g_sharedMemory->sharedMemPath,
        HOP_SHARED_MEM_PREFIX,
        HOP_STRLEN( HOP_SHARED_MEM_PREFIX ) + 1 );
    HOP_STRNCATW(
-       g_sharedMemory.sharedMemPath,
+       g_sharedMemory->sharedMemPath,
        pidStr,
        HOP_SHARED_MEM_MAX_NAME_SIZE - HOP_STRLEN( HOP_SHARED_MEM_PREFIX ) - 1 );
 
    // Try to open shared memory
-   hop_connection_state state = HOP_CONNECTED;
-   uint64_t totalSize         = 0;
-   uint8_t* baseSharedPtr     = (uint8_t*)open_ipc_memory(
-       g_sharedMemory.sharedMemPath, &g_sharedMemory.sharedMemHandle, &totalSize, &state );
+   hop_connection_state state  = HOP_CONNECTED;
+   uint64_t totalSize          = 0;
+   hop_ipc_segment* ipcSegment = (hop_ipc_segment*)open_ipc_memory(
+       g_sharedMemory->sharedMemPath, &g_sharedMemory->sharedMemHandle, &totalSize, &state );
 
    // If we are unable to open the shared memory
-   if( !baseSharedPtr )
+   if( !ipcSegment )
    {
       // If we are not a consumer, we need to create it
       if( !isConsumer )
       {
          size_t ringBufSize;
          ringbuf_get_sizes( HOP_MAX_THREAD_NB, &ringBufSize, NULL );
-         totalSize     = ringBufSize + requestedSize + sizeof( hop_shared_memory_header );
-         baseSharedPtr = (uint8_t*)create_ipc_memory(
-             g_sharedMemory.sharedMemPath, totalSize, &g_sharedMemory.sharedMemHandle, &state );
+         totalSize  = ringBufSize + requestedSize + sizeof( hop_ipc_segment );
+         ipcSegment = (hop_ipc_segment*)create_ipc_memory(
+             g_sharedMemory->sharedMemPath, totalSize, &g_sharedMemory->sharedMemHandle, &state );
       }
    }
 
    // If we still are not able to get the shared memory, return failure state
-   if( !baseSharedPtr )
+   if( !ipcSegment )
    {
+      hop_destroy_shared_memory();
       return state;
    }
 
-   hop_shared_memory_header* header = (hop_shared_memory_header*)baseSharedPtr;
    if( !isConsumer )
    {
       // Set client's info in the shared memory for the viewer to access
-      header->clientVersion            = HOP_VERSION;
-      header->maxThreadNb              = HOP_MAX_THREAD_NB;
-      header->requestedSize            = HOP_SHARED_MEM_SIZE;
-      header->usingStdChronoTimeStamps = HOP_USE_STD_CHRONO;
-      header->lastResetTimeStamp       = hop_get_timestamp_no_core();
+      ipcSegment->clientVersion            = HOP_VERSION;
+      ipcSegment->maxThreadNb              = HOP_MAX_THREAD_NB;
+      ipcSegment->requestedSize            = HOP_SHARED_MEM_SIZE;
+      ipcSegment->usingStdChronoTimeStamps = HOP_USE_STD_CHRONO;
+      ipcSegment->lastResetTimeStamp       = hop_get_timestamp_no_core();
 
       // Take a local copy as we do not want to expose the ring buffer before it is
       // actually initialized
-      g_sharedMemory.sharedSegment.ringbuf =
-          (ringbuf_t*)( baseSharedPtr + sizeof( hop_shared_memory_header ) );
-      if( ringbuf_setup( g_sharedMemory.sharedSegment.ringbuf, HOP_MAX_THREAD_NB, requestedSize ) <
-          0 )
+      if( ringbuf_setup( &ipcSegment->ringbuf, HOP_MAX_THREAD_NB, requestedSize ) < 0 )
       {
-         close_ipc_memory(
-             g_sharedMemory.sharedMemPath, g_sharedMemory.sharedMemHandle, baseSharedPtr );
+         hop_destroy_shared_memory();
          return HOP_UNKNOWN_CONNECTION_ERROR;
       }
    }
    else  // Check if client has compatible version
    {
-      if( fabsf( header->clientVersion - HOP_VERSION ) > 0.001f )
+      if( fabsf( ipcSegment->clientVersion - HOP_VERSION ) > 0.001f )
       {
          printf(
              "HOP - Client's version (%f) does not match HOP viewer version (%f)\n",
-             header->clientVersion,
+             ipcSegment->clientVersion,
              HOP_VERSION );
          hop_destroy_shared_memory();
          return HOP_INVALID_VERSION;
@@ -676,20 +651,17 @@ hop_connection_state hop_create_shared_memory( int pid, uint64_t requestedSize, 
 
    // Get the size needed for the ringbuf struct
    size_t ringBufSize;
-   ringbuf_get_sizes( header->maxThreadNb, &ringBufSize, NULL );
+   ringbuf_get_sizes( ipcSegment->maxThreadNb, &ringBufSize, NULL );
 
-   // Get pointers inside the shared memory once it has been initialized
-   g_sharedMemory.sharedSegment.header = header;
-   g_sharedMemory.sharedSegment.data   = g_sharedMemory.sharedSegment.ringbuf + ringBufSize;
-   g_sharedMemory.pid                  = pid;
-   g_sharedMemory.valid                = hop_true;
-   g_sharedMemory.isConsumer           = isConsumer;
+   g_sharedMemory->ipcSegment = ipcSegment;
+   g_sharedMemory->pid        = pid;
+   g_sharedMemory->isConsumer = isConsumer;
 
    if( isConsumer )
    {
-      set_reset_timestamp( &g_sharedMemory, hop_get_timestamp_no_core() );
+      set_reset_timestamp( g_sharedMemory, hop_get_timestamp_no_core() );
       // We can only have one consumer
-      if( has_connected_consumer( &g_sharedMemory ) )
+      if( has_connected_consumer( g_sharedMemory ) )
       {
          printf(
              "/!\\ HOP WARNING /!\\ \n"
@@ -701,12 +673,148 @@ hop_connection_state hop_create_shared_memory( int pid, uint64_t requestedSize, 
          // Force resetting the listening state as this could cause crash. The side
          // effect would simply be that other consumer would stop listening. Not a
          // big deal as there should not be any other consumer...
-         atomic_clear_bit( &g_sharedMemory.sharedSegment.header->state, HOP_LISTENING_CONSUMER );
+         atomic_clear_bit( &g_sharedMemory->ipcSegment->state, HOP_LISTENING_CONSUMER );
       }
    }
 
-   isConsumer ? set_connected_consumer( &g_sharedMemory, hop_true ) : set_connected_producer( &g_sharedMemory, hop_true );
+   isConsumer ? set_connected_consumer( g_sharedMemory, hop_true ) : set_connected_producer( g_sharedMemory, hop_true );
    return state;
+}
+
+void hop_destroy_shared_memory()
+{
+   if( g_sharedMemory )
+   {
+      if( g_sharedMemory->isConsumer )
+      {
+         set_listening_consumer( g_sharedMemory, hop_false );
+         set_connected_consumer( g_sharedMemory, hop_false );
+      }
+      else
+      {
+         set_connected_producer( g_sharedMemory, hop_false );
+      }
+      
+      if( g_sharedMemory->ipcSegment )
+      {
+         uint32_t state = atomic_load_explicit( &g_sharedMemory->ipcSegment->state, memory_order_seq_cst );
+         if( ( state & ( HOP_CONNECTED_PRODUCER | HOP_CONNECTED_CONSUMER ) ) == 0 )
+         {
+            printf( "HOP - Cleaning up shared memory...\n" );
+            close_ipc_memory(
+                g_sharedMemory->sharedMemPath,
+                g_sharedMemory->sharedMemHandle,
+                g_sharedMemory->ipcSegment );
+         }
+      }
+   }
+   HOP_FREE( g_sharedMemory );
+}
+
+typedef struct pending_traces_t
+{
+   uint32_t count;
+   uint32_t maxSize;
+   hop_timestamp_t *starts, *ends;  // Timestamp for start/end of this trace
+   hop_str_ptr_t* fileNameIds;      // Index into string array for the file name
+   hop_str_ptr_t* fctNameIds;       // Index into string array for the function name
+   hop_linenb_t* lineNumbers;       // Line at which the trace was inserted
+   hop_depth_t* depths;             // The depth in the callstack of this trace
+   hop_zone_t* zones;               // Zone to which this trace belongs
+} pending_traces_t;
+
+static hop_thread_local pending_traces_t tl_pendingTraces;
+static hop_thread_local hop_depth_t tl_traceLevel;
+static hop_thread_local hop_zone_t tl_zoneId;
+static hop_thread_local hop_str_ptr_t tl_threadName;
+static hop_thread_local char tl_threadNameBuffer[64];
+static hop_thread_local uint32_t tl_threadIndex;  // Index of the tread as they are coming in
+static hop_thread_local uint64_t tl_threadId;     // ID of the thread as seen by the OS
+
+
+static void alloc_traces( pending_traces_t* t, unsigned size )
+{
+   t->maxSize     = size;
+   t->starts      = (hop_timestamp_t*)HOP_REALLOC( t->starts, size * sizeof( hop_timestamp_t ) );
+   t->ends        = (hop_timestamp_t*)HOP_REALLOC( t->ends, size * sizeof( hop_timestamp_t ) );
+   t->depths      = (hop_depth_t*)HOP_REALLOC( t->depths, size * sizeof( hop_depth_t ) );
+   t->fctNameIds  = (hop_str_ptr_t*)HOP_REALLOC( t->fctNameIds, size * sizeof( hop_str_ptr_t ) );
+   t->fileNameIds = (hop_str_ptr_t*)HOP_REALLOC( t->fileNameIds, size * sizeof( hop_str_ptr_t ) );
+   t->lineNumbers = (hop_linenb_t*)HOP_REALLOC( t->lineNumbers, size * sizeof( hop_linenb_t ) );
+   t->zones       = (hop_zone_t*)HOP_REALLOC( t->zones, size * sizeof( hop_zone_t ) );
+}
+
+static void free_traces( pending_traces_t* t )
+{
+   free( t->starts );
+   free( t->ends );
+   free( t->depths );
+   free( t->fctNameIds );
+   free( t->fileNameIds );
+   free( t->lineNumbers );
+   free( t->zones );
+   memset( t, 0, sizeof( pending_traces_t ) );
+}
+
+static void copy_pending_traces_to( const pending_traces_t* t, void* outBuffer )
+{
+   const uint32_t count = t->count;
+
+   void* startsPtr         = outBuffer;
+   const size_t startsSize = sizeof( t->starts[0] ) * count;
+   memcpy( startsPtr, t->starts, startsSize );
+
+   void* endsPtr         = (uint8_t*)startsPtr + startsSize;
+   const size_t endsSize = sizeof( t->ends[0] ) * count;
+   memcpy( endsPtr, t->ends, endsSize );
+
+   void* fileNamesPtr         = (uint8_t*)endsPtr + endsSize;
+   const size_t fileNamesSize = sizeof( t->fileNameIds[0] ) * count;
+   memcpy( fileNamesPtr, t->fileNameIds, fileNamesSize );
+
+   void* fctNamesPtr         = (uint8_t*)fileNamesPtr + fileNamesSize;
+   const size_t fctNamesSize = sizeof( t->fctNameIds[0] ) * count;
+   memcpy( fctNamesPtr, t->fctNameIds, fctNamesSize );
+
+   void* lineNbPtr         = (uint8_t*)fctNamesPtr + fctNamesSize;
+   const size_t lineNbSize = sizeof( t->lineNumbers[0] ) * count;
+   memcpy( lineNbPtr, t->lineNumbers, lineNbSize );
+
+   void* depthsPtr         = (uint8_t*)lineNbPtr + lineNbSize;
+   const size_t depthsSize = sizeof( t->depths[0] ) * count;
+   memcpy( depthsPtr, t->depths, depthsSize );
+
+   void* zonesPtr        = (uint8_t*)depthsPtr + depthsSize;
+   const size_t zoneSize = sizeof( t->zones[0] ) * count;
+   memcpy( zonesPtr, t->zones, zoneSize );
+}
+
+static uint32_t align_on( uint32_t val, uint32_t alignment )
+{
+   return ( ( val + alignment - 1 ) & ~( alignment - 1 ) );
+}
+
+void hop_start_prof( const char* fileName, hop_linenb_t line, const char* fctName )
+{
+   const uint32_t curCount = tl_pendingTraces.count;
+   if( curCount == tl_pendingTraces.maxSize )
+   {
+      alloc_traces( &tl_pendingTraces, HOP_MAX( 256, tl_pendingTraces.maxSize * 2 ) );
+   }
+
+   tl_pendingTraces.starts[curCount]      = hop_get_timestamp_no_core();
+   //tl_pendingTraces.ends[curCount]        = end;
+   tl_pendingTraces.depths[curCount]      = tl_traceLevel++;
+   tl_pendingTraces.fileNameIds[curCount] = (hop_str_ptr_t)fileName;
+   tl_pendingTraces.fctNameIds[curCount]  = (hop_str_ptr_t)fctName;
+   tl_pendingTraces.lineNumbers[curCount] = line;
+   tl_pendingTraces.zones[curCount]       = tl_zoneId;
+   ++tl_pendingTraces.count;
+}
+
+void hop_end_prof()
+{
+
 }
 
 static void* create_ipc_memory(
@@ -874,47 +982,47 @@ static uintptr_t atomic_clear_bit( hop_atomic_uint32* value, uint32_t bitToSet )
 
 static hop_bool_t has_connected_producer( hop_shared_memory* mem )
 {
-   return ( mem->sharedSegment.header->state & HOP_CONNECTED_PRODUCER ) > 0;
+   return ( mem->ipcSegment->state & HOP_CONNECTED_PRODUCER ) > 0;
 }
 
 static void set_connected_producer( hop_shared_memory* mem, hop_bool_t connected )
 {
    if( connected )
-      atomic_set_bit( &mem->sharedSegment.header->state, HOP_CONNECTED_PRODUCER );
+      atomic_set_bit( &mem->ipcSegment->state, HOP_CONNECTED_PRODUCER );
    else
-      atomic_clear_bit( &mem->sharedSegment.header->state, HOP_CONNECTED_PRODUCER );
+      atomic_clear_bit( &mem->ipcSegment->state, HOP_CONNECTED_PRODUCER );
 }
 
 static hop_bool_t has_connected_consumer( hop_shared_memory* mem )
 {
-   return ( mem->sharedSegment.header->state & HOP_CONNECTED_CONSUMER ) > 0;
+   return ( mem->ipcSegment->state & HOP_CONNECTED_CONSUMER ) > 0;
 }
 
 static void set_connected_consumer( hop_shared_memory* mem, hop_bool_t connected )
 {
    if( connected )
-      atomic_set_bit( &mem->sharedSegment.header->state, HOP_CONNECTED_CONSUMER );
+      atomic_set_bit( &mem->ipcSegment->state, HOP_CONNECTED_CONSUMER );
    else
-      atomic_clear_bit( &mem->sharedSegment.header->state, HOP_CONNECTED_CONSUMER );
+      atomic_clear_bit( &mem->ipcSegment->state, HOP_CONNECTED_CONSUMER );
 }
 
 static hop_bool_t has_listening_consumer( hop_shared_memory* mem )
 {
    const uint32_t mask = HOP_CONNECTED_CONSUMER | HOP_LISTENING_CONSUMER;
-   return ( mem->sharedSegment.header->state & mask ) == mask;
+   return ( mem->ipcSegment->state & mask ) == mask;
 }
 
 static void set_listening_consumer( hop_shared_memory* mem, hop_bool_t listening )
 {
    if( listening )
-      atomic_set_bit( &mem->sharedSegment.header->state, HOP_LISTENING_CONSUMER );
+      atomic_set_bit( &mem->ipcSegment->state, HOP_LISTENING_CONSUMER );
    else
-      atomic_clear_bit( &mem->sharedSegment.header->state, HOP_LISTENING_CONSUMER );
+      atomic_clear_bit( &mem->ipcSegment->state, HOP_LISTENING_CONSUMER );
 }
 
 static void set_reset_timestamp( hop_shared_memory* mem, hop_timestamp_t t )
 {
-   atomic_store_explicit( &mem->sharedSegment.header->lastResetTimeStamp, t, memory_order_seq_cst );
+   atomic_store_explicit( &mem->ipcSegment->lastResetTimeStamp, t, memory_order_seq_cst );
 }
 
 static hop_bool_t should_send_heartbeat( hop_shared_memory* mem, hop_timestamp_t curTimestamp )
@@ -924,13 +1032,13 @@ static hop_bool_t should_send_heartbeat( hop_shared_memory* mem, hop_timestamp_t
    // send them every few milliseconds
    static const uint64_t cyclesBetweenHB = 100000000;
    const int64_t lastHb                  = atomic_load_explicit(
-       &mem->sharedSegment.header->lastHeartbeatTimeStamp, memory_order_seq_cst );
+       &mem->ipcSegment->lastHeartbeatTimeStamp, memory_order_seq_cst );
    return curTimestamp - lastHb > cyclesBetweenHB;
 }
 
 static void set_last_heartbeat( hop_shared_memory* mem, hop_timestamp_t t )
 {
-   atomic_store_explicit( &mem->sharedSegment.header->lastHeartbeatTimeStamp, t, memory_order_seq_cst );
+   atomic_store_explicit( &mem->ipcSegment->lastHeartbeatTimeStamp, t, memory_order_seq_cst );
 }
 
 #include <stdio.h>
@@ -938,7 +1046,6 @@ static void set_last_heartbeat( hop_shared_memory* mem, hop_timestamp_t t )
 #include <stddef.h>
 #include <stdbool.h>
 #include <inttypes.h>
-#include <string.h>
 #include <limits.h>
 #include <errno.h>
 
@@ -1765,13 +1872,6 @@ void closeSharedMemory( const HOP_CHAR* name, shm_handle handle, void* dataPtr )
 
 namespace hop
 {
-// The call stack depth of the current measured trace. One variable per thread
-static thread_local int tl_traceLevel       = 0;
-static thread_local uint32_t tl_threadIndex = 0;  // Index of the tread as they are coming in
-static thread_local uint64_t tl_threadId    = 0;  // ID of the thread as seen by the OS
-static thread_local hop_zone_t tl_zoneId      = HOP_ZONE_DEFAULT;
-static thread_local char tl_threadNameBuffer[64];
-static thread_local hop_str_ptr_t tl_threadName  = 0;
 
 static std::atomic<bool> g_done{false};  // Was the shared memory destroyed? (Are we done?)
 
@@ -1836,34 +1936,7 @@ static hop_str_ptr_t cStringHash( const char* str, size_t strLen )
    return result;
 }
 
-static uint32_t alignOn( uint32_t val, uint32_t alignment )
-{
-   return ( ( val + alignment - 1 ) & ~( alignment - 1 ) );
-}
 
-static void allocTraces( Traces* t, unsigned size )
-{
-   t->maxSize = size;
-   t->starts      = (hop_timestamp_t*)realloc( t->starts, size * sizeof( hop_timestamp_t ) );
-   t->ends        = (hop_timestamp_t*)realloc( t->ends, size * sizeof( hop_timestamp_t ) );
-   t->depths      = (hop_depth_t*)realloc( t->depths, size * sizeof( hop_depth_t ) );
-   t->fctNameIds  = (hop_str_ptr_t*)realloc( t->fctNameIds, size * sizeof( hop_str_ptr_t ) );
-   t->fileNameIds = (hop_str_ptr_t*)realloc( t->fileNameIds, size * sizeof( hop_str_ptr_t ) );
-   t->lineNumbers = (hop_linenb_t*)realloc( t->lineNumbers, size * sizeof( hop_linenb_t ) );
-   t->zones       = (hop_zone_t*)realloc( t->zones, size * sizeof( hop_zone_t ) );
-}
-
-static void freeTraces( Traces* t )
-{
-   free( t->starts );
-   free( t->ends );
-   free( t->depths );
-   free( t->fctNameIds );
-   free( t->fileNameIds );
-   free( t->lineNumbers );
-   free( t->zones );
-   memset( t, 0, sizeof( Traces ) );
-}
 
 static void addTrace(
     Traces* t,
