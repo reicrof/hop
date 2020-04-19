@@ -8,7 +8,10 @@ int main()
     hop_core_t core;
     for( int i = 0; i < 100; ++i )
     {
-        hop_get_timestamp( &core );
+       HOP_ENTER_FUNC();
+       HOP_ENTER("TESSST");
+       HOP_LEAVE();
+       HOP_LEAVE();
     }
 
     hop_terminate();

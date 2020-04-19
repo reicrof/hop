@@ -82,6 +82,15 @@ extern "C"
 ///////////////////////////////////////////////////////////////
 /////       THESE ARE THE MACROS YOU SHOULD USE     ///////////
 ///////////////////////////////////////////////////////////////
+#if defined( _MSC_VER )
+#define HOP_FCT_NAME __FUNCTION__
+#else
+#define HOP_FCT_NAME __PRETTY_FUNCTION__
+#endif
+
+#define HOP_ENTER( x )   hop_enter( __FILE__, __LINE__, (x) )
+#define HOP_ENTER_FUNC() hop_enter( __FILE__, __LINE__, HOP_FCT_NAME )
+#define HOP_LEAVE()      hop_leave()
 
 // Create a new profiling trace with specified name. Name must be static
 #define HOP_PROF( x ) HOP_PROF_GUARD_VAR( __LINE__, ( __FILE__, __LINE__, ( x ) ) )
@@ -316,7 +325,7 @@ void hop_terminate();
 #define HOP_MALLOC( x ) malloc( (x) )
 #define HOP_REALLOC( ptr, size ) realloc( (ptr), (size) )
 #define HOP_FREE( x )   free( (x) )
-#define HOP_ASSERT( x ) assert( (x) )
+#define HOP_ASSERT( x ) ( (x) )
 
 #if !defined( _MSC_VER )
 #include <unistd.h>    // ftruncate, getpid
@@ -329,6 +338,11 @@ const HOP_CHAR HOP_SHARED_MEM_PREFIX[] = "/hop_";
 #define HOP_STRNCPY( dst, src, count ) strncpy( ( dst ), ( src ), ( count ) )
 #define HOP_STRNCAT( dst, src, count ) strncat( ( dst ), ( src ), ( count ) )
 
+#define HOP_LIKELY( x ) __builtin_expect( !!( x ), 1 )
+#define HOP_UNLIKELY( x ) __builtin_expect( !!( x ), 0 )
+
+#define HOP_GET_THREAD_ID() reinterpret_cast<size_t>( pthread_self() )
+
 /*
 // Unix shared memory includes
 #include <fcntl.h>     // O_CREAT
@@ -337,10 +351,6 @@ const HOP_CHAR HOP_SHARED_MEM_PREFIX[] = "/hop_";
 #include <sys/mman.h>  // shm_open
 #include <sys/stat.h>  // stat
 
-#define likely( x ) __builtin_expect( !!( x ), 1 )
-#define unlikely( x ) __builtin_expect( !!( x ), 0 )
-
-#define HOP_GET_THREAD_ID() reinterpret_cast<size_t>( pthread_self() )
 #define HOP_SLEEP_MS( x ) usleep( x * 1000 )
 */
 int HOP_GET_PID() { return getpid(); }
@@ -357,12 +367,14 @@ const HOP_CHAR HOP_SHARED_MEM_PREFIX[] = _T("/hop_");
 #define HOP_STRNCATW( dst, src, count ) _tcsncat( ( dst ), ( src ), ( count ) )
 #define HOP_STRNCPY( dst, src, count ) strncpy_s( ( dst ), ( count ), ( src ), ( count ) )
 #define HOP_STRNCAT( dst, src, count ) strncat_s( ( dst ), ( count ), ( src ), ( count ) )
-/*
 
-#define likely( x ) ( x )
-#define unlikely( x ) ( x )
+#define HOP_LIKELY( x ) ( x )
+#define HOP_UNLIKELY( x ) ( x )
 
 #define HOP_GET_THREAD_ID() ( size_t ) GetCurrentThreadId()
+/*
+
+
 #define HOP_SLEEP_MS( x ) Sleep( x )
 */
 inline int HOP_GET_PID() { return GetCurrentProcessId(); }
@@ -468,9 +480,6 @@ typedef struct hop_shared_memory
 } hop_shared_memory;
 
 
-
-
-
 /*
  * Copyright (c) 2016 Mindaugas Rasiukevicius <rmind at noxt eu>
  * All rights reserved.
@@ -533,6 +542,16 @@ void ringbuf_release(ringbuf_t*, size_t);
 #ifndef atomic_load_explicit
 #define	atomic_load_explicit	__atomic_load_n
 #endif
+#ifndef atomic_fetch_add_explicit
+#define	atomic_fetch_add_explicit	__atomic_fetch_add
+#endif
+
+
+typedef struct hop_hash_set* hop_hash_set_t;
+hop_hash_set_t hop_hash_set_create();
+void hop_hash_set_destroy( hop_hash_set_t set );
+void hop_hash_set_clear( hop_hash_set_t set );
+int hop_hash_set_insert( hop_hash_set_t set, const void* value );
 
 /* -------------------------------------------------------
                   End of declaration
@@ -576,7 +595,7 @@ static void set_reset_timestamp( hop_shared_memory* mem, hop_timestamp_t t );
 
 hop_connection_state hop_create_shared_memory( int pid, uint64_t requestedSize, hop_bool_t isConsumer )
 {
-   assert( !g_sharedMemory );
+   HOP_ASSERT( !g_sharedMemory );
    
    g_sharedMemory = (hop_shared_memory*) HOP_MALLOC( sizeof(hop_shared_memory) );
 
@@ -711,6 +730,11 @@ void hop_destroy_shared_memory()
    HOP_FREE( g_sharedMemory );
 }
 
+static uint32_t align_on( uint32_t val, uint32_t alignment )
+{
+   return ( ( val + alignment - 1 ) & ~( alignment - 1 ) );
+}
+
 typedef struct pending_traces_t
 {
    uint32_t count;
@@ -723,14 +747,24 @@ typedef struct pending_traces_t
    hop_zone_t* zones;               // Zone to which this trace belongs
 } pending_traces_t;
 
-static hop_thread_local pending_traces_t tl_pendingTraces;
-static hop_thread_local hop_depth_t tl_traceLevel;
-static hop_thread_local hop_zone_t tl_zoneId;
-static hop_thread_local hop_str_ptr_t tl_threadName;
-static hop_thread_local char tl_threadNameBuffer[64];
-static hop_thread_local uint32_t tl_threadIndex;  // Index of the tread as they are coming in
-static hop_thread_local uint64_t tl_threadId;     // ID of the thread as seen by the OS
+typedef struct local_context_t
+{
+   pending_traces_t pendingTraces;
+   uint32_t openTraceIdx;  // Index of the last opened trace
+   hop_depth_t traceLevel;
+   hop_zone_t zoneId;
 
+   hop_str_ptr_t threadName;
+   char threadNameBuffer[64];
+
+   uint64_t threadId;     // ID of the thread as seen by the OS
+   uint32_t threadIndex;  // Index of the tread as they are coming in
+   ringbuf_worker_t* ringbufWorker;
+
+   hop_hash_set_t stringHashSet;
+} local_context_t;
+
+static hop_thread_local local_context_t tl_context;
 
 static void alloc_traces( pending_traces_t* t, unsigned size )
 {
@@ -789,32 +823,134 @@ static void copy_pending_traces_to( const pending_traces_t* t, void* outBuffer )
    memcpy( zonesPtr, t->zones, zoneSize );
 }
 
-static uint32_t align_on( uint32_t val, uint32_t alignment )
+static hop_bool_t thread_local_context_valid( local_context_t* ctxt )
 {
-   return ( ( val + alignment - 1 ) & ~( alignment - 1 ) );
+   return ctxt && ctxt->ringbufWorker;
 }
 
-void hop_start_prof( const char* fileName, hop_linenb_t line, const char* fctName )
+static hop_bool_t thread_local_context_create( local_context_t* ctxt )
 {
-   const uint32_t curCount = tl_pendingTraces.count;
-   if( curCount == tl_pendingTraces.maxSize )
+   static uint32_t g_totalThreadCount;  // Index of the tread as they are coming in
+   ctxt->threadIndex = atomic_fetch_add_explicit( &g_totalThreadCount, 1, memory_order_seq_cst );
+
+   if( ctxt->threadIndex > HOP_MAX_THREAD_NB )
    {
-      alloc_traces( &tl_pendingTraces, HOP_MAX( 256, tl_pendingTraces.maxSize * 2 ) );
+      printf( "Maximum number of threads reached. No trace will be available for this thread\n" );
+      ctxt->pendingTraces.count = 0;
+      return hop_false;
    }
 
-   tl_pendingTraces.starts[curCount]      = hop_get_timestamp_no_core();
-   //tl_pendingTraces.ends[curCount]        = end;
-   tl_pendingTraces.depths[curCount]      = tl_traceLevel++;
-   tl_pendingTraces.fileNameIds[curCount] = (hop_str_ptr_t)fileName;
-   tl_pendingTraces.fctNameIds[curCount]  = (hop_str_ptr_t)fctName;
-   tl_pendingTraces.lineNumbers[curCount] = line;
-   tl_pendingTraces.zones[curCount]       = tl_zoneId;
-   ++tl_pendingTraces.count;
+   alloc_traces( &ctxt->pendingTraces, 256 );
+   ctxt->stringHashSet = hop_hash_set_create();
+   ctxt->threadId = HOP_GET_THREAD_ID();
+   ctxt->ringbufWorker =
+       ringbuf_register( &g_sharedMemory->ipcSegment->ringbuf, ctxt->threadIndex );
+
+   return ctxt->ringbufWorker != NULL;
 }
 
-void hop_end_prof()
+// C-style string hash inspired by Stackoverflow question
+// based on the Java string hash fct. If its good enough
+// for java, it should be good enough for me...
+static hop_str_ptr_t c_str_hash( const char* str, size_t strLen )
 {
+   hop_str_ptr_t result      = 0;
+   const hop_str_ptr_t prime = 31;
+   for( size_t i = 0; i < strLen; ++i )
+   {
+      result = str[i] + ( result * prime );
+   }
+   return result;
+}
 
+static hop_str_ptr_t add_dynamic_string_to_db( const char* dynStr )
+{
+   // Should not have null as dyn string, but just in case...
+   if( dynStr == NULL ) return 0;
+
+   const size_t strLen = strlen( dynStr );
+
+   const hop_str_ptr_t hash = c_str_hash( dynStr, strLen );
+   hop_bool_t inserted      = (bool)hop_hash_set_insert( tl_context.stringHashSet, (void*)hash );
+   // If the string was inserted (meaning it was not already there),
+   // add it to the database, otherwise return its hash
+   if( inserted )
+   {
+     const size_t newEntryPos = _stringData.size();
+     HOP_ASSERT( ( newEntryPos & 7 ) == 0 );  // Make sure we are 8 byte aligned
+     const size_t alignedStrLen = alignOn( static_cast<uint32_t>( strLen ) + 1, 8 );
+
+     _stringData.resize( newEntryPos + sizeof( hop_str_ptr_t ) + alignedStrLen );
+     hop_str_ptr_t* strIdPtr = reinterpret_cast<hop_str_ptr_t*>( &_stringData[newEntryPos] );
+     *strIdPtr               = hash;
+     HOP_STRNCPY( &_stringData[newEntryPos + sizeof( hop_str_ptr_t )], dynStr, alignedStrLen );
+   }
+
+   return hash;
+}
+
+static void
+enter_internal( hop_timestamp_t ts, const char* fileName, hop_linenb_t line, const char* fctName )
+{
+   const uint32_t curCount = tl_context.pendingTraces.count;
+   if( curCount == tl_context.pendingTraces.maxSize )
+   {
+      alloc_traces( &tl_context.pendingTraces, tl_context.pendingTraces.maxSize * 2 );
+   }
+
+   // Keep the index of the last opened trace in the new 'end' timestamp. It will
+   // be restored when poping the trace
+   tl_context.pendingTraces.ends[curCount]        = tl_context.openTraceIdx;
+   tl_context.openTraceIdx                        = curCount;
+
+   // Save the actual data
+   tl_context.pendingTraces.starts[curCount]      = ts;
+   tl_context.pendingTraces.depths[curCount]      = tl_context.traceLevel++;
+   tl_context.pendingTraces.fileNameIds[curCount] = (hop_str_ptr_t)fileName;
+   tl_context.pendingTraces.fctNameIds[curCount]  = (hop_str_ptr_t)fctName;
+   tl_context.pendingTraces.lineNumbers[curCount] = line;
+   tl_context.pendingTraces.zones[curCount]       = tl_context.zoneId;
+   ++tl_context.pendingTraces.count;
+}
+
+void hop_enter( const char* fileName, hop_linenb_t line, const char* fctName )
+{
+   if( HOP_UNLIKELY( !thread_local_context_valid( &tl_context ) ) )
+   {
+      thread_local_context_create( &tl_context );
+   }
+
+   enter_internal( hop_get_timestamp_no_core(), fileName, line, fctName );
+}
+
+void hop_enter_dynamic_string( const char* fileName, hop_linenb_t line, const char* fctName )
+{
+   if( HOP_UNLIKELY( !thread_local_context_valid( &tl_context ) ) )
+   {
+     thread_local_context_create( &tl_context );
+   }
+
+   // Flag the timestamp as being dynamic (first bit set), and add the dynamic string to the db
+   enter_internal(
+       hop_get_timestamp_no_core() | 1ULL, fileName, line, add_dynamic_string_to_db( fctName ) );
+}
+
+void hop_leave()
+{
+   const hop_timestamp_t endTime           = hop_get_timestamp_no_core();
+   const int32_t remainingPushedTraces     = --tl_context.traceLevel;
+   const uint32_t lastOpenTraceIdx         = tl_context.openTraceIdx;
+   tl_context.openTraceIdx                         = tl_context.pendingTraces.ends[lastOpenTraceIdx];
+   tl_context.pendingTraces.ends[lastOpenTraceIdx] = endTime;
+
+   if( remainingPushedTraces <= 0 )
+   {
+      HOP_ASSERT( remainingPushedTraces == 0 ); // If < 0, there is a mismatch of enter/leave calls
+      // client->flushToConsumer();
+
+      // client->addProfilingTrace( fileName, fctName, start, end, lineNb, zone );
+      // client->addCoreEvent( core, start, end );
+   }
 }
 
 static void* create_ipc_memory(
@@ -1041,6 +1177,32 @@ static void set_last_heartbeat( hop_shared_memory* mem, hop_timestamp_t t )
    atomic_store_explicit( &mem->ipcSegment->lastHeartbeatTimeStamp, t, memory_order_seq_cst );
 }
 
+/*
+ * Copyright (c) 2016 Mindaugas Rasiukevicius <rmind at noxt eu>
+ * All rights reserved.
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions
+ * are met:
+ * 1. Redistributions of source code must retain the above copyright
+ *    notice, this list of conditions and the following disclaimer.
+ * 2. Redistributions in binary form must reproduce the above copyright
+ *    notice, this list of conditions and the following disclaimer in the
+ *    documentation and/or other materials provided with the distribution.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE AUTHOR AND CONTRIBUTORS ``AS IS'' AND
+ * ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+ * ARE DISCLAIMED.  IN NO EVENT SHALL THE AUTHOR OR CONTRIBUTORS BE LIABLE
+ * FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+ * DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS
+ * OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION)
+ * HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT
+ * LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY
+ * OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
+ * SUCH DAMAGE.
+ */
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <stddef.h>
@@ -1149,7 +1311,7 @@ retry:
       SPINLOCK_BACKOFF(count);
       goto retry;
    }
-   assert((next & RBUF_OFF_MASK) < rbuf->space);
+   HOP_ASSERT((next & RBUF_OFF_MASK) < rbuf->space);
    return next;
 }
 
@@ -1181,8 +1343,8 @@ ringbuf_acquire(ringbuf_t* rbuf, ringbuf_worker_t* w, size_t len)
 {
    ringbuf_off_t seen, next, target;
 
-   assert(len > 0 && len <= rbuf->space);
-   assert(w->seen_off == RBUF_OFF_MAX);
+   HOP_ASSERT(len > 0 && len <= rbuf->space);
+   HOP_ASSERT(w->seen_off == RBUF_OFF_MAX);
 
    do {
       ringbuf_off_t written;
@@ -1198,7 +1360,7 @@ ringbuf_acquire(ringbuf_t* rbuf, ringbuf_worker_t* w, size_t len)
        */
       seen = stable_nextoff(rbuf);
       next = seen & RBUF_OFF_MASK;
-      assert(next < rbuf->space);
+      HOP_ASSERT(next < rbuf->space);
       atomic_store_explicit(&w->seen_off, next | WRAP_LOCK_BIT,
          memory_order_relaxed);
 
@@ -1259,8 +1421,8 @@ ringbuf_acquire(ringbuf_t* rbuf, ringbuf_worker_t* w, size_t len)
     */
    if (__predict_false(target & WRAP_LOCK_BIT)) {
       /* Cannot wrap-around again if consumer did not catch-up. */
-      assert(rbuf->written <= next);
-      assert(rbuf->end == RBUF_OFF_MAX);
+      HOP_ASSERT(rbuf->written <= next);
+      HOP_ASSERT(rbuf->end == RBUF_OFF_MAX);
       rbuf->end = next;
       next = 0;
 
@@ -1271,7 +1433,7 @@ ringbuf_acquire(ringbuf_t* rbuf, ringbuf_worker_t* w, size_t len)
       atomic_store_explicit(&rbuf->next,
          (target & ~WRAP_LOCK_BIT), memory_order_release);
    }
-   assert((target & RBUF_OFF_MASK) <= rbuf->space);
+   HOP_ASSERT((target & RBUF_OFF_MASK) <= rbuf->space);
    return (ssize_t)next;
 }
 
@@ -1283,8 +1445,8 @@ void
 ringbuf_produce(ringbuf_t* rbuf, ringbuf_worker_t* w)
 {
    (void)rbuf;
-   assert(w->registered);
-   assert(w->seen_off != RBUF_OFF_MAX);
+   HOP_ASSERT(w->registered);
+   HOP_ASSERT(w->seen_off != RBUF_OFF_MAX);
    atomic_store_explicit(&w->seen_off, RBUF_OFF_MAX, memory_order_release);
 }
 
@@ -1340,7 +1502,7 @@ retry:
       if (seen_off >= written) {
          ready = HOP_MIN(seen_off, ready);
       }
-      assert(ready >= written);
+      HOP_ASSERT(ready >= written);
    }
 
    /*
@@ -1381,9 +1543,9 @@ retry:
        * 'ready' or the 'end' offset.  If neither is set, then
        * the actual end of the buffer.
        */
-      assert(ready > next);
+      HOP_ASSERT(ready > next);
       ready = HOP_MIN(ready, end);
-      assert(ready >= written);
+      HOP_ASSERT(ready >= written);
    }
    else {
       /*
@@ -1395,8 +1557,8 @@ retry:
    towrite = ready - written;
    *offset = written;
 
-   assert(ready >= written);
-   assert(towrite <= rbuf->space);
+   HOP_ASSERT(ready >= written);
+   HOP_ASSERT(towrite <= rbuf->space);
    return towrite;
 }
 
@@ -1408,15 +1570,137 @@ ringbuf_release(ringbuf_t* rbuf, size_t nbytes)
 {
    const size_t nwritten = rbuf->written + nbytes;
 
-   assert(rbuf->written <= rbuf->space);
-   assert(rbuf->written <= rbuf->end);
-   assert(nwritten <= rbuf->space);
+   HOP_ASSERT(rbuf->written <= rbuf->space);
+   HOP_ASSERT(rbuf->written <= rbuf->end);
+   HOP_ASSERT(nwritten <= rbuf->space);
 
    rbuf->written = (nwritten == rbuf->space) ? 0 : nwritten;
 }
 
 
+/**
+ * Hash set implementation
+ */
 
+/**
+ * Start of hop hash set implementation
+ */
+
+static const uint32_t DEFAULT_TABLE_SIZE = 1 << 8U;  // Required to be a power of 2 !
+static const float MAX_LOAD_FACTOR       = 0.4f;
+
+typedef struct hop_hash_set
+{
+   const void** table;
+   uint32_t capacity;
+   uint32_t count;
+} hop_hash_set;
+
+static inline float load_factor( hop_hash_set_t set ) { return (float)set->count / set->capacity; }
+
+static inline uint64_t hash_func( const void* value )
+{
+   return (uint64_t)value;
+}
+
+static inline uint32_t quad_probe( uint64_t hash_value, uint32_t it, uint32_t table_size )
+{
+   // Using quadratic probing function (x^2 + x) / 2
+   return ( hash_value + ( ( it * it + it ) >> 2 ) ) % table_size;
+}
+
+// Insert value inside the hash set without incrementing the count. Used while rehashing as
+// well as within the public insert function
+static int insert_internal( hop_hash_set_t hs, const void* value )
+{
+   const uint64_t hash_value = hash_func( value );
+   uint32_t iteration        = 0;
+   while( iteration < hs->capacity )
+   {
+      const uint32_t idx         = quad_probe( hash_value, iteration++, hs->capacity );
+      const void* existing_value = hs->table[idx];
+      if( existing_value == value )
+      {
+         return 0;  // Value already inserted. Return insertion failure
+      }
+      else if( existing_value == NULL )
+      {
+         hs->table[idx] = value;
+         return 1;
+      }
+   }
+
+   return 0;
+}
+
+static void rehash( hop_hash_set_t hs )
+{
+   const void** prev_table            = hs->table;
+   const uint32_t prev_capacity = hs->capacity;
+
+   hs->capacity = prev_capacity * 2;
+   hs->table    = (const void**)calloc( hs->capacity, sizeof( const void* ) );
+
+   for( uint32_t i = 0; i < prev_capacity; ++i )
+   {
+      if( prev_table[i] != NULL ) insert_internal( hs, prev_table[i] );
+   }
+
+   free( prev_table );
+}
+
+hop_hash_set_t hop_hash_set_create()
+{
+   hop_hash_set* hs = (hop_hash_set*)calloc( 1, sizeof( hop_hash_set ) );
+   if( !hs ) return NULL;
+
+   hs->table = (const void**)calloc( DEFAULT_TABLE_SIZE, sizeof( const void* ) );
+   if( !hs->table )
+   {
+      free( hs );
+      return NULL;
+   }
+
+   hs->capacity = DEFAULT_TABLE_SIZE;
+   return hs;
+}
+
+void hop_hash_set_destroy( hop_hash_set_t set )
+{
+   if( set )
+   {
+      free( set->table );
+   }
+   free( set );
+}
+
+int hop_hash_set_insert( hop_hash_set_t hs, const void* value )
+{
+   const int inserted = insert_internal( hs, value );
+   if( inserted )
+   {
+      ++hs->count;
+      if( load_factor( hs ) > MAX_LOAD_FACTOR )
+      {
+         rehash( hs );
+      }
+   }
+   return inserted;
+}
+
+int hop_hash_set_count( hop_hash_set_t set ) { return set->count; }
+
+void hop_hash_set_clear( hop_hash_set_t set )
+{
+   if( set )
+   {
+      set->count = 0;
+      if( set->table )
+      {
+         memset( set->table, 0, set->capacity * sizeof( const void* ) );
+      }
+   }
+}
 
 
 
@@ -1562,11 +1846,7 @@ class ZoneGuard
 #define HOP_ZONE_GUARD( LINE, ARGS ) hop::ZoneGuard HOP_COMBINE( hopZoneGuard, LINE ) ARGS
 
 #define HOP_COMBINE( X, Y ) X##Y
-#if defined( _MSC_VER )
-#define HOP_FCT_NAME __FUNCTION__
-#else
-#define HOP_FCT_NAME __PRETTY_FUNCTION__
-#endif
+
 
 }  // namespace hop
 
@@ -1675,7 +1955,7 @@ class SharedMemory
 #if defined( HOP_IMPLEMENTATION )
 
 // standard includes
-#include <assert.h>
+#include <HOP_ASSERT.h>
 
 #define HOP_MIN( a, b ) ( ( ( a ) < ( b ) ) ? ( a ) : ( b ) )
 #define HOP_MAX( a, b ) ( ( ( a ) > ( b ) ) ? ( a ) : ( b ) )
@@ -1699,8 +1979,8 @@ const HOP_CHAR HOP_SHARED_MEM_PREFIX[] = "/hop_";
 #define HOP_STRNCPY( dst, src, count ) strncpy( ( dst ), ( src ), ( count ) )
 #define HOP_STRNCAT( dst, src, count ) strncat( ( dst ), ( src ), ( count ) )
 
-#define likely( x ) __builtin_expect( !!( x ), 1 )
-#define unlikely( x ) __builtin_expect( !!( x ), 0 )
+#define HOP_LIKELY( x ) __builtin_expect( !!( x ), 1 )
+#define HOP_UNLIKELY( x ) __builtin_expect( !!( x ), 0 )
 
 #define HOP_GET_THREAD_ID() reinterpret_cast<size_t>( pthread_self() )
 #define HOP_SLEEP_MS( x ) usleep( x * 1000 )
@@ -1721,8 +2001,8 @@ const HOP_CHAR HOP_SHARED_MEM_PREFIX[] = _T("/hop_");
 #define HOP_STRNCPY( dst, src, count ) strncpy_s( ( dst ), ( count ), ( src ), ( count ) )
 #define HOP_STRNCAT( dst, src, count ) strncat_s( ( dst ), ( count ), ( src ), ( count ) )
 
-#define likely( x ) ( x )
-#define unlikely( x ) ( x )
+#define HOP_LIKELY( x ) ( x )
+#define HOP_UNLIKELY( x ) ( x )
 
 #define HOP_GET_THREAD_ID() ( size_t ) GetCurrentThreadId()
 #define HOP_SLEEP_MS( x ) Sleep( x )
@@ -1922,22 +2202,6 @@ void SharedMemory::destroy()
 
 SharedMemory::~SharedMemory() { destroy(); }
 
-// C-style string hash inspired by Stackoverflow question
-// based on the Java string hash fct. If its good enough
-// for java, it should be good enough for me...
-static hop_str_ptr_t cStringHash( const char* str, size_t strLen )
-{
-   hop_str_ptr_t result              = 0;
-   HOP_CONSTEXPR hop_str_ptr_t prime = 31;
-   for( size_t i = 0; i < strLen; ++i )
-   {
-      result = str[i] + ( result * prime );
-   }
-   return result;
-}
-
-
-
 static void addTrace(
     Traces* t,
     hop_timestamp_t start,
@@ -2067,44 +2331,18 @@ class Client
       }
    }
 
-   hop_str_ptr_t addDynamicStringToDb( const char* dynStr )
-   {
-      // Should not have null as dyn string, but just in case...
-      if( dynStr == NULL ) return 0;
-
-      const size_t strLen = strlen( dynStr );
-
-      const hop_str_ptr_t hash = cStringHash( dynStr, strLen );
-      bool inserted = (bool)hop_hash_set_insert( _stringPtrSet, (void*)hash );
-      // If the string was inserted (meaning it was not already there),
-      // add it to the database, otherwise return its hash
-      if( inserted )
-      {
-         const size_t newEntryPos = _stringData.size();
-         assert( ( newEntryPos & 7 ) == 0 );  // Make sure we are 8 byte aligned
-         const size_t alignedStrLen = alignOn( static_cast<uint32_t>( strLen ) + 1, 8 );
-
-         _stringData.resize( newEntryPos + sizeof( hop_str_ptr_t ) + alignedStrLen );
-         hop_str_ptr_t* strIdPtr = reinterpret_cast<hop_str_ptr_t*>( &_stringData[newEntryPos] );
-         *strIdPtr          = hash;
-         HOP_STRNCPY( &_stringData[newEntryPos + sizeof( hop_str_ptr_t )], dynStr, alignedStrLen );
-      }
-
-      return hash;
-   }
-
    bool addStringToDb( hop_str_ptr_t strId )
    {
       // Early return on NULL
       if( strId == 0 ) return false;
 
-      const bool inserted = (bool)hop_hash_set_insert( _stringPtrSet, (void*)strId );
+      const hop_bool_t inserted = hop_hash_set_insert( _stringPtrSet, (void*)strId );
       // If the string was inserted (meaning it was not already there),
       // add it to the database, otherwise do nothing
       if( inserted )
       {
          const size_t newEntryPos = _stringData.size();
-         assert( ( newEntryPos & 7 ) == 0 );  // Make sure we are 8 byte aligned
+         HOP_ASSERT( ( newEntryPos & 7 ) == 0 );  // Make sure we are 8 byte aligned
 
          const size_t alignedStrLen = alignOn(
              static_cast<uint32_t>( strlen( reinterpret_cast<const char*>( strId ) ) ) + 1, 8 );
@@ -2133,7 +2371,7 @@ class Client
       {
          const auto hash = addDynamicStringToDb( tl_threadNameBuffer );
          HOP_UNUSED( hash );
-         assert( hash == tl_threadName );
+         HOP_ASSERT( hash == tl_threadName );
       }
    }
 
@@ -2177,7 +2415,7 @@ class Client
       }
 
       const uint32_t stringDataSize = static_cast<uint32_t>( _stringData.size() );
-      assert( stringDataSize >= _sentStringDataSize );
+      HOP_ASSERT( stringDataSize >= _sentStringDataSize );
       const uint32_t stringToSendSize = stringDataSize - _sentStringDataSize;
       const size_t msgSize            = sizeof( MsgInfo ) + stringToSendSize;
 
@@ -2463,8 +2701,8 @@ Client* ClientManager::Get()
 {
    // thread_local std::unique_ptr<Client> threadClient;
 
-   // if( unlikely( g_done.load() ) ) return nullptr;
-   // if( likely( threadClient.get() ) ) return threadClient.get();
+   // if( HOP_UNLIKELY( g_done.load() ) ) return nullptr;
+   // if( HOP_LIKELY( threadClient.get() ) ) return threadClient.get();
 
    // // If we have not yet created our shared memory segment, do it here
    // if( !ClientManager::sharedMemory().valid() )
@@ -2500,25 +2738,18 @@ Client* ClientManager::Get()
       threadClient->_worker = ringbuf_register( ringBuffer, tl_threadIndex );
       if( threadClient->_worker == NULL )
       {
-         assert( false && "ringbuf_register" );
+         HOP_ASSERT( false && "ringbuf_register" );
       }
    }
 
    return threadClient.get();
 }
-
-hop_zone_t ClientManager::StartProfile()
-{
-   ++tl_traceLevel;
-   return tl_zoneId;
-}
-
 hop_str_ptr_t ClientManager::StartProfileDynString( const char* str, hop_zone_t* zone )
 {
    ++tl_traceLevel;
    Client* client = ClientManager::Get();
 
-   if( unlikely( !client ) ) return 0;
+   if( HOP_UNLIKELY( !client ) ) return 0;
 
    *zone = tl_zoneId;
    return client->addDynamicStringToDb( str );
@@ -2536,7 +2767,7 @@ void ClientManager::EndProfile(
    const int remainingPushedTraces = --tl_traceLevel;
    Client* client                  = ClientManager::Get();
 
-   if( unlikely( !client ) ) return;
+   if( HOP_UNLIKELY( !client ) ) return;
 
    if( end - start > 50 )  // Minimum trace time is 50 ns
    {
@@ -2556,7 +2787,7 @@ void ClientManager::EndLockWait( void* mutexAddr, hop_timestamp_t start, hop_tim
    if( tl_traceLevel > 0 && end - start >= HOP_MIN_LOCK_CYCLES )
    {
       auto client = ClientManager::Get();
-      if( unlikely( !client ) ) return;
+      if( HOP_UNLIKELY( !client ) ) return;
 
       client->addWaitLockTrace(
           mutexAddr, start, end, static_cast<unsigned short>( tl_traceLevel ) );
@@ -2568,7 +2799,7 @@ void ClientManager::UnlockEvent( void* mutexAddr, hop_timestamp_t time )
    if( tl_traceLevel > 0 )
    {
       auto client = ClientManager::Get();
-      if( unlikely( !client ) ) return;
+      if( HOP_UNLIKELY( !client ) ) return;
 
       client->addUnlockEvent( mutexAddr, time );
    }
@@ -2577,7 +2808,7 @@ void ClientManager::UnlockEvent( void* mutexAddr, hop_timestamp_t time )
 void ClientManager::SetThreadName( const char* name ) HOP_NOEXCEPT
 {
    auto client = ClientManager::Get();
-   if( unlikely( !client ) ) return;
+   if( HOP_UNLIKELY( !client ) ) return;
 
    client->setThreadName( reinterpret_cast<hop_str_ptr_t>( name ) );
 }
@@ -2610,125 +2841,7 @@ SharedMemory& ClientManager::sharedMemory() HOP_NOEXCEPT
 
 }  // end of namespace hop
 
-/**
- * Start of hop hash set implementation
- */
 
-static const uint32_t DEFAULT_TABLE_SIZE = 1 << 8U;  // Required to be a power of 2 !
-static const float MAX_LOAD_FACTOR       = 0.4f;
-
-typedef struct hop_hash_set
-{
-   const void** table;
-   uint32_t capacity;
-   uint32_t count;
-} hop_hash_set;
-
-static inline float load_factor( hop_hash_set_t set ) { return (float)set->count / set->capacity; }
-
-static inline uint64_t hash_func( const void* value )
-{
-   return (uint64_t)value;
-}
-
-static inline uint32_t quad_probe( uint64_t hash_value, uint32_t it, uint32_t table_size )
-{
-   // Using quadratic probing function (x^2 + x) / 2
-   return ( hash_value + ( ( it * it + it ) >> 2 ) ) % table_size;
-}
-
-// Insert value inside the hash set without incrementing the count. Used while rehashing as
-// well as within the public insert function
-static int insert_internal( hop_hash_set_t hs, const void* value )
-{
-   const uint64_t hash_value = hash_func( value );
-   uint32_t iteration        = 0;
-   while( iteration < hs->capacity )
-   {
-      const uint32_t idx         = quad_probe( hash_value, iteration++, hs->capacity );
-      const void* existing_value = hs->table[idx];
-      if( existing_value == value )
-      {
-         return 0;  // Value already inserted. Return insertion failure
-      }
-      else if( existing_value == NULL )
-      {
-         hs->table[idx] = value;
-         return 1;
-      }
-   }
-
-   return 0;
-}
-
-static void rehash( hop_hash_set_t hs )
-{
-   const void** prev_table            = hs->table;
-   const uint32_t prev_capacity = hs->capacity;
-
-   hs->capacity = prev_capacity * 2;
-   hs->table    = (const void**)calloc( hs->capacity, sizeof( const void* ) );
-
-   for( uint32_t i = 0; i < prev_capacity; ++i )
-   {
-      if( prev_table[i] != NULL ) insert_internal( hs, prev_table[i] );
-   }
-
-   free( prev_table );
-}
-
-hop_hash_set_t hop_hash_set_create()
-{
-   hop_hash_set* hs = (hop_hash_set*)calloc( 1, sizeof( hop_hash_set ) );
-   if( !hs ) return NULL;
-
-   hs->table = (const void**)calloc( DEFAULT_TABLE_SIZE, sizeof( const void* ) );
-   if( !hs->table )
-   {
-      free( hs );
-      return NULL;
-   }
-
-   hs->capacity = DEFAULT_TABLE_SIZE;
-   return hs;
-}
-
-void hop_hash_set_destroy( hop_hash_set_t set )
-{
-   if( set )
-   {
-      free( set->table );
-   }
-   free( set );
-}
-
-int hop_hash_set_insert( hop_hash_set_t hs, const void* value )
-{
-   const int inserted = insert_internal( hs, value );
-   if( inserted )
-   {
-      ++hs->count;
-      if( load_factor( hs ) > MAX_LOAD_FACTOR )
-      {
-         rehash( hs );
-      }
-   }
-   return inserted;
-}
-
-int hop_hash_set_count( hop_hash_set_t set ) { return set->count; }
-
-void hop_hash_set_clear( hop_hash_set_t set )
-{
-   if( set )
-   {
-      set->count = 0;
-      if( set->table )
-      {
-         memset( set->table, 0, set->capacity * sizeof( const void* ) );
-      }
-   }
-}
 
 #endif  // end HOP_IMPLEMENTATION
 
