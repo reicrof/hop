@@ -762,6 +762,9 @@ typedef struct local_context_t
    ringbuf_worker_t* ringbufWorker;
 
    hop_hash_set_t stringHashSet;
+   uint32_t       stringDataSize;
+   uint32_t       stringDataCapacity;
+   char*          stringData;
 } local_context_t;
 
 static hop_thread_local local_context_t tl_context;
@@ -840,6 +843,7 @@ static hop_bool_t thread_local_context_create( local_context_t* ctxt )
       return hop_false;
    }
 
+   ctxt->stringData = (char*) HOP_MALLOC( 1024 );
    alloc_traces( &ctxt->pendingTraces, 256 );
    ctxt->stringHashSet = hop_hash_set_create();
    ctxt->threadId = HOP_GET_THREAD_ID();
@@ -863,30 +867,51 @@ static hop_str_ptr_t c_str_hash( const char* str, size_t strLen )
    return result;
 }
 
+static hop_bool_t add_string_to_db_internal(
+    local_context_t* ctxt,
+    hop_str_ptr_t strId,  // String ID (hash or actual pointer)
+    const char* strPtr,   // Pointer to string data
+    uint32_t strLen )     // String length
+{
+   const hop_bool_t inserted = hop_hash_set_insert( ctxt->stringHashSet, (void*)strId );
+   // If the string was inserted to the hash set, also add it to the data section
+   if( inserted )
+   {
+      const size_t newEntryPos = ctxt->stringDataSize;
+      HOP_ASSERT( ( newEntryPos & 7 ) == 0 );  // Make sure we are 8 byte aligned
+      const size_t alignedStrLen = align_on( strLen + 1, 8 );
+
+      ctxt->stringDataSize += newEntryPos + sizeof( hop_str_ptr_t ) + alignedStrLen;
+      if( ctxt->stringDataSize >= ctxt->stringDataCapacity )
+      {
+         ctxt->stringDataCapacity *= 2;
+         HOP_REALLOC( ctxt->stringData, ctxt->stringDataCapacity );
+      }
+
+      hop_str_ptr_t* strIdPtr = (hop_str_ptr_t*)( &ctxt->stringData[newEntryPos] );
+      *strIdPtr               = strId;
+      HOP_STRNCPY(
+          &ctxt->stringData[newEntryPos + sizeof( hop_str_ptr_t )], strPtr, alignedStrLen );
+   }
+   return inserted;
+}
+
+static hop_str_ptr_t add_string_to_db( const char* strId )
+{
+   // Early return on NULL
+   if( strId == 0 ) return 0;
+
+   return add_string_to_db_internal( &tl_context, strId, strId, strlen( strId ) );
+}
+
 static hop_str_ptr_t add_dynamic_string_to_db( const char* dynStr )
 {
    // Should not have null as dyn string, but just in case...
    if( dynStr == NULL ) return 0;
 
    const size_t strLen = strlen( dynStr );
-
    const hop_str_ptr_t hash = c_str_hash( dynStr, strLen );
-   hop_bool_t inserted      = (bool)hop_hash_set_insert( tl_context.stringHashSet, (void*)hash );
-   // If the string was inserted (meaning it was not already there),
-   // add it to the database, otherwise return its hash
-   if( inserted )
-   {
-     const size_t newEntryPos = _stringData.size();
-     HOP_ASSERT( ( newEntryPos & 7 ) == 0 );  // Make sure we are 8 byte aligned
-     const size_t alignedStrLen = alignOn( static_cast<uint32_t>( strLen ) + 1, 8 );
-
-     _stringData.resize( newEntryPos + sizeof( hop_str_ptr_t ) + alignedStrLen );
-     hop_str_ptr_t* strIdPtr = reinterpret_cast<hop_str_ptr_t*>( &_stringData[newEntryPos] );
-     *strIdPtr               = hash;
-     HOP_STRNCPY( &_stringData[newEntryPos + sizeof( hop_str_ptr_t )], dynStr, alignedStrLen );
-   }
-
-   return hash;
+   return add_string_to_db_internal( &tl_context, hash, dynStr, strLen );
 }
 
 static void
@@ -2279,7 +2304,7 @@ class Client
       _cores.reserve( 64 );
       _lockWaits.reserve( 64 );
       _unlockEvents.reserve( 64 );
-      _stringData.reserve( 256 * 32 );
+
 
       _stringPtrSet = hop_hash_set_create();
 
