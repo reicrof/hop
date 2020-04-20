@@ -341,7 +341,7 @@ const HOP_CHAR HOP_SHARED_MEM_PREFIX[] = "/hop_";
 #define HOP_LIKELY( x ) __builtin_expect( !!( x ), 1 )
 #define HOP_UNLIKELY( x ) __builtin_expect( !!( x ), 0 )
 
-#define HOP_GET_THREAD_ID() reinterpret_cast<size_t>( pthread_self() )
+#define HOP_GET_THREAD_ID() (size_t)( pthread_self() )
 
 /*
 // Unix shared memory includes
@@ -885,7 +885,7 @@ static hop_bool_t add_string_to_db_internal(
       if( ctxt->stringDataSize >= ctxt->stringDataCapacity )
       {
          ctxt->stringDataCapacity *= 2;
-         HOP_REALLOC( ctxt->stringData, ctxt->stringDataCapacity );
+         ctxt->stringData = HOP_REALLOC( ctxt->stringData, ctxt->stringDataCapacity );
       }
 
       hop_str_ptr_t* strIdPtr = (hop_str_ptr_t*)( &ctxt->stringData[newEntryPos] );
@@ -896,12 +896,14 @@ static hop_bool_t add_string_to_db_internal(
    return inserted;
 }
 
-static hop_str_ptr_t add_string_to_db( const char* strId )
+static hop_str_ptr_t add_string_to_db( const char* str )
 {
    // Early return on NULL
-   if( strId == 0 ) return 0;
+   if( str == 0 ) return 0;
 
-   return add_string_to_db_internal( &tl_context, strId, strId, strlen( strId ) );
+   const hop_str_ptr_t strId = (hop_str_ptr_t)str;
+   add_string_to_db_internal( &tl_context, strId, str, strlen( str ) );
+   return strId;
 }
 
 static hop_str_ptr_t add_dynamic_string_to_db( const char* dynStr )
@@ -911,11 +913,15 @@ static hop_str_ptr_t add_dynamic_string_to_db( const char* dynStr )
 
    const size_t strLen = strlen( dynStr );
    const hop_str_ptr_t hash = c_str_hash( dynStr, strLen );
-   return add_string_to_db_internal( &tl_context, hash, dynStr, strLen );
+   add_string_to_db_internal( &tl_context, hash, dynStr, strLen );
+   return hash;
 }
 
-static void
-enter_internal( hop_timestamp_t ts, const char* fileName, hop_linenb_t line, const char* fctName )
+static void enter_internal(
+    hop_timestamp_t ts,
+    hop_str_ptr_t fileName,
+    hop_linenb_t line,
+    hop_str_ptr_t fctName )
 {
    const uint32_t curCount = tl_context.pendingTraces.count;
    if( curCount == tl_context.pendingTraces.maxSize )
@@ -931,8 +937,8 @@ enter_internal( hop_timestamp_t ts, const char* fileName, hop_linenb_t line, con
    // Save the actual data
    tl_context.pendingTraces.starts[curCount]      = ts;
    tl_context.pendingTraces.depths[curCount]      = tl_context.traceLevel++;
-   tl_context.pendingTraces.fileNameIds[curCount] = (hop_str_ptr_t)fileName;
-   tl_context.pendingTraces.fctNameIds[curCount]  = (hop_str_ptr_t)fctName;
+   tl_context.pendingTraces.fileNameIds[curCount] = fileName;
+   tl_context.pendingTraces.fctNameIds[curCount]  = fctName;
    tl_context.pendingTraces.lineNumbers[curCount] = line;
    tl_context.pendingTraces.zones[curCount]       = tl_context.zoneId;
    ++tl_context.pendingTraces.count;
@@ -945,7 +951,7 @@ void hop_enter( const char* fileName, hop_linenb_t line, const char* fctName )
       thread_local_context_create( &tl_context );
    }
 
-   enter_internal( hop_get_timestamp_no_core(), fileName, line, fctName );
+   enter_internal( hop_get_timestamp_no_core(), (hop_str_ptr_t)fileName, line, (hop_str_ptr_t)fctName );
 }
 
 void hop_enter_dynamic_string( const char* fileName, hop_linenb_t line, const char* fctName )
@@ -956,8 +962,8 @@ void hop_enter_dynamic_string( const char* fileName, hop_linenb_t line, const ch
    }
 
    // Flag the timestamp as being dynamic (first bit set), and add the dynamic string to the db
-   enter_internal(
-       hop_get_timestamp_no_core() | 1ULL, fileName, line, add_dynamic_string_to_db( fctName ) );
+   const hop_str_ptr_t fctStrId = add_dynamic_string_to_db( fctName );
+   enter_internal( hop_get_timestamp_no_core() | 1ULL, (hop_str_ptr_t)fileName, line, fctStrId );
 }
 
 void hop_leave()
