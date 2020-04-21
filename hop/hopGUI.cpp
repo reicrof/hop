@@ -2,6 +2,7 @@
 #include "Hop.h"
 #include "hop/Stats.h"
 #include "hop/Options.h"
+#include "hop/Renderer.h"
 #include "hop/Viewer.h"
 #include "hop_icon_raster.inline"
 
@@ -264,6 +265,8 @@ int main( int argc, char* argv[] )
    }
 
    hop::setupSignalHandlers( terminateCallback );
+
+   SDL_SetHint( SDL_HINT_RENDER_DRIVER, renderer::sdlRenderDriverHint() );
 
    if ( SDL_Init( SDL_INIT_VIDEO ) != 0 )
    {

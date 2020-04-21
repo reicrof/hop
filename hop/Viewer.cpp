@@ -5,7 +5,7 @@
 #include "hop/Lod.h"
 #include "hop/ModalWindow.h"
 #include "hop/Options.h"
-#include "hop/RendererGL.h"
+#include "hop/Renderer.h"
 #include "hop/Stats.h"
 #include "hop/hop_icon_vect.inline"
 
@@ -657,7 +657,7 @@ Viewer::Viewer( uint32_t screenSizeX, uint32_t /*screenSizeY*/ )
 {
    hop::setupLODResolution( screenSizeX );
    hop::initCursors();
-   renderer::createResources();
+   renderer::initialize();
 }
 
 int Viewer::addNewProfiler( const char* processName, bool startRecording )
@@ -790,9 +790,6 @@ void Viewer::onNewFrame(
 void Viewer::draw( float windowWidth, float windowHeight )
 {
    const auto drawStart = std::chrono::system_clock::now();
-
-   renderer::setViewport( 0, 0, windowWidth, windowHeight );
-   renderer::clearColorBuffer();
 
    ImGui::SetNextWindowPos( ImVec2( 0.0f, 0.0f ), ImGuiCond_Always );
    ImGui::SetNextWindowSize( ImGui::GetIO().DisplaySize, ImGuiCond_Always );
