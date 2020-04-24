@@ -657,7 +657,6 @@ Viewer::Viewer( uint32_t screenSizeX, uint32_t /*screenSizeY*/ )
 {
    hop::setupLODResolution( screenSizeX );
    hop::initCursors();
-   renderer::initialize();
 }
 
 int Viewer::addNewProfiler( const char* processName, bool startRecording )

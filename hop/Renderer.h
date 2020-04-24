@@ -1,12 +1,14 @@
 #ifndef HOP_RENDERER_H_
 #define HOP_RENDERER_H_
 
+struct SDL_Window;
 struct ImDrawData;
 
 namespace renderer
 {
 
-void initialize();
+void initialize( SDL_Window* window );
+void terminate();
 const char* sdlRenderDriverHint();
 void renderDrawlist( ImDrawData* draw_data );
 void setVSync( bool on );

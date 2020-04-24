@@ -210,6 +210,8 @@ static hop::ProcessID startViewer( SDL_Window* window, const hop::LaunchOptions&
       HOP_PROF( "Main Loop" );
       const auto frameStart = ClockType::now();
 
+      renderer::setVSync( hop::options::vsyncOn() );
+
       handleInput();
 
       const auto startFetch = ClockType::now();
@@ -301,6 +303,7 @@ int main( int argc, char* argv[] )
    hop::options::load();
 
    createIcon( window );
+   renderer::initialize( window );
 
    HOP_SET_THREAD_NAME( "Main" );
 
@@ -314,6 +317,8 @@ int main( int argc, char* argv[] )
    {
       hop::terminateProcess( childProcId );
    }
+
+   renderer::terminate();
 
    hop::block_allocator::terminate();
 

@@ -27,6 +27,8 @@ if(UNIX)
         set( HOP_RENDERER_IMPL "hop/renderer/RendererMetal.mm" )
         set( NOC_IMPL_FILE "noc_file_dialog/noc_file_dialog.mm")
         set( NOC_IMPL_DEFINE "NOC_FILE_DIALOG_OSX" )
+
+        set( PLATFORM_LINK_FLAGS "${PLATFORM_LINK_FLAGS} -framework Metal" )
    else()
       set( PLATFORM_LINK_FLAGS "${PLATFORM_LINK_FLAGS} -lrt -latomic" )
 

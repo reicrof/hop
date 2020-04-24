@@ -23,7 +23,7 @@ const char* sdlRenderDriverHint()
     return "opengl";
 }
 
-void initialize()
+void initialize( SDL_Window* /*window*/ )
 {
    // Build texture atlas
    ImGuiIO& io = ImGui::GetIO();
@@ -46,6 +46,11 @@ void initialize()
 
    // Store our identifier
    io.Fonts->TexID = (void*)(intptr_t)g_FontTexture;
+}
+
+void terminate()
+{
+   glDeleteTextures( 1, &g_FontTexture );
 }
 
 // This is the main rendering function that you have to implement and provide to ImGui (via setting
