@@ -228,7 +228,7 @@ static hop::ProcessID startViewer( SDL_Window* window, const hop::LaunchOptions&
 
       // Get delta time for current frame
       const auto curTime = ClockType::now();
-      const float deltaTime = static_cast<float>(
+      const float deltaTime = (float)(
          duration_cast<milliseconds>( ( curTime - lastFrameTime ) ).count() );
 
       const float wndWidth = (float)w;
@@ -248,6 +248,7 @@ static hop::ProcessID startViewer( SDL_Window* window, const hop::LaunchOptions&
          viewer.fetchClientsData();
       }
 
+      HOP_PROF( "Swapping" );
       SDL_GL_SwapWindow( window );
 
       frameEnd = ClockType::now();
@@ -290,20 +291,18 @@ int main( int argc, char* argv[] )
 
    hop::block_allocator::initialize( hop::VIRT_MEM_BLK_SIZE );
 
-   sdlImGuiInit();
+   sdlImGuiInit(); 
 
-   SDL_GLContext mainContext = SDL_GL_CreateContext( window );
-   SDL_GL_SetAttribute( SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_CORE );
-   SDL_GL_SetAttribute( SDL_GL_CONTEXT_MAJOR_VERSION, 3 );
-   SDL_GL_SetAttribute( SDL_GL_CONTEXT_MINOR_VERSION, 2 );
-   SDL_GL_SetAttribute( SDL_GL_DOUBLEBUFFER, 1 );
-   SDL_GL_SetSwapInterval( 1 );
+   if( !renderer::initialize( window ) )
+   {
+      fprintf( stderr, "FATAL ERROR ! Renderer initializaiton failed\n" );
+      return -1;
+   }
 
    const hop::LaunchOptions opts = hop::parseArgs( argc, argv );
    hop::options::load();
 
    createIcon( window );
-   renderer::initialize( window );
 
    HOP_SET_THREAD_NAME( "Main" );
 
@@ -318,15 +317,11 @@ int main( int argc, char* argv[] )
       hop::terminateProcess( childProcId );
    }
 
+   destroyIcon();
+   ImGui::DestroyContext();
    renderer::terminate();
-
    hop::block_allocator::terminate();
 
-   destroyIcon();
-
-   ImGui::DestroyContext();
-
-   SDL_GL_DeleteContext( mainContext );
    SDL_DestroyWindow( window );
    SDL_Quit();
 }

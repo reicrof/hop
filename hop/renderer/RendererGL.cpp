@@ -13,6 +13,8 @@
 #include <GL/gl.h>
 #endif
 
+static SDL_Window* g_window;
+static SDL_GLContext g_glContext;
 static uint32_t g_FontTexture;
 
 namespace renderer
@@ -23,8 +25,16 @@ const char* sdlRenderDriverHint()
     return "opengl";
 }
 
-void initialize( SDL_Window* /*window*/ )
+bool initialize( SDL_Window* window )
 {
+   g_glContext = SDL_GL_CreateContext( window );
+   SDL_GL_SetAttribute( SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_CORE );
+   SDL_GL_SetAttribute( SDL_GL_CONTEXT_MAJOR_VERSION, 3 );
+   SDL_GL_SetAttribute( SDL_GL_CONTEXT_MINOR_VERSION, 2 );
+   SDL_GL_SetAttribute( SDL_GL_DOUBLEBUFFER, 1 );
+   SDL_GL_SetSwapInterval( 1 );
+
+   g_window = window;
    // Build texture atlas
    ImGuiIO& io = ImGui::GetIO();
    unsigned char* pixels;
@@ -46,11 +56,14 @@ void initialize( SDL_Window* /*window*/ )
 
    // Store our identifier
    io.Fonts->TexID = (void*)(intptr_t)g_FontTexture;
+
+   return true;
 }
 
 void terminate()
 {
    glDeleteTextures( 1, &g_FontTexture );
+   SDL_GL_DeleteContext( g_glContext );
 }
 
 // This is the main rendering function that you have to implement and provide to ImGui (via setting
@@ -165,6 +178,13 @@ void renderDrawlist( ImDrawData* draw_data )
        last_scissor_box[1],
        (GLsizei)last_scissor_box[2],
        (GLsizei)last_scissor_box[3] );
+
+   //SDL_GL_SwapWindow( g_window );
+}
+
+void present()
+{
+   
 }
 
 void setVSync( bool on )
