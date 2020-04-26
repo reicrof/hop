@@ -2,6 +2,8 @@
 
 #include "imgui/imgui.h"
 
+#include <cmath>
+
 #import <Metal/Metal.h>
 #import <QuartzCore/CAMetalLayer.h>
 
@@ -40,7 +42,7 @@ static NSString *shaderSrc =
     "    VertexOut out;\n"
     "    out.position = uniforms.projectionMatrix * float4(in.position, 0, 1);\n"
     "    out.texCoords = in.texCoords;\n"
-    "    out.color = float4(in.color) / float4(255.0);\n"
+    "    out.color = float4(in.color.argb) / float4(255.0);\n"
     "    return out;\n"
     "}\n"
     "\n"
@@ -56,6 +58,7 @@ static MTLPixelFormat sdlPxlFmtToMtlPxlFmt( uint32_t fmt )
    // clang-format off
    switch( fmt )
    {
+      case SDL_PIXELFORMAT_ARGB8888: // Fallthrough
       case SDL_PIXELFORMAT_RGBA8888: return MTLPixelFormatRGBA8Unorm;
       case SDL_PIXELFORMAT_BGRA8888: return MTLPixelFormatBGRA8Unorm;
       case SDL_PIXELFORMAT_UNKNOWN:  return MTLPixelFormatInvalid;
@@ -111,7 +114,13 @@ bool initialize( SDL_Window* window )
       vertexDesc.layouts[0].stepFunction = MTLVertexStepFunctionPerVertex;
       vertexDesc.layouts[0].stride = sizeof(ImDrawVert);
 
-      const MTLPixelFormat mtlFmt = sdlPxlFmtToMtlPxlFmt( SDL_GetWindowPixelFormat( window ) );
+      const uint32_t sdlPxlFmt = SDL_GetWindowPixelFormat( window );
+      const MTLPixelFormat mtlFmt = sdlPxlFmtToMtlPxlFmt( sdlPxlFmt );
+      if( mtlFmt == MTLPixelFormatInvalid )
+      {
+         NSLog( @"Surface Pixel Format %s not supported\n", SDL_GetPixelFormatName( sdlPxlFmt ) );
+         return false;
+      }
       assert( mtlFmt != MTLPixelFormatInvalid );
 
       MTLRenderPipelineDescriptor *pipelineDesc    = [[MTLRenderPipelineDescriptor alloc] init];
@@ -166,51 +175,40 @@ void terminate()
     SDL_DestroyRenderer( g_renderer );
 }
 
-void renderDrawlist( ImDrawData* draw_data )
+void renderDrawlist( ImDrawData* drawData )
 {
-    @autoreleasepool {
-        MTLClearColor color = MTLClearColorMake(0, 0, 0, 1);
-            id<CAMetalDrawable> surface = [g_swapchain nextDrawable];
+    @autoreleasepool
+    {
+      ImGuiIO& io = ImGui::GetIO();
+      const double fbWidth = (double)(drawData->DisplaySize.x * drawData->FramebufferScale.x);
+      const double fbHeight = (double)(drawData->DisplaySize.y * drawData->FramebufferScale.y);
 
-            color.red = (color.red > 1.0) ? 0 : color.red + 0.01;
+      if ( std::abs( fbWidth ) < 0.001 || std::abs( fbHeight ) < 0.001 ) return;
 
-            MTLRenderPassDescriptor *pass = [MTLRenderPassDescriptor renderPassDescriptor];
-            pass.colorAttachments[0].clearColor = color;
-            pass.colorAttachments[0].loadAction  = MTLLoadActionClear;
-            pass.colorAttachments[0].storeAction = MTLStoreActionStore;
-            pass.colorAttachments[0].texture = surface.texture;
+      MTLViewport viewport = {};
+      viewport.width       = fbWidth;
+      viewport.height      = fbHeight;
+      viewport.zfar        = 1.0;
 
-            id<MTLCommandBuffer> buffer = [g_queue commandBuffer];
-            id<MTLRenderCommandEncoder> encoder = [buffer renderCommandEncoderWithDescriptor:pass];
-            [encoder endEncoding];
-            [buffer presentDrawable:surface];
-            [buffer commit];
-        }
-    //id<MTLCommandBuffer> commandBuffer = [commandQueue commandBuffer];
+      const size_t vertBufferSize = drawData->TotalVtxCount * sizeof(ImDrawVert);
+      const size_t idxBufferSize  = drawData->TotalIdxCount * sizeof(ImDrawIdx);
 
+      id<CAMetalDrawable> surface = [g_swapchain nextDrawable];
+      MTLRenderPassDescriptor *pass = [MTLRenderPassDescriptor renderPassDescriptor];
+      pass.colorAttachments[0].clearColor  = MTLClearColorMake(0, 0, 0, 1);
+      pass.colorAttachments[0].loadAction  = MTLLoadActionClear;
+      pass.colorAttachments[0].storeAction = MTLStoreActionStore;
+      pass.colorAttachments[0].texture = surface.texture;
 
-   ImGuiIO& io = ImGui::GetIO();
-   const double fbWidth = (double)(drawData->DisplaySize.x * drawData->FramebufferScale.x);
-   const double fbHeight = (double)(drawData->DisplaySize.y * drawData->FramebufferScale.y);
-
-   if ( std::abs( fbWidth ) < 0.001 || std::abs( fbHeight ) < 0.001 ) return;
-
-   MTLViewport viewport = {};
-   viewport.width       = fbWidth;
-   viewport.height      = fbHeight;
-   viewport.zfar        = 1.0;
-
-   const size_t vertBufferSize = drawData->TotalVtxCount * sizeof(ImDrawVert);
-   const size_t idxBufferSize  = drawData->TotalIdxCount * sizeof(ImDrawIdx);
-
-   MTLRenderPassDescriptor *pass = [MTLRenderPassDescriptor renderPassDescriptor];
-   pass.colorAttachments[0].clearColor = color;
-   pass.colorAttachments[0].loadAction  = MTLLoadActionClear;
-   pass.colorAttachments[0].storeAction = MTLStoreActionStore;
-   pass.colorAttachments[0].texture = surface.texture;
+      id<MTLCommandBuffer> buffer = [g_queue commandBuffer];
+      id<MTLRenderCommandEncoder> encoder = [buffer renderCommandEncoderWithDescriptor:pass];
+      [encoder endEncoding];
+      [buffer presentDrawable:surface];
+      [buffer commit];
+    }
 }
 
-void present()
+void present();
 
 void setVSync( bool on )
 {
