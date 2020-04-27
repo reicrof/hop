@@ -1,4 +1,5 @@
 #include "hop/Renderer.h"
+#include "common/Utils.h"
 
 #include "imgui/imgui.h"
 
@@ -22,7 +23,7 @@ struct GPUBuffers
 {
    id<MTLBuffer> vertex;
    id<MTLBuffer> index;
-}
+};
 static GPUBuffers g_buffersPerFrame[3];
 
 static NSString *shaderSrc =
@@ -177,10 +178,10 @@ bool initialize( SDL_Window* window )
    // Allocate GPU buffers for each frame
    for( uint32_t i = 0; i < MAX_FRAME_IN_FLIGHT; ++i )
    {
-      g_buffersPerFrame[i].vertex =
-         [g_device newBufferWithLength:size options:MTLResourceStorageModeShared];
-      g_buffersPerFrame[i].index =
-         [g_device newBufferWithLength:size options:MTLResourceStorageModeShared];
+      g_buffersPerFrame[i].vertex = [g_device newBufferWithLength:DEFAULT_GPU_BUFFER_SIZE
+                                                          options:MTLResourceStorageModeShared];
+      g_buffersPerFrame[i].index  = [g_device newBufferWithLength:DEFAULT_GPU_BUFFER_SIZE
+                                                         options:MTLResourceStorageModeShared];
    }
 
    // Build texture atlas
@@ -218,7 +219,6 @@ void renderDrawlist( ImDrawData* drawData )
    static uint32_t curFrame = 0;
    @autoreleasepool
    {
-      ImGuiIO& io = ImGui::GetIO();
       const double fbWidth = (double)(drawData->DisplaySize.x * drawData->FramebufferScale.x);
       const double fbHeight = (double)(drawData->DisplaySize.y * drawData->FramebufferScale.y);
 
