@@ -16,6 +16,15 @@ static id<MTLTexture> g_texture;
 static id<MTLRenderPipelineState> g_pipelineState;
 static const CAMetalLayer* g_swapchain;
 
+static constexpr uint32_t MAX_FRAME_IN_FLIGHT = 3;
+static constexpr uint32_t DEFAULT_GPU_BUFFER_SIZE = 1024 * 1024U;
+struct GPUBuffers
+{
+   id<MTLBuffer> vertex;
+   id<MTLBuffer> index;
+}
+static GPUBuffers g_buffersPerFrame[3];
+
 static NSString *shaderSrc =
    @""
     "#include <metal_stdlib>\n"
@@ -65,6 +74,26 @@ static MTLPixelFormat sdlPxlFmtToMtlPxlFmt( uint32_t fmt )
    }
    // clang-format on
    return MTLPixelFormatInvalid;
+}
+
+// Acquire buffers from the current frame and reallocate them if they are too small.
+GPUBuffers& acquireBuffersForFrame( uint32_t frameIdx, uint32_t vertexSize, uint32_t indexSize )
+{
+   GPUBuffers& curBuf = g_buffersPerFrame[frameIdx];
+   const uint32_t curVertSize = [curBuf.vertex length];
+   const uint32_t curIdxSize = [curBuf.index length];
+   if( vertexSize > curVertSize )
+   {
+      const uint32_t nextSz = hop::nextPow2( vertexSize );
+      curBuf.vertex = [g_device newBufferWithLength:nextSz options:MTLResourceStorageModeShared];
+   }
+   if( indexSize > curIdxSize )
+   {
+      const uint32_t nextSz = hop::nextPow2( indexSize );
+      curBuf.index = [g_device newBufferWithLength:nextSz options:MTLResourceStorageModeShared];
+   }
+
+   return curBuf;
 }
 
 namespace renderer
@@ -145,9 +174,18 @@ bool initialize( SDL_Window* window )
       }
    }
 
-   ImGuiIO& io = ImGui::GetIO();
-   
-   {  // Build texture atlas
+   // Allocate GPU buffers for each frame
+   for( uint32_t i = 0; i < MAX_FRAME_IN_FLIGHT; ++i )
+   {
+      g_buffersPerFrame[i].vertex =
+         [g_device newBufferWithLength:size options:MTLResourceStorageModeShared];
+      g_buffersPerFrame[i].index =
+         [g_device newBufferWithLength:size options:MTLResourceStorageModeShared];
+   }
+
+   // Build texture atlas
+   {
+      ImGuiIO& io = ImGui::GetIO();
       unsigned char* pixels;
       int width, height;
       io.Fonts->GetTexDataAsRGBA32( &pixels, &width, &height );
@@ -177,8 +215,9 @@ void terminate()
 
 void renderDrawlist( ImDrawData* drawData )
 {
-    @autoreleasepool
-    {
+   static uint32_t curFrame = 0;
+   @autoreleasepool
+   {
       ImGuiIO& io = ImGui::GetIO();
       const double fbWidth = (double)(drawData->DisplaySize.x * drawData->FramebufferScale.x);
       const double fbHeight = (double)(drawData->DisplaySize.y * drawData->FramebufferScale.y);
@@ -193,11 +232,14 @@ void renderDrawlist( ImDrawData* drawData )
       const size_t vertBufferSize = drawData->TotalVtxCount * sizeof(ImDrawVert);
       const size_t idxBufferSize  = drawData->TotalIdxCount * sizeof(ImDrawIdx);
 
-      id<CAMetalDrawable> surface = [g_swapchain nextDrawable];
+      GPUBuffers& gpuBuffers = acquireBuffersForFrame( curFrame, vertBufferSize, idxBufferSize );
+
       MTLRenderPassDescriptor *pass = [MTLRenderPassDescriptor renderPassDescriptor];
       pass.colorAttachments[0].clearColor  = MTLClearColorMake(0, 0, 0, 1);
       pass.colorAttachments[0].loadAction  = MTLLoadActionClear;
       pass.colorAttachments[0].storeAction = MTLStoreActionStore;
+
+      id<CAMetalDrawable> surface = [g_swapchain nextDrawable];
       pass.colorAttachments[0].texture = surface.texture;
 
       id<MTLCommandBuffer> buffer = [g_queue commandBuffer];
@@ -205,10 +247,10 @@ void renderDrawlist( ImDrawData* drawData )
       [encoder endEncoding];
       [buffer presentDrawable:surface];
       [buffer commit];
-    }
-}
+   }
 
-void present();
+   curFrame = (curFrame + 1) % MAX_FRAME_IN_FLIGHT;
+}
 
 void setVSync( bool on )
 {

@@ -179,12 +179,7 @@ void renderDrawlist( ImDrawData* draw_data )
        (GLsizei)last_scissor_box[2],
        (GLsizei)last_scissor_box[3] );
 
-   //SDL_GL_SwapWindow( g_window );
-}
-
-void present()
-{
-   
+   SDL_GL_SwapWindow( g_window );
 }
 
 void setVSync( bool on )

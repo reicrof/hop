@@ -190,7 +190,6 @@ static hop::ProcessID startViewer( SDL_Window* window, const hop::LaunchOptions&
       // If we want to launch an executable to profile, now is the time to do it
       if ( opts.startExec )
       {
-         // profiler->setRecording( true );
          childProcId = hop::startChildProcess( opts.fullProcessPath, opts.args );
          if ( childProcId == (hop::ProcessID)-1 )
          {
@@ -210,11 +209,7 @@ static hop::ProcessID startViewer( SDL_Window* window, const hop::LaunchOptions&
       HOP_PROF( "Main Loop" );
       const auto frameStart = ClockType::now();
 
-      renderer::setVSync( hop::options::vsyncOn() );
-
-      handleInput();
-
-      const auto startFetch = ClockType::now();
+      const auto startFetch = frameStart;
       viewer.fetchClientsData();
       const auto endFetch = ClockType::now();
       hop::g_stats.fetchTimeMs =
@@ -222,6 +217,10 @@ static hop::ProcessID startViewer( SDL_Window* window, const hop::LaunchOptions&
 
       int w, h, x, y;
       SDL_GetWindowSize( window, &w, &h );
+
+      // Poll SDL events
+      handleInput();
+
       const uint32_t buttonState = SDL_GetMouseState( &x, &y );
       const bool lmb = buttonState & SDL_BUTTON( SDL_BUTTON_LEFT );
       const bool rmb = buttonState & SDL_BUTTON( SDL_BUTTON_RIGHT );
@@ -241,18 +240,6 @@ static hop::ProcessID startViewer( SDL_Window* window, const hop::LaunchOptions&
       viewer.draw( wndWidth, wndHeight);
 
       auto frameEnd = ClockType::now();
-
-      // If we rendered fast, fetch data again instead of stalling on the vsync
-      if ( duration<double, std::milli>( ( frameEnd - frameStart ) ).count() < 10.0 )
-      {
-         viewer.fetchClientsData();
-      }
-
-      HOP_PROF( "Swapping" );
-      SDL_GL_SwapWindow( window );
-
-      frameEnd = ClockType::now();
-
       hop::g_stats.frameTimeMs = duration<double, std::milli>( ( frameEnd - frameStart ) ).count();
    }
 
