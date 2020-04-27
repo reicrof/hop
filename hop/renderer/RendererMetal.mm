@@ -78,7 +78,7 @@ static MTLPixelFormat sdlPxlFmtToMtlPxlFmt( uint32_t fmt )
 }
 
 // Acquire buffers from the current frame and reallocate them if they are too small.
-GPUBuffers& acquireBuffersForFrame( uint32_t frameIdx, uint32_t vertexSize, uint32_t indexSize )
+static GPUBuffers& acquireBuffersForFrame( uint32_t frameIdx, uint32_t vertexSize, uint32_t indexSize )
 {
    GPUBuffers& curBuf = g_buffersPerFrame[frameIdx];
    const uint32_t curVertSize = [curBuf.vertex length];
@@ -224,15 +224,30 @@ void renderDrawlist( ImDrawData* drawData )
 
       if ( std::abs( fbWidth ) < 0.001 || std::abs( fbHeight ) < 0.001 ) return;
 
+      const size_t vertBufferSize = drawData->TotalVtxCount * sizeof(ImDrawVert);
+      const size_t idxBufferSize  = drawData->TotalIdxCount * sizeof(ImDrawIdx);
+
+      // Copy vertices/indices to gpu buffers
+      GPUBuffers& gpuBuffers  = acquireBuffersForFrame( curFrame, vertBufferSize, idxBufferSize );
+      ImDrawVert* vertexData  = (ImDrawVert*)[gpuBuffers.vertex contents];
+      ImDrawIdx* indexData    = (ImDrawIdx*)[gpuBuffers.index contents];
+      uint32_t curVertexCount = 0;
+      uint32_t curIndexCount  = 0;
+      for( int n = 0; n < drawData->CmdListsCount; n++ )
+      {
+         const ImDrawList* cmdList     = drawData->CmdLists[n];
+         memcpy( vertexData + curVertexCount, cmdList->VtxBuffer.Data, cmdList->VtxBuffer.Size );
+         memcpy( indexData + curIndexCount, cmdList->IdxBuffer.Data, cmdList->IdxBuffer.Size );
+         curVertexCount += cmdList->VtxBuffer.Size;
+         curIndexCount  += cmdList->IdxBuffer.Size;
+      }
+      [gpuBuffers.vertex didModifyRange:vertBufferSize];
+      [gpuBuffers.index  didModifyRange:idxBufferSize];
+
       MTLViewport viewport = {};
       viewport.width       = fbWidth;
       viewport.height      = fbHeight;
       viewport.zfar        = 1.0;
-
-      const size_t vertBufferSize = drawData->TotalVtxCount * sizeof(ImDrawVert);
-      const size_t idxBufferSize  = drawData->TotalIdxCount * sizeof(ImDrawIdx);
-
-      GPUBuffers& gpuBuffers = acquireBuffersForFrame( curFrame, vertBufferSize, idxBufferSize );
 
       MTLRenderPassDescriptor *pass = [MTLRenderPassDescriptor renderPassDescriptor];
       pass.colorAttachments[0].clearColor  = MTLClearColorMake(0, 0, 0, 1);
