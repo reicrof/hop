@@ -205,7 +205,8 @@ typedef char HOP_CHAR;
 #define hop_atomic_uint64   volatile uint64_t
 #define hop_atomic_uint32   volatile uint32_t
 
-typedef int      hop_bool_t;
+typedef int           hop_bool_t;
+typedef unsigned char hop_byte_t;
 enum { hop_false, hop_true };
 
 typedef uint64_t hop_timestamp_t;
@@ -226,13 +227,13 @@ typedef struct ringbuf_worker ringbuf_worker_t;
 
 typedef enum hop_msg_type
 {
-   PROFILER_TRACE,
-   PROFILER_STRING_DATA,
-   PROFILER_WAIT_LOCK,
-   PROFILER_UNLOCK_EVENT,
-   PROFILER_HEARTBEAT,
-   PROFILER_CORE_EVENT,
-   INVALID_MESSAGE
+   HOP_PROFILER_TRACE,
+   HOP_PROFILER_STRING_DATA,
+   HOP_PROFILER_WAIT_LOCK,
+   HOP_PROFILER_UNLOCK_EVENT,
+   HOP_PROFILER_HEARTBEAT,
+   HOP_PROFILER_CORE_EVENT,
+   HOP_INVALID_MESSAGE
 } hop_msg_type;
 
 typedef struct hop_msg_info
@@ -316,7 +317,6 @@ void hop_terminate();
 
 /* End of declarations */
 
-#include <assert.h>
 #include <string.h>
 
 #define HOP_MIN( a, b ) ( ( ( a ) < ( b ) ) ? ( a ) : ( b ) )
@@ -325,7 +325,13 @@ void hop_terminate();
 #define HOP_MALLOC( x ) malloc( (x) )
 #define HOP_REALLOC( ptr, size ) realloc( (ptr), (size) )
 #define HOP_FREE( x )   free( (x) )
+
+#ifdef NDEBUG
+#define HOP_ASSERT( x ) do { (void)sizeof(x);} while (0)
+#else
+#include <assert.h>
 #define HOP_ASSERT( x ) ( (x) )
+#endif
 
 #if !defined( _MSC_VER )
 #include <unistd.h>    // ftruncate, getpid
@@ -466,7 +472,7 @@ typedef struct hop_ipc_segment
    hop_bool_t usingStdChronoTimeStamps;
 
    ringbuf_t ringbuf;
-   uint8_t* data;
+   hop_byte_t* data;
 } hop_ipc_segment;
 
 typedef struct hop_shared_memory
@@ -730,7 +736,12 @@ void hop_destroy_shared_memory()
    HOP_FREE( g_sharedMemory );
 }
 
-static uint32_t align_on( uint32_t val, uint32_t alignment )
+static uint32_t align_on_uint32( uint32_t val, uint32_t alignment )
+{
+   return ( ( val + alignment - 1 ) & ~( alignment - 1 ) );
+}
+
+static uint64_t align_on_uint64( uint64_t val, uint64_t alignment )
 {
    return ( ( val + alignment - 1 ) & ~( alignment - 1 ) );
 }
@@ -749,25 +760,33 @@ typedef struct pending_traces_t
 
 typedef struct local_context_t
 {
+   // Local client data
    pending_traces_t pendingTraces;
+   hop_timestamp_t clientResetTimeStamp;
    uint32_t openTraceIdx;  // Index of the last opened trace
    hop_depth_t traceLevel;
    hop_zone_t zoneId;
 
+   // Thread data
    hop_str_ptr_t threadName;
    char threadNameBuffer[64];
-
    uint64_t threadId;     // ID of the thread as seen by the OS
    uint32_t threadIndex;  // Index of the tread as they are coming in
    ringbuf_worker_t* ringbufWorker;
 
+   // String data
    hop_hash_set_t stringHashSet;
    uint32_t       stringDataSize;
    uint32_t       stringDataCapacity;
    char*          stringData;
+   uint32_t       sentStringDataSize;
 } local_context_t;
 
 static hop_thread_local local_context_t tl_context;
+
+static void flush_to_consumer(local_context_t* ctxt);
+static hop_str_ptr_t add_dynamic_string_to_db( local_context_t* ctxt, const char* dynStr );
+static hop_str_ptr_t add_string_to_db( local_context_t* ctxt, const char* strId );
 
 static void alloc_traces( pending_traces_t* t, unsigned size )
 {
@@ -801,27 +820,27 @@ static void copy_pending_traces_to( const pending_traces_t* t, void* outBuffer )
    const size_t startsSize = sizeof( t->starts[0] ) * count;
    memcpy( startsPtr, t->starts, startsSize );
 
-   void* endsPtr         = (uint8_t*)startsPtr + startsSize;
+   void* endsPtr         = (hop_byte_t*)startsPtr + startsSize;
    const size_t endsSize = sizeof( t->ends[0] ) * count;
    memcpy( endsPtr, t->ends, endsSize );
 
-   void* fileNamesPtr         = (uint8_t*)endsPtr + endsSize;
+   void* fileNamesPtr         = (hop_byte_t*)endsPtr + endsSize;
    const size_t fileNamesSize = sizeof( t->fileNameIds[0] ) * count;
    memcpy( fileNamesPtr, t->fileNameIds, fileNamesSize );
 
-   void* fctNamesPtr         = (uint8_t*)fileNamesPtr + fileNamesSize;
+   void* fctNamesPtr         = (hop_byte_t*)fileNamesPtr + fileNamesSize;
    const size_t fctNamesSize = sizeof( t->fctNameIds[0] ) * count;
    memcpy( fctNamesPtr, t->fctNameIds, fctNamesSize );
 
-   void* lineNbPtr         = (uint8_t*)fctNamesPtr + fctNamesSize;
+   void* lineNbPtr         = (hop_byte_t*)fctNamesPtr + fctNamesSize;
    const size_t lineNbSize = sizeof( t->lineNumbers[0] ) * count;
    memcpy( lineNbPtr, t->lineNumbers, lineNbSize );
 
-   void* depthsPtr         = (uint8_t*)lineNbPtr + lineNbSize;
+   void* depthsPtr         = (hop_byte_t*)lineNbPtr + lineNbSize;
    const size_t depthsSize = sizeof( t->depths[0] ) * count;
    memcpy( depthsPtr, t->depths, depthsSize );
 
-   void* zonesPtr        = (uint8_t*)depthsPtr + depthsSize;
+   void* zonesPtr        = (hop_byte_t*)depthsPtr + depthsSize;
    const size_t zoneSize = sizeof( t->zones[0] ) * count;
    memcpy( zonesPtr, t->zones, zoneSize );
 }
@@ -833,6 +852,7 @@ static hop_bool_t thread_local_context_valid( local_context_t* ctxt )
 
 static hop_bool_t thread_local_context_create( local_context_t* ctxt )
 {
+   memset( ctxt, 0, sizeof( *ctxt ) );
    static uint32_t g_totalThreadCount;  // Index of the tread as they are coming in
    ctxt->threadIndex = atomic_fetch_add_explicit( &g_totalThreadCount, 1, memory_order_seq_cst );
 
@@ -851,6 +871,40 @@ static hop_bool_t thread_local_context_create( local_context_t* ctxt )
        ringbuf_register( &g_sharedMemory->ipcSegment->ringbuf, ctxt->threadIndex );
 
    return ctxt->ringbufWorker != NULL;
+}
+
+static void reset_pending_traces( local_context_t* ctxt )
+{
+   ctxt->pendingTraces.count = 0;
+   ctxt->openTraceIdx        = 0;
+   ctxt->traceLevel          = 0;
+   ctxt->zoneId              = 0;
+
+   // _cores.clear();
+   // _lockWaits.clear();
+   // _unlockEvents.clear();
+}
+
+static void reset_string_data( local_context_t* ctxt )
+{
+   hop_hash_set_t stringHashSet;
+   uint32_t       stringDataSize;
+   uint32_t       stringDataCapacity;
+   char*          stringData;
+
+   hop_hash_set_clear( ctxt->stringHashSet );
+   ctxt->stringDataSize = 0;
+   memset( ctxt->stringData, 0, ctxt->stringDataCapacity );
+
+   ctxt->clientResetTimeStamp = atomic_load_explicit(
+       &g_sharedMemory->ipcSegment->lastResetTimeStamp, memory_order_seq_cst );
+
+   // Push back thread name
+   if( ctxt->threadNameBuffer[0] != '\0' )
+   {
+      const auto hash = add_dynamic_string_to_db( ctxt, ctxt->threadNameBuffer);
+      HOP_ASSERT( hash == ctxt->threadName );
+   }
 }
 
 // C-style string hash inspired by Stackoverflow question
@@ -879,7 +933,7 @@ static hop_bool_t add_string_to_db_internal(
    {
       const size_t newEntryPos = ctxt->stringDataSize;
       HOP_ASSERT( ( newEntryPos & 7 ) == 0 );  // Make sure we are 8 byte aligned
-      const size_t alignedStrLen = align_on( strLen + 1, 8 );
+      const size_t alignedStrLen = align_on_uint32( strLen + 1, 8 );
 
       ctxt->stringDataSize += newEntryPos + sizeof( hop_str_ptr_t ) + alignedStrLen;
       if( ctxt->stringDataSize >= ctxt->stringDataCapacity )
@@ -896,25 +950,37 @@ static hop_bool_t add_string_to_db_internal(
    return inserted;
 }
 
+<<<<<<< HEAD
 static hop_str_ptr_t add_string_to_db( const char* str )
+=======
+static hop_str_ptr_t add_string_to_db( local_context_t* ctxt, const char* strId )
+>>>>>>> Continue porting to c
 {
    // Early return on NULL
    if( str == 0 ) return 0;
 
+<<<<<<< HEAD
    const hop_str_ptr_t strId = (hop_str_ptr_t)str;
    add_string_to_db_internal( &tl_context, strId, str, strlen( str ) );
    return strId;
+=======
+   return add_string_to_db_internal( ctxt, strId, strId, strlen( strId ) );
+>>>>>>> Continue porting to c
 }
 
-static hop_str_ptr_t add_dynamic_string_to_db( const char* dynStr )
+static hop_str_ptr_t add_dynamic_string_to_db( local_context_t* ctxt, const char* dynStr )
 {
    // Should not have null as dyn string, but just in case...
    if( dynStr == NULL ) return 0;
 
    const size_t strLen = strlen( dynStr );
    const hop_str_ptr_t hash = c_str_hash( dynStr, strLen );
+<<<<<<< HEAD
    add_string_to_db_internal( &tl_context, hash, dynStr, strLen );
    return hash;
+=======
+   return add_string_to_db_internal( ctxt, hash, dynStr, strLen );
+>>>>>>> Continue porting to c
 }
 
 static void enter_internal(
@@ -962,24 +1028,30 @@ void hop_enter_dynamic_string( const char* fileName, hop_linenb_t line, const ch
    }
 
    // Flag the timestamp as being dynamic (first bit set), and add the dynamic string to the db
+<<<<<<< HEAD
    const hop_str_ptr_t fctStrId = add_dynamic_string_to_db( fctName );
    enter_internal( hop_get_timestamp_no_core() | 1ULL, (hop_str_ptr_t)fileName, line, fctStrId );
+=======
+   enter_internal(
+       hop_get_timestamp_no_core() | 1ULL,
+       fileName,
+       line,
+       add_dynamic_string_to_db( &tl_context, fctName ) );
+>>>>>>> Continue porting to c
 }
 
 void hop_leave()
 {
-   const hop_timestamp_t endTime           = hop_get_timestamp_no_core();
-   const int32_t remainingPushedTraces     = --tl_context.traceLevel;
-   const uint32_t lastOpenTraceIdx         = tl_context.openTraceIdx;
+   const hop_timestamp_t endTime                   = hop_get_timestamp_no_core();
+   const int32_t remainingPushedTraces             = --tl_context.traceLevel;
+   const uint32_t lastOpenTraceIdx                 = tl_context.openTraceIdx;
    tl_context.openTraceIdx                         = tl_context.pendingTraces.ends[lastOpenTraceIdx];
    tl_context.pendingTraces.ends[lastOpenTraceIdx] = endTime;
 
    if( remainingPushedTraces <= 0 )
    {
       HOP_ASSERT( remainingPushedTraces == 0 ); // If < 0, there is a mismatch of enter/leave calls
-      // client->flushToConsumer();
-
-      // client->addProfilingTrace( fileName, fctName, start, end, lineNb, zone );
+      flush_to_consumer( &tl_context );
       // client->addCoreEvent( core, start, end );
    }
 }
@@ -990,7 +1062,7 @@ static void* create_ipc_memory(
     shm_handle* handle,
     hop_connection_state* state )
 {
-   uint8_t* sharedMem = NULL;
+   hop_byte_t* sharedMem = NULL;
 #if defined( _MSC_VER )
    *handle = CreateFileMapping(
        INVALID_HANDLE_VALUE,  // use paging file
@@ -1005,7 +1077,7 @@ static void* create_ipc_memory(
       *state = err_to_connection_state( GetLastError() );
       return NULL;
    }
-   sharedMem = (uint8_t*)MapViewOfFile(
+   sharedMem = (hop_byte_t*)MapViewOfFile(
        *handle,
        FILE_MAP_ALL_ACCESS,  // read/write permission
        0,
@@ -1033,7 +1105,7 @@ static void* create_ipc_memory(
       return NULL;
    }
 
-   sharedMem = (uint8_t*)( mmap( NULL, size, PROT_READ | PROT_WRITE, MAP_SHARED, *handle, 0 ) );
+   sharedMem = (hop_byte_t*)( mmap( NULL, size, PROT_READ | PROT_WRITE, MAP_SHARED, *handle, 0 ) );
 #endif
    if( sharedMem ) *state = HOP_CONNECTED;
    return sharedMem;
@@ -1045,7 +1117,7 @@ static void* open_ipc_memory(
     uint64_t* totalSize,
     hop_connection_state* state )
 {
-   uint8_t* sharedMem = NULL;
+   hop_byte_t* sharedMem = NULL;
 #if defined( _MSC_VER )
    *handle = OpenFileMapping(
        FILE_MAP_ALL_ACCESS,  // read/write access
@@ -1058,7 +1130,7 @@ static void* open_ipc_memory(
       return NULL;
    }
 
-   sharedMem = (uint8_t*)MapViewOfFile(
+   sharedMem = (hop_byte_t*)MapViewOfFile(
        *handle,
        FILE_MAP_ALL_ACCESS,  // read/write permission
        0,
@@ -1099,7 +1171,7 @@ static void* open_ipc_memory(
    *totalSize = fileStat.st_size;
 
    sharedMem =
-       (uint8_t*)( mmap( NULL, fileStat.st_size, PROT_READ | PROT_WRITE, MAP_SHARED, *handle, 0 ) );
+       (hop_byte_t*)( mmap( NULL, fileStat.st_size, PROT_READ | PROT_WRITE, MAP_SHARED, *handle, 0 ) );
    *state = sharedMem ? HOP_CONNECTED : HOP_UNKNOWN_CONNECTION_ERROR;
 #endif
    return sharedMem;
@@ -1115,6 +1187,116 @@ static void close_ipc_memory( const HOP_CHAR* name, shm_handle handle, void* dat
    HOP_UNUSED( dataPtr );
    if( shm_unlink( name ) != 0 ) perror( " HOP - Could not unlink shared memory" );
 #endif
+}
+
+hop_byte_t* acquire_shared_chunk( local_context_t* ctxt, ringbuf_t* ringbuf, uint64_t size )
+{
+   hop_byte_t* data             = NULL;
+   const hop_bool_t msgWayToBig = size > HOP_SHARED_MEM_SIZE;
+   if( !msgWayToBig )
+   {
+      const uint64_t paddedSize = align_on_uint64( size, 8 );
+      const ssize_t offset      = ringbuf_acquire( ringbuf, ctxt->ringbufWorker, paddedSize );
+      if( offset != -1 )
+      {
+         data = g_sharedMemory->ipcSegment->data[offset];
+      }
+   }
+
+   return data;
+}
+
+static hop_bool_t send_string_data( local_context_t* ctxt, hop_timestamp_t timeStamp )
+{
+   // Add all strings to the database
+   for( uint32_t i = 0; i < ctxt->pendingTraces.count; ++i )
+   {
+      add_string_to_db( ctxt, ctxt->pendingTraces.fileNameIds[i] );
+
+      // String that were added dynamically are already in the
+      // database and are flaged with the first bit of their start
+      // time being 1. Therefore we only need to add the
+      // non-dynamic strings. (first bit of start time being 0)
+      if( ( ctxt->pendingTraces.starts[i] & 1 ) == 0 )
+         add_string_to_db( ctxt, ctxt->pendingTraces.fctNameIds[i] );
+   }
+
+   HOP_ASSERT( ctxt->stringDataSize >= ctxt->sentStringDataSize );
+   const uint32_t stringToSendSize = ctxt->stringDataSize - ctxt->sentStringDataSize;
+   const size_t msgSize            = sizeof( hop_msg_info ) + stringToSendSize;
+
+   ringbuf_t* ringbuf = &g_sharedMemory->ipcSegment->ringbuf;
+   hop_byte_t* bufferPtr = acquire_shared_chunk( ctxt, ringbuf, msgSize );
+   if( !bufferPtr )
+   {
+      printf(
+            "HOP - String to send are bigger than shared memory size. Consider"
+            " increasing shared memory size \n" );
+      return hop_false;
+   }
+
+   // Fill the buffer with the header followed by the string data
+   {
+      hop_msg_info* msgInfo = (hop_msg_info*)bufferPtr;
+      char* stringData      = (char*)( bufferPtr + sizeof( hop_msg_info ) );
+
+      msgInfo->type            = HOP_PROFILER_STRING_DATA;
+      msgInfo->threadId        = ctxt->threadId;
+      msgInfo->threadName      = ctxt->threadName;
+      msgInfo->threadIndex     = ctxt->threadIndex;
+      msgInfo->timeStamp       = timeStamp;
+      msgInfo->count           = stringToSendSize;
+
+      // Copy string data into its array
+      const char* newStringData = ctxt->stringData + ctxt->sentStringDataSize;
+      memcpy( stringData, newStringData, stringToSendSize );
+   }
+
+   ringbuf_produce( ringbuf, ctxt->ringbufWorker );
+
+   // Update sent array size
+   ctxt->sentStringDataSize = ctxt->stringDataSize;
+
+   return hop_true;
+}
+
+static void flush_to_consumer( local_context_t* ctxt )
+{
+   const hop_timestamp_t timeStamp = hop_get_timestamp_no_core();
+
+   // If we have a consumer, send life signal
+   if( has_connected_consumer( g_sharedMemory ) && should_send_heartbeat( g_sharedMemory, timeStamp ) )
+   {
+      send_heartbeat( timeStamp );
+   }
+
+   // If no one is there to listen, no need to send any data
+   if( has_listening_consumer( g_sharedMemory ) )
+   {
+      // If the shared memory reset timestamp more recent than our local one
+      // it means we need to clear our string table. Otherwise it means we
+      // already took care of it. Since some traces might depend on strings
+      // that were added dynamically (ie before clearing the db), we cannot
+      // consider them and need to return here.
+      hop_timestamp_t resetTimeStamp = atomic_load_explicit(
+          &g_sharedMemory->ipcSegment->lastResetTimeStamp, memory_order_seq_cst );
+      if( ctxt->clientResetTimeStamp < resetTimeStamp )
+      {
+         reset_string_data( ctxt );
+         reset_pending_traces( ctxt );
+         return;
+      }
+
+      send_string_data( ctxt, timeStamp ); // Always send string data first
+      /*sendTraces( timeStamp );
+      sendLockWaits( timeStamp );
+      sendUnlockEvents( timeStamp );
+      sendCores( timeStamp );*/
+   }
+   else
+   {
+      reset_pending_traces( ctxt );
+   }
 }
 
 static hop_connection_state err_to_connection_state( uint32_t err )
@@ -1957,7 +2139,7 @@ class SharedMemory
    hop_timestamp_t lastResetTimestamp() const HOP_NOEXCEPT;
    void setResetTimestamp( hop_timestamp_t t ) HOP_NOEXCEPT;
    ringbuf_t* ringbuffer() const HOP_NOEXCEPT;
-   uint8_t* data() const HOP_NOEXCEPT;
+   hop_byte_t* data() const HOP_NOEXCEPT;
    bool valid() const HOP_NOEXCEPT;
    int pid() const HOP_NOEXCEPT;
    const SharedMetaInfo* sharedMetaInfo() const HOP_NOEXCEPT;
@@ -1967,7 +2149,7 @@ class SharedMemory
    // Pointer into the shared memory
    SharedMetaInfo* _sharedMetaData{NULL};
    ringbuf_t* _ringbuf{NULL};
-   uint8_t* _data{NULL};
+   hop_byte_t* _data{NULL};
    // ----------------
    bool _isConsumer{false};
    shm_handle _sharedMemHandle{};
@@ -2051,7 +2233,7 @@ void* createSharedMemory(
     shm_handle* handle,
     hop::SharedMemory::ConnectionState* state )
 {
-   uint8_t* sharedMem{NULL};
+   hop_byte_t* sharedMem{NULL};
 #if defined( _MSC_VER )
    *handle = CreateFileMapping(
        INVALID_HANDLE_VALUE,  // use paging file
@@ -2066,7 +2248,7 @@ void* createSharedMemory(
       *state = errorToConnectionState( GetLastError() );
       return NULL;
    }
-   sharedMem = (uint8_t*)MapViewOfFile(
+   sharedMem = (hop_byte_t*)MapViewOfFile(
        *handle,
        FILE_MAP_ALL_ACCESS,  // read/write permission
        0,
@@ -2094,7 +2276,7 @@ void* createSharedMemory(
       return NULL;
    }
 
-   sharedMem = reinterpret_cast<uint8_t*>(
+   sharedMem = reinterpret_cast<hop_byte_t*>(
        mmap( NULL, size, PROT_READ | PROT_WRITE, MAP_SHARED, *handle, 0 ) );
 #endif
    if( sharedMem ) *state = hop::SharedMemory::CONNECTED;
@@ -2107,7 +2289,7 @@ void* openSharedMemory(
     uint64_t* totalSize,
     hop::SharedMemory::ConnectionState* state )
 {
-   uint8_t* sharedMem{NULL};
+   hop_byte_t* sharedMem{NULL};
 #if defined( _MSC_VER )
    *handle = OpenFileMapping(
        FILE_MAP_ALL_ACCESS,  // read/write access
@@ -2120,7 +2302,7 @@ void* openSharedMemory(
       return NULL;
    }
 
-   sharedMem = (uint8_t*)MapViewOfFile(
+   sharedMem = (hop_byte_t*)MapViewOfFile(
        *handle,
        FILE_MAP_ALL_ACCESS,  // read/write permission
        0,
@@ -2160,7 +2342,7 @@ void* openSharedMemory(
 
    *totalSize = fileStat.st_size;
 
-   sharedMem = reinterpret_cast<uint8_t*>(
+   sharedMem = reinterpret_cast<hop_byte_t*>(
        mmap( NULL, fileStat.st_size, PROT_READ | PROT_WRITE, MAP_SHARED, *handle, 0 ) );
    *state = sharedMem ? hop::SharedMemory::CONNECTED : hop::SharedMemory::UNKNOWN_CONNECTION_ERROR;
 #endif
@@ -2187,7 +2369,7 @@ namespace hop
 static std::atomic<bool> g_done{false};  // Was the shared memory destroyed? (Are we done?)
 
 
-uint8_t* SharedMemory::data() const HOP_NOEXCEPT { return _data; }
+hop_byte_t* SharedMemory::data() const HOP_NOEXCEPT { return _data; }
 
 bool SharedMemory::valid() const HOP_NOEXCEPT { return _valid; }
 
@@ -2274,27 +2456,27 @@ static void copyTracesTo( const Traces* t, void* outBuffer )
    const size_t startsSize = sizeof( t->starts[0] ) * count;
    memcpy( startsPtr, t->starts, startsSize );
 
-   void* endsPtr         = (uint8_t*)startsPtr + startsSize;
+   void* endsPtr         = (hop_byte_t*)startsPtr + startsSize;
    const size_t endsSize = sizeof( t->ends[0] ) * count;
    memcpy( endsPtr, t->ends, endsSize );
 
-   void* fileNamesPtr         = (uint8_t*)endsPtr + endsSize;
+   void* fileNamesPtr         = (hop_byte_t*)endsPtr + endsSize;
    const size_t fileNamesSize = sizeof( t->fileNameIds[0] ) * count;
    memcpy( fileNamesPtr, t->fileNameIds, fileNamesSize );
 
-   void* fctNamesPtr         = (uint8_t*)fileNamesPtr + fileNamesSize;
+   void* fctNamesPtr         = (hop_byte_t*)fileNamesPtr + fileNamesSize;
    const size_t fctNamesSize = sizeof( t->fctNameIds[0] ) * count;
    memcpy( fctNamesPtr, t->fctNameIds, fctNamesSize );
 
-   void* lineNbPtr         = (uint8_t*)fctNamesPtr + fctNamesSize;
+   void* lineNbPtr         = (hop_byte_t*)fctNamesPtr + fctNamesSize;
    const size_t lineNbSize = sizeof( t->lineNumbers[0] ) * count;
    memcpy( lineNbPtr, t->lineNumbers, lineNbSize );
 
-   void* depthsPtr         = (uint8_t*)lineNbPtr + lineNbSize;
+   void* depthsPtr         = (hop_byte_t*)lineNbPtr + lineNbSize;
    const size_t depthsSize = sizeof( t->depths[0] ) * count;
    memcpy( depthsPtr, t->depths, depthsSize );
 
-   void* zonesPtr        = (uint8_t*)depthsPtr + depthsSize;
+   void* zonesPtr        = (hop_byte_t*)depthsPtr + depthsSize;
    const size_t zoneSize = sizeof( t->zones[0] ) * count;
    memcpy( zonesPtr, t->zones, zoneSize );
 }
@@ -2390,113 +2572,13 @@ class Client
       return inserted;
    }
 
-   void resetStringData()
-   {
-      hop_hash_set_clear( _stringPtrSet );
-      _stringData.clear();
-      _sentStringDataSize   = 0;
-      _clientResetTimeStamp = ClientManager::sharedMemory().lastResetTimestamp();
-
-      // Push back thread name
-      if( tl_threadNameBuffer[0] != '\0' )
-      {
-         const auto hash = addDynamicStringToDb( tl_threadNameBuffer );
-         HOP_UNUSED( hash );
-         HOP_ASSERT( hash == tl_threadName );
-      }
-   }
-
-   void resetPendingTraces()
-   {
-      _traces.count = 0;
-      _cores.clear();
-      _lockWaits.clear();
-      _unlockEvents.clear();
-   }
-
-   uint8_t* acquireSharedChunk( ringbuf_t* ringbuf, size_t size )
-   {
-      uint8_t* data          = NULL;
-      const bool msgWayToBig = size > HOP_SHARED_MEM_SIZE;
-      if( !msgWayToBig )
-      {
-         const size_t paddedSize = alignOn( static_cast<uint32_t>( size ), 8 );
-         const ssize_t offset    = ringbuf_acquire( ringbuf, _worker, paddedSize );
-         if( offset != -1 )
-         {
-            data = &ClientManager::sharedMemory().data()[offset];
-         }
-      }
-
-      return data;
-   }
-
-   bool sendStringData( hop_timestamp_t timeStamp )
-   {
-      // Add all strings to the database
-      for( uint32_t i = 0; i < _traces.count; ++i )
-      {
-         addStringToDb( _traces.fileNameIds[i] );
-
-         // String that were added dynamically are already in the
-         // database and are flaged with the first bit of their start
-         // time being 1. Therefore we only need to add the
-         // non-dynamic strings. (first bit of start time being 0)
-         if( ( _traces.starts[i] & 1 ) == 0 ) addStringToDb( _traces.fctNameIds[i] );
-      }
-
-      const uint32_t stringDataSize = static_cast<uint32_t>( _stringData.size() );
-      HOP_ASSERT( stringDataSize >= _sentStringDataSize );
-      const uint32_t stringToSendSize = stringDataSize - _sentStringDataSize;
-      const size_t msgSize            = sizeof( MsgInfo ) + stringToSendSize;
-
-      ringbuf_t* ringbuf = ClientManager::sharedMemory().ringbuffer();
-      uint8_t* bufferPtr = acquireSharedChunk( ringbuf, msgSize );
-
-      if( !bufferPtr )
-      {
-         printf(
-             "HOP - String to send are bigger than shared memory size. Consider"
-             " increasing shared memory size \n" );
-         return false;
-      }
-
-      // Fill the buffer with the string data
-      {
-         // The data layout is as follow:
-         // =========================================================
-         // msgInfo     = Profiler specific infos  - Information about the message sent
-         // stringData  = String Data              - Array with all strings referenced by the traces
-         MsgInfo* msgInfo = reinterpret_cast<MsgInfo*>( bufferPtr );
-         char* stringData = reinterpret_cast<char*>( bufferPtr + sizeof( MsgInfo ) );
-
-         msgInfo->type            = MsgType::PROFILER_STRING_DATA;
-         msgInfo->threadId        = tl_threadId;
-         msgInfo->threadName      = tl_threadName;
-         msgInfo->threadIndex     = tl_threadIndex;
-         msgInfo->timeStamp       = timeStamp;
-         msgInfo->stringData.size = stringToSendSize;
-
-         // Copy string data into its array
-         const auto itFrom = _stringData.begin() + _sentStringDataSize;
-         std::copy( itFrom, itFrom + stringToSendSize, stringData );
-      }
-
-      ringbuf_produce( ringbuf, _worker );
-
-      // Update sent array size
-      _sentStringDataSize = stringDataSize;
-
-      return true;
-   }
-
    bool sendTraces( hop_timestamp_t timeStamp )
    {
       // Get size of profiling traces message
       const size_t profilerMsgSize = sizeof( MsgInfo ) + traceDataSize( &_traces );
 
       ringbuf_t* ringbuf = ClientManager::sharedMemory().ringbuffer();
-      uint8_t* bufferPtr = acquireSharedChunk( ringbuf, profilerMsgSize );
+      hop_byte_t* bufferPtr = acquireSharedChunk( ringbuf, profilerMsgSize );
       if( !bufferPtr )
       {
          printf(
@@ -2514,7 +2596,7 @@ class Client
          // traceToSend = Traces                   - Array containing all of the traces
          MsgInfo* tracesInfo = reinterpret_cast<MsgInfo*>( bufferPtr );
 
-         tracesInfo->type         = MsgType::PROFILER_TRACE;
+         tracesInfo->type         = HOP_PROFILER_TRACE;
          tracesInfo->threadId     = tl_threadId;
          tracesInfo->threadName   = tl_threadName;
          tracesInfo->threadIndex  = tl_threadIndex;
@@ -2540,7 +2622,7 @@ class Client
       const size_t coreMsgSize = sizeof( MsgInfo ) + _cores.size() * sizeof( CoreEvent );
 
       ringbuf_t* ringbuf = ClientManager::sharedMemory().ringbuffer();
-      uint8_t* bufferPtr = acquireSharedChunk( ringbuf, coreMsgSize );
+      hop_byte_t* bufferPtr = acquireSharedChunk( ringbuf, coreMsgSize );
       if( !bufferPtr )
       {
          printf(
@@ -2579,7 +2661,7 @@ class Client
       const size_t lockMsgSize = sizeof( MsgInfo ) + _lockWaits.size() * sizeof( LockWait );
 
       ringbuf_t* ringbuf = ClientManager::sharedMemory().ringbuffer();
-      uint8_t* bufferPtr = acquireSharedChunk( ringbuf, lockMsgSize );
+      hop_byte_t* bufferPtr = acquireSharedChunk( ringbuf, lockMsgSize );
       if( !bufferPtr )
       {
          printf(
@@ -2617,7 +2699,7 @@ class Client
           sizeof( MsgInfo ) + _unlockEvents.size() * sizeof( UnlockEvent );
 
       ringbuf_t* ringbuf = ClientManager::sharedMemory().ringbuffer();
-      uint8_t* bufferPtr = acquireSharedChunk( ringbuf, unlocksMsgSize );
+      hop_byte_t* bufferPtr = acquireSharedChunk( ringbuf, unlocksMsgSize );
       if( !bufferPtr )
       {
          printf(
@@ -2654,7 +2736,7 @@ class Client
       const size_t heartbeatSize = sizeof( MsgInfo );
 
       ringbuf_t* ringbuf = ClientManager::sharedMemory().ringbuffer();
-      uint8_t* bufferPtr = acquireSharedChunk( ringbuf, heartbeatSize );
+      hop_byte_t* bufferPtr = acquireSharedChunk( ringbuf, heartbeatSize );
       if( !bufferPtr )
       {
          printf(
@@ -2679,43 +2761,7 @@ class Client
       return true;
    }
 
-   void flushToConsumer()
-   {
-      const hop_timestamp_t timeStamp = getTimeStamp();
-
-      // If we have a consumer, send life signal
-      if( ClientManager::has_connected_consumer() && ClientManager::ShouldSendHeartbeat( timeStamp ) )
-      {
-         sendHeartbeat( timeStamp );
-      }
-
-      // If no one is there to listen, no need to send any data
-      if( ClientManager::has_listening_consumer() )
-      {
-         // If the shared memory reset timestamp more recent than our local one
-         // it means we need to clear our string table. Otherwise it means we
-         // already took care of it. Since some traces might depend on strings
-         // that were added dynamically (ie before clearing the db), we cannot
-         // consider them and need to return here.
-         hop_timestamp_t resetTimeStamp = ClientManager::sharedMemory().lastResetTimestamp();
-         if( _clientResetTimeStamp < resetTimeStamp )
-         {
-            resetStringData();
-            resetPendingTraces();
-            return;
-         }
-
-         sendStringData( timeStamp );  // Always send string data first
-         sendTraces( timeStamp );
-         sendLockWaits( timeStamp );
-         sendUnlockEvents( timeStamp );
-         sendCores( timeStamp );
-      }
-      else
-      {
-         resetPendingTraces();
-      }
-   }
+   
 
    Traces _traces;
    std::vector<CoreEvent> _cores;
@@ -2775,41 +2821,7 @@ Client* ClientManager::Get()
 
    return threadClient.get();
 }
-hop_str_ptr_t ClientManager::StartProfileDynString( const char* str, hop_zone_t* zone )
-{
-   ++tl_traceLevel;
-   Client* client = ClientManager::Get();
 
-   if( HOP_UNLIKELY( !client ) ) return 0;
-
-   *zone = tl_zoneId;
-   return client->addDynamicStringToDb( str );
-}
-
-void ClientManager::EndProfile(
-    hop_str_ptr_t fileName,
-    hop_str_ptr_t fctName,
-    hop_timestamp_t start,
-    hop_timestamp_t end,
-    hop_linenb_t lineNb,
-    hop_zone_t zone,
-    hop_core_t core )
-{
-   const int remainingPushedTraces = --tl_traceLevel;
-   Client* client                  = ClientManager::Get();
-
-   if( HOP_UNLIKELY( !client ) ) return;
-
-   if( end - start > 50 )  // Minimum trace time is 50 ns
-   {
-      client->addProfilingTrace( fileName, fctName, start, end, lineNb, zone );
-      client->addCoreEvent( core, start, end );
-   }
-   if( remainingPushedTraces <= 0 )
-   {
-      client->flushToConsumer();
-   }
-}
 
 void ClientManager::EndLockWait( void* mutexAddr, hop_timestamp_t start, hop_timestamp_t end )
 {
