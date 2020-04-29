@@ -35,18 +35,26 @@ extern "C"
 // to false
 #if !defined( HOP_ENABLED )
 
-// Stubbing all profiling macros so they are disabled
-// when HOP_ENABLED is false
-#define HOP_PROF( x )
-#define HOP_PROF_FUNC()
-#define HOP_PROF_SPLIT( x )
-#define HOP_PROF_DYN_NAME( x )
-#define HOP_PROF_MUTEX_LOCK( x )
-#define HOP_PROF_MUTEX_UNLOCK( x )
-#define HOP_ZONE( x )
-#define HOP_SET_THREAD_NAME( x )
+// Stubbing all profiling macros so they are disabled when HOP_ENABLED is false
+#define HOP_ENTER( x )     do { (void)sizeof( x ); } while (0)
+#define HOP_ENTER_FUNC()   do { ; } while (0)
+#define HOP_LEAVE()        do { ; } while (0)
 
 #else  // We do want to profile
+
+///////////////////////////////////////////////////////////////
+/////       THESE ARE THE MACROS YOU SHOULD USE     ///////////
+///////////////////////////////////////////////////////////////
+#if defined( _MSC_VER )
+#define HOP_FCT_NAME __FUNCTION__
+#else
+#define HOP_FCT_NAME __PRETTY_FUNCTION__
+#endif
+
+#define HOP_ENTER( x )   hop_enter( __FILE__, __LINE__, (x) )
+#define HOP_ENTER_FUNC() hop_enter( __FILE__, __LINE__, HOP_FCT_NAME )
+#define HOP_LEAVE()      hop_leave()
+
 
 ///////////////////////////////////////////////////////////////
 /////       THESE ARE THE MACROS YOU CAN MODIFY     ///////////
@@ -67,60 +75,6 @@ extern "C"
 #if !defined( HOP_MIN_LOCK_CYCLES )
 #define HOP_MIN_LOCK_CYCLES 1000
 #endif
-
-// By default HOP will use a call to RDTSCP to get the current timestamp of the
-// CPU. A mismatch in synchronization was noted on some machine having multiple
-// physical CPUs. This would show up in the viewer as infinitly long traces or
-// traces that overlaps each-other. The std::chrono library seems to handle
-// this use case correctly. You can therefore enable the use of std::chrono
-// by setting this variable to 1. This will also increase the over-head of
-// HOP in your application.
-#if !defined( HOP_USE_STD_CHRONO )
-#define HOP_USE_STD_CHRONO 0
-#endif
-
-///////////////////////////////////////////////////////////////
-/////       THESE ARE THE MACROS YOU SHOULD USE     ///////////
-///////////////////////////////////////////////////////////////
-#if defined( _MSC_VER )
-#define HOP_FCT_NAME __FUNCTION__
-#else
-#define HOP_FCT_NAME __PRETTY_FUNCTION__
-#endif
-
-#define HOP_ENTER( x )   hop_enter( __FILE__, __LINE__, (x) )
-#define HOP_ENTER_FUNC() hop_enter( __FILE__, __LINE__, HOP_FCT_NAME )
-#define HOP_LEAVE()      hop_leave()
-
-// Create a new profiling trace with specified name. Name must be static
-#define HOP_PROF( x ) HOP_PROF_GUARD_VAR( __LINE__, ( __FILE__, __LINE__, ( x ) ) )
-
-// Create a new profiling trace with the compiler provided name
-#define HOP_PROF_FUNC() HOP_PROF_ID_GUARD( hop__, ( __FILE__, __LINE__, HOP_FCT_NAME ) )
-
-// Split a profiling trace with a new provided name. Name must be static.
-#define HOP_PROF_SPLIT( x ) HOP_PROF_ID_SPLIT( hop__, ( __FILE__, __LINE__, ( x ) ) )
-
-// Create a new profiling trace for dynamic strings. Please use sparingly as they will incur more
-// slowdown
-#define HOP_PROF_DYN_NAME( x ) \
-   HOP_PROF_DYN_STRING_GUARD_VAR( __LINE__, ( __FILE__, __LINE__, ( x ) ) )
-
-// Create a trace that represent the time waiting for a mutex. You need to provide
-// a pointer to the mutex that is being locked
-#define HOP_PROF_MUTEX_LOCK( x ) HOP_MUTEX_LOCK_GUARD_VAR( __LINE__, ( x ) )
-
-// Create an event that correspond to the unlock of the specified mutex. This is
-// used to provide stall region. You should provide a pointer to the mutex that
-// is being unlocked.
-#define HOP_PROF_MUTEX_UNLOCK( x ) HOP_MUTEX_UNLOCK_EVENT( x )
-
-// The zone id specified must be between 0-255, where the default zone is 0
-#define HOP_ZONE( x ) HOP_ZONE_GUARD( __LINE__, ( x ) )
-
-// Set the name of the current thread in the profiler. Only the first call will
-// be considered for each thread.
-#define HOP_SET_THREAD_NAME( x ) hop::ClientManager::SetThreadName( ( x ) )
 
 ///////////////////////////////////////////////////////////////
 /////     EVERYTHING AFTER THIS IS IMPL DETAILS        ////////
@@ -170,12 +124,6 @@ extern "C"
 #else
 #define HOP_API
 #endif
-
-/*
-#ifdef HOP_USE_STD_CHRONO
-   #include <chrono>
-#endif
-*/
 
 /* Windows specific macros and defines */
 #if defined( _MSC_VER )
@@ -259,13 +207,13 @@ typedef struct hop_traces
    hop_zone_t* zones;               // Zone to which this trace belongs
 } hop_traces;
 
-typedef struct hop_lock_wait
+typedef struct hop_lock_wait_event
 {
    hop_mutex_t mutexAddress;
    hop_timestamp_t start, end;
    hop_depth_t depth;
    uint16_t padding;
-} hop_lock_wait;
+} hop_lock_wait_event;
 
 typedef struct hop_unlock_event
 {
@@ -650,7 +598,7 @@ hop_connection_state hop_create_shared_memory( int pid, uint64_t requestedSize, 
       ipcSegment->clientVersion            = HOP_VERSION;
       ipcSegment->maxThreadNb              = HOP_MAX_THREAD_NB;
       ipcSegment->requestedSize            = HOP_SHARED_MEM_SIZE;
-      ipcSegment->usingStdChronoTimeStamps = HOP_USE_STD_CHRONO;
+      ipcSegment->usingStdChronoTimeStamps = hop_false;
       ipcSegment->lastResetTimeStamp       = hop_get_timestamp_no_core();
 
       // Take a local copy as we do not want to expose the ring buffer before it is
@@ -746,7 +694,7 @@ static uint64_t align_on_uint64( uint64_t val, uint64_t alignment )
    return ( ( val + alignment - 1 ) & ~( alignment - 1 ) );
 }
 
-typedef struct pending_traces_t
+typedef struct hop_traces_t
 {
    uint32_t count;
    uint32_t maxSize;
@@ -756,12 +704,27 @@ typedef struct pending_traces_t
    hop_linenb_t* lineNumbers;       // Line at which the trace was inserted
    hop_depth_t* depths;             // The depth in the callstack of this trace
    hop_zone_t* zones;               // Zone to which this trace belongs
-} pending_traces_t;
+} hop_traces_t;
+
+typedef union hop_event {
+   hop_lock_wait_event lock_wait;
+   hop_unlock_event unlock;
+   hop_core_event core;
+} hop_event;
+
+typedef struct hop_event_array_t
+{
+   union hop_event* events;
+   uint32_t count;
+   uint32_t capacity;
+} hop_event_array_t;
 
 typedef struct local_context_t
 {
    // Local client data
-   pending_traces_t pendingTraces;
+   hop_traces_t traces;
+   hop_event_array_t lockWaits;
+   hop_event_array_t unlocks;
    hop_timestamp_t clientResetTimeStamp;
    uint32_t openTraceIdx;  // Index of the last opened trace
    hop_depth_t traceLevel;
@@ -788,7 +751,7 @@ static void flush_to_consumer(local_context_t* ctxt);
 static hop_str_ptr_t add_dynamic_string_to_db( local_context_t* ctxt, const char* dynStr );
 static hop_str_ptr_t add_string_to_db( local_context_t* ctxt, const char* strId );
 
-static void alloc_traces( pending_traces_t* t, unsigned size )
+static void alloc_traces( hop_traces_t* t, unsigned size )
 {
    t->maxSize     = size;
    t->starts      = (hop_timestamp_t*)HOP_REALLOC( t->starts, size * sizeof( hop_timestamp_t ) );
@@ -800,7 +763,7 @@ static void alloc_traces( pending_traces_t* t, unsigned size )
    t->zones       = (hop_zone_t*)HOP_REALLOC( t->zones, size * sizeof( hop_zone_t ) );
 }
 
-static void free_traces( pending_traces_t* t )
+static void free_traces( hop_traces_t* t )
 {
    free( t->starts );
    free( t->ends );
@@ -809,18 +772,17 @@ static void free_traces( pending_traces_t* t )
    free( t->fileNameIds );
    free( t->lineNumbers );
    free( t->zones );
-   memset( t, 0, sizeof( pending_traces_t ) );
+   memset( t, 0, sizeof( hop_traces_t ) );
 }
 
-
-static size_t pending_traces_size( const pending_traces_t* t )
+static size_t traces_size( const hop_traces_t* t )
 {
    const size_t sliceSize = sizeof( hop_timestamp_t ) * 2 + +sizeof( hop_depth_t ) + sizeof( hop_str_ptr_t ) * 2 +
                             sizeof( hop_linenb_t ) + sizeof( hop_zone_t );
    return sliceSize * t->count;
 }
 
-static void copy_pending_traces_to( const pending_traces_t* t, void* outBuffer )
+static void copy_traces_to( const hop_traces_t* t, void* outBuffer )
 {
    const uint32_t count = t->count;
 
@@ -851,6 +813,23 @@ static void copy_pending_traces_to( const pending_traces_t* t, void* outBuffer )
    void* zonesPtr        = (hop_byte_t*)depthsPtr + depthsSize;
    const size_t zoneSize = sizeof( t->zones[0] ) * count;
    memcpy( zonesPtr, t->zones, zoneSize );
+}
+
+static void alloc_event_array( hop_event_array_t* array, uint32_t size )
+{
+   if( array->capacity >= size )
+      return;
+   array->events = HOP_REALLOC( array->events, size * sizeof(*array->events) );
+   array->capacity = size;
+}
+
+static void push_event( hop_event_array_t* array, const hop_event* ev )
+{
+   if( array->capacity == array->count )
+   {
+      alloc_event_array( array, array->capacity * 2 );
+   }
+   array->events[array->count++] = *ev;
 }
 
 static hop_bool_t local_context_valid( local_context_t* ctxt )
@@ -889,15 +868,17 @@ static hop_bool_t local_context_create( local_context_t* ctxt )
    if( ctxt->threadIndex > HOP_MAX_THREAD_NB )
    {
       printf( "Maximum number of threads reached. No trace will be available for this thread\n" );
-      ctxt->pendingTraces.count = 0;
+      ctxt->traces.count = 0;
       return hop_false;
    }
 
-   alloc_traces( &ctxt->pendingTraces, 256 );
+   alloc_traces( &ctxt->traces, 256 );
    ctxt->threadId = HOP_GET_THREAD_ID();
    ctxt->ringbufWorker =
        ringbuf_register( &g_sharedMemory->ipcSegment->ringbuf, ctxt->threadIndex );
 
+   alloc_event_array( &ctxt->lockWaits, 128 );
+   alloc_event_array( &ctxt->unlocks, 128 );
 
    ctxt->stringDataCapacity = 1024;
    ctxt->stringData = (char*) HOP_MALLOC( 1024 );
@@ -909,43 +890,17 @@ static hop_bool_t local_context_create( local_context_t* ctxt )
    return ctxt->ringbufWorker != NULL;
 }
 
-static void reset_pending_traces( local_context_t* ctxt )
+static void reset_traces( local_context_t* ctxt )
 {
-   ctxt->pendingTraces.count = 0;
-   ctxt->openTraceIdx        = 0;
-   ctxt->traceLevel          = 0;
-   ctxt->zoneId              = 0;
-
+   ctxt->traces.count    = 0;
+   ctxt->unlocks.count   = 0;
+   ctxt->lockWaits.count = 0;
+   ctxt->openTraceIdx    = 0;
+   ctxt->traceLevel      = 0;
+   ctxt->zoneId          = 0;
    // _cores.clear();
-   // _lockWaits.clear();
-   // _unlockEvents.clear();
 }
 
-<<<<<<< HEAD
-static void reset_string_data( local_context_t* ctxt )
-{
-   hop_hash_set_t stringHashSet;
-   uint32_t       stringDataSize;
-   uint32_t       stringDataCapacity;
-   char*          stringData;
-
-   hop_hash_set_clear( ctxt->stringHashSet );
-   ctxt->stringDataSize = 0;
-   memset( ctxt->stringData, 0, ctxt->stringDataCapacity );
-
-   ctxt->clientResetTimeStamp = atomic_load_explicit(
-       &g_sharedMemory->ipcSegment->lastResetTimeStamp, memory_order_seq_cst );
-
-   // Push back thread name
-   if( ctxt->threadNameBuffer[0] != '\0' )
-   {
-      const auto hash = add_dynamic_string_to_db( ctxt, ctxt->threadNameBuffer);
-      HOP_ASSERT( hash == ctxt->threadName );
-   }
-}
-
-=======
->>>>>>> Fixed few issues
 // C-style string hash inspired by Stackoverflow question
 // based on the Java string hash fct. If its good enough
 // for java, it should be good enough for me...
@@ -989,22 +944,12 @@ static hop_bool_t add_string_to_db_internal(
    return inserted;
 }
 
-<<<<<<< HEAD
-static hop_str_ptr_t add_string_to_db( const char* str )
-=======
 static hop_str_ptr_t add_string_to_db( local_context_t* ctxt, const char* strId )
->>>>>>> Continue porting to c
 {
    // Early return on NULL
    if( str == 0 ) return 0;
 
-<<<<<<< HEAD
-   const hop_str_ptr_t strId = (hop_str_ptr_t)str;
-   add_string_to_db_internal( &tl_context, strId, str, strlen( str ) );
-   return strId;
-=======
    return add_string_to_db_internal( ctxt, strId, strId, strlen( strId ) );
->>>>>>> Continue porting to c
 }
 
 static hop_str_ptr_t add_dynamic_string_to_db( local_context_t* ctxt, const char* dynStr )
@@ -1014,12 +959,7 @@ static hop_str_ptr_t add_dynamic_string_to_db( local_context_t* ctxt, const char
 
    const size_t strLen = strlen( dynStr );
    const hop_str_ptr_t hash = c_str_hash( dynStr, strLen );
-<<<<<<< HEAD
-   add_string_to_db_internal( &tl_context, hash, dynStr, strLen );
-   return hash;
-=======
    return add_string_to_db_internal( ctxt, hash, dynStr, strLen );
->>>>>>> Continue porting to c
 }
 
 static void enter_internal(
@@ -1028,25 +968,25 @@ static void enter_internal(
     hop_linenb_t line,
     hop_str_ptr_t fctName )
 {
-   const uint32_t curCount = tl_context.pendingTraces.count;
-   if( curCount == tl_context.pendingTraces.maxSize )
+   const uint32_t curCount = tl_context.traces.count;
+   if( curCount == tl_context.traces.maxSize )
    {
-      alloc_traces( &tl_context.pendingTraces, tl_context.pendingTraces.maxSize * 2 );
+      alloc_traces( &tl_context.traces, tl_context.traces.maxSize * 2 );
    }
 
    // Keep the index of the last opened trace in the new 'end' timestamp. It will
    // be restored when poping the trace
-   tl_context.pendingTraces.ends[curCount]        = tl_context.openTraceIdx;
-   tl_context.openTraceIdx                        = curCount;
+   tl_context.traces.ends[curCount]        = tl_context.openTraceIdx;
+   tl_context.openTraceIdx                 = curCount;
 
    // Save the actual data
-   tl_context.pendingTraces.starts[curCount]      = ts;
-   tl_context.pendingTraces.depths[curCount]      = tl_context.traceLevel++;
-   tl_context.pendingTraces.fileNameIds[curCount] = fileName;
-   tl_context.pendingTraces.fctNameIds[curCount]  = fctName;
-   tl_context.pendingTraces.lineNumbers[curCount] = line;
-   tl_context.pendingTraces.zones[curCount]       = tl_context.zoneId;
-   ++tl_context.pendingTraces.count;
+   tl_context.traces.starts[curCount]      = ts;
+   tl_context.traces.depths[curCount]      = tl_context.traceLevel++;
+   tl_context.traces.fileNameIds[curCount] = fileName;
+   tl_context.traces.fctNameIds[curCount]  = fctName;
+   tl_context.traces.lineNumbers[curCount] = line;
+   tl_context.traces.zones[curCount]       = tl_context.zoneId;
+   ++tl_context.traces.count;
 }
 
 void hop_enter( const char* fileName, hop_linenb_t line, const char* fctName )
@@ -1067,16 +1007,11 @@ void hop_enter_dynamic_string( const char* fileName, hop_linenb_t line, const ch
    }
 
    // Flag the timestamp as being dynamic (first bit set), and add the dynamic string to the db
-<<<<<<< HEAD
-   const hop_str_ptr_t fctStrId = add_dynamic_string_to_db( fctName );
-   enter_internal( hop_get_timestamp_no_core() | 1ULL, (hop_str_ptr_t)fileName, line, fctStrId );
-=======
    enter_internal(
        hop_get_timestamp_no_core() | 1ULL,
        fileName,
        line,
        add_dynamic_string_to_db( &tl_context, fctName ) );
->>>>>>> Continue porting to c
 }
 
 void hop_leave()
@@ -1084,8 +1019,8 @@ void hop_leave()
    const hop_timestamp_t endTime                   = hop_get_timestamp_no_core();
    const int32_t remainingPushedTraces             = --tl_context.traceLevel;
    const uint32_t lastOpenTraceIdx                 = tl_context.openTraceIdx;
-   tl_context.openTraceIdx                         = tl_context.pendingTraces.ends[lastOpenTraceIdx];
-   tl_context.pendingTraces.ends[lastOpenTraceIdx] = endTime;
+   tl_context.openTraceIdx                         = tl_context.traces.ends[lastOpenTraceIdx];
+   tl_context.traces.ends[lastOpenTraceIdx] = endTime;
 
    if( remainingPushedTraces <= 0 )
    {
@@ -1256,11 +1191,7 @@ hop_byte_t* acquire_shared_chunk( local_context_t* ctxt, ringbuf_t* ringbuf, uin
       const ssize_t offset      = ringbuf_acquire( ringbuf, ctxt->ringbufWorker, paddedSize );
       if( offset != -1 )
       {
-<<<<<<< HEAD
-         data = g_sharedMemory->ipcSegment->data[offset];
-=======
          data = g_sharedMemory->ipcSegment->data + offset;
->>>>>>> Fixed few issues
       }
    }
 
@@ -1270,16 +1201,16 @@ hop_byte_t* acquire_shared_chunk( local_context_t* ctxt, ringbuf_t* ringbuf, uin
 static hop_bool_t send_string_data( local_context_t* ctxt, hop_timestamp_t timeStamp )
 {
    // Add all strings to the database
-   for( uint32_t i = 0; i < ctxt->pendingTraces.count; ++i )
+   for( uint32_t i = 0; i < ctxt->traces.count; ++i )
    {
-      add_string_to_db( ctxt, ctxt->pendingTraces.fileNameIds[i] );
+      add_string_to_db( ctxt, (const char*) ctxt->traces.fileNameIds[i] );
 
       // String that were added dynamically are already in the
       // database and are flaged with the first bit of their start
       // time being 1. Therefore we only need to add the
       // non-dynamic strings. (first bit of start time being 0)
-      if( ( ctxt->pendingTraces.starts[i] & 1 ) == 0 )
-         add_string_to_db( ctxt, ctxt->pendingTraces.fctNameIds[i] );
+      if( ( ctxt->traces.starts[i] & 1 ) == 0 )
+         add_string_to_db( ctxt, (const char*)ctxt->traces.fctNameIds[i] );
    }
 
    HOP_ASSERT( ctxt->stringDataSize >= ctxt->sentStringDataSize );
@@ -1321,10 +1252,10 @@ static hop_bool_t send_string_data( local_context_t* ctxt, hop_timestamp_t timeS
    return hop_true;
 }
 
-static hop_bool_t send_pending_traces( local_context_t* ctxt, hop_timestamp_t timeStamp )
+static hop_bool_t send_traces( local_context_t* ctxt, hop_timestamp_t timeStamp )
 {
    // Get size of profiling traces message
-   const size_t msgSize = sizeof( hop_msg_info ) + pending_traces_size( &ctxt->pendingTraces );
+   const size_t msgSize = sizeof( hop_msg_info ) + traces_size( &ctxt->traces );
 
    ringbuf_t* ringbuf = &g_sharedMemory->ipcSegment->ringbuf;
    hop_byte_t* bufferPtr = acquire_shared_chunk( ctxt, ringbuf, msgSize );
@@ -1333,7 +1264,7 @@ static hop_bool_t send_pending_traces( local_context_t* ctxt, hop_timestamp_t ti
       printf(
             "HOP - Failed to acquire enough shared memory. Consider increasing"
             "shared memory size if you see this message more than once\n" );
-      ctxt->pendingTraces.count = 0;
+      ctxt->traces.count = 0;
       return hop_false;
    }
 
@@ -1346,16 +1277,53 @@ static hop_bool_t send_pending_traces( local_context_t* ctxt, hop_timestamp_t ti
       msgInfo->threadName      = ctxt->threadName;
       msgInfo->threadIndex     = ctxt->threadIndex;
       msgInfo->timeStamp       = timeStamp;
-      msgInfo->count           = ctxt->pendingTraces.count;
+      msgInfo->count           = ctxt->traces.count;
 
       // Copy trace information into buffer to send
       void* outBuffer = (void*)( bufferPtr + sizeof( hop_msg_info ) );
-      copy_pending_traces_to( &ctxt->pendingTraces, outBuffer );
+      copy_traces_to( &ctxt->traces, outBuffer );
    }
 
    ringbuf_produce( ringbuf, ctxt->ringbufWorker );
 
-   ctxt->pendingTraces.count = 0;
+   ctxt->traces.count = 0;
+
+   return hop_true;
+}
+
+hop_bool_t send_lock_waits( local_context_t* ctxt, hop_timestamp_t timeStamp )
+{
+   // if( _lockWaits.empty() ) return false;
+
+   // const size_t lockMsgSize = sizeof( MsgInfo ) + _lockWaits.size() * sizeof( LockWait );
+
+   // ringbuf_t* ringbuf = ClientManager::sharedMemory().ringbuffer();
+   // hop_byte_t* bufferPtr = acquireSharedChunk( ringbuf, lockMsgSize );
+   // if( !bufferPtr )
+   // {
+   //    printf(
+   //          "HOP - Failed to acquire enough shared memory. Consider increasing shared memory "
+   //          "size\n" );
+   //    _lockWaits.clear();
+   //    return hop_false;
+   // }
+
+   // // Fill the buffer with the lock message
+   // {
+   //    MsgInfo* lwInfo         = reinterpret_cast<MsgInfo*>( bufferPtr );
+   //    lwInfo->type            = MsgType::PROFILER_WAIT_LOCK;
+   //    lwInfo->threadId        = tl_threadId;
+   //    lwInfo->threadName      = tl_threadName;
+   //    lwInfo->threadIndex     = tl_threadIndex;
+   //    lwInfo->timeStamp       = timeStamp;
+   //    lwInfo->lockwaits.count = static_cast<uint32_t>( _lockWaits.size() );
+   //    bufferPtr += sizeof( MsgInfo );
+   //    memcpy( bufferPtr, _lockWaits.data(), _lockWaits.size() * sizeof( LockWait ) );
+   // }
+
+   // ringbuf_produce( ringbuf, _worker );
+
+   // _lockWaits.clear();
 
    return hop_true;
 }
@@ -1398,11 +1366,7 @@ static void flush_to_consumer( local_context_t* ctxt )
    // If we have a consumer, send life signal
    if( has_connected_consumer( g_sharedMemory ) && should_send_heartbeat( g_sharedMemory, timeStamp ) )
    {
-<<<<<<< HEAD
-      send_heartbeat( timeStamp );
-=======
       send_heartbeat( ctxt, timeStamp );
->>>>>>> Fixed few issues
    }
 
    // If no one is there to listen, no need to send any data
@@ -1418,19 +1382,19 @@ static void flush_to_consumer( local_context_t* ctxt )
       if( ctxt->clientResetTimeStamp < resetTimeStamp )
       {
          reset_string_data( ctxt );
-         reset_pending_traces( ctxt );
+         reset_traces( ctxt );
          return;
       }
 
       send_string_data( ctxt, timeStamp ); // Always send string data first
-      send_pending_traces( ctxt, timeStamp );
+      send_traces( ctxt, timeStamp );
       /*sendLockWaits( timeStamp );
       sendUnlockEvents( timeStamp );
       sendCores( timeStamp );*/
    }
    else
    {
-      reset_pending_traces( ctxt );
+      reset_traces( ctxt );
    }
 }
 
@@ -2411,43 +2375,6 @@ class Client
       const auto lastEntry = _cores.back();
       _cores.clear();
       _cores.emplace_back( lastEntry );
-
-      return true;
-   }
-
-   bool sendLockWaits( hop_timestamp_t timeStamp )
-   {
-      if( _lockWaits.empty() ) return false;
-
-      const size_t lockMsgSize = sizeof( MsgInfo ) + _lockWaits.size() * sizeof( LockWait );
-
-      ringbuf_t* ringbuf = ClientManager::sharedMemory().ringbuffer();
-      hop_byte_t* bufferPtr = acquireSharedChunk( ringbuf, lockMsgSize );
-      if( !bufferPtr )
-      {
-         printf(
-             "HOP - Failed to acquire enough shared memory. Consider increasing shared memory "
-             "size\n" );
-         _lockWaits.clear();
-         return false;
-      }
-
-      // Fill the buffer with the lock message
-      {
-         MsgInfo* lwInfo         = reinterpret_cast<MsgInfo*>( bufferPtr );
-         lwInfo->type            = MsgType::PROFILER_WAIT_LOCK;
-         lwInfo->threadId        = tl_threadId;
-         lwInfo->threadName      = tl_threadName;
-         lwInfo->threadIndex     = tl_threadIndex;
-         lwInfo->timeStamp       = timeStamp;
-         lwInfo->lockwaits.count = static_cast<uint32_t>( _lockWaits.size() );
-         bufferPtr += sizeof( MsgInfo );
-         memcpy( bufferPtr, _lockWaits.data(), _lockWaits.size() * sizeof( LockWait ) );
-      }
-
-      ringbuf_produce( ringbuf, _worker );
-
-      _lockWaits.clear();
 
       return true;
    }
