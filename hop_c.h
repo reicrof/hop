@@ -36,9 +36,12 @@ extern "C"
 #if !defined( HOP_ENABLED )
 
 // Stubbing all profiling macros so they are disabled when HOP_ENABLED is false
-#define HOP_ENTER( x )     do { (void)sizeof( x ); } while (0)
-#define HOP_ENTER_FUNC()   do { ; } while (0)
-#define HOP_LEAVE()        do { ; } while (0)
+#define HOP_ENTER( x )           do { (void)sizeof( x ); } while (0)
+#define HOP_ENTER_FUNC()         do { ; } while (0)
+#define HOP_LEAVE()              do { ; } while (0)
+
+#define HOP_ACQUIRE_LOCK( x )    do { (void)sizeof( x ); } while (0)
+#define HOP_LOCK_ACQUIRED()      do { ; } while (0)
 
 #else  // We do want to profile
 
@@ -54,6 +57,9 @@ extern "C"
 #define HOP_ENTER( x )   hop_enter( __FILE__, __LINE__, (x) )
 #define HOP_ENTER_FUNC() hop_enter( __FILE__, __LINE__, HOP_FCT_NAME )
 #define HOP_LEAVE()      hop_leave()
+
+#define HOP_ACQUIRE_LOCK( x )    hop_acquire_lock( (x) )
+#define HOP_LOCK_ACQUIRED()      hop_lock_acquired()
 
 
 ///////////////////////////////////////////////////////////////
@@ -723,10 +729,13 @@ typedef struct local_context_t
 {
    // Local client data
    hop_traces_t traces;
+   uint32_t openTraceIdx;  // Index of the last opened trace
+
    hop_event_array_t lockWaits;
+   uint32_t openLockWaitIdx; // Index of the last opened lockwait
+
    hop_event_array_t unlocks;
    hop_timestamp_t clientResetTimeStamp;
-   uint32_t openTraceIdx;  // Index of the last opened trace
    hop_depth_t traceLevel;
    hop_zone_t zoneId;
 
@@ -1030,6 +1039,27 @@ void hop_leave()
    }
 }
 
+void hop_acquire_lock( void* mutexAddr )
+{
+   hop_event ev;
+   ev.lock_wait.start         = hop_get_timestamp_no_core();
+   ev.lock_wait.end           = tl_context.openLockWaitIdx; // Save previous opened idx
+   tl_context.openLockWaitIdx = tl_context.lockWaits.count; // Current idx is the new opended idx
+   ev.lock_wait.mutexAddress  = mutexAddr;
+   push_event( &tl_context.lockWaits, &ev );
+}
+
+void hop_lock_acquired()
+{
+   const hop_timestamp_t endTime = hop_get_timestamp_no_core();
+   const uint32_t lastOpenLWIdx  = tl_context.openLockWaitIdx;
+   hop_event* ev                 = &tl_context.lockWaits.events[lastOpenLWIdx];
+   tl_context.openLockWaitIdx    = ev->lock_wait.end;
+   ev->lock_wait.end             = endTime;
+}
+
+void hop_lock_release( void* mutexAddr ) {}
+
 void hop_set_thread_name( hop_str_ptr_t name )
 {
    if( tl_context.threadNameBuffer[0] == '\0' )
@@ -1291,41 +1321,36 @@ static hop_bool_t send_traces( local_context_t* ctxt, hop_timestamp_t timeStamp 
    return hop_true;
 }
 
-hop_bool_t send_lock_waits( local_context_t* ctxt, hop_timestamp_t timeStamp )
+static hop_bool_t send_events(
+    local_context_t* ctxt,
+    hop_timestamp_t timeStamp,
+    hop_event_array_t* array,
+    hop_msg_type msgType )
 {
-   // if( _lockWaits.empty() ) return false;
+   if( array->count == 0 ) return hop_false;
 
-   // const size_t lockMsgSize = sizeof( MsgInfo ) + _lockWaits.size() * sizeof( LockWait );
+   const size_t msgSize = sizeof( hop_msg_info ) + array->count * sizeof( hop_event );
 
-   // ringbuf_t* ringbuf = ClientManager::sharedMemory().ringbuffer();
-   // hop_byte_t* bufferPtr = acquireSharedChunk( ringbuf, lockMsgSize );
-   // if( !bufferPtr )
-   // {
-   //    printf(
-   //          "HOP - Failed to acquire enough shared memory. Consider increasing shared memory "
-   //          "size\n" );
-   //    _lockWaits.clear();
-   //    return hop_false;
-   // }
+   ringbuf_t* ringbuf = &g_sharedMemory->ipcSegment->ringbuf;
+   hop_byte_t* bufferPtr = acquire_shared_chunk( ctxt, ringbuf, msgSize );
+   if( !bufferPtr )
+   {
+      printf(
+          "HOP - Failed acquiring enough shared memory. Consider increasing shared memory "
+          "size\n" );
+      array->count = 0;
+      return hop_false;
+   }
 
-   // // Fill the buffer with the lock message
-   // {
-   //    MsgInfo* lwInfo         = reinterpret_cast<MsgInfo*>( bufferPtr );
-   //    lwInfo->type            = MsgType::PROFILER_WAIT_LOCK;
-   //    lwInfo->threadId        = tl_threadId;
-   //    lwInfo->threadName      = tl_threadName;
-   //    lwInfo->threadIndex     = tl_threadIndex;
-   //    lwInfo->timeStamp       = timeStamp;
-   //    lwInfo->lockwaits.count = static_cast<uint32_t>( _lockWaits.size() );
-   //    bufferPtr += sizeof( MsgInfo );
-   //    memcpy( bufferPtr, _lockWaits.data(), _lockWaits.size() * sizeof( LockWait ) );
-   // }
-
-   // ringbuf_produce( ringbuf, _worker );
-
-   // _lockWaits.clear();
-
-   return hop_true;
+   hop_msg_info* info = (hop_msg_info*)bufferPtr;
+   info->type         = msgType;
+   info->threadId     = ctxt->threadId;
+   info->threadName   = ctxt->threadName;
+   info->threadIndex  = ctxt->threadIndex;
+   info->timeStamp    = timeStamp;
+   info->count        = array->count;
+   bufferPtr += sizeof( hop_msg_info );
+   memcpy( bufferPtr, array->events, array->count * sizeof( *array->events ) );
 }
 
 static hop_bool_t send_heartbeat( local_context_t* ctxt, hop_timestamp_t timeStamp )
@@ -1388,7 +1413,8 @@ static void flush_to_consumer( local_context_t* ctxt )
 
       send_string_data( ctxt, timeStamp ); // Always send string data first
       send_traces( ctxt, timeStamp );
-      /*sendLockWaits( timeStamp );
+      send_events( ctxt, timeStamp, &ctxt->lockWaits, HOP_PROFILER_WAIT_LOCK );
+      /*
       sendUnlockEvents( timeStamp );
       sendCores( timeStamp );*/
    }
