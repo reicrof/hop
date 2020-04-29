@@ -472,7 +472,7 @@ typedef struct hop_ipc_segment
    hop_bool_t usingStdChronoTimeStamps;
 
    ringbuf_t ringbuf;
-   hop_byte_t* data;
+   hop_byte_t data[];
 } hop_ipc_segment;
 
 typedef struct hop_shared_memory
@@ -812,6 +812,14 @@ static void free_traces( pending_traces_t* t )
    memset( t, 0, sizeof( pending_traces_t ) );
 }
 
+
+static size_t pending_traces_size( const pending_traces_t* t )
+{
+   const size_t sliceSize = sizeof( hop_timestamp_t ) * 2 + +sizeof( hop_depth_t ) + sizeof( hop_str_ptr_t ) * 2 +
+                            sizeof( hop_linenb_t ) + sizeof( hop_zone_t );
+   return sliceSize * t->count;
+}
+
 static void copy_pending_traces_to( const pending_traces_t* t, void* outBuffer )
 {
    const uint32_t count = t->count;
@@ -845,12 +853,34 @@ static void copy_pending_traces_to( const pending_traces_t* t, void* outBuffer )
    memcpy( zonesPtr, t->zones, zoneSize );
 }
 
-static hop_bool_t thread_local_context_valid( local_context_t* ctxt )
+static hop_bool_t local_context_valid( local_context_t* ctxt )
 {
    return ctxt && ctxt->ringbufWorker;
 }
 
-static hop_bool_t thread_local_context_create( local_context_t* ctxt )
+static void reset_string_data( local_context_t* ctxt )
+{
+   hop_hash_set_t stringHashSet;
+   uint32_t       stringDataSize;
+   uint32_t       stringDataCapacity;
+   char*          stringData;
+
+   hop_hash_set_clear( ctxt->stringHashSet );
+   ctxt->stringDataSize = 0;
+   memset( ctxt->stringData, 0, ctxt->stringDataCapacity );
+
+   ctxt->clientResetTimeStamp = atomic_load_explicit(
+       &g_sharedMemory->ipcSegment->lastResetTimeStamp, memory_order_seq_cst );
+
+   // Push back thread name
+   if( ctxt->threadNameBuffer[0] != '\0' )
+   {
+      const hop_str_ptr_t hash = add_dynamic_string_to_db( ctxt, ctxt->threadNameBuffer);
+      HOP_ASSERT( hash == ctxt->threadName );
+   }
+}
+
+static hop_bool_t local_context_create( local_context_t* ctxt )
 {
    memset( ctxt, 0, sizeof( *ctxt ) );
    static uint32_t g_totalThreadCount;  // Index of the tread as they are coming in
@@ -863,12 +893,18 @@ static hop_bool_t thread_local_context_create( local_context_t* ctxt )
       return hop_false;
    }
 
-   ctxt->stringData = (char*) HOP_MALLOC( 1024 );
    alloc_traces( &ctxt->pendingTraces, 256 );
-   ctxt->stringHashSet = hop_hash_set_create();
    ctxt->threadId = HOP_GET_THREAD_ID();
    ctxt->ringbufWorker =
        ringbuf_register( &g_sharedMemory->ipcSegment->ringbuf, ctxt->threadIndex );
+
+
+   ctxt->stringDataCapacity = 1024;
+   ctxt->stringData = (char*) HOP_MALLOC( 1024 );
+   ctxt->stringHashSet = hop_hash_set_create();
+
+   // Will setup string data and reset timestamp
+   reset_string_data( ctxt );
 
    return ctxt->ringbufWorker != NULL;
 }
@@ -885,6 +921,7 @@ static void reset_pending_traces( local_context_t* ctxt )
    // _unlockEvents.clear();
 }
 
+<<<<<<< HEAD
 static void reset_string_data( local_context_t* ctxt )
 {
    hop_hash_set_t stringHashSet;
@@ -907,6 +944,8 @@ static void reset_string_data( local_context_t* ctxt )
    }
 }
 
+=======
+>>>>>>> Fixed few issues
 // C-style string hash inspired by Stackoverflow question
 // based on the Java string hash fct. If its good enough
 // for java, it should be good enough for me...
@@ -1012,9 +1051,9 @@ static void enter_internal(
 
 void hop_enter( const char* fileName, hop_linenb_t line, const char* fctName )
 {
-   if( HOP_UNLIKELY( !thread_local_context_valid( &tl_context ) ) )
+   if( HOP_UNLIKELY( !local_context_valid( &tl_context ) ) )
    {
-      thread_local_context_create( &tl_context );
+      local_context_create( &tl_context );
    }
 
    enter_internal( hop_get_timestamp_no_core(), (hop_str_ptr_t)fileName, line, (hop_str_ptr_t)fctName );
@@ -1022,9 +1061,9 @@ void hop_enter( const char* fileName, hop_linenb_t line, const char* fctName )
 
 void hop_enter_dynamic_string( const char* fileName, hop_linenb_t line, const char* fctName )
 {
-   if( HOP_UNLIKELY( !thread_local_context_valid( &tl_context ) ) )
+   if( HOP_UNLIKELY( !local_context_valid( &tl_context ) ) )
    {
-     thread_local_context_create( &tl_context );
+     local_context_create( &tl_context );
    }
 
    // Flag the timestamp as being dynamic (first bit set), and add the dynamic string to the db
@@ -1053,6 +1092,24 @@ void hop_leave()
       HOP_ASSERT( remainingPushedTraces == 0 ); // If < 0, there is a mismatch of enter/leave calls
       flush_to_consumer( &tl_context );
       // client->addCoreEvent( core, start, end );
+   }
+}
+
+void hop_set_thread_name( hop_str_ptr_t name )
+{
+   if( tl_context.threadNameBuffer[0] == '\0' )
+   {
+      HOP_STRNCPY(
+          &tl_context.threadNameBuffer[0],
+          (const char*)name,
+          sizeof( tl_context.threadNameBuffer ) - 1 );
+      tl_context.threadNameBuffer[sizeof( tl_context.threadNameBuffer ) - 1] = '\0';
+
+      if( local_context_valid( &tl_context ) )
+      {
+         tl_context.threadName =
+             add_dynamic_string_to_db( &tl_context, tl_context.threadNameBuffer );
+      }
    }
 }
 
@@ -1199,7 +1256,11 @@ hop_byte_t* acquire_shared_chunk( local_context_t* ctxt, ringbuf_t* ringbuf, uin
       const ssize_t offset      = ringbuf_acquire( ringbuf, ctxt->ringbufWorker, paddedSize );
       if( offset != -1 )
       {
+<<<<<<< HEAD
          data = g_sharedMemory->ipcSegment->data[offset];
+=======
+         data = g_sharedMemory->ipcSegment->data + offset;
+>>>>>>> Fixed few issues
       }
    }
 
@@ -1260,6 +1321,76 @@ static hop_bool_t send_string_data( local_context_t* ctxt, hop_timestamp_t timeS
    return hop_true;
 }
 
+static hop_bool_t send_pending_traces( local_context_t* ctxt, hop_timestamp_t timeStamp )
+{
+   // Get size of profiling traces message
+   const size_t msgSize = sizeof( hop_msg_info ) + pending_traces_size( &ctxt->pendingTraces );
+
+   ringbuf_t* ringbuf = &g_sharedMemory->ipcSegment->ringbuf;
+   hop_byte_t* bufferPtr = acquire_shared_chunk( ctxt, ringbuf, msgSize );
+   if( !bufferPtr )
+   {
+      printf(
+            "HOP - Failed to acquire enough shared memory. Consider increasing"
+            "shared memory size if you see this message more than once\n" );
+      ctxt->pendingTraces.count = 0;
+      return hop_false;
+   }
+
+   // Fill the buffer with the header followed by the trace data
+   {
+      hop_msg_info* msgInfo    = (hop_msg_info*)bufferPtr;
+
+      msgInfo->type            = HOP_PROFILER_TRACE;
+      msgInfo->threadId        = ctxt->threadId;
+      msgInfo->threadName      = ctxt->threadName;
+      msgInfo->threadIndex     = ctxt->threadIndex;
+      msgInfo->timeStamp       = timeStamp;
+      msgInfo->count           = ctxt->pendingTraces.count;
+
+      // Copy trace information into buffer to send
+      void* outBuffer = (void*)( bufferPtr + sizeof( hop_msg_info ) );
+      copy_pending_traces_to( &ctxt->pendingTraces, outBuffer );
+   }
+
+   ringbuf_produce( ringbuf, ctxt->ringbufWorker );
+
+   ctxt->pendingTraces.count = 0;
+
+   return hop_true;
+}
+
+static hop_bool_t send_heartbeat( local_context_t* ctxt, hop_timestamp_t timeStamp )
+{
+   atomic_store_explicit(
+       &g_sharedMemory->ipcSegment->lastHeartbeatTimeStamp, timeStamp, memory_order_seq_cst );
+
+   ringbuf_t* ringbuf = &g_sharedMemory->ipcSegment->ringbuf;
+   hop_byte_t* bufferPtr = acquire_shared_chunk( ctxt, ringbuf, sizeof( hop_msg_info ) );
+   if( !bufferPtr )
+   {
+      printf(
+            "HOP - Failed to acquire enough shared memory. Consider increasing shared memory "
+            "size\n" );
+      return hop_false;
+   }
+
+   // Fill the buffer with the lock message
+   {
+      hop_msg_info* msgInfo = (hop_msg_info*)bufferPtr;
+      msgInfo->type         = HOP_PROFILER_HEARTBEAT;
+      msgInfo->threadId     = ctxt->threadId;
+      msgInfo->threadName   = ctxt->threadName;
+      msgInfo->threadIndex  = ctxt->threadIndex;
+      msgInfo->timeStamp    = timeStamp;
+      bufferPtr += sizeof( hop_msg_info );
+   }
+
+   ringbuf_produce( ringbuf, ctxt->ringbufWorker );
+
+   return hop_true;
+}
+
 static void flush_to_consumer( local_context_t* ctxt )
 {
    const hop_timestamp_t timeStamp = hop_get_timestamp_no_core();
@@ -1267,7 +1398,11 @@ static void flush_to_consumer( local_context_t* ctxt )
    // If we have a consumer, send life signal
    if( has_connected_consumer( g_sharedMemory ) && should_send_heartbeat( g_sharedMemory, timeStamp ) )
    {
+<<<<<<< HEAD
       send_heartbeat( timeStamp );
+=======
+      send_heartbeat( ctxt, timeStamp );
+>>>>>>> Fixed few issues
    }
 
    // If no one is there to listen, no need to send any data
@@ -1288,8 +1423,8 @@ static void flush_to_consumer( local_context_t* ctxt )
       }
 
       send_string_data( ctxt, timeStamp ); // Always send string data first
-      /*sendTraces( timeStamp );
-      sendLockWaits( timeStamp );
+      send_pending_traces( ctxt, timeStamp );
+      /*sendLockWaits( timeStamp );
       sendUnlockEvents( timeStamp );
       sendCores( timeStamp );*/
    }
@@ -1957,50 +2092,9 @@ class HOP_API ClientManager
        hop_core_t core );
    static void EndLockWait( void* mutexAddr, hop_timestamp_t start, hop_timestamp_t end );
    static void UnlockEvent( void* mutexAddr, hop_timestamp_t time );
-   static void SetThreadName( const char* name ) HOP_NOEXCEPT;
    static hop_zone_t PushNewZone( hop_zone_t newZone );
    
    static SharedMemory& sharedMemory() HOP_NOEXCEPT;
-};
-
-class ProfGuard
-{
-  public:
-   ProfGuard( const char* fileName, hop_linenb_t lineNb, const char* fctName ) HOP_NOEXCEPT
-   {
-      open( fileName, lineNb, fctName );
-   }
-   ~ProfGuard() { close(); }
-   inline void reset( const char* fileName, hop_linenb_t lineNb, const char* fctName )
-   {
-      // Please uncomment the following line if close() is made public!
-      // if ( _fctName )
-      close();
-      open( fileName, lineNb, fctName );
-   }
-
-  private:
-   inline void open( const char* fileName, hop_linenb_t lineNb, const char* fctName )
-   {
-      _start    = getTimeStamp();
-      _fileName = (hop_str_ptr_t)fileName;
-      _fctName  = (hop_str_ptr_t)fctName;
-      _lineNb   = lineNb;
-      _zone     = ClientManager::StartProfile();
-   }
-   inline void close()
-   {
-      uint32_t core;
-      const auto end = getTimeStamp( core );
-      ClientManager::EndProfile( _fileName, _fctName, _start, end, _lineNb, _zone, core );
-      // Please uncomment the following line if close() is made public!
-      // _fctName = nullptr;
-   }
-
-   hop_timestamp_t _start;
-   hop_str_ptr_t _fileName, _fctName;
-   hop_linenb_t _lineNb;
-   hop_zone_t _zone;
 };
 
 class LockWaitGuard
@@ -2227,259 +2321,10 @@ inline int HOP_GET_PID() { return GetCurrentProcessId(); }
 namespace
 {
 
-void* createSharedMemory(
-    const HOP_CHAR* path,
-    uint64_t size,
-    shm_handle* handle,
-    hop::SharedMemory::ConnectionState* state )
-{
-   hop_byte_t* sharedMem{NULL};
-#if defined( _MSC_VER )
-   *handle = CreateFileMapping(
-       INVALID_HANDLE_VALUE,  // use paging file
-       NULL,                  // default security
-       PAGE_READWRITE,        // read/write access
-       size >> 32,            // maximum object size (high-order DWORD)
-       size & 0xFFFFFFFF,     // maximum object size (low-order DWORD)
-       path );                // name of mapping object
-
-   if( *handle == NULL )
-   {
-      *state = errorToConnectionState( GetLastError() );
-      return NULL;
-   }
-   sharedMem = (hop_byte_t*)MapViewOfFile(
-       *handle,
-       FILE_MAP_ALL_ACCESS,  // read/write permission
-       0,
-       0,
-       size );
-
-   if( sharedMem == NULL )
-   {
-      *state = errorToConnectionState( GetLastError() );
-      CloseHandle( *handle );
-      return NULL;
-   }
-#else
-   *handle = shm_open( path, O_CREAT | O_RDWR, 0666 );
-   if( *handle < 0 )
-   {
-      *state = errorToConnectionState( errno );
-      return NULL;
-   }
-
-   int truncRes = ftruncate( *handle, size );
-   if( truncRes != 0 )
-   {
-      *state = errorToConnectionState( errno );
-      return NULL;
-   }
-
-   sharedMem = reinterpret_cast<hop_byte_t*>(
-       mmap( NULL, size, PROT_READ | PROT_WRITE, MAP_SHARED, *handle, 0 ) );
-#endif
-   if( sharedMem ) *state = hop::SharedMemory::CONNECTED;
-   return sharedMem;
-}
-
-void* openSharedMemory(
-    const HOP_CHAR* path,
-    shm_handle* handle,
-    uint64_t* totalSize,
-    hop::SharedMemory::ConnectionState* state )
-{
-   hop_byte_t* sharedMem{NULL};
-#if defined( _MSC_VER )
-   *handle = OpenFileMapping(
-       FILE_MAP_ALL_ACCESS,  // read/write access
-       FALSE,                // do not inherit the name
-       path );               // name of mapping object
-
-   if( *handle == NULL )
-   {
-      *state = errorToConnectionState( GetLastError() );
-      return NULL;
-   }
-
-   sharedMem = (hop_byte_t*)MapViewOfFile(
-       *handle,
-       FILE_MAP_ALL_ACCESS,  // read/write permission
-       0,
-       0,
-       0 );
-
-   if( sharedMem == NULL )
-   {
-      *state = errorToConnectionState( GetLastError() );
-      CloseHandle( *handle );
-      return NULL;
-   }
-
-   MEMORY_BASIC_INFORMATION memInfo;
-   if( !VirtualQuery( sharedMem, &memInfo, sizeof( memInfo ) ) )
-   {
-      *state = errorToConnectionState( GetLastError() );
-      UnmapViewOfFile( sharedMem );
-      CloseHandle( *handle );
-      return NULL;
-   }
-   *totalSize = memInfo.RegionSize;
-#else
-   *handle = shm_open( path, O_RDWR, 0666 );
-   if( *handle < 0 )
-   {
-      *state = errorToConnectionState( errno );
-      return NULL;
-   }
-
-   struct stat fileStat;
-   if( fstat( *handle, &fileStat ) < 0 )
-   {
-      *state = errorToConnectionState( errno );
-      return NULL;
-   }
-
-   *totalSize = fileStat.st_size;
-
-   sharedMem = reinterpret_cast<hop_byte_t*>(
-       mmap( NULL, fileStat.st_size, PROT_READ | PROT_WRITE, MAP_SHARED, *handle, 0 ) );
-   *state = sharedMem ? hop::SharedMemory::CONNECTED : hop::SharedMemory::UNKNOWN_CONNECTION_ERROR;
-#endif
-   return sharedMem;
-}
-
-void closeSharedMemory( const HOP_CHAR* name, shm_handle handle, void* dataPtr )
-{
-#if defined( _MSC_VER )
-   UnmapViewOfFile( dataPtr );
-   CloseHandle( handle );
-#else
-   HOP_UNUSED( handle );  // Remove unuesed warning
-   HOP_UNUSED( dataPtr );
-   if( shm_unlink( name ) != 0 ) perror( " HOP - Could not unlink shared memory" );
-#endif
-}
-
-}  // namespace
-
 namespace hop
 {
 
 static std::atomic<bool> g_done{false};  // Was the shared memory destroyed? (Are we done?)
-
-
-hop_byte_t* SharedMemory::data() const HOP_NOEXCEPT { return _data; }
-
-bool SharedMemory::valid() const HOP_NOEXCEPT { return _valid; }
-
-int SharedMemory::pid() const HOP_NOEXCEPT { return _pid; }
-
-ringbuf_t* SharedMemory::ringbuffer() const HOP_NOEXCEPT { return _ringbuf; }
-
-const SharedMemory::SharedMetaInfo* SharedMemory::sharedMetaInfo() const HOP_NOEXCEPT
-{
-   return _sharedMetaData;
-}
-
-void SharedMemory::destroy()
-{
-   if( valid() )
-   {
-      if( _isConsumer )
-      {
-         set_listening_consumer( false );
-         set_connected_consumer( false );
-      }
-      else
-      {
-         set_connected_producer( false );
-      }
-
-      // If we are the last one accessing the shared memory, clean it.
-      if( ( _sharedMetaData->flags.load() &
-            ( SharedMetaInfo::CONNECTED_PRODUCER | SharedMetaInfo::CONNECTED_CONSUMER ) ) == 0 )
-      {
-         printf( "HOP - Cleaning up shared memory...\n" );
-         closeSharedMemory( _sharedMemPath, _sharedMemHandle, _sharedMetaData );
-         _sharedMetaData->~SharedMetaInfo();
-      }
-
-      _data           = NULL;
-      _ringbuf        = NULL;
-      _sharedMetaData = NULL;
-      _valid          = false;
-      g_done.store( true );
-   }
-}
-
-SharedMemory::~SharedMemory() { destroy(); }
-
-static void addTrace(
-    Traces* t,
-    hop_timestamp_t start,
-    hop_timestamp_t end,
-    hop_depth_t depth,
-    hop_str_ptr_t fileName,
-    hop_str_ptr_t fctName,
-    hop_linenb_t lineNb,
-    hop_zone_t zone )
-{
-   const uint32_t curCount = t->count;
-   if( curCount == t->maxSize )
-   {
-      allocTraces( t, t->maxSize * 2 );
-   }
-
-   t->starts[curCount]      = start;
-   t->ends[curCount]        = end;
-   t->depths[curCount]      = depth;
-   t->fileNameIds[curCount] = fileName;
-   t->fctNameIds[curCount]  = fctName;
-   t->lineNumbers[curCount] = lineNb;
-   t->zones[curCount]       = zone;
-   ++t->count;
-}
-
-static size_t traceDataSize( const Traces* t )
-{
-   const size_t sliceSize = sizeof( hop_timestamp_t ) * 2 + +sizeof( hop_depth_t ) + sizeof( hop_str_ptr_t ) * 2 +
-                            sizeof( hop_linenb_t ) + sizeof( hop_zone_t );
-   return sliceSize * t->count;
-}
-
-static void copyTracesTo( const Traces* t, void* outBuffer )
-{
-   const uint32_t count = t->count;
-
-   void* startsPtr         = outBuffer;
-   const size_t startsSize = sizeof( t->starts[0] ) * count;
-   memcpy( startsPtr, t->starts, startsSize );
-
-   void* endsPtr         = (hop_byte_t*)startsPtr + startsSize;
-   const size_t endsSize = sizeof( t->ends[0] ) * count;
-   memcpy( endsPtr, t->ends, endsSize );
-
-   void* fileNamesPtr         = (hop_byte_t*)endsPtr + endsSize;
-   const size_t fileNamesSize = sizeof( t->fileNameIds[0] ) * count;
-   memcpy( fileNamesPtr, t->fileNameIds, fileNamesSize );
-
-   void* fctNamesPtr         = (hop_byte_t*)fileNamesPtr + fileNamesSize;
-   const size_t fctNamesSize = sizeof( t->fctNameIds[0] ) * count;
-   memcpy( fctNamesPtr, t->fctNameIds, fctNamesSize );
-
-   void* lineNbPtr         = (hop_byte_t*)fctNamesPtr + fctNamesSize;
-   const size_t lineNbSize = sizeof( t->lineNumbers[0] ) * count;
-   memcpy( lineNbPtr, t->lineNumbers, lineNbSize );
-
-   void* depthsPtr         = (hop_byte_t*)lineNbPtr + lineNbSize;
-   const size_t depthsSize = sizeof( t->depths[0] ) * count;
-   memcpy( depthsPtr, t->depths, depthsSize );
-
-   void* zonesPtr        = (hop_byte_t*)depthsPtr + depthsSize;
-   const size_t zoneSize = sizeof( t->zones[0] ) * count;
-   memcpy( zonesPtr, t->zones, zoneSize );
-}
 
 class Client
 {
@@ -2529,90 +2374,6 @@ class Client
    void addUnlockEvent( void* mutexAddr, hop_timestamp_t time )
    {
       _unlockEvents.push_back( UnlockEvent{mutexAddr, time} );
-   }
-
-   void setThreadName( hop_str_ptr_t name )
-   {
-      if( !tl_threadName )
-      {
-         HOP_STRNCPY(
-             &tl_threadNameBuffer[0],
-             reinterpret_cast<const char*>( name ),
-             sizeof( tl_threadNameBuffer ) - 1 );
-         tl_threadNameBuffer[sizeof( tl_threadNameBuffer ) - 1] = '\0';
-         tl_threadName = addDynamicStringToDb( tl_threadNameBuffer );
-      }
-   }
-
-   bool addStringToDb( hop_str_ptr_t strId )
-   {
-      // Early return on NULL
-      if( strId == 0 ) return false;
-
-      const hop_bool_t inserted = hop_hash_set_insert( _stringPtrSet, (void*)strId );
-      // If the string was inserted (meaning it was not already there),
-      // add it to the database, otherwise do nothing
-      if( inserted )
-      {
-         const size_t newEntryPos = _stringData.size();
-         HOP_ASSERT( ( newEntryPos & 7 ) == 0 );  // Make sure we are 8 byte aligned
-
-         const size_t alignedStrLen = alignOn(
-             static_cast<uint32_t>( strlen( reinterpret_cast<const char*>( strId ) ) ) + 1, 8 );
-
-         _stringData.resize( newEntryPos + sizeof( hop_str_ptr_t ) + alignedStrLen );
-         hop_str_ptr_t* strIdPtr = reinterpret_cast<hop_str_ptr_t*>( &_stringData[newEntryPos] );
-         *strIdPtr          = strId;
-         HOP_STRNCPY(
-             &_stringData[newEntryPos + sizeof( hop_str_ptr_t )],
-             reinterpret_cast<const char*>( strId ),
-             alignedStrLen );
-      }
-
-      return inserted;
-   }
-
-   bool sendTraces( hop_timestamp_t timeStamp )
-   {
-      // Get size of profiling traces message
-      const size_t profilerMsgSize = sizeof( MsgInfo ) + traceDataSize( &_traces );
-
-      ringbuf_t* ringbuf = ClientManager::sharedMemory().ringbuffer();
-      hop_byte_t* bufferPtr = acquireSharedChunk( ringbuf, profilerMsgSize );
-      if( !bufferPtr )
-      {
-         printf(
-             "HOP - Failed to acquire enough shared memory. Consider increasing"
-             "shared memory size if you see this message more than once\n" );
-         _traces.count = 0;
-         return false;
-      }
-
-      // Fill the buffer with the profiling trace message
-      {
-         // The data layout is as follow:
-         // =========================================================
-         // msgInfo     = Profiler specific infos  - Information about the message sent
-         // traceToSend = Traces                   - Array containing all of the traces
-         MsgInfo* tracesInfo = reinterpret_cast<MsgInfo*>( bufferPtr );
-
-         tracesInfo->type         = HOP_PROFILER_TRACE;
-         tracesInfo->threadId     = tl_threadId;
-         tracesInfo->threadName   = tl_threadName;
-         tracesInfo->threadIndex  = tl_threadIndex;
-         tracesInfo->timeStamp    = timeStamp;
-         tracesInfo->traces.count = _traces.count;
-
-         // Copy trace information into buffer to send
-         void* outBuffer = (void*)( bufferPtr + sizeof( MsgInfo ) );
-         copyTracesTo( &_traces, outBuffer );
-      }
-
-      ringbuf_produce( ringbuf, _worker );
-
-      _traces.count = 0;
-
-      return true;
    }
 
    bool sendCores( hop_timestamp_t timeStamp )
@@ -2848,14 +2609,6 @@ void ClientManager::UnlockEvent( void* mutexAddr, hop_timestamp_t time )
    }
 }
 
-void ClientManager::SetThreadName( const char* name ) HOP_NOEXCEPT
-{
-   auto client = ClientManager::Get();
-   if( HOP_UNLIKELY( !client ) ) return;
-
-   client->setThreadName( reinterpret_cast<hop_str_ptr_t>( name ) );
-}
-
 hop_zone_t ClientManager::PushNewZone( hop_zone_t newZone )
 {
    hop_zone_t prevZone = tl_zoneId;
@@ -2864,23 +2617,6 @@ hop_zone_t ClientManager::PushNewZone( hop_zone_t newZone )
 }
 
 
-
-bool ClientManager::ShouldSendHeartbeat( hop_timestamp_t t ) HOP_NOEXCEPT
-{
-   return ClientManager::sharedMemory().valid() &&
-          ClientManager::sharedMemory().shouldSendHeartbeat( t );
-}
-
-void ClientManager::SetLastHeartbeatTimestamp( hop_timestamp_t t ) HOP_NOEXCEPT
-{
-   ClientManager::sharedMemory().setLastHeartbeatTimestamp( t );
-}
-
-SharedMemory& ClientManager::sharedMemory() HOP_NOEXCEPT
-{
-   static SharedMemory _sharedMemory;
-   return _sharedMemory;
-}
 
 }  // end of namespace hop
 

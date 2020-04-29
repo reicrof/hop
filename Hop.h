@@ -602,6 +602,7 @@ class SharedMemory
 // standard includes
 #include <algorithm>
 #include <cassert>
+#include <math.h>
 #include <memory>
 #include <vector>
 
@@ -891,7 +892,7 @@ SharedMemory::create( int pid, size_t requestedSize, bool isConsumer )
       }
       else  // Check if client has compatible version
       {
-         if( std::abs( metaInfo->clientVersion - HOP_VERSION ) > 0.001f )
+         if( fabs( metaInfo->clientVersion - HOP_VERSION ) > 0.001f )
          {
             printf(
                 "HOP - Client's version (%f) does not match HOP viewer version (%f)\n",
