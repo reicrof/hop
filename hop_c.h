@@ -49,17 +49,20 @@ extern "C"
 
 #else  // We do want to profile
 
-///////////////////////////////////////////////////////////////
-/////       THESE ARE THE MACROS YOU SHOULD USE     ///////////
-///////////////////////////////////////////////////////////////
+
+/************************************************************/
+/*           THESE ARE THE MACROS YOU SHOULD USE            */
+/************************************************************/
 
 #define HOP_INTIALIZE() hop_initialize()
 #define HOP_SHUTDOWN() hop_shutdown()
 
 #if defined( _MSC_VER )
 #define HOP_FCT_NAME __FUNCTION__
+#define HOP_EXPORT __declspec( dllexport )
 #else
 #define HOP_FCT_NAME __PRETTY_FUNCTION__
+#define HOP_EXPORT
 #endif
 
 #define HOP_ENTER( x )   hop_enter( __FILE__, __LINE__, (x) )
@@ -70,9 +73,14 @@ extern "C"
 #define HOP_LOCK_ACQUIRED()   hop_lock_acquired()
 #define HOP_RELEASE_LOCK( x ) hop_lock_release( (x) )
 
-///////////////////////////////////////////////////////////////
-/////       THESE ARE THE MACROS YOU CAN MODIFY     ///////////
-///////////////////////////////////////////////////////////////
+/* Utility macros */
+#define HOP_VERSION 0.91f
+#define HOP_ZONE_MAX 255
+#define HOP_ZONE_DEFAULT 0
+
+/************************************************************/
+/*           THESE ARE THE MACROS YOU CAN MODIFY            */
+/************************************************************/
 
 // Total maximum of thread being traced
 #if !defined( HOP_MAX_THREAD_NB )
@@ -90,9 +98,34 @@ extern "C"
 #define HOP_MIN_LOCK_CYCLES 1000
 #endif
 
-///////////////////////////////////////////////////////////////
-/////     EVERYTHING AFTER THIS IS IMPL DETAILS        ////////
-///////////////////////////////////////////////////////////////
+// Hop typedefs
+#include <stdint.h> // integer types
+typedef uint64_t hop_timestamp_t;
+typedef int64_t  hop_timeduration_t;
+typedef uint64_t hop_str_ptr_t;
+typedef uint32_t hop_linenb_t;
+typedef uint32_t hop_core_t;
+typedef uint16_t hop_depth_t;
+typedef uint16_t hop_zone_t;
+typedef void*    hop_mutex_t;
+
+typedef unsigned char hop_bool_t;
+static const hop_bool_t hop_false = 0;
+static const hop_bool_t hop_true = 1;
+
+// Hop actual function decl
+HOP_EXPORT hop_bool_t hop_initialize();
+HOP_EXPORT void hop_shutdown();
+HOP_EXPORT void hop_enter( const char* fileName, hop_linenb_t line, const char* fctName );
+HOP_EXPORT void hop_enter_dynamic_string( const char* fileName, hop_linenb_t line, const char* fctName );
+HOP_EXPORT void hop_leave();
+HOP_EXPORT void hop_acquire_lock( void* mutexAddr );
+HOP_EXPORT void hop_lock_acquired();
+HOP_EXPORT void hop_lock_release( void* mutexAddr );
+
+/************************************************************/
+/*          EVERYTHING AFTER THIS IS IMPL DETAILS           */
+/************************************************************/
 
 /*
                               /NN\
@@ -125,16 +158,39 @@ extern "C"
                        |_||_|\___/|_|
 */
 
-// Useful macros
-#define HOP_VERSION 0.91f
-#define HOP_ZONE_MAX 255
-#define HOP_ZONE_DEFAULT 0
+#if defined( HOP_IMPLEMENTATION )
 
-#include <stdint.h> // integer types
+#include <errno.h>
+#include <math.h>   // fabsf
 #include <stdio.h>  // printf
+#include <string.h>
 
-/* Windows specific macros and defines */
+#define HOP_MIN( a, b ) ( ( ( a ) < ( b ) ) ? ( a ) : ( b ) )
+#define HOP_MAX( a, b ) ( ( ( a ) > ( b ) ) ? ( a ) : ( b ) )
+#define HOP_UNUSED( x ) do { (void)sizeof(x);} while (0)
+#define HOP_MALLOC( x ) malloc( (x) )
+#define HOP_REALLOC( ptr, size ) realloc( (ptr), (size) )
+#define HOP_FREE( x )   free( (x) )
+#define HOP_SHARED_MEM_MAX_NAME_SIZE 30
+
+#ifdef NDEBUG
+#define HOP_ASSERT( x ) HOP_UNUSED( x )
+#else
+#include <assert.h>
+#define HOP_ASSERT( x ) ( (x) )
+#endif
+
+#define hop_atomic_uint64   volatile uint64_t
+#define hop_atomic_uint32   volatile uint32_t
+
+typedef unsigned char hop_byte_t;
+
+/************************************************************/
+/*                         WINDOWS                          */
+/************************************************************/
 #if defined( _MSC_VER )
+#define WIN32_LEAN_AND_MEAN
+#include <windows.h>
 #include <tchar.h>
 #include <intrin.h>  // __rdtscp 
 
@@ -142,53 +198,66 @@ extern "C"
 #define NOMINMAX
 #endif
 
-#define HOP_EXPORT __declspec( dllexport )
-#define hop_thread_local    __declspec(thread)
-
-typedef void* shm_handle;  // HANDLE is a void*
-typedef TCHAR HOP_CHAR;
-
-// Type defined in unistd.h
 #ifdef _WIN64
 #define ssize_t __int64
 #else
 #define ssize_t long
-#endif                  // _WIN64
+#endif
+
+#define hop_thread_local    __declspec(thread)
+#define HOP_LIKELY( x ) ( x )
+#define HOP_UNLIKELY( x ) ( x )
+
+#define HOP_STRLEN( str ) _tcslen( ( str ) )
+#define HOP_STRNCPYW( dst, src, count ) _tcsncpy_s( ( dst ), ( count ), ( src ), ( count ) )
+#define HOP_STRNCATW( dst, src, count ) _tcsncat( ( dst ), ( src ), ( count ) )
+#define HOP_STRNCPY( dst, src, count ) strncpy_s( ( dst ), ( count ), ( src ), ( count ) )
+#define HOP_STRNCAT( dst, src, count ) strncat_s( ( dst ), ( count ), ( src ), ( count ) )
+#define HOP_GET_THREAD_ID() ( size_t ) GetCurrentThreadId()
+
+typedef void* shm_handle;  // HANDLE is a void*
+typedef TCHAR HOP_CHAR;
+
+const HOP_CHAR HOP_SHARED_MEM_PREFIX[] = _T("/hop_");
+
+inline int HOP_GET_PID() { return GetCurrentProcessId(); }
 
 #else
-/* Unix (Linux & MacOs) specific macros and defines */
+/************************************************************/
+/*                UNIX (Linux & MacOS)                      */
+/************************************************************/
+#include <fcntl.h>      // O_CREAT
+#include <pthread.h>    // pthread_self
+#include <sys/mman.h>   // shm_open
+#include <sys/stat.h>   // fstat
 #include <sys/types.h>  // ssize_t
+#include <unistd.h>     // ftruncate, getpid
 
-#define HOP_EXPORT
-#define hop_thread_local    __thread
+#define hop_thread_local __thread
+
+#define HOP_STRLEN( str ) strlen( ( str ) )
+#define HOP_STRNCPYW( dst, src, count ) strncpy( ( dst ), ( src ), ( count ) )
+#define HOP_STRNCATW( dst, src, count ) strncat( ( dst ), ( src ), ( count ) )
+#define HOP_STRNCPY( dst, src, count ) strncpy( ( dst ), ( src ), ( count ) )
+#define HOP_STRNCAT( dst, src, count ) strncat( ( dst ), ( src ), ( count ) )
+
+#define HOP_LIKELY( x ) __builtin_expect( !!( x ), 1 )
+#define HOP_UNLIKELY( x ) __builtin_expect( !!( x ), 0 )
+
+#define HOP_GET_THREAD_ID() ( size_t )( pthread_self() )
 
 typedef int shm_handle;
 typedef char HOP_CHAR;
 
+const HOP_CHAR HOP_SHARED_MEM_PREFIX[] = "/hop_";
+
+int HOP_GET_PID() { return getpid(); }
+
 #endif
 
-#define hop_atomic_uint64   volatile uint64_t
-#define hop_atomic_uint32   volatile uint32_t
-
-typedef int           hop_bool_t;
-typedef unsigned char hop_byte_t;
-enum { hop_false, hop_true };
-
-typedef uint64_t hop_timestamp_t;
-typedef int64_t  hop_timeduration_t;
-typedef uint64_t hop_str_ptr_t;
-typedef uint32_t hop_linenb_t;
-typedef uint32_t hop_core_t;
-typedef uint16_t hop_depth_t;
-typedef uint16_t hop_zone_t;
-typedef void*    hop_mutex_t;
-
-// -----------------------------
-// Forward declarations of type used by ringbuffer as adapted from
-// Mindaugas Rasiukevicius. See below for Copyright/Disclaimer
-typedef struct ringbuf ringbuf_t;
-typedef struct ringbuf_worker ringbuf_worker_t;
-// -----------------------------
+/************************************************************/
+/*                Internal Declarations                     */
+/************************************************************/
 
 typedef enum hop_msg_type
 {
@@ -244,122 +313,6 @@ typedef struct hop_core_event
    hop_core_t core;
 } hop_core_event;
 
-hop_timestamp_t hop_rdtscp( uint32_t* aux )
-{
-#if defined( _MSC_VER )
-   return __rdtscp( aux );
-#else
-   uint64_t rax, rdx;
-   asm volatile( "rdtscp\n" : "=a"( rax ), "=d"( rdx ), "=c"( *aux ) : : );
-   return ( rdx << 32U ) + rax;
-#endif
-}
-
-hop_timestamp_t hop_get_timestamp( hop_core_t* core )
-{
-   // We return the timestamp with the first bit set to 0. We do not require this last cycle/nanosec
-   // of precision. It will instead be used to flag if a trace uses dynamic strings or not in its
-   // start time. See hop::StartProfileDynString
-   // #if HOP_USE_STD_CHRONO != 0
-   //    using namespace std::chrono;
-   //    core = 0;
-   //    return (hop_timestamp_t)duration_cast<nanoseconds>( steady_clock::now().time_since_epoch()
-   //    ).count() &
-   //           ~1ULL;
-   // #else
-   return hop_rdtscp( core ) & ~1ULL;
-   //#endif
-}
-
-hop_timestamp_t hop_get_timestamp_no_core()
-{
-   hop_core_t dummyCore;
-   return hop_get_timestamp( &dummyCore );
-}
-
-HOP_EXPORT hop_bool_t hop_initialize();
-HOP_EXPORT void hop_shutdown();
-HOP_EXPORT void hop_enter( const char* fileName, hop_linenb_t line, const char* fctName );
-HOP_EXPORT void hop_enter_dynamic_string( const char* fileName, hop_linenb_t line, const char* fctName );
-HOP_EXPORT void hop_leave();
-HOP_EXPORT void hop_acquire_lock( void* mutexAddr );
-HOP_EXPORT void hop_lock_acquired();
-HOP_EXPORT void hop_lock_release( void* mutexAddr );
-
-/* End of declarations */
-
-#include <string.h>
-
-#define HOP_MIN( a, b ) ( ( ( a ) < ( b ) ) ? ( a ) : ( b ) )
-#define HOP_MAX( a, b ) ( ( ( a ) > ( b ) ) ? ( a ) : ( b ) )
-#define HOP_UNUSED( x ) (void)( x )
-#define HOP_MALLOC( x ) malloc( (x) )
-#define HOP_REALLOC( ptr, size ) realloc( (ptr), (size) )
-#define HOP_FREE( x )   free( (x) )
-
-#ifdef NDEBUG
-#define HOP_ASSERT( x ) do { (void)sizeof(x);} while (0)
-#else
-#include <assert.h>
-#define HOP_ASSERT( x ) ( (x) )
-#endif
-
-#if !defined( _MSC_VER )
-#include <unistd.h>    // ftruncate, getpid
-
-const HOP_CHAR HOP_SHARED_MEM_PREFIX[] = "/hop_";
-
-#define HOP_STRLEN( str ) strlen( ( str ) )
-#define HOP_STRNCPYW( dst, src, count ) strncpy( ( dst ), ( src ), ( count ) )
-#define HOP_STRNCATW( dst, src, count ) strncat( ( dst ), ( src ), ( count ) )
-#define HOP_STRNCPY( dst, src, count ) strncpy( ( dst ), ( src ), ( count ) )
-#define HOP_STRNCAT( dst, src, count ) strncat( ( dst ), ( src ), ( count ) )
-
-#define HOP_LIKELY( x ) __builtin_expect( !!( x ), 1 )
-#define HOP_UNLIKELY( x ) __builtin_expect( !!( x ), 0 )
-
-#define HOP_GET_THREAD_ID() (size_t)( pthread_self() )
-
-/*
-// Unix shared memory includes
-#include <fcntl.h>     // O_CREAT
-#include <cstring>     // memcpy
-#include <pthread.h>   // pthread_self
-#include <sys/mman.h>  // shm_open
-#include <sys/stat.h>  // stat
-
-#define HOP_SLEEP_MS( x ) usleep( x * 1000 )
-*/
-int HOP_GET_PID() { return getpid(); }
-
-#else  // !defined( _MSC_VER )
-
-#define WIN32_LEAN_AND_MEAN
-#include <windows.h>
-
-const HOP_CHAR HOP_SHARED_MEM_PREFIX[] = _T("/hop_");
-
-#define HOP_STRLEN( str ) _tcslen( ( str ) )
-#define HOP_STRNCPYW( dst, src, count ) _tcsncpy_s( ( dst ), ( count ), ( src ), ( count ) )
-#define HOP_STRNCATW( dst, src, count ) _tcsncat( ( dst ), ( src ), ( count ) )
-#define HOP_STRNCPY( dst, src, count ) strncpy_s( ( dst ), ( count ), ( src ), ( count ) )
-#define HOP_STRNCAT( dst, src, count ) strncat_s( ( dst ), ( count ), ( src ), ( count ) )
-
-#define HOP_LIKELY( x ) ( x )
-#define HOP_UNLIKELY( x ) ( x )
-
-#define HOP_GET_THREAD_ID() ( size_t ) GetCurrentThreadId()
-/*
-
-
-#define HOP_SLEEP_MS( x ) Sleep( x )
-*/
-inline int HOP_GET_PID() { return GetCurrentProcessId(); }
-
-#endif  // !defined( _MSC_VER )
-
-
-
 typedef enum hop_connection_state
 {
    HOP_NO_TARGET_PROCESS,
@@ -371,35 +324,6 @@ typedef enum hop_connection_state
    HOP_UNKNOWN_CONNECTION_ERROR
 } hop_connection_state;
 
-static struct hop_shared_memory* g_sharedMemory;
-
-hop_connection_state
-hop_create_shared_memory( int pid, uint64_t requestedSize, hop_bool_t isConsumer );
-void hop_destroy_shared_memory();
-
-hop_bool_t hop_initialize()
-{
-   hop_connection_state state = hop_create_shared_memory( HOP_GET_PID(), HOP_SHARED_MEM_SIZE, hop_false );
-   if( state != HOP_CONNECTED )
-   {
-      const char* reason = "";
-      if( state == HOP_PERMISSION_DENIED ) reason = " : Permission Denied";
-
-      fprintf(
-          stderr, "HOP - Could not create shared memory%s. HOP will not be able to run\n", reason );
-      return hop_false;
-   }
-   return hop_true;
-}
-
-void hop_shutdown()
-{
-   hop_destroy_shared_memory();
-}
-
-/*Viewer declaration*/
-#define HOP_SHARED_MEM_MAX_NAME_SIZE 30
-
 typedef enum hop_shared_memory_state_bits
 {
    HOP_CONNECTED_PRODUCER = 1 << 0,
@@ -408,7 +332,50 @@ typedef enum hop_shared_memory_state_bits
 } hop_shared_memory_state_bits;
 typedef uint32_t hop_shared_memory_state;
 
+typedef struct hop_hash_set* hop_hash_set_t;
+
+/*
+ * Copyright (c) 2016 Mindaugas Rasiukevicius <rmind at noxt eu>
+ * Forward declaration only. See the actual implementation for
+ * the full LICENSE
+ */
+
+#ifndef atomic_compare_exchange_weak
+#define	atomic_compare_exchange_weak(ptr, expected, desired) \
+    __sync_bool_compare_and_swap(ptr, *(expected), desired)
+#endif
+
+#ifndef atomic_thread_fence
+#define	memory_order_relaxed	__ATOMIC_RELAXED
+#define	memory_order_acquire	__ATOMIC_ACQUIRE
+#define	memory_order_release	__ATOMIC_RELEASE
+#define	memory_order_seq_cst	__ATOMIC_SEQ_CST
+#define	atomic_thread_fence(m)	__atomic_thread_fence(m)
+#endif
+#ifndef atomic_store_explicit
+#define	atomic_store_explicit	__atomic_store_n
+#endif
+#ifndef atomic_load_explicit
+#define	atomic_load_explicit	__atomic_load_n
+#endif
+#ifndef atomic_fetch_add_explicit
+#define	atomic_fetch_add_explicit	__atomic_fetch_add
+#endif
+
+typedef struct ringbuf ringbuf_t;
+typedef struct ringbuf_worker ringbuf_worker_t;
 typedef uint64_t	ringbuf_off_t;
+
+int ringbuf_setup(ringbuf_t*, unsigned, size_t);
+void ringbuf_get_sizes(unsigned, size_t*, size_t*);
+
+ringbuf_worker_t* ringbuf_register(ringbuf_t*, unsigned);
+void ringbuf_unregister(ringbuf_t*, ringbuf_worker_t*);
+
+ssize_t ringbuf_acquire(ringbuf_t*, ringbuf_worker_t*, size_t);
+void ringbuf_produce(ringbuf_t*, ringbuf_worker_t*);
+size_t ringbuf_consume(ringbuf_t*, size_t*);
+void ringbuf_release(ringbuf_t*, size_t);
 
 struct ringbuf_worker {
    volatile ringbuf_off_t	seen_off;
@@ -432,6 +399,7 @@ struct ringbuf {
    unsigned		nworkers;
    ringbuf_worker_t	workers[0];
 };
+// --- End of Mindaugas Rasiukevicius code ------
 
 typedef struct hop_ipc_segment
 {
@@ -457,97 +425,68 @@ typedef struct hop_shared_memory
    hop_bool_t isConsumer;
 } hop_shared_memory;
 
+typedef struct hop_traces_t
+{
+   uint32_t count;
+   uint32_t maxSize;
+   hop_timestamp_t *starts, *ends;  // Timestamp for start/end of this trace
+   hop_str_ptr_t* fileNameIds;      // Index into string array for the file name
+   hop_str_ptr_t* fctNameIds;       // Index into string array for the function name
+   hop_linenb_t* lineNumbers;       // Line at which the trace was inserted
+   hop_depth_t* depths;             // The depth in the callstack of this trace
+   hop_zone_t* zones;               // Zone to which this trace belongs
+} hop_traces_t;
 
-/*
- * Copyright (c) 2016 Mindaugas Rasiukevicius <rmind at noxt eu>
- * All rights reserved.
- *
- * Redistribution and use in source and binary forms, with or without
- * modification, are permitted provided that the following conditions
- * are met:
- * 1. Redistributions of source code must retain the above copyright
- *    notice, this list of conditions and the following disclaimer.
- * 2. Redistributions in binary form must reproduce the above copyright
- *    notice, this list of conditions and the following disclaimer in the
- *    documentation and/or other materials provided with the distribution.
- *
- * THIS SOFTWARE IS PROVIDED BY THE AUTHOR AND CONTRIBUTORS ``AS IS'' AND
- * ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
- * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
- * ARE DISCLAIMED.  IN NO EVENT SHALL THE AUTHOR OR CONTRIBUTORS BE LIABLE
- * FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
- * DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS
- * OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION)
- * HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT
- * LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY
- * OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
- * SUCH DAMAGE.
- */
-int ringbuf_setup(ringbuf_t*, unsigned, size_t);
-void ringbuf_get_sizes(unsigned, size_t*, size_t*);
+typedef union hop_event {
+   hop_lock_wait_event lock_wait;
+   hop_unlock_event unlock;
+   hop_core_event core;
+} hop_event;
 
-ringbuf_worker_t* ringbuf_register(ringbuf_t*, unsigned);
-void ringbuf_unregister(ringbuf_t*, ringbuf_worker_t*);
+typedef struct hop_event_array_t
+{
+   union hop_event* events;
+   uint32_t count;
+   uint32_t capacity;
+} hop_event_array_t;
 
-ssize_t ringbuf_acquire(ringbuf_t*, ringbuf_worker_t*, size_t);
-void ringbuf_produce(ringbuf_t*, ringbuf_worker_t*);
-size_t ringbuf_consume(ringbuf_t*, size_t*);
-void ringbuf_release(ringbuf_t*, size_t);
+/************************************************************/
+/* Thread local context created for each client thread      */
+/************************************************************/
+typedef struct local_context_t
+{
+   // Local client data
+   hop_traces_t traces;
+   uint32_t openTraceIdx;  // Index of the last opened trace
 
-/*
- * Atomic operations and memory barriers.  If C11 API is not available,
- * then wrap the GCC builtin routines.
- *
- * Note: This atomic_compare_exchange_weak does not do the C11 thing of
- * filling *(expected) with the actual value, because we don't need
- * that here.
- */
-#ifndef atomic_compare_exchange_weak
-#define	atomic_compare_exchange_weak(ptr, expected, desired) \
-    __sync_bool_compare_and_swap(ptr, *(expected), desired)
-#endif
+   hop_event_array_t lockWaits;
+   uint32_t openLockWaitIdx; // Index of the last opened lockwait
+   hop_event_array_t unlocks;
 
-#ifndef atomic_thread_fence
-#define	memory_order_relaxed	__ATOMIC_RELAXED
-#define	memory_order_acquire	__ATOMIC_ACQUIRE
-#define	memory_order_release	__ATOMIC_RELEASE
-#define	memory_order_seq_cst	__ATOMIC_SEQ_CST
-#define	atomic_thread_fence(m)	__atomic_thread_fence(m)
-#endif
-#ifndef atomic_store_explicit
-#define	atomic_store_explicit	__atomic_store_n
-#endif
-#ifndef atomic_load_explicit
-#define	atomic_load_explicit	__atomic_load_n
-#endif
-#ifndef atomic_fetch_add_explicit
-#define	atomic_fetch_add_explicit	__atomic_fetch_add
-#endif
+   hop_timestamp_t clientResetTimeStamp;
+   hop_depth_t traceLevel;
+   hop_zone_t zoneId;
 
+   // Thread data
+   hop_str_ptr_t threadName;
+   char threadNameBuffer[64];
+   uint64_t threadId;     // ID of the thread as seen by the OS
+   uint32_t threadIndex;  // Index of the tread as they are coming in
+   ringbuf_worker_t* ringbufWorker;
 
-typedef struct hop_hash_set* hop_hash_set_t;
-hop_hash_set_t hop_hash_set_create();
-void hop_hash_set_destroy( hop_hash_set_t set );
-void hop_hash_set_clear( hop_hash_set_t set );
-int hop_hash_set_insert( hop_hash_set_t set, const void* value );
+   // String data
+   hop_hash_set_t stringHashSet;
+   uint32_t       stringDataSize;
+   uint32_t       stringDataCapacity;
+   char*          stringData;
+   uint32_t       sentStringDataSize;
+} local_context_t;
 
-/* -------------------------------------------------------
-                  End of declaration
--------------------------------------------------------  */
+/* Global and thread local variables */
+static struct hop_shared_memory* g_sharedMemory;
+static hop_thread_local local_context_t tl_context;
 
-#include <errno.h>
-#include <math.h>
-
-#if !defined( _MSC_VER )
-#include <fcntl.h>     // O_CREAT
-#include <pthread.h>   // pthread_self
-#include <sys/mman.h>  // shm_open
-#include <sys/stat.h>  // stat
-#endif
-
-/*Viewer implementation*/
-
-static hop_connection_state err_to_connection_state( uint32_t err );
+/* Creation/Destruction of shared memory */
 static void* open_ipc_memory(
     const HOP_CHAR* path,
     shm_handle* hdl,
@@ -559,9 +498,11 @@ static void* create_ipc_memory(
     shm_handle* handle,
     hop_connection_state* state );
 static void close_ipc_memory( const HOP_CHAR* name, shm_handle handle, void* dataPtr );
-
-static uint32_t atomic_set_bit( hop_atomic_uint32* value, uint32_t bitToSet );
-static uintptr_t atomic_clear_bit( hop_atomic_uint32* value, uint32_t bitToSet );
+static hop_bool_t check_or_create_local_context( local_context_t* ctxt );
+static hop_bool_t local_context_valid( local_context_t* ctxt );
+static hop_connection_state
+create_shared_memory( int pid, uint64_t requestedSize, hop_bool_t isConsumer );
+static void destroy_shared_memory();
 
 static hop_bool_t has_connected_producer( hop_shared_memory* mem );
 static void set_connected_producer( hop_shared_memory* mem, hop_bool_t );
@@ -571,7 +512,201 @@ static hop_bool_t has_listening_consumer( hop_shared_memory* mem );
 static void set_listening_consumer( hop_shared_memory* mem, hop_bool_t );
 static void set_reset_timestamp( hop_shared_memory* mem, hop_timestamp_t t );
 
-hop_connection_state hop_create_shared_memory( int pid, uint64_t requestedSize, hop_bool_t isConsumer )
+/* Events related functions */
+static hop_timestamp_t hop_rdtscp( uint32_t* aux );
+static hop_timestamp_t hop_get_timestamp( hop_core_t* core );
+static hop_timestamp_t hop_get_timestamp_no_core();
+static hop_str_ptr_t add_dynamic_string_to_db( local_context_t* ctxt, const char* dynStr );
+static hop_str_ptr_t add_string_to_db( local_context_t* ctxt, const char* strId );
+static hop_bool_t should_send_heartbeat( hop_shared_memory* mem, hop_timestamp_t curTimestamp );
+static void flush_to_consumer(local_context_t* ctxt);
+static void alloc_traces( hop_traces_t* t, unsigned size );
+static void push_event( hop_event_array_t* array, const hop_event* ev );
+static void enter_internal(
+    hop_timestamp_t ts,
+    hop_str_ptr_t fileName,
+    hop_linenb_t line,
+    hop_str_ptr_t fctName );
+
+/* Hash set functions */
+hop_hash_set_t hop_hash_set_create();
+void hop_hash_set_destroy( hop_hash_set_t set );
+void hop_hash_set_clear( hop_hash_set_t set );
+int hop_hash_set_insert( hop_hash_set_t set, const void* value );
+
+/* Misc functions */
+static uint32_t atomic_set_bit( hop_atomic_uint32* value, uint32_t bitToSet );
+static uintptr_t atomic_clear_bit( hop_atomic_uint32* value, uint32_t bitToSet );
+
+/************************************************************/
+/*                Internal Implementation                   */
+/************************************************************/
+
+hop_bool_t hop_initialize()
+{
+   hop_connection_state state = create_shared_memory( HOP_GET_PID(), HOP_SHARED_MEM_SIZE, hop_false );
+   if( state != HOP_CONNECTED )
+   {
+      const char* reason = "";
+      if( state == HOP_PERMISSION_DENIED ) reason = " : Permission Denied";
+
+      fprintf(
+          stderr, "HOP - Could not create shared memory%s. HOP will not be able to run\n", reason );
+      return hop_false;
+   }
+   return hop_true;
+}
+
+void hop_shutdown()
+{
+   destroy_shared_memory();
+}
+
+void hop_enter( const char* fileName, hop_linenb_t line, const char* fctName )
+{
+   if( HOP_UNLIKELY( !check_or_create_local_context( &tl_context ) ) )
+         return;
+
+   enter_internal( hop_get_timestamp_no_core(), (hop_str_ptr_t)fileName, line, (hop_str_ptr_t)fctName );
+}
+
+void hop_enter_dynamic_string( const char* fileName, hop_linenb_t line, const char* fctName )
+{
+   if( HOP_UNLIKELY( !check_or_create_local_context( &tl_context ) ) )
+         return;
+
+   // Flag the timestamp as being dynamic (first bit set), and add the dynamic string to the db
+   enter_internal(
+       hop_get_timestamp_no_core() | 1ULL,
+       (hop_str_ptr_t)fileName,
+       line,
+       add_dynamic_string_to_db( &tl_context, fctName ) );
+}
+
+void hop_leave()
+{
+   if( HOP_UNLIKELY( !check_or_create_local_context( &tl_context ) ) )
+         return;
+
+   const hop_timestamp_t endTime                   = hop_get_timestamp_no_core();
+   const int32_t remainingPushedTraces             = --tl_context.traceLevel;
+   const uint32_t lastOpenTraceIdx                 = tl_context.openTraceIdx;
+   tl_context.openTraceIdx                         = tl_context.traces.ends[lastOpenTraceIdx];
+   tl_context.traces.ends[lastOpenTraceIdx] = endTime;
+
+   if( remainingPushedTraces <= 0 )
+   {
+      HOP_ASSERT( remainingPushedTraces == 0 ); // If < 0, there is a mismatch of enter/leave calls
+      flush_to_consumer( &tl_context );
+      // client->addCoreEvent( core, start, end );
+   }
+}
+
+void hop_acquire_lock( void* mutexAddr )
+{
+   if( HOP_UNLIKELY( !check_or_create_local_context( &tl_context ) ) )
+         return;
+
+   hop_event ev;
+   ev.lock_wait.start         = hop_get_timestamp_no_core();
+   ev.lock_wait.end           = tl_context.openLockWaitIdx; // Save previous opened idx
+   tl_context.openLockWaitIdx = tl_context.lockWaits.count; // Current idx is the new opended idx
+   ev.lock_wait.mutexAddress  = mutexAddr;
+   push_event( &tl_context.lockWaits, &ev );
+}
+
+void hop_lock_acquired()
+{
+   if( HOP_UNLIKELY( !check_or_create_local_context( &tl_context ) ) )
+         return;
+
+   const hop_timestamp_t endTime = hop_get_timestamp_no_core();
+   const uint32_t lastOpenLWIdx  = tl_context.openLockWaitIdx;
+   hop_event* ev                 = &tl_context.lockWaits.events[lastOpenLWIdx];
+   tl_context.openLockWaitIdx    = ev->lock_wait.end;
+   ev->lock_wait.end             = endTime;
+}
+
+void hop_lock_release( void* mutexAddr )
+{
+   if( HOP_UNLIKELY( !check_or_create_local_context( &tl_context ) ) )
+         return;
+
+   hop_event ev;
+   ev.unlock.time         = hop_get_timestamp_no_core();
+   ev.unlock.mutexAddress = mutexAddr;
+   push_event( &tl_context.unlocks, &ev );
+}
+
+void hop_set_thread_name( hop_str_ptr_t name )
+{
+   if( tl_context.threadNameBuffer[0] == '\0' )
+   {
+      HOP_STRNCPY(
+          &tl_context.threadNameBuffer[0],
+          (const char*)name,
+          sizeof( tl_context.threadNameBuffer ) - 1 );
+      tl_context.threadNameBuffer[sizeof( tl_context.threadNameBuffer ) - 1] = '\0';
+
+      if( local_context_valid( &tl_context ) )
+      {
+         tl_context.threadName =
+             add_dynamic_string_to_db( &tl_context, tl_context.threadNameBuffer );
+      }
+   }
+}
+
+static hop_timestamp_t hop_rdtscp( uint32_t* aux )
+{
+#if defined( _MSC_VER )
+   return __rdtscp( aux );
+#else
+   uint64_t rax, rdx;
+   asm volatile( "rdtscp\n" : "=a"( rax ), "=d"( rdx ), "=c"( *aux ) : : );
+   return ( rdx << 32U ) + rax;
+#endif
+}
+
+static hop_timestamp_t hop_get_timestamp( hop_core_t* core )
+{
+   return hop_rdtscp( core ) & ~1ULL;
+}
+
+static hop_timestamp_t hop_get_timestamp_no_core()
+{
+   hop_core_t dummyCore;
+   return hop_get_timestamp( &dummyCore );
+}
+
+static void enter_internal(
+    hop_timestamp_t ts,
+    hop_str_ptr_t fileName,
+    hop_linenb_t line,
+    hop_str_ptr_t fctName )
+{
+   const uint32_t curCount = tl_context.traces.count;
+   if( curCount == tl_context.traces.maxSize )
+   {
+      alloc_traces( &tl_context.traces, tl_context.traces.maxSize * 2 );
+   }
+
+   // Keep the index of the last opened trace in the new 'end' timestamp. It will
+   // be restored when poping the trace
+   tl_context.traces.ends[curCount]        = tl_context.openTraceIdx;
+   tl_context.openTraceIdx                 = curCount;
+
+   // Save the actual data
+   tl_context.traces.starts[curCount]      = ts;
+   tl_context.traces.depths[curCount]      = tl_context.traceLevel++;
+   tl_context.traces.fileNameIds[curCount] = fileName;
+   tl_context.traces.fctNameIds[curCount]  = fctName;
+   tl_context.traces.lineNumbers[curCount] = line;
+   tl_context.traces.zones[curCount]       = tl_context.zoneId;
+   ++tl_context.traces.count;
+}
+
+static hop_connection_state
+create_shared_memory( int pid, uint64_t requestedSize, hop_bool_t isConsumer )
 {
    HOP_ASSERT( !g_sharedMemory );
    
@@ -612,7 +747,7 @@ hop_connection_state hop_create_shared_memory( int pid, uint64_t requestedSize, 
    // If we still are not able to get the shared memory, return failure state
    if( !ipcSegment )
    {
-      hop_destroy_shared_memory();
+      destroy_shared_memory();
       return state;
    }
 
@@ -629,7 +764,7 @@ hop_connection_state hop_create_shared_memory( int pid, uint64_t requestedSize, 
       // actually initialized
       if( ringbuf_setup( &ipcSegment->ringbuf, HOP_MAX_THREAD_NB, requestedSize ) < 0 )
       {
-         hop_destroy_shared_memory();
+         destroy_shared_memory();
          return HOP_UNKNOWN_CONNECTION_ERROR;
       }
    }
@@ -642,7 +777,7 @@ hop_connection_state hop_create_shared_memory( int pid, uint64_t requestedSize, 
              "HOP - Client's version (%f) does not match HOP viewer version (%f)\n",
              ipcSegment->clientVersion,
              HOP_VERSION );
-         hop_destroy_shared_memory();
+         destroy_shared_memory();
          return HOP_INVALID_VERSION;
       }
    }
@@ -680,7 +815,7 @@ hop_connection_state hop_create_shared_memory( int pid, uint64_t requestedSize, 
    return state;
 }
 
-void hop_destroy_shared_memory()
+void destroy_shared_memory()
 {
    if( g_sharedMemory )
    {
@@ -719,66 +854,6 @@ static uint64_t align_on_uint64( uint64_t val, uint64_t alignment )
 {
    return ( ( val + alignment - 1 ) & ~( alignment - 1 ) );
 }
-
-typedef struct hop_traces_t
-{
-   uint32_t count;
-   uint32_t maxSize;
-   hop_timestamp_t *starts, *ends;  // Timestamp for start/end of this trace
-   hop_str_ptr_t* fileNameIds;      // Index into string array for the file name
-   hop_str_ptr_t* fctNameIds;       // Index into string array for the function name
-   hop_linenb_t* lineNumbers;       // Line at which the trace was inserted
-   hop_depth_t* depths;             // The depth in the callstack of this trace
-   hop_zone_t* zones;               // Zone to which this trace belongs
-} hop_traces_t;
-
-typedef union hop_event {
-   hop_lock_wait_event lock_wait;
-   hop_unlock_event unlock;
-   hop_core_event core;
-} hop_event;
-
-typedef struct hop_event_array_t
-{
-   union hop_event* events;
-   uint32_t count;
-   uint32_t capacity;
-} hop_event_array_t;
-
-typedef struct local_context_t
-{
-   // Local client data
-   hop_traces_t traces;
-   uint32_t openTraceIdx;  // Index of the last opened trace
-
-   hop_event_array_t lockWaits;
-   uint32_t openLockWaitIdx; // Index of the last opened lockwait
-   hop_event_array_t unlocks;
-
-   hop_timestamp_t clientResetTimeStamp;
-   hop_depth_t traceLevel;
-   hop_zone_t zoneId;
-
-   // Thread data
-   hop_str_ptr_t threadName;
-   char threadNameBuffer[64];
-   uint64_t threadId;     // ID of the thread as seen by the OS
-   uint32_t threadIndex;  // Index of the tread as they are coming in
-   ringbuf_worker_t* ringbufWorker;
-
-   // String data
-   hop_hash_set_t stringHashSet;
-   uint32_t       stringDataSize;
-   uint32_t       stringDataCapacity;
-   char*          stringData;
-   uint32_t       sentStringDataSize;
-} local_context_t;
-
-static hop_thread_local local_context_t tl_context;
-
-static void flush_to_consumer(local_context_t* ctxt);
-static hop_str_ptr_t add_dynamic_string_to_db( local_context_t* ctxt, const char* dynStr );
-static hop_str_ptr_t add_string_to_db( local_context_t* ctxt, const char* strId );
 
 static void alloc_traces( hop_traces_t* t, unsigned size )
 {
@@ -1009,125 +1084,17 @@ static hop_bool_t check_or_create_local_context( local_context_t* ctxt )
    return hop_true;
 }
 
-static void enter_internal(
-    hop_timestamp_t ts,
-    hop_str_ptr_t fileName,
-    hop_linenb_t line,
-    hop_str_ptr_t fctName )
+static hop_connection_state err_to_connection_state( uint32_t err )
 {
-   const uint32_t curCount = tl_context.traces.count;
-   if( curCount == tl_context.traces.maxSize )
-   {
-      alloc_traces( &tl_context.traces, tl_context.traces.maxSize * 2 );
-   }
-
-   // Keep the index of the last opened trace in the new 'end' timestamp. It will
-   // be restored when poping the trace
-   tl_context.traces.ends[curCount]        = tl_context.openTraceIdx;
-   tl_context.openTraceIdx                 = curCount;
-
-   // Save the actual data
-   tl_context.traces.starts[curCount]      = ts;
-   tl_context.traces.depths[curCount]      = tl_context.traceLevel++;
-   tl_context.traces.fileNameIds[curCount] = fileName;
-   tl_context.traces.fctNameIds[curCount]  = fctName;
-   tl_context.traces.lineNumbers[curCount] = line;
-   tl_context.traces.zones[curCount]       = tl_context.zoneId;
-   ++tl_context.traces.count;
-}
-
-void hop_enter( const char* fileName, hop_linenb_t line, const char* fctName )
-{
-   if( HOP_UNLIKELY( !check_or_create_local_context( &tl_context ) ) )
-         return;
-
-   enter_internal( hop_get_timestamp_no_core(), (hop_str_ptr_t)fileName, line, (hop_str_ptr_t)fctName );
-}
-
-void hop_enter_dynamic_string( const char* fileName, hop_linenb_t line, const char* fctName )
-{
-   if( HOP_UNLIKELY( !check_or_create_local_context( &tl_context ) ) )
-         return;
-
-   // Flag the timestamp as being dynamic (first bit set), and add the dynamic string to the db
-   enter_internal(
-       hop_get_timestamp_no_core() | 1ULL,
-       fileName,
-       line,
-       add_dynamic_string_to_db( &tl_context, fctName ) );
-}
-
-void hop_leave()
-{
-   if( HOP_UNLIKELY( !check_or_create_local_context( &tl_context ) ) )
-         return;
-
-   const hop_timestamp_t endTime                   = hop_get_timestamp_no_core();
-   const int32_t remainingPushedTraces             = --tl_context.traceLevel;
-   const uint32_t lastOpenTraceIdx                 = tl_context.openTraceIdx;
-   tl_context.openTraceIdx                         = tl_context.traces.ends[lastOpenTraceIdx];
-   tl_context.traces.ends[lastOpenTraceIdx] = endTime;
-
-   if( remainingPushedTraces <= 0 )
-   {
-      HOP_ASSERT( remainingPushedTraces == 0 ); // If < 0, there is a mismatch of enter/leave calls
-      flush_to_consumer( &tl_context );
-      // client->addCoreEvent( core, start, end );
-   }
-}
-
-void hop_acquire_lock( void* mutexAddr )
-{
-   if( HOP_UNLIKELY( !check_or_create_local_context( &tl_context ) ) )
-         return;
-
-   hop_event ev;
-   ev.lock_wait.start         = hop_get_timestamp_no_core();
-   ev.lock_wait.end           = tl_context.openLockWaitIdx; // Save previous opened idx
-   tl_context.openLockWaitIdx = tl_context.lockWaits.count; // Current idx is the new opended idx
-   ev.lock_wait.mutexAddress  = mutexAddr;
-   push_event( &tl_context.lockWaits, &ev );
-}
-
-void hop_lock_acquired()
-{
-   if( HOP_UNLIKELY( !check_or_create_local_context( &tl_context ) ) )
-         return;
-
-   const hop_timestamp_t endTime = hop_get_timestamp_no_core();
-   const uint32_t lastOpenLWIdx  = tl_context.openLockWaitIdx;
-   hop_event* ev                 = &tl_context.lockWaits.events[lastOpenLWIdx];
-   tl_context.openLockWaitIdx    = ev->lock_wait.end;
-   ev->lock_wait.end             = endTime;
-}
-
-void hop_lock_release( void* mutexAddr )
-{
-   if( HOP_UNLIKELY( !check_or_create_local_context( &tl_context ) ) )
-         return;
-
-   hop_event ev;
-   ev.unlock.time         = hop_get_timestamp_no_core();
-   ev.unlock.mutexAddress = mutexAddr;
-   push_event( &tl_context.unlocks, &ev );
-}
-
-void hop_set_thread_name( hop_str_ptr_t name )
-{
-   if( tl_context.threadNameBuffer[0] == '\0' )
-   {
-      HOP_STRNCPY(
-          &tl_context.threadNameBuffer[0],
-          (const char*)name,
-          sizeof( tl_context.threadNameBuffer ) - 1 );
-      tl_context.threadNameBuffer[sizeof( tl_context.threadNameBuffer ) - 1] = '\0';
-
-      if( local_context_valid( &tl_context ) )
-      {
-         tl_context.threadName =
-             add_dynamic_string_to_db( &tl_context, tl_context.threadNameBuffer );
-      }
-   }
+#if defined( _MSC_VER )
+   if( err == ERROR_FILE_NOT_FOUND ) return HOP_NOT_CONNECTED;
+   if( err == ERROR_ACCESS_DENIED ) return HOP_PERMISSION_DENIED;
+   return HOP_UNKNOWN_CONNECTION_ERROR;
+#else
+   if( err == ENOENT ) return HOP_NOT_CONNECTED;
+   if( err == EACCES ) return HOP_PERMISSION_DENIED;
+   return HOP_UNKNOWN_CONNECTION_ERROR;
+#endif
 }
 
 static void* create_ipc_memory(
@@ -1480,19 +1447,6 @@ static void flush_to_consumer( local_context_t* ctxt )
    }
 }
 
-static hop_connection_state err_to_connection_state( uint32_t err )
-{
-#if defined( _MSC_VER )
-   if( err == ERROR_FILE_NOT_FOUND ) return HOP_NOT_CONNECTED;
-   if( err == ERROR_ACCESS_DENIED ) return HOP_PERMISSION_DENIED;
-   return HOP_UNKNOWN_CONNECTION_ERROR;
-#else
-   if( err == ENOENT ) return HOP_NOT_CONNECTED;
-   if( err == EACCES ) return HOP_PERMISSION_DENIED;
-   return HOP_UNKNOWN_CONNECTION_ERROR;
-#endif
-}
-
 static uint32_t atomic_set_bit( hop_atomic_uint32* value, uint32_t bitToSet )
 {
    uint32_t origValue = atomic_load_explicit( value, memory_order_seq_cst );
@@ -1571,6 +1525,129 @@ static void set_last_heartbeat( hop_shared_memory* mem, hop_timestamp_t t )
    atomic_store_explicit( &mem->ipcSegment->lastHeartbeatTimeStamp, t, memory_order_seq_cst );
 }
 
+/************************************************************/
+/*                  HASH SET IMPLEMENTATION                 */
+/************************************************************/
+static const uint32_t DEFAULT_TABLE_SIZE = 1 << 8U;  // Required to be a power of 2 !
+static const float MAX_LOAD_FACTOR       = 0.4f;
+
+typedef struct hop_hash_set
+{
+   const void** table;
+   uint32_t capacity;
+   uint32_t count;
+} hop_hash_set;
+
+static inline float load_factor( hop_hash_set_t set ) { return (float)set->count / set->capacity; }
+
+static inline uint64_t hash_func( const void* value )
+{
+   return (uint64_t)value;
+}
+
+static inline uint32_t quad_probe( uint64_t hash_value, uint32_t it, uint32_t table_size )
+{
+   // Using quadratic probing function (x^2 + x) / 2
+   return ( hash_value + ( ( it * it + it ) >> 2 ) ) % table_size;
+}
+
+// Insert value inside the hash set without incrementing the count. Used while rehashing as
+// well as within the public insert function
+static int insert_internal( hop_hash_set_t hs, const void* value )
+{
+   const uint64_t hash_value = hash_func( value );
+   uint32_t iteration        = 0;
+   while( iteration < hs->capacity )
+   {
+      const uint32_t idx         = quad_probe( hash_value, iteration++, hs->capacity );
+      const void* existing_value = hs->table[idx];
+      if( existing_value == value )
+      {
+         return 0;  // Value already inserted. Return insertion failure
+      }
+      else if( existing_value == NULL )
+      {
+         hs->table[idx] = value;
+         return 1;
+      }
+   }
+
+   return 0;
+}
+
+static void rehash( hop_hash_set_t hs )
+{
+   const void** prev_table            = hs->table;
+   const uint32_t prev_capacity = hs->capacity;
+
+   hs->capacity = prev_capacity * 2;
+   hs->table    = (const void**)calloc( hs->capacity, sizeof( const void* ) );
+
+   for( uint32_t i = 0; i < prev_capacity; ++i )
+   {
+      if( prev_table[i] != NULL ) insert_internal( hs, prev_table[i] );
+   }
+
+   free( prev_table );
+}
+
+hop_hash_set_t hop_hash_set_create()
+{
+   hop_hash_set* hs = (hop_hash_set*)calloc( 1, sizeof( hop_hash_set ) );
+   if( !hs ) return NULL;
+
+   hs->table = (const void**)calloc( DEFAULT_TABLE_SIZE, sizeof( const void* ) );
+   if( !hs->table )
+   {
+      free( hs );
+      return NULL;
+   }
+
+   hs->capacity = DEFAULT_TABLE_SIZE;
+   return hs;
+}
+
+void hop_hash_set_destroy( hop_hash_set_t set )
+{
+   if( set )
+   {
+      free( set->table );
+   }
+   free( set );
+}
+
+int hop_hash_set_insert( hop_hash_set_t hs, const void* value )
+{
+   const int inserted = insert_internal( hs, value );
+   if( inserted )
+   {
+      ++hs->count;
+      if( load_factor( hs ) > MAX_LOAD_FACTOR )
+      {
+         rehash( hs );
+      }
+   }
+   return inserted;
+}
+
+int hop_hash_set_count( hop_hash_set_t set ) { return set->count; }
+
+void hop_hash_set_clear( hop_hash_set_t set )
+{
+   if( set )
+   {
+      set->count = 0;
+      if( set->table )
+      {
+         memset( set->table, 0, set->capacity * sizeof( const void* ) );
+      }
+   }
+}
+
+/************************************************************/
+/*            MSPC RING BUFER SET IMPLEMENTATION            */
+/************************************************************/
+
 /*
  * Copyright (c) 2016 Mindaugas Rasiukevicius <rmind at noxt eu>
  * All rights reserved.
@@ -1597,13 +1674,11 @@ static void set_last_heartbeat( hop_shared_memory* mem, hop_timestamp_t t )
  * SUCH DAMAGE.
  */
 
-#include <stdio.h>
 #include <stdlib.h>
 #include <stddef.h>
 #include <stdbool.h>
 #include <inttypes.h>
 #include <limits.h>
-#include <errno.h>
 
 /*
  * Branch prediction macros.
@@ -1972,131 +2047,6 @@ ringbuf_release(ringbuf_t* rbuf, size_t nbytes)
 }
 
 
-/**
- * Hash set implementation
- */
-
-/**
- * Start of hop hash set implementation
- */
-
-static const uint32_t DEFAULT_TABLE_SIZE = 1 << 8U;  // Required to be a power of 2 !
-static const float MAX_LOAD_FACTOR       = 0.4f;
-
-typedef struct hop_hash_set
-{
-   const void** table;
-   uint32_t capacity;
-   uint32_t count;
-} hop_hash_set;
-
-static inline float load_factor( hop_hash_set_t set ) { return (float)set->count / set->capacity; }
-
-static inline uint64_t hash_func( const void* value )
-{
-   return (uint64_t)value;
-}
-
-static inline uint32_t quad_probe( uint64_t hash_value, uint32_t it, uint32_t table_size )
-{
-   // Using quadratic probing function (x^2 + x) / 2
-   return ( hash_value + ( ( it * it + it ) >> 2 ) ) % table_size;
-}
-
-// Insert value inside the hash set without incrementing the count. Used while rehashing as
-// well as within the public insert function
-static int insert_internal( hop_hash_set_t hs, const void* value )
-{
-   const uint64_t hash_value = hash_func( value );
-   uint32_t iteration        = 0;
-   while( iteration < hs->capacity )
-   {
-      const uint32_t idx         = quad_probe( hash_value, iteration++, hs->capacity );
-      const void* existing_value = hs->table[idx];
-      if( existing_value == value )
-      {
-         return 0;  // Value already inserted. Return insertion failure
-      }
-      else if( existing_value == NULL )
-      {
-         hs->table[idx] = value;
-         return 1;
-      }
-   }
-
-   return 0;
-}
-
-static void rehash( hop_hash_set_t hs )
-{
-   const void** prev_table            = hs->table;
-   const uint32_t prev_capacity = hs->capacity;
-
-   hs->capacity = prev_capacity * 2;
-   hs->table    = (const void**)calloc( hs->capacity, sizeof( const void* ) );
-
-   for( uint32_t i = 0; i < prev_capacity; ++i )
-   {
-      if( prev_table[i] != NULL ) insert_internal( hs, prev_table[i] );
-   }
-
-   free( prev_table );
-}
-
-hop_hash_set_t hop_hash_set_create()
-{
-   hop_hash_set* hs = (hop_hash_set*)calloc( 1, sizeof( hop_hash_set ) );
-   if( !hs ) return NULL;
-
-   hs->table = (const void**)calloc( DEFAULT_TABLE_SIZE, sizeof( const void* ) );
-   if( !hs->table )
-   {
-      free( hs );
-      return NULL;
-   }
-
-   hs->capacity = DEFAULT_TABLE_SIZE;
-   return hs;
-}
-
-void hop_hash_set_destroy( hop_hash_set_t set )
-{
-   if( set )
-   {
-      free( set->table );
-   }
-   free( set );
-}
-
-int hop_hash_set_insert( hop_hash_set_t hs, const void* value )
-{
-   const int inserted = insert_internal( hs, value );
-   if( inserted )
-   {
-      ++hs->count;
-      if( load_factor( hs ) > MAX_LOAD_FACTOR )
-      {
-         rehash( hs );
-      }
-   }
-   return inserted;
-}
-
-int hop_hash_set_count( hop_hash_set_t set ) { return set->count; }
-
-void hop_hash_set_clear( hop_hash_set_t set )
-{
-   if( set )
-   {
-      set->count = 0;
-      if( set->table )
-      {
-         memset( set->table, 0, set->capacity * sizeof( const void* ) );
-      }
-   }
-}
-
-
 
 
 
@@ -2254,7 +2204,7 @@ void ringbuf_release( ringbuf_t*, size_t );
 #include <mutex>
 
 // On MacOs the max name length seems to be 30...
-#define HOP_SHARED_MEM_MAX_NAME_SIZE 30
+
 namespace hop
 {
 class SharedMemory
@@ -2305,8 +2255,6 @@ class SharedMemory
                     End of private declarations
    ==================================================================== */
 
-#if defined( HOP_IMPLEMENTATION )
-
 // standard includes
 #include <HOP_ASSERT.h>
 
@@ -2336,7 +2284,6 @@ const HOP_CHAR HOP_SHARED_MEM_PREFIX[] = "/hop_";
 #define HOP_UNLIKELY( x ) __builtin_expect( !!( x ), 0 )
 
 #define HOP_GET_THREAD_ID() reinterpret_cast<size_t>( pthread_self() )
-#define HOP_SLEEP_MS( x ) usleep( x * 1000 )
 */
 inline int HOP_GET_PID() { return getpid(); }
 
@@ -2358,7 +2305,6 @@ const HOP_CHAR HOP_SHARED_MEM_PREFIX[] = _T("/hop_");
 #define HOP_UNLIKELY( x ) ( x )
 
 #define HOP_GET_THREAD_ID() ( size_t ) GetCurrentThreadId()
-#define HOP_SLEEP_MS( x ) Sleep( x )
 
 inline int HOP_GET_PID() { return GetCurrentProcessId(); }
 */

@@ -33,7 +33,7 @@ int main()
       bool insertFailure = hop_hash_set_insert(hs, (void*)randNums[i]);
       HOP_TEST_ASSERT( !insertFailure );
 
-      HOP_TEST_ASSERT( reference.size() == hop_hash_set_count( hs ) );
+      HOP_TEST_ASSERT( (int)reference.size() == hop_hash_set_count( hs ) );
    }
 
    // Clear both to bench

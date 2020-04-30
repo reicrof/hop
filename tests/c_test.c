@@ -1,5 +1,6 @@
 #include <stdlib.h>
 
+#define HOP_IMPLEMENTATION
 #include "hop_c.h"
 
 static int g_fakelock;
