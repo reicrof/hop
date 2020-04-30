@@ -42,6 +42,7 @@ extern "C"
 
 #define HOP_ACQUIRE_LOCK( x )    do { (void)sizeof( x ); } while (0)
 #define HOP_LOCK_ACQUIRED()      do { ; } while (0)
+#define HOP_RELEASE_LOCK( x )    do { (void)sizeof( x ); } while (0)
 
 #else  // We do want to profile
 
@@ -58,9 +59,9 @@ extern "C"
 #define HOP_ENTER_FUNC() hop_enter( __FILE__, __LINE__, HOP_FCT_NAME )
 #define HOP_LEAVE()      hop_leave()
 
-#define HOP_ACQUIRE_LOCK( x )    hop_acquire_lock( (x) )
-#define HOP_LOCK_ACQUIRED()      hop_lock_acquired()
-
+#define HOP_ACQUIRE_LOCK( x ) hop_acquire_lock( (x) )
+#define HOP_LOCK_ACQUIRED()   hop_lock_acquired()
+#define HOP_RELEASE_LOCK( x ) hop_lock_release( (x) )
 
 ///////////////////////////////////////////////////////////////
 /////       THESE ARE THE MACROS YOU CAN MODIFY     ///////////
@@ -733,8 +734,8 @@ typedef struct local_context_t
 
    hop_event_array_t lockWaits;
    uint32_t openLockWaitIdx; // Index of the last opened lockwait
-
    hop_event_array_t unlocks;
+
    hop_timestamp_t clientResetTimeStamp;
    hop_depth_t traceLevel;
    hop_zone_t zoneId;
@@ -1058,7 +1059,13 @@ void hop_lock_acquired()
    ev->lock_wait.end             = endTime;
 }
 
-void hop_lock_release( void* mutexAddr ) {}
+void hop_lock_release( void* mutexAddr )
+{
+   hop_event ev;
+   ev.unlock.time         = hop_get_timestamp_no_core();
+   ev.unlock.mutexAddress = mutexAddr;
+   push_event( &tl_context.unlocks, &ev );
+}
 
 void hop_set_thread_name( hop_str_ptr_t name )
 {
@@ -1414,8 +1421,8 @@ static void flush_to_consumer( local_context_t* ctxt )
       send_string_data( ctxt, timeStamp ); // Always send string data first
       send_traces( ctxt, timeStamp );
       send_events( ctxt, timeStamp, &ctxt->lockWaits, HOP_PROFILER_WAIT_LOCK );
+      send_events( ctxt, timeStamp, &ctxt->unlocks, HOP_PROFILER_UNLOCK_EVENT );
       /*
-      sendUnlockEvents( timeStamp );
       sendCores( timeStamp );*/
    }
    else

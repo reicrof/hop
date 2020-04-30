@@ -5,20 +5,21 @@
 #include <signal.h>
 
 #define HOP_IMPLEMENTATION
-#include <Hop.h>
+#include <hop_c.h>
 
 class MyMutex
 {
 public:
    void lock()
    {
-      HOP_PROF_MUTEX_LOCK( &m );
+      HOP_ACQUIRE_LOCK( &m );
       m.lock();
+      HOP_LOCK_ACQUIRED();
    }
 
    void unlock()
    {
-      HOP_PROF_MUTEX_UNLOCK( &m );
+      HOP_RELEASE_LOCK( &m );
       m.unlock();
    }
 
@@ -34,7 +35,7 @@ thread_local std::vector< MyMutex > mxs( RECURSION_COUNT + 1 );
 
 void rec( int& i )
 {
-   HOP_PROF_FUNC();
+   HOP_ENTER_FUNC();
    while( i > 0 )
    {
       std::lock_guard<MyMutex> g{mxs[i]};
@@ -42,13 +43,15 @@ void rec( int& i )
          std::this_thread::sleep_for(std::chrono::microseconds(1));
       rec(--i);
    }
+   HOP_LEAVE();
 }
 
 void startRec()
 {
-   HOP_PROF_FUNC();
+   HOP_ENTER_FUNC();
    int recCount = RECURSION_COUNT;
    rec( recCount );
+   HOP_LEAVE();
 }
 
 #if !defined(_MSC_VER)
