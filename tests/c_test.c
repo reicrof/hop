@@ -12,7 +12,7 @@ void fakeLock( void* lock )
 
 int main()
 {
-    hop_initialize();
+    HOP_INTIALIZE();
     hop_core_t core;
     for( int i = 0; i < 100; ++i )
     {
@@ -25,5 +25,5 @@ int main()
        HOP_LEAVE();
     }
 
-    hop_terminate();
+    HOP_SHUTDOWN();
 }

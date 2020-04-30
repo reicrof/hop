@@ -36,6 +36,9 @@ extern "C"
 #if !defined( HOP_ENABLED )
 
 // Stubbing all profiling macros so they are disabled when HOP_ENABLED is false
+#define HOP_INTIALIZE()          do { ; } while (0)
+#define HOP_SHUTDOWN()           do { ; } while (0)
+
 #define HOP_ENTER( x )           do { (void)sizeof( x ); } while (0)
 #define HOP_ENTER_FUNC()         do { ; } while (0)
 #define HOP_LEAVE()              do { ; } while (0)
@@ -49,6 +52,10 @@ extern "C"
 ///////////////////////////////////////////////////////////////
 /////       THESE ARE THE MACROS YOU SHOULD USE     ///////////
 ///////////////////////////////////////////////////////////////
+
+#define HOP_INTIALIZE() hop_initialize()
+#define HOP_SHUTDOWN() hop_shutdown()
+
 #if defined( _MSC_VER )
 #define HOP_FCT_NAME __FUNCTION__
 #else
@@ -126,20 +133,18 @@ extern "C"
 #include <stdint.h> // integer types
 #include <stdio.h>  // printf
 
-#if defined( _MSC_VER ) && defined( HOP_IMPLEMENTATION )
-#define HOP_API __declspec( dllexport )
-#else
-#define HOP_API
-#endif
-
 /* Windows specific macros and defines */
 #if defined( _MSC_VER )
+#include <tchar.h>
+#include <intrin.h>  // __rdtscp 
+
 #ifndef NOMINMAX
 #define NOMINMAX
 #endif
 
-#include <tchar.h>
-#include <intrin.h>  // __rdtscp 
+#define HOP_EXPORT __declspec( dllexport )
+#define hop_thread_local    __declspec(thread)
+
 typedef void* shm_handle;  // HANDLE is a void*
 typedef TCHAR HOP_CHAR;
 
@@ -149,14 +154,19 @@ typedef TCHAR HOP_CHAR;
 #else
 #define ssize_t long
 #endif                  // _WIN64
-#else                   /* Unix (Linux & MacOs) specific macros and defines */
+
+#else
+/* Unix (Linux & MacOs) specific macros and defines */
 #include <sys/types.h>  // ssize_t
+
+#define HOP_EXPORT
+#define hop_thread_local    __thread
+
 typedef int shm_handle;
 typedef char HOP_CHAR;
+
 #endif
 
-// typedef _Thread_local hop_thread_local;
-#define hop_thread_local    _Thread_local
 #define hop_atomic_uint64   volatile uint64_t
 #define hop_atomic_uint32   volatile uint32_t
 
@@ -267,8 +277,14 @@ hop_timestamp_t hop_get_timestamp_no_core()
    return hop_get_timestamp( &dummyCore );
 }
 
-hop_bool_t hop_initialize();
-void hop_terminate();
+HOP_EXPORT hop_bool_t hop_initialize();
+HOP_EXPORT void hop_shutdown();
+HOP_EXPORT void hop_enter( const char* fileName, hop_linenb_t line, const char* fctName );
+HOP_EXPORT void hop_enter_dynamic_string( const char* fileName, hop_linenb_t line, const char* fctName );
+HOP_EXPORT void hop_leave();
+HOP_EXPORT void hop_acquire_lock( void* mutexAddr );
+HOP_EXPORT void hop_lock_acquired();
+HOP_EXPORT void hop_lock_release( void* mutexAddr );
 
 /* End of declarations */
 
@@ -369,13 +385,14 @@ hop_bool_t hop_initialize()
       const char* reason = "";
       if( state == HOP_PERMISSION_DENIED ) reason = " : Permission Denied";
 
-      printf( "HOP - Could not create shared memory%s. HOP will not be able to run\n", reason );
+      fprintf(
+          stderr, "HOP - Could not create shared memory%s. HOP will not be able to run\n", reason );
       return hop_false;
    }
    return hop_true;
 }
 
-void hop_terminate()
+void hop_shutdown()
 {
    hop_destroy_shared_memory();
 }
@@ -413,7 +430,7 @@ struct ringbuf {
    /* The following are updated by the consumer. */
    ringbuf_off_t		written;
    unsigned		nworkers;
-   ringbuf_worker_t	workers[];
+   ringbuf_worker_t	workers[0];
 };
 
 typedef struct hop_ipc_segment
@@ -620,7 +637,8 @@ hop_connection_state hop_create_shared_memory( int pid, uint64_t requestedSize, 
    {
       if( fabsf( ipcSegment->clientVersion - HOP_VERSION ) > 0.001f )
       {
-         printf(
+         fprintf(
+             stderr,
              "HOP - Client's version (%f) does not match HOP viewer version (%f)\n",
              ipcSegment->clientVersion,
              HOP_VERSION );
@@ -643,7 +661,8 @@ hop_connection_state hop_create_shared_memory( int pid, uint64_t requestedSize, 
       // We can only have one consumer
       if( has_connected_consumer( g_sharedMemory ) )
       {
-         printf(
+         fprintf(
+             stderr,
              "/!\\ HOP WARNING /!\\ \n"
              "Cannot have more than one instance of the consumer at a time."
              " You might be trying to run the consumer application twice or"
@@ -829,7 +848,7 @@ static void alloc_event_array( hop_event_array_t* array, uint32_t size )
 {
    if( array->capacity >= size )
       return;
-   array->events = HOP_REALLOC( array->events, size * sizeof(*array->events) );
+   array->events = (hop_event*)HOP_REALLOC( array->events, size * sizeof(*array->events) );
    array->capacity = size;
 }
 
@@ -844,7 +863,7 @@ static void push_event( hop_event_array_t* array, const hop_event* ev )
 
 static hop_bool_t local_context_valid( local_context_t* ctxt )
 {
-   return ctxt && ctxt->ringbufWorker;
+   return ctxt->ringbufWorker != NULL;
 }
 
 static void reset_string_data( local_context_t* ctxt )
@@ -871,13 +890,21 @@ static void reset_string_data( local_context_t* ctxt )
 
 static hop_bool_t local_context_create( local_context_t* ctxt )
 {
+   if( !g_sharedMemory )
+   {
+      fprintf( stderr, "HOP was not initialized properly\n" );
+      return hop_false;
+   }
+
    memset( ctxt, 0, sizeof( *ctxt ) );
    static uint32_t g_totalThreadCount;  // Index of the tread as they are coming in
    ctxt->threadIndex = atomic_fetch_add_explicit( &g_totalThreadCount, 1, memory_order_seq_cst );
 
    if( ctxt->threadIndex > HOP_MAX_THREAD_NB )
    {
-      printf( "Maximum number of threads reached. No trace will be available for this thread\n" );
+      fprintf(
+          stderr,
+          "Maximum number of threads reached. No trace will be available for this thread\n" );
       ctxt->traces.count = 0;
       return hop_false;
    }
@@ -943,7 +970,7 @@ static hop_bool_t add_string_to_db_internal(
       if( ctxt->stringDataSize >= ctxt->stringDataCapacity )
       {
          ctxt->stringDataCapacity *= 2;
-         ctxt->stringData = HOP_REALLOC( ctxt->stringData, ctxt->stringDataCapacity );
+         ctxt->stringData = (char*)HOP_REALLOC( ctxt->stringData, ctxt->stringDataCapacity );
       }
 
       hop_str_ptr_t* strIdPtr = (hop_str_ptr_t*)( &ctxt->stringData[newEntryPos] );
@@ -970,6 +997,16 @@ static hop_str_ptr_t add_dynamic_string_to_db( local_context_t* ctxt, const char
    const size_t strLen = strlen( dynStr );
    const hop_str_ptr_t hash = c_str_hash( dynStr, strLen );
    return add_string_to_db_internal( ctxt, hash, dynStr, strLen );
+}
+
+static hop_bool_t check_or_create_local_context( local_context_t* ctxt )
+{
+   if( HOP_UNLIKELY( !local_context_valid( ctxt ) ) &&
+       HOP_UNLIKELY( !local_context_create( ctxt ) ) )
+   {
+      return hop_false; // hop was not initialized properly before first trace
+   }
+   return hop_true;
 }
 
 static void enter_internal(
@@ -1001,20 +1038,16 @@ static void enter_internal(
 
 void hop_enter( const char* fileName, hop_linenb_t line, const char* fctName )
 {
-   if( HOP_UNLIKELY( !local_context_valid( &tl_context ) ) )
-   {
-      local_context_create( &tl_context );
-   }
+   if( HOP_UNLIKELY( !check_or_create_local_context( &tl_context ) ) )
+         return;
 
    enter_internal( hop_get_timestamp_no_core(), (hop_str_ptr_t)fileName, line, (hop_str_ptr_t)fctName );
 }
 
 void hop_enter_dynamic_string( const char* fileName, hop_linenb_t line, const char* fctName )
 {
-   if( HOP_UNLIKELY( !local_context_valid( &tl_context ) ) )
-   {
-     local_context_create( &tl_context );
-   }
+   if( HOP_UNLIKELY( !check_or_create_local_context( &tl_context ) ) )
+         return;
 
    // Flag the timestamp as being dynamic (first bit set), and add the dynamic string to the db
    enter_internal(
@@ -1026,6 +1059,9 @@ void hop_enter_dynamic_string( const char* fileName, hop_linenb_t line, const ch
 
 void hop_leave()
 {
+   if( HOP_UNLIKELY( !check_or_create_local_context( &tl_context ) ) )
+         return;
+
    const hop_timestamp_t endTime                   = hop_get_timestamp_no_core();
    const int32_t remainingPushedTraces             = --tl_context.traceLevel;
    const uint32_t lastOpenTraceIdx                 = tl_context.openTraceIdx;
@@ -1042,6 +1078,9 @@ void hop_leave()
 
 void hop_acquire_lock( void* mutexAddr )
 {
+   if( HOP_UNLIKELY( !check_or_create_local_context( &tl_context ) ) )
+         return;
+
    hop_event ev;
    ev.lock_wait.start         = hop_get_timestamp_no_core();
    ev.lock_wait.end           = tl_context.openLockWaitIdx; // Save previous opened idx
@@ -1052,6 +1091,9 @@ void hop_acquire_lock( void* mutexAddr )
 
 void hop_lock_acquired()
 {
+   if( HOP_UNLIKELY( !check_or_create_local_context( &tl_context ) ) )
+         return;
+
    const hop_timestamp_t endTime = hop_get_timestamp_no_core();
    const uint32_t lastOpenLWIdx  = tl_context.openLockWaitIdx;
    hop_event* ev                 = &tl_context.lockWaits.events[lastOpenLWIdx];
@@ -1061,6 +1103,9 @@ void hop_lock_acquired()
 
 void hop_lock_release( void* mutexAddr )
 {
+   if( HOP_UNLIKELY( !check_or_create_local_context( &tl_context ) ) )
+         return;
+
    hop_event ev;
    ev.unlock.time         = hop_get_timestamp_no_core();
    ev.unlock.mutexAddress = mutexAddr;
@@ -1258,9 +1303,10 @@ static hop_bool_t send_string_data( local_context_t* ctxt, hop_timestamp_t timeS
    hop_byte_t* bufferPtr = acquire_shared_chunk( ctxt, ringbuf, msgSize );
    if( !bufferPtr )
    {
-      printf(
-            "HOP - String to send are bigger than shared memory size. Consider"
-            " increasing shared memory size \n" );
+      fprintf(
+          stderr,
+          "HOP - String to send are bigger than shared memory size. Consider"
+          " increasing shared memory size \n" );
       return hop_false;
    }
 
@@ -1298,7 +1344,8 @@ static hop_bool_t send_traces( local_context_t* ctxt, hop_timestamp_t timeStamp 
    hop_byte_t* bufferPtr = acquire_shared_chunk( ctxt, ringbuf, msgSize );
    if( !bufferPtr )
    {
-      printf(
+      fprintf(
+            stderr,
             "HOP - Failed to acquire enough shared memory. Consider increasing"
             "shared memory size if you see this message more than once\n" );
       ctxt->traces.count = 0;
@@ -1342,7 +1389,8 @@ static hop_bool_t send_events(
    hop_byte_t* bufferPtr = acquire_shared_chunk( ctxt, ringbuf, msgSize );
    if( !bufferPtr )
    {
-      printf(
+      fprintf(
+          stderr,
           "HOP - Failed acquiring enough shared memory. Consider increasing shared memory "
           "size\n" );
       array->count = 0;
@@ -1369,7 +1417,8 @@ static hop_bool_t send_heartbeat( local_context_t* ctxt, hop_timestamp_t timeSta
    hop_byte_t* bufferPtr = acquire_shared_chunk( ctxt, ringbuf, sizeof( hop_msg_info ) );
    if( !bufferPtr )
    {
-      printf(
+      fprintf(
+            stderr,
             "HOP - Failed to acquire enough shared memory. Consider increasing shared memory "
             "size\n" );
       return hop_false;
@@ -2073,7 +2122,7 @@ void hop_hash_set_clear( hop_hash_set_t set )
 class Client;
 class SharedMemory;
 
-class HOP_API ClientManager
+class HOP_EXPORT ClientManager
 {
   public:
    static Client* Get();
@@ -2347,30 +2396,9 @@ class Client
       hop_hash_set_destroy( _stringPtrSet );
    }
 
-   void addProfilingTrace(
-       hop_str_ptr_t fileName,
-       hop_str_ptr_t fctName,
-       hop_timestamp_t start,
-       hop_timestamp_t end,
-       hop_linenb_t lineNb,
-       hop_zone_t zone )
-   {
-      addTrace( &_traces, start, end, (hop_depth_t)tl_traceLevel, fileName, fctName, lineNb, zone );
-   }
-
    void addCoreEvent( hop_core_t core, hop_timestamp_t startTime, hop_timestamp_t endTime )
    {
       _cores.emplace_back( CoreEvent{startTime, endTime, core} );
-   }
-
-   void addWaitLockTrace( void* mutexAddr, hop_timestamp_t start, hop_timestamp_t end, hop_depth_t depth )
-   {
-      _lockWaits.push_back( LockWait{mutexAddr, start, end, depth, 0 /*padding*/} );
-   }
-
-   void addUnlockEvent( void* mutexAddr, hop_timestamp_t time )
-   {
-      _unlockEvents.push_back( UnlockEvent{mutexAddr, time} );
    }
 
    bool sendCores( hop_timestamp_t timeStamp )
@@ -2383,7 +2411,8 @@ class Client
       hop_byte_t* bufferPtr = acquireSharedChunk( ringbuf, coreMsgSize );
       if( !bufferPtr )
       {
-         printf(
+         fprintf(
+             stderr,
              "HOP - Failed to acquire enough shared memory. Consider increasing shared memory "
              "size\n" );
          _cores.clear();
@@ -2411,77 +2440,6 @@ class Client
 
       return true;
    }
-
-   bool sendUnlockEvents( hop_timestamp_t timeStamp )
-   {
-      if( _unlockEvents.empty() ) return false;
-
-      const size_t unlocksMsgSize =
-          sizeof( MsgInfo ) + _unlockEvents.size() * sizeof( UnlockEvent );
-
-      ringbuf_t* ringbuf = ClientManager::sharedMemory().ringbuffer();
-      hop_byte_t* bufferPtr = acquireSharedChunk( ringbuf, unlocksMsgSize );
-      if( !bufferPtr )
-      {
-         printf(
-             "HOP - Failed to acquire enough shared memory. Consider increasing shared memory "
-             "size\n" );
-         _unlockEvents.clear();
-         return false;
-      }
-
-      // Fill the buffer with the lock message
-      {
-         MsgInfo* uInfo            = reinterpret_cast<MsgInfo*>( bufferPtr );
-         uInfo->type               = MsgType::PROFILER_UNLOCK_EVENT;
-         uInfo->threadId           = tl_threadId;
-         uInfo->threadName         = tl_threadName;
-         uInfo->threadIndex        = tl_threadIndex;
-         uInfo->timeStamp          = timeStamp;
-         uInfo->unlockEvents.count = static_cast<uint32_t>( _unlockEvents.size() );
-         bufferPtr += sizeof( MsgInfo );
-         memcpy( bufferPtr, _unlockEvents.data(), _unlockEvents.size() * sizeof( UnlockEvent ) );
-      }
-
-      ringbuf_produce( ringbuf, _worker );
-
-      _unlockEvents.clear();
-
-      return true;
-   }
-
-   bool sendHeartbeat( hop_timestamp_t timeStamp )
-   {
-      ClientManager::SetLastHeartbeatTimestamp( timeStamp );
-
-      const size_t heartbeatSize = sizeof( MsgInfo );
-
-      ringbuf_t* ringbuf = ClientManager::sharedMemory().ringbuffer();
-      hop_byte_t* bufferPtr = acquireSharedChunk( ringbuf, heartbeatSize );
-      if( !bufferPtr )
-      {
-         printf(
-             "HOP - Failed to acquire enough shared memory. Consider increasing shared memory "
-             "size\n" );
-         return false;
-      }
-
-      // Fill the buffer with the lock message
-      {
-         MsgInfo* hbInfo     = reinterpret_cast<MsgInfo*>( bufferPtr );
-         hbInfo->type        = MsgType::PROFILER_HEARTBEAT;
-         hbInfo->threadId    = tl_threadId;
-         hbInfo->threadName  = tl_threadName;
-         hbInfo->threadIndex = tl_threadIndex;
-         hbInfo->timeStamp   = timeStamp;
-         bufferPtr += sizeof( MsgInfo );
-      }
-
-      ringbuf_produce( ringbuf, _worker );
-
-      return true;
-   }
-
    
 
    Traces _traces;
@@ -2495,79 +2453,6 @@ class Client
    uint32_t _sentStringDataSize{0};  // The size of the string array on viewer side
 };
 
-Client* ClientManager::Get()
-{
-   // thread_local std::unique_ptr<Client> threadClient;
-
-   // if( HOP_UNLIKELY( g_done.load() ) ) return nullptr;
-   // if( HOP_LIKELY( threadClient.get() ) ) return threadClient.get();
-
-   // // If we have not yet created our shared memory segment, do it here
-   // if( !ClientManager::sharedMemory().valid() )
-   // {
-   //    SharedMemory::ConnectionState state =
-   //        ClientManager::sharedMemory().create( HOP_GET_PID(), HOP_SHARED_MEM_SIZE, false );
-   //    if( state != SharedMemory::CONNECTED )
-   //    {
-   //       const char* reason = "";
-   //       if( state == SharedMemory::PERMISSION_DENIED ) reason = " : Permission Denied";
-
-   //       printf( "HOP - Could not create shared memory%s. HOP will not be able to run\n", reason );
-   //       return NULL;
-   //    }
-   // }
-
-   // Atomically get the next thread id from the static atomic count
-   static std::atomic<uint32_t> threadCount{0};
-   tl_threadIndex = threadCount.fetch_add( 1 );
-   tl_threadId    = HOP_GET_THREAD_ID();
-
-   if( tl_threadIndex > HOP_MAX_THREAD_NB )
-   {
-      printf( "Maximum number of threads reached. No trace will be available for this thread\n" );
-      return nullptr;
-   }
-
-   // Register producer in the ringbuffer
-   auto ringBuffer = ClientManager::sharedMemory().ringbuffer();
-   if( ringBuffer )
-   {
-      threadClient.reset( new Client() );
-      threadClient->_worker = ringbuf_register( ringBuffer, tl_threadIndex );
-      if( threadClient->_worker == NULL )
-      {
-         HOP_ASSERT( false && "ringbuf_register" );
-      }
-   }
-
-   return threadClient.get();
-}
-
-
-void ClientManager::EndLockWait( void* mutexAddr, hop_timestamp_t start, hop_timestamp_t end )
-{
-   // Only add lock wait event if the lock is coming from within
-   // measured code
-   if( tl_traceLevel > 0 && end - start >= HOP_MIN_LOCK_CYCLES )
-   {
-      auto client = ClientManager::Get();
-      if( HOP_UNLIKELY( !client ) ) return;
-
-      client->addWaitLockTrace(
-          mutexAddr, start, end, static_cast<unsigned short>( tl_traceLevel ) );
-   }
-}
-
-void ClientManager::UnlockEvent( void* mutexAddr, hop_timestamp_t time )
-{
-   if( tl_traceLevel > 0 )
-   {
-      auto client = ClientManager::Get();
-      if( HOP_UNLIKELY( !client ) ) return;
-
-      client->addUnlockEvent( mutexAddr, time );
-   }
-}
 
 hop_zone_t ClientManager::PushNewZone( hop_zone_t newZone )
 {

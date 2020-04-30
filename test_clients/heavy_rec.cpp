@@ -70,6 +70,8 @@ int main( int argc, const char** argv )
    signal(SIGTERM, terminateCallback);
 #endif
 
+   HOP_INTIALIZE();
+
    int threadNum = 1;
    if( argc > 1 )
       threadNum = atoi( argv[1] );
@@ -82,4 +84,6 @@ int main( int argc, const char** argv )
    {
       startRec();
    }
+
+   HOP_SHUTDOWN();
 }
