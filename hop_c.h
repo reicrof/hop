@@ -26,7 +26,8 @@ For more information, please refer to <http://unlicense.org/>
 #ifndef HOP_C_H_
 #define HOP_C_H_
 
-#ifdef __cplusplus
+
+#if defined(__cplusplus) && defined(HOP_CPP)
 extern "C"
 {
 #endif
@@ -180,8 +181,16 @@ HOP_EXPORT void hop_lock_release( void* mutexAddr );
 #define HOP_ASSERT( x ) ( (x) )
 #endif
 
+#ifdef __cplusplus
+#include <atomic>
+#define hop_atomic_uint64   std::atomic<uint64_t>
+#define hop_atomic_uint32   std::atomic<uint32_t>
+#define hop_atomic_int32    std::atomic<int32_t>
+#else
 #define hop_atomic_uint64   volatile uint64_t
 #define hop_atomic_uint32   volatile uint32_t
+#define hop_atomic_int32    volatile int32_t
+#endif
 
 typedef unsigned char hop_byte_t;
 
@@ -339,32 +348,45 @@ typedef struct hop_hash_set* hop_hash_set_t;
  * Forward declaration only. See the actual implementation for
  * the full LICENSE
  */
-
+#if defined( _MSC_VER ) && defined(__cplusplus)
+#include <atomic>
+#define hop_memory_order_relaxed          std::memory_order_relaxed
+#define hop_memory_order_acquire          std::memory_order_acquire
+#define hop_memory_order_release          std::memory_order_release
+#define hop_memory_order_seq_cst          std::memory_order_seq_cst
+#define hop_atomic_thread_fence(m)        std::atomic_thread_fence
+#define hop_atomic_load_explicit          std::atomic_load_explicit
+#define hop_atomic_store_explicit         std::atomic_store_explicit
+#define hop_atomic_fetch_add_explicit     std::atomic_fetch_add_explicit
+#define hop_atomic_compare_exchange_weak  std::atomic_compare_exchange_weak
+#else
 #ifndef atomic_compare_exchange_weak
-#define	atomic_compare_exchange_weak(ptr, expected, desired) \
+#define	hop_atomic_compare_exchange_weak(ptr, expected, desired) \
     __sync_bool_compare_and_swap(ptr, *(expected), desired)
 #endif
 
 #ifndef atomic_thread_fence
-#define	memory_order_relaxed	__ATOMIC_RELAXED
-#define	memory_order_acquire	__ATOMIC_ACQUIRE
-#define	memory_order_release	__ATOMIC_RELEASE
-#define	memory_order_seq_cst	__ATOMIC_SEQ_CST
-#define	atomic_thread_fence(m)	__atomic_thread_fence(m)
+#define	hop_memory_order_relaxed	__ATOMIC_RELAXED
+#define	hop_memory_order_acquire	__ATOMIC_ACQUIRE
+#define	hop_memory_order_release	__ATOMIC_RELEASE
+#define	hop_memory_order_seq_cst	__ATOMIC_SEQ_CST
+#define	hop_atomic_thread_fence(m)	__atomic_thread_fence(m)
 #endif
 #ifndef atomic_store_explicit
-#define	atomic_store_explicit	__atomic_store_n
+#define	hop_atomic_store_explicit	__atomic_store_n
 #endif
 #ifndef atomic_load_explicit
-#define	atomic_load_explicit	__atomic_load_n
+#define	hop_atomic_load_explicit	__atomic_load_n
 #endif
 #ifndef atomic_fetch_add_explicit
-#define	atomic_fetch_add_explicit	__atomic_fetch_add
+#define	hop_atomic_fetch_add_explicit	__atomic_fetch_add
+#endif
 #endif
 
 typedef struct ringbuf ringbuf_t;
 typedef struct ringbuf_worker ringbuf_worker_t;
 typedef uint64_t	ringbuf_off_t;
+typedef hop_atomic_uint64	atomic_ringbuf_off_t;
 
 int ringbuf_setup(ringbuf_t*, unsigned, size_t);
 void ringbuf_get_sizes(unsigned, size_t*, size_t*);
@@ -378,8 +400,8 @@ size_t ringbuf_consume(ringbuf_t*, size_t*);
 void ringbuf_release(ringbuf_t*, size_t);
 
 struct ringbuf_worker {
-   volatile ringbuf_off_t	seen_off;
-   int			registered;
+   atomic_ringbuf_off_t seen_off;
+   hop_atomic_int32     registered;
 };
 
 struct ringbuf {
@@ -391,13 +413,13 @@ struct ringbuf {
     * WRAP_LOCK_BIT is set in case of wrap-around; in such case,
     * the producer can update the 'end' offset.
     */
-   volatile ringbuf_off_t	next;
+   atomic_ringbuf_off_t	next;
    ringbuf_off_t		end;
 
    /* The following are updated by the consumer. */
-   ringbuf_off_t		written;
+   atomic_ringbuf_off_t written;
    unsigned		nworkers;
-   ringbuf_worker_t	workers[0];
+   ringbuf_worker_t	workers[];
 };
 // --- End of Mindaugas Rasiukevicius code ------
 
@@ -411,8 +433,8 @@ typedef struct hop_ipc_segment
    hop_atomic_uint32 state;
    hop_bool_t usingStdChronoTimeStamps;
 
+   hop_byte_t* data;
    ringbuf_t ringbuf;
-   hop_byte_t data[];
 } hop_ipc_segment;
 
 typedef struct hop_shared_memory
@@ -785,6 +807,7 @@ create_shared_memory( int pid, uint64_t requestedSize, hop_bool_t isConsumer )
    // Get the size needed for the ringbuf struct
    size_t ringBufSize;
    ringbuf_get_sizes( ipcSegment->maxThreadNb, &ringBufSize, NULL );
+   ipcSegment->data = ((hop_byte_t*)&ipcSegment->ringbuf) + ringBufSize;
 
    g_sharedMemory->ipcSegment = ipcSegment;
    g_sharedMemory->pid        = pid;
@@ -831,7 +854,7 @@ void destroy_shared_memory()
       
       if( g_sharedMemory->ipcSegment )
       {
-         uint32_t state = atomic_load_explicit( &g_sharedMemory->ipcSegment->state, memory_order_seq_cst );
+         uint32_t state = hop_atomic_load_explicit( &g_sharedMemory->ipcSegment->state, hop_memory_order_seq_cst );
          if( ( state & ( HOP_CONNECTED_PRODUCER | HOP_CONNECTED_CONSUMER ) ) == 0 )
          {
             printf( "HOP - Cleaning up shared memory...\n" );
@@ -952,8 +975,8 @@ static void reset_string_data( local_context_t* ctxt )
    ctxt->stringDataSize = 0;
    memset( ctxt->stringData, 0, ctxt->stringDataCapacity );
 
-   ctxt->clientResetTimeStamp = atomic_load_explicit(
-       &g_sharedMemory->ipcSegment->lastResetTimeStamp, memory_order_seq_cst );
+   ctxt->clientResetTimeStamp = hop_atomic_load_explicit(
+       &g_sharedMemory->ipcSegment->lastResetTimeStamp, hop_memory_order_seq_cst );
 
    // Push back thread name
    if( ctxt->threadNameBuffer[0] != '\0' )
@@ -972,8 +995,8 @@ static hop_bool_t local_context_create( local_context_t* ctxt )
    }
 
    memset( ctxt, 0, sizeof( *ctxt ) );
-   static uint32_t g_totalThreadCount;  // Index of the tread as they are coming in
-   ctxt->threadIndex = atomic_fetch_add_explicit( &g_totalThreadCount, 1, memory_order_seq_cst );
+   static hop_atomic_uint32 g_totalThreadCount;  // Index of the tread as they are coming in
+   ctxt->threadIndex = hop_atomic_fetch_add_explicit( &g_totalThreadCount, 1, hop_memory_order_seq_cst );
 
    if( ctxt->threadIndex > HOP_MAX_THREAD_NB )
    {
@@ -1377,8 +1400,8 @@ static hop_bool_t send_events(
 
 static hop_bool_t send_heartbeat( local_context_t* ctxt, hop_timestamp_t timeStamp )
 {
-   atomic_store_explicit(
-       &g_sharedMemory->ipcSegment->lastHeartbeatTimeStamp, timeStamp, memory_order_seq_cst );
+   hop_atomic_store_explicit(
+       &g_sharedMemory->ipcSegment->lastHeartbeatTimeStamp, timeStamp, hop_memory_order_seq_cst );
 
    ringbuf_t* ringbuf = &g_sharedMemory->ipcSegment->ringbuf;
    hop_byte_t* bufferPtr = acquire_shared_chunk( ctxt, ringbuf, sizeof( hop_msg_info ) );
@@ -1418,15 +1441,15 @@ static void flush_to_consumer( local_context_t* ctxt )
    }
 
    // If no one is there to listen, no need to send any data
-   if( has_listening_consumer( g_sharedMemory ) )
+   if( 1 /*has_listening_consumer( g_sharedMemory )*/ )
    {
       // If the shared memory reset timestamp more recent than our local one
       // it means we need to clear our string table. Otherwise it means we
       // already took care of it. Since some traces might depend on strings
       // that were added dynamically (ie before clearing the db), we cannot
       // consider them and need to return here.
-      hop_timestamp_t resetTimeStamp = atomic_load_explicit(
-          &g_sharedMemory->ipcSegment->lastResetTimeStamp, memory_order_seq_cst );
+      hop_timestamp_t resetTimeStamp = hop_atomic_load_explicit(
+          &g_sharedMemory->ipcSegment->lastResetTimeStamp, hop_memory_order_seq_cst );
       if( ctxt->clientResetTimeStamp < resetTimeStamp )
       {
          reset_string_data( ctxt );
@@ -1449,8 +1472,8 @@ static void flush_to_consumer( local_context_t* ctxt )
 
 static uint32_t atomic_set_bit( hop_atomic_uint32* value, uint32_t bitToSet )
 {
-   uint32_t origValue = atomic_load_explicit( value, memory_order_seq_cst );
-   while( !atomic_compare_exchange_weak( value, &origValue, origValue | bitToSet ) )
+   uint32_t origValue = hop_atomic_load_explicit( value, hop_memory_order_seq_cst );
+   while( !hop_atomic_compare_exchange_weak( value, &origValue, origValue | bitToSet ) )
       ;
    return origValue;  // return value before change
 }
@@ -1458,8 +1481,8 @@ static uint32_t atomic_set_bit( hop_atomic_uint32* value, uint32_t bitToSet )
 static uintptr_t atomic_clear_bit( hop_atomic_uint32* value, uint32_t bitToSet )
 {
    const uint32_t mask = ~bitToSet;
-   uint32_t origValue = atomic_load_explicit( value, memory_order_seq_cst );
-   while( !atomic_compare_exchange_weak( value, &origValue, origValue & mask ) )
+   uint32_t origValue = hop_atomic_load_explicit( value, hop_memory_order_seq_cst );
+   while( !hop_atomic_compare_exchange_weak( value, &origValue, origValue & mask ) )
       ;
    return origValue;  // return value before change
 }
@@ -1506,7 +1529,7 @@ static void set_listening_consumer( hop_shared_memory* mem, hop_bool_t listening
 
 static void set_reset_timestamp( hop_shared_memory* mem, hop_timestamp_t t )
 {
-   atomic_store_explicit( &mem->ipcSegment->lastResetTimeStamp, t, memory_order_seq_cst );
+   hop_atomic_store_explicit( &mem->ipcSegment->lastResetTimeStamp, t, hop_memory_order_seq_cst );
 }
 
 static hop_bool_t should_send_heartbeat( hop_shared_memory* mem, hop_timestamp_t curTimestamp )
@@ -1515,14 +1538,14 @@ static hop_bool_t should_send_heartbeat( hop_shared_memory* mem, hop_timestamp_t
    // unnecessary heartbeats every time a trace stack was sent. This make sure we only
    // send them every few milliseconds
    static const uint64_t cyclesBetweenHB = 100000000;
-   const int64_t lastHb                  = atomic_load_explicit(
-       &mem->ipcSegment->lastHeartbeatTimeStamp, memory_order_seq_cst );
+   const int64_t lastHb                  = hop_atomic_load_explicit(
+       &mem->ipcSegment->lastHeartbeatTimeStamp, hop_memory_order_seq_cst );
    return curTimestamp - lastHb > cyclesBetweenHB;
 }
 
 static void set_last_heartbeat( hop_shared_memory* mem, hop_timestamp_t t )
 {
-   atomic_store_explicit( &mem->ipcSegment->lastHeartbeatTimeStamp, t, memory_order_seq_cst );
+   hop_atomic_store_explicit( &mem->ipcSegment->lastHeartbeatTimeStamp, t, hop_memory_order_seq_cst );
 }
 
 /************************************************************/
@@ -1680,14 +1703,6 @@ void hop_hash_set_clear( hop_hash_set_t set )
 #include <inttypes.h>
 #include <limits.h>
 
-/*
- * Branch prediction macros.
- */
-#ifndef __predict_true
-#define	__predict_true(x)	__builtin_expect((x) != 0, 1)
-#define	__predict_false(x)	__builtin_expect((x) != 0, 0)
-#endif
-
   /*
    * Exponential back-off for the spinning paths.
    */
@@ -1755,7 +1770,7 @@ ringbuf_register(ringbuf_t* rbuf, unsigned i)
    ringbuf_worker_t* w = &rbuf->workers[i];
 
    w->seen_off = RBUF_OFF_MAX;
-   atomic_store_explicit(&w->registered, true, memory_order_release);
+   hop_atomic_store_explicit(&w->registered, true, hop_memory_order_release);
    return w;
 }
 
@@ -1775,7 +1790,7 @@ stable_nextoff(ringbuf_t* rbuf)
    unsigned count = SPINLOCK_BACKOFF_MIN;
    ringbuf_off_t next;
 retry:
-   next = atomic_load_explicit(&rbuf->next, memory_order_acquire);
+   next = hop_atomic_load_explicit(&rbuf->next, hop_memory_order_acquire);
    if (next & WRAP_LOCK_BIT) {
       SPINLOCK_BACKOFF(count);
       goto retry;
@@ -1793,7 +1808,7 @@ stable_seenoff(ringbuf_worker_t* w)
    unsigned count = SPINLOCK_BACKOFF_MIN;
    ringbuf_off_t seen_off;
 retry:
-   seen_off = atomic_load_explicit(&w->seen_off, memory_order_acquire);
+   seen_off = hop_atomic_load_explicit(&w->seen_off, hop_memory_order_acquire);
    if (seen_off & WRAP_LOCK_BIT) {
       SPINLOCK_BACKOFF(count);
       goto retry;
@@ -1823,15 +1838,15 @@ ringbuf_acquire(ringbuf_t* rbuf, ringbuf_worker_t* w, size_t len)
        * value (i.e. the 'seen' offset), but mark the value as
        * unstable (set WRAP_LOCK_BIT).
        *
-       * Note: CAS will issue a memory_order_release for us and
+       * Note: CAS will issue a hop_memory_order_release for us and
        * thus ensures that it reaches global visibility together
        * with new 'next'.
        */
       seen = stable_nextoff(rbuf);
       next = seen & RBUF_OFF_MASK;
       HOP_ASSERT(next < rbuf->space);
-      atomic_store_explicit(&w->seen_off, next | WRAP_LOCK_BIT,
-         memory_order_relaxed);
+      hop_atomic_store_explicit(&w->seen_off, next | WRAP_LOCK_BIT,
+         hop_memory_order_relaxed);
 
       /*
        * Compute the target offset.  Key invariant: we cannot
@@ -1839,14 +1854,14 @@ ringbuf_acquire(ringbuf_t* rbuf, ringbuf_worker_t* w, size_t len)
        */
       target = next + len;
       written = rbuf->written;
-      if (__predict_false(next < written && target >= written)) {
+      if (HOP_UNLIKELY(next < written && target >= written)) {
          /* The producer must wait. */
-         atomic_store_explicit(&w->seen_off,
-            RBUF_OFF_MAX, memory_order_release);
+         hop_atomic_store_explicit(&w->seen_off,
+            RBUF_OFF_MAX, hop_memory_order_release);
          return -1;
       }
 
-      if (__predict_false(target >= rbuf->space)) {
+      if (HOP_UNLIKELY(target >= rbuf->space)) {
          const bool exceed = target > rbuf->space;
 
          /*
@@ -1861,8 +1876,8 @@ ringbuf_acquire(ringbuf_t* rbuf, ringbuf_worker_t* w, size_t len)
           */
          target = exceed ? (WRAP_LOCK_BIT | len) : 0;
          if ((target & RBUF_OFF_MASK) >= written) {
-            atomic_store_explicit(&w->seen_off,
-               RBUF_OFF_MAX, memory_order_release);
+            hop_atomic_store_explicit(&w->seen_off,
+               RBUF_OFF_MAX, hop_memory_order_release);
             return -1;
          }
          /* Increment the wrap-around counter. */
@@ -1872,23 +1887,23 @@ ringbuf_acquire(ringbuf_t* rbuf, ringbuf_worker_t* w, size_t len)
          /* Preserve the wrap-around counter. */
          target |= seen & WRAP_COUNTER;
       }
-   } while (!atomic_compare_exchange_weak(&rbuf->next, &seen, target));
+   } while (!hop_atomic_compare_exchange_weak(&rbuf->next, &seen, target));
 
    /*
     * Acquired the range.  Clear WRAP_LOCK_BIT in the 'seen' value
     * thus indicating that it is stable now.
     *
-    * No need for memory_order_release, since CAS issued a fence.
+    * No need for hop_memory_order_release, since CAS issued a fence.
     */
-   atomic_store_explicit(&w->seen_off, w->seen_off & ~WRAP_LOCK_BIT,
-      memory_order_relaxed);
+   hop_atomic_store_explicit(&w->seen_off, w->seen_off & ~WRAP_LOCK_BIT,
+      hop_memory_order_relaxed);
 
    /*
     * If we set the WRAP_LOCK_BIT in the 'next' (because we exceed
     * the remaining space and need to wrap-around), then save the
     * 'end' offset and release the lock.
     */
-   if (__predict_false(target & WRAP_LOCK_BIT)) {
+   if (HOP_UNLIKELY(target & WRAP_LOCK_BIT)) {
       /* Cannot wrap-around again if consumer did not catch-up. */
       HOP_ASSERT(rbuf->written <= next);
       HOP_ASSERT(rbuf->end == RBUF_OFF_MAX);
@@ -1899,8 +1914,8 @@ ringbuf_acquire(ringbuf_t* rbuf, ringbuf_worker_t* w, size_t len)
        * Unlock: ensure the 'end' offset reaches global
        * visibility before the lock is released.
        */
-      atomic_store_explicit(&rbuf->next,
-         (target & ~WRAP_LOCK_BIT), memory_order_release);
+      hop_atomic_store_explicit(&rbuf->next,
+         (target & ~WRAP_LOCK_BIT), hop_memory_order_release);
    }
    HOP_ASSERT((target & RBUF_OFF_MASK) <= rbuf->space);
    return (ssize_t)next;
@@ -1916,7 +1931,7 @@ ringbuf_produce(ringbuf_t* rbuf, ringbuf_worker_t* w)
    (void)rbuf;
    HOP_ASSERT(w->registered);
    HOP_ASSERT(w->seen_off != RBUF_OFF_MAX);
-   atomic_store_explicit(&w->seen_off, RBUF_OFF_MAX, memory_order_release);
+   hop_atomic_store_explicit(&w->seen_off, RBUF_OFF_MAX, hop_memory_order_release);
 }
 
 /*
@@ -1959,7 +1974,7 @@ retry:
        * Get a stable 'seen' value.  This is necessary since we
        * want to discard the stale 'seen' values.
        */
-      if (!atomic_load_explicit(&w->registered, memory_order_relaxed))
+      if (!hop_atomic_load_explicit(&w->registered, hop_memory_order_relaxed))
          continue;
       seen_off = stable_seenoff(w);
 
@@ -2001,8 +2016,8 @@ retry:
           * Wrap-around the consumer and start from zero.
           */
          written = 0;
-         atomic_store_explicit(&rbuf->written,
-            written, memory_order_release);
+         hop_atomic_store_explicit(&rbuf->written,
+            written, hop_memory_order_release);
          goto retry;
       }
 
@@ -2431,8 +2446,10 @@ hop_zone_t ClientManager::PushNewZone( hop_zone_t newZone )
 
 #endif // HOP_ENABLED
 
-#ifdef __cplusplus
+
+#if defined(__cplusplus) && defined(HOP_CPP)
 }
 #endif
+
 
 #endif // HOP_C_H_
