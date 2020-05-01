@@ -26,6 +26,21 @@ For more information, please refer to <http://unlicense.org/>
 #ifndef HOP_C_H_
 #define HOP_C_H_
 
+// You can disable completly HOP by setting this variable to false
+#if !defined( HOP_ENABLED )
+
+// Stubbing all profiling macros so they are disabled when HOP_ENABLED is false
+#define HOP_INTIALIZE()          do { ; } while (0)
+#define HOP_SHUTDOWN()           do { ; } while (0)
+#define HOP_ENTER( name, zone )  do { (void)sizeof( zone ); (void)sizeof( name ); } while (0)
+#define HOP_ENTER_FUNC( zone )   do { (void)sizeof( zone ); } while (0)
+#define HOP_LEAVE()              do { ; } while (0)
+#define HOP_ACQUIRE_LOCK( x )    do { (void)sizeof( x ); } while (0)
+#define HOP_LOCK_ACQUIRED()      do { ; } while (0)
+#define HOP_RELEASE_LOCK( x )    do { (void)sizeof( x ); } while (0)
+
+#else  // Hop is enabled so we declare the macros and functions
+
 // MSVC does not fully supports C, so we will compile this file as C++ to get all
 // the required feature needed
 #if !defined(HOP_CPP) && defined( _MSC_VER ) && defined(__cplusplus)
@@ -36,25 +51,6 @@ For more information, please refer to <http://unlicense.org/>
 extern "C"
 {
 #endif
-
-// You can disable completly HOP by setting this variable
-// to false
-#if !defined( HOP_ENABLED )
-
-// Stubbing all profiling macros so they are disabled when HOP_ENABLED is false
-#define HOP_INTIALIZE()          do { ; } while (0)
-#define HOP_SHUTDOWN()           do { ; } while (0)
-
-#define HOP_ENTER( name, zone )  do { (void)sizeof( zone ); (void)sizeof( name ); } while (0)
-#define HOP_ENTER_FUNC( zone )   do { (void)sizeof( zone ) } while (0)
-#define HOP_LEAVE()              do { ; } while (0)
-
-#define HOP_ACQUIRE_LOCK( x )    do { (void)sizeof( x ); } while (0)
-#define HOP_LOCK_ACQUIRED()      do { ; } while (0)
-#define HOP_RELEASE_LOCK( x )    do { (void)sizeof( x ); } while (0)
-
-#else  // We do want to profile
-
 
 /************************************************************/
 /*           THESE ARE THE MACROS YOU SHOULD USE            */
@@ -129,6 +125,10 @@ HOP_EXPORT void hop_acquire_lock( void* mutexAddr );
 HOP_EXPORT void hop_lock_acquired();
 HOP_EXPORT void hop_lock_release( void* mutexAddr );
 
+#if defined(__cplusplus) && !defined(HOP_CPP)
+}
+#endif
+
 /************************************************************/
 /*          EVERYTHING AFTER THIS IS IMPL DETAILS           */
 /************************************************************/
@@ -163,7 +163,10 @@ HOP_EXPORT void hop_lock_release( void* mutexAddr );
                        | __ | (_) |  _/
                        |_||_|\___/|_|
 */
-
+#if defined(__cplusplus) && !defined(HOP_CPP)
+extern "C"
+{
+#endif
 #if defined( HOP_IMPLEMENTATION )
 
 #include <errno.h>
@@ -2448,18 +2451,12 @@ hop_zone_t ClientManager::PushNewZone( hop_zone_t newZone )
 
 
 
-
-
-
-
-
-
-#endif // HOP_ENABLED
-
-
 #if defined(__cplusplus) && !defined(HOP_CPP)
 }
 #endif
+
+
+#endif // HOP_ENABLED
 
 
 #endif // HOP_C_H_

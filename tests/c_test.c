@@ -1,5 +1,6 @@
 #include <stdlib.h>
 
+#undef HOP_ENABLED
 #define HOP_IMPLEMENTATION
 #include "hop_c.h"
 
@@ -14,7 +15,6 @@ void fakeLock( void* lock )
 int main()
 {
     HOP_INTIALIZE();
-    hop_core_t core;
     for( int i = 0; i < 100; ++i )
     {
        HOP_ENTER_FUNC( 0 );
