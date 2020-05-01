@@ -5,6 +5,7 @@
 #include <signal.h>
 
 #define HOP_IMPLEMENTATION
+#define HOP_CPP
 #include <hop_c.h>
 
 class MyMutex
@@ -48,6 +49,7 @@ void rec( int& i )
 
 void startRec()
 {
+   HOP_PROF_FUNC();
    HOP_ENTER_FUNC( 0 );
    int recCount = RECURSION_COUNT;
    rec( recCount );

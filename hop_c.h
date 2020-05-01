@@ -41,10 +41,22 @@ For more information, please refer to <http://unlicense.org/>
 
 #else  // Hop is enabled so we declare the macros and functions
 
-// MSVC does not fully supports C, so we will compile this file as C++ to get all
-// the required feature needed
-#if !defined(HOP_CPP) && defined( _MSC_VER ) && defined(__cplusplus)
+#if defined( _MSC_VER )
+#define HOP_FCT_NAME __FUNCTION__
+#define HOP_EXPORT   __declspec( dllexport )
+#else
+#define HOP_FCT_NAME __PRETTY_FUNCTION__
+#define HOP_EXPORT
+#endif
+
+// MSVC is not fully C compliant, so we will compile this file as C++ to get all
+// the required features
+#if !defined(HOP_CPP) && defined(_MSC_VER) && defined(__cplusplus)
 #define HOP_CPP
+#endif
+
+#ifdef HOP_CPP
+#define HOP_PROF_FUNC() HOP_PROF_ID_GUARD( hop__, ( __FILE__, __LINE__, HOP_FCT_NAME ) )
 #endif
 
 #if defined(__cplusplus) && !defined(HOP_CPP)
@@ -58,14 +70,6 @@ extern "C"
 
 #define HOP_INTIALIZE() hop_initialize()
 #define HOP_SHUTDOWN() hop_shutdown()
-
-#if defined( _MSC_VER )
-#define HOP_FCT_NAME __FUNCTION__
-#define HOP_EXPORT __declspec( dllexport )
-#else
-#define HOP_FCT_NAME __PRETTY_FUNCTION__
-#define HOP_EXPORT
-#endif
 
 #define HOP_ENTER( x, zone )   hop_enter( __FILE__, __LINE__, (x), (zone) )
 #define HOP_ENTER_FUNC( zone ) hop_enter( __FILE__, __LINE__, HOP_FCT_NAME, (zone) )
@@ -127,6 +131,20 @@ HOP_EXPORT void hop_lock_release( void* mutexAddr );
 
 #if defined(__cplusplus) && !defined(HOP_CPP)
 }
+#endif
+
+#ifdef HOP_CPP
+
+namespace hop {
+struct Guard {
+   Guard( const char* fileName, hop_linenb_t lineNb, const char* fctName ) noexcept {
+      hop_enter( fileName, lineNb, fctName, 0 );
+      //_zone     = ClientManager::StartProfile();
+   }
+   ~Guard() { hop_leave(); }
+};
+} // namespace hop
+#define HOP_PROF_ID_GUARD( ID, ARGS ) hop::Guard ID ARGS
 #endif
 
 /************************************************************/
@@ -1010,7 +1028,7 @@ static hop_bool_t local_context_create( local_context_t* ctxt )
 
    memset( ctxt, 0, sizeof( *ctxt ) );
    static hop_atomic_uint32 g_totalThreadCount;  // Index of the tread as they are coming in
-   ctxt->threadIndex = hop_atomic_fetch_add_explicit( &g_totalThreadCount, 1, hop_memory_order_seq_cst );
+   ctxt->threadIndex = hop_atomic_fetch_add_explicit( &g_totalThreadCount, 1U, hop_memory_order_seq_cst );
 
    if( ctxt->threadIndex > HOP_MAX_THREAD_NB )
    {
@@ -1454,7 +1472,7 @@ static void flush_to_consumer( local_context_t* ctxt )
    }
 
    // If no one is there to listen, no need to send any data
-   if( 1 /*has_listening_consumer( g_sharedMemory )*/ )
+   if( has_listening_consumer( g_sharedMemory ) )
    {
       // If the shared memory reset timestamp more recent than our local one
       // it means we need to clear our string table. Otherwise it means we
@@ -1783,7 +1801,7 @@ ringbuf_register(ringbuf_t* rbuf, unsigned i)
    ringbuf_worker_t* w = &rbuf->workers[i];
 
    w->seen_off = RBUF_OFF_MAX;
-   hop_atomic_store_explicit(&w->registered, true, hop_memory_order_release);
+   hop_atomic_store_explicit(&w->registered, 1, hop_memory_order_release);
    return w;
 }
 
