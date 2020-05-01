@@ -26,8 +26,13 @@ For more information, please refer to <http://unlicense.org/>
 #ifndef HOP_C_H_
 #define HOP_C_H_
 
+// MSVC does not fully supports C, so we will compile this file as C++ to get all
+// the required feature needed
+#if !defined(HOP_CPP) && defined( _MSC_VER ) && defined(__cplusplus)
+#define HOP_CPP
+#endif
 
-#if defined(__cplusplus) && defined(HOP_CPP)
+#if defined(__cplusplus) && !defined(HOP_CPP)
 extern "C"
 {
 #endif
@@ -181,7 +186,7 @@ HOP_EXPORT void hop_lock_release( void* mutexAddr );
 #define HOP_ASSERT( x ) ( (x) )
 #endif
 
-#ifdef __cplusplus
+#ifdef HOP_CPP
 #include <atomic>
 #define hop_atomic_uint64   std::atomic<uint64_t>
 #define hop_atomic_uint32   std::atomic<uint32_t>
@@ -348,7 +353,8 @@ typedef struct hop_hash_set* hop_hash_set_t;
  * Forward declaration only. See the actual implementation for
  * the full LICENSE
  */
-#if defined( _MSC_VER ) && defined(__cplusplus)
+#ifdef HOP_CPP
+
 #include <atomic>
 #define hop_memory_order_relaxed          std::memory_order_relaxed
 #define hop_memory_order_acquire          std::memory_order_acquire
@@ -359,7 +365,9 @@ typedef struct hop_hash_set* hop_hash_set_t;
 #define hop_atomic_store_explicit         std::atomic_store_explicit
 #define hop_atomic_fetch_add_explicit     std::atomic_fetch_add_explicit
 #define hop_atomic_compare_exchange_weak  std::atomic_compare_exchange_weak
+
 #else
+
 #ifndef atomic_compare_exchange_weak
 #define	hop_atomic_compare_exchange_weak(ptr, expected, desired) \
     __sync_bool_compare_and_swap(ptr, *(expected), desired)
@@ -381,6 +389,7 @@ typedef struct hop_hash_set* hop_hash_set_t;
 #ifndef atomic_fetch_add_explicit
 #define	hop_atomic_fetch_add_explicit	__atomic_fetch_add
 #endif
+
 #endif
 
 typedef struct ringbuf ringbuf_t;
@@ -2447,7 +2456,7 @@ hop_zone_t ClientManager::PushNewZone( hop_zone_t newZone )
 #endif // HOP_ENABLED
 
 
-#if defined(__cplusplus) && defined(HOP_CPP)
+#if defined(__cplusplus) && !defined(HOP_CPP)
 }
 #endif
 
