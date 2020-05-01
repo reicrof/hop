@@ -1,4 +1,4 @@
-#include "hop/RendererGL.h"
+#include "hop/Renderer.h"
 
 #include "imgui/imgui.h"
 
@@ -13,20 +13,57 @@
 #include <GL/gl.h>
 #endif
 
+static SDL_Window* g_window;
+static SDL_GLContext g_glContext;
+static uint32_t g_FontTexture;
+
 namespace renderer
 {
 
-uint32_t g_FontTexture = 0;
-
-void setViewport( uint32_t x, uint32_t y, uint32_t width, uint32_t height )
+const char* sdlRenderDriverHint()
 {
-   glViewport( x, y, width, height );
+    return "opengl";
 }
 
-void clearColorBuffer()
+bool initialize( SDL_Window* window )
 {
-   glClearColor( 1.0f, 1.0f, 1.0f, 1.0f );
-   glClear( GL_COLOR_BUFFER_BIT );
+   g_glContext = SDL_GL_CreateContext( window );
+   SDL_GL_SetAttribute( SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_CORE );
+   SDL_GL_SetAttribute( SDL_GL_CONTEXT_MAJOR_VERSION, 3 );
+   SDL_GL_SetAttribute( SDL_GL_CONTEXT_MINOR_VERSION, 2 );
+   SDL_GL_SetAttribute( SDL_GL_DOUBLEBUFFER, 1 );
+   SDL_GL_SetSwapInterval( 1 );
+
+   g_window = window;
+   // Build texture atlas
+   ImGuiIO& io = ImGui::GetIO();
+   unsigned char* pixels;
+   int width, height;
+   io.Fonts->GetTexDataAsRGBA32(
+       &pixels, &width, &height );  // Load as RGBA 32-bits (75% of the memory is wasted, but
+                                    // default font is so small) because it is more likely to be
+                                    // compatible with user's existing shaders. If your ImTextureId
+                                    // represent a higher-level concept than just a GL texture id,
+                                    // consider calling GetTexDataAsAlpha8() instead to save on GPU
+                                    // memory.
+
+   // Upload texture to graphics system
+   glGenTextures( 1, &g_FontTexture );
+   glBindTexture( GL_TEXTURE_2D, g_FontTexture );
+   glTexParameteri( GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR );
+   glTexParameteri( GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR );
+   glTexImage2D( GL_TEXTURE_2D, 0, GL_RGBA, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, pixels );
+
+   // Store our identifier
+   io.Fonts->TexID = (void*)(intptr_t)g_FontTexture;
+
+   return true;
+}
+
+void terminate()
+{
+   glDeleteTextures( 1, &g_FontTexture );
+   SDL_GL_DeleteContext( g_glContext );
 }
 
 // This is the main rendering function that you have to implement and provide to ImGui (via setting
@@ -62,6 +99,9 @@ void renderDrawlist( ImDrawData* draw_data )
    glEnableClientState( GL_COLOR_ARRAY );
    glEnable( GL_TEXTURE_2D );
    // glUseProgram(0); // You may want this if using this code in an OpenGL 3+ context
+
+   glClearColor( 1.0f, 1.0f, 1.0f, 1.0f );
+   glClear( GL_COLOR_BUFFER_BIT );
 
    // Setup viewport, orthographic projection matrix
    glViewport( 0, 0, (GLsizei)fb_width, (GLsizei)fb_height );
@@ -138,31 +178,8 @@ void renderDrawlist( ImDrawData* draw_data )
        last_scissor_box[1],
        (GLsizei)last_scissor_box[2],
        (GLsizei)last_scissor_box[3] );
-}
 
-void createResources()
-{
-   // Build texture atlas
-   ImGuiIO& io = ImGui::GetIO();
-   unsigned char* pixels;
-   int width, height;
-   io.Fonts->GetTexDataAsRGBA32(
-       &pixels, &width, &height );  // Load as RGBA 32-bits (75% of the memory is wasted, but
-                                    // default font is so small) because it is more likely to be
-                                    // compatible with user's existing shaders. If your ImTextureId
-                                    // represent a higher-level concept than just a GL texture id,
-                                    // consider calling GetTexDataAsAlpha8() instead to save on GPU
-                                    // memory.
-
-   // Upload texture to graphics system
-   glGenTextures( 1, &g_FontTexture );
-   glBindTexture( GL_TEXTURE_2D, g_FontTexture );
-   glTexParameteri( GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR );
-   glTexParameteri( GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR );
-   glTexImage2D( GL_TEXTURE_2D, 0, GL_RGBA, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, pixels );
-
-   // Store our identifier
-   io.Fonts->TexID = (void*)(intptr_t)g_FontTexture;
+   SDL_GL_SwapWindow( g_window );
 }
 
 void setVSync( bool on )

@@ -2,6 +2,7 @@
 #include "Hop.h"
 #include "hop/Stats.h"
 #include "hop/Options.h"
+#include "hop/Renderer.h"
 #include "hop/Viewer.h"
 #include "hop_icon_raster.inline"
 
@@ -189,7 +190,6 @@ static hop::ProcessID startViewer( SDL_Window* window, const hop::LaunchOptions&
       // If we want to launch an executable to profile, now is the time to do it
       if ( opts.startExec )
       {
-         // profiler->setRecording( true );
          childProcId = hop::startChildProcess( opts.fullProcessPath, opts.args );
          if ( childProcId == (hop::ProcessID)-1 )
          {
@@ -209,9 +209,7 @@ static hop::ProcessID startViewer( SDL_Window* window, const hop::LaunchOptions&
       HOP_PROF( "Main Loop" );
       const auto frameStart = ClockType::now();
 
-      handleInput();
-
-      const auto startFetch = ClockType::now();
+      const auto startFetch = frameStart;
       viewer.fetchClientsData();
       const auto endFetch = ClockType::now();
       hop::g_stats.fetchTimeMs =
@@ -219,13 +217,17 @@ static hop::ProcessID startViewer( SDL_Window* window, const hop::LaunchOptions&
 
       int w, h, x, y;
       SDL_GetWindowSize( window, &w, &h );
+
+      // Poll SDL events
+      handleInput();
+
       const uint32_t buttonState = SDL_GetMouseState( &x, &y );
       const bool lmb = buttonState & SDL_BUTTON( SDL_BUTTON_LEFT );
       const bool rmb = buttonState & SDL_BUTTON( SDL_BUTTON_RIGHT );
 
       // Get delta time for current frame
       const auto curTime = ClockType::now();
-      const float deltaTime = static_cast<float>(
+      const float deltaTime = (float)(
          duration_cast<milliseconds>( ( curTime - lastFrameTime ) ).count() );
 
       const float wndWidth = (float)w;
@@ -235,20 +237,9 @@ static hop::ProcessID startViewer( SDL_Window* window, const hop::LaunchOptions&
       g_mouseWheel = 0;
       lastFrameTime = curTime;
 
-      viewer.draw( wndWidth, wndHeight);
+      viewer.draw( wndWidth, wndHeight );
 
       auto frameEnd = ClockType::now();
-
-      // If we rendered fast, fetch data again instead of stalling on the vsync
-      if ( duration<double, std::milli>( ( frameEnd - frameStart ) ).count() < 10.0 )
-      {
-         viewer.fetchClientsData();
-      }
-
-      SDL_GL_SwapWindow( window );
-
-      frameEnd = ClockType::now();
-
       hop::g_stats.frameTimeMs = duration<double, std::milli>( ( frameEnd - frameStart ) ).count();
    }
 
@@ -264,6 +255,8 @@ int main( int argc, char* argv[] )
    }
 
    hop::setupSignalHandlers( terminateCallback );
+
+   SDL_SetHint( SDL_HINT_RENDER_DRIVER, renderer::sdlRenderDriverHint() );
 
    if ( SDL_Init( SDL_INIT_VIDEO ) != 0 )
    {
@@ -285,14 +278,13 @@ int main( int argc, char* argv[] )
 
    hop::block_allocator::initialize( hop::VIRT_MEM_BLK_SIZE );
 
-   sdlImGuiInit();
+   sdlImGuiInit(); 
 
-   SDL_GLContext mainContext = SDL_GL_CreateContext( window );
-   SDL_GL_SetAttribute( SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_CORE );
-   SDL_GL_SetAttribute( SDL_GL_CONTEXT_MAJOR_VERSION, 3 );
-   SDL_GL_SetAttribute( SDL_GL_CONTEXT_MINOR_VERSION, 2 );
-   SDL_GL_SetAttribute( SDL_GL_DOUBLEBUFFER, 1 );
-   SDL_GL_SetSwapInterval( 1 );
+   if( !renderer::initialize( window ) )
+   {
+      fprintf( stderr, "FATAL ERROR ! Renderer initializaiton failed\n" );
+      return -1;
+   }
 
    const hop::LaunchOptions opts = hop::parseArgs( argc, argv );
    hop::options::load();
@@ -312,13 +304,11 @@ int main( int argc, char* argv[] )
       hop::terminateProcess( childProcId );
    }
 
+   destroyIcon();
+   ImGui::DestroyContext();
+   renderer::terminate();
    hop::block_allocator::terminate();
 
-   destroyIcon();
-
-   ImGui::DestroyContext();
-
-   SDL_GL_DeleteContext( mainContext );
    SDL_DestroyWindow( window );
    SDL_Quit();
 }

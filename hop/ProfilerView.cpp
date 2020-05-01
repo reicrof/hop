@@ -4,7 +4,7 @@
 #include "hop/Lod.h"
 #include "hop/ModalWindow.h"
 #include "hop/Options.h"
-#include "hop/RendererGL.h"
+#include "hop/Renderer.h"
 
 #include "Hop.h"
 

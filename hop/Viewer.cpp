@@ -5,7 +5,7 @@
 #include "hop/Lod.h"
 #include "hop/ModalWindow.h"
 #include "hop/Options.h"
-#include "hop/RendererGL.h"
+#include "hop/Renderer.h"
 #include "hop/Stats.h"
 #include "hop/hop_icon_vect.inline"
 
@@ -657,7 +657,6 @@ Viewer::Viewer( uint32_t screenSizeX, uint32_t /*screenSizeY*/ )
 {
    hop::setupLODResolution( screenSizeX );
    hop::initCursors();
-   renderer::createResources();
 }
 
 int Viewer::addNewProfiler( const char* processName, bool startRecording )
@@ -750,7 +749,7 @@ void Viewer::onNewFrame(
    ImGuiIO& io = ImGui::GetIO();
 
    // Setup display size (every frame to accommodate for window resizing)
-   io.DisplaySize = ImVec2( (float)width, (float)height );
+   io.DisplaySize = ImVec2( width, height );
 
    // Setup time step
    io.DeltaTime = std::max( deltaMs * 0.001f, 0.00001f );  // ImGui expect seconds
@@ -790,9 +789,6 @@ void Viewer::onNewFrame(
 void Viewer::draw( float windowWidth, float windowHeight )
 {
    const auto drawStart = std::chrono::system_clock::now();
-
-   renderer::setViewport( 0, 0, windowWidth, windowHeight );
-   renderer::clearColorBuffer();
 
    ImGui::SetNextWindowPos( ImVec2( 0.0f, 0.0f ), ImGuiCond_Always );
    ImGui::SetNextWindowSize( ImGui::GetIO().DisplaySize, ImGuiCond_Always );
@@ -850,8 +846,11 @@ void Viewer::draw( float windowWidth, float windowHeight )
       hop::drawStatsWindow( hop::g_stats );
    }
 
-   // Create the draw commands
-   ImGui::Render();
+   {
+      // Create the draw commands
+      HOP_PROF( "Create ImGui drawlist" );
+      ImGui::Render();
+   }
 
    // Do the actual render
    renderer::renderDrawlist( ImGui::GetDrawData() );

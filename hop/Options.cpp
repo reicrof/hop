@@ -1,4 +1,5 @@
 #include "hop/Options.h"
+#include "hop/Renderer.h"
 
 #include "imgui/imgui.h"
 
@@ -191,7 +192,10 @@ void options::draw()
       ImGui::Checkbox( "Start in Fullscreen", &g_options.startFullScreen );
       ImGui::Checkbox("Show Debug Window", &g_options.showDebugWindow );
       ImGui::Checkbox("Show Core Information", &g_options.showCoreInfo );
-      ImGui::Checkbox("Vsync Enabled", &g_options.vsyncOn );
+      if( ImGui::Checkbox("Vsync Enabled", &g_options.vsyncOn ) )
+      {
+         renderer::setVSync( g_options.vsyncOn );
+      }
       ImGui::SliderFloat( "Trace Height", &g_options.traceHeight, 15.0f, 50.0f );
       ImGui::SliderFloat( "Trace Text Alignment", &g_options.traceTextAlignment, 0.0f, 1.0f );
       ImGui::SliderFloat( "Window Opacity", &g_options.windowOpacity, 0.0f, 1.0f );
