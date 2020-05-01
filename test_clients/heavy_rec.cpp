@@ -35,7 +35,7 @@ thread_local std::vector< MyMutex > mxs( RECURSION_COUNT + 1 );
 
 void rec( int& i )
 {
-   HOP_ENTER_FUNC();
+   HOP_ENTER_FUNC( 0 );
    while( i > 0 )
    {
       std::lock_guard<MyMutex> g{mxs[i]};
@@ -48,7 +48,7 @@ void rec( int& i )
 
 void startRec()
 {
-   HOP_ENTER_FUNC();
+   HOP_ENTER_FUNC( 0 );
    int recCount = RECURSION_COUNT;
    rec( recCount );
    HOP_LEAVE();

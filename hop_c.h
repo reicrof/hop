@@ -45,8 +45,8 @@ extern "C"
 #define HOP_INTIALIZE()          do { ; } while (0)
 #define HOP_SHUTDOWN()           do { ; } while (0)
 
-#define HOP_ENTER( x )           do { (void)sizeof( x ); } while (0)
-#define HOP_ENTER_FUNC()         do { ; } while (0)
+#define HOP_ENTER( name, zone )  do { (void)sizeof( zone ); (void)sizeof( name ); } while (0)
+#define HOP_ENTER_FUNC( zone )   do { (void)sizeof( zone ) } while (0)
 #define HOP_LEAVE()              do { ; } while (0)
 
 #define HOP_ACQUIRE_LOCK( x )    do { (void)sizeof( x ); } while (0)
@@ -71,9 +71,9 @@ extern "C"
 #define HOP_EXPORT
 #endif
 
-#define HOP_ENTER( x )   hop_enter( __FILE__, __LINE__, (x) )
-#define HOP_ENTER_FUNC() hop_enter( __FILE__, __LINE__, HOP_FCT_NAME )
-#define HOP_LEAVE()      hop_leave()
+#define HOP_ENTER( x, zone )   hop_enter( __FILE__, __LINE__, (x), (zone) )
+#define HOP_ENTER_FUNC( zone ) hop_enter( __FILE__, __LINE__, HOP_FCT_NAME, (zone) )
+#define HOP_LEAVE()            hop_leave()
 
 #define HOP_ACQUIRE_LOCK( x ) hop_acquire_lock( (x) )
 #define HOP_LOCK_ACQUIRED()   hop_lock_acquired()
@@ -122,8 +122,8 @@ static const hop_bool_t hop_true = 1;
 // Hop actual function decl
 HOP_EXPORT hop_bool_t hop_initialize();
 HOP_EXPORT void hop_shutdown();
-HOP_EXPORT void hop_enter( const char* fileName, hop_linenb_t line, const char* fctName );
-HOP_EXPORT void hop_enter_dynamic_string( const char* fileName, hop_linenb_t line, const char* fctName );
+HOP_EXPORT void hop_enter( const char* fileName, hop_linenb_t line, const char* fctName, hop_zone_t zone );
+HOP_EXPORT void hop_enter_dynamic_string( const char* fileName, hop_linenb_t line, const char* fctName, hop_zone_t zone );
 HOP_EXPORT void hop_leave();
 HOP_EXPORT void hop_acquire_lock( void* mutexAddr );
 HOP_EXPORT void hop_lock_acquired();
@@ -496,7 +496,6 @@ typedef struct local_context_t
 
    hop_timestamp_t clientResetTimeStamp;
    hop_depth_t traceLevel;
-   hop_zone_t zoneId;
 
    // Thread data
    hop_str_ptr_t threadName;
@@ -557,7 +556,8 @@ static void enter_internal(
     hop_timestamp_t ts,
     hop_str_ptr_t fileName,
     hop_linenb_t line,
-    hop_str_ptr_t fctName );
+    hop_str_ptr_t fctName,
+    hop_zone_t zone );
 
 /* Hash set functions */
 hop_hash_set_t hop_hash_set_create();
@@ -593,15 +593,15 @@ void hop_shutdown()
    destroy_shared_memory();
 }
 
-void hop_enter( const char* fileName, hop_linenb_t line, const char* fctName )
+void hop_enter( const char* fileName, hop_linenb_t line, const char* fctName, hop_zone_t zone )
 {
    if( HOP_UNLIKELY( !check_or_create_local_context( &tl_context ) ) )
          return;
 
-   enter_internal( hop_get_timestamp_no_core(), (hop_str_ptr_t)fileName, line, (hop_str_ptr_t)fctName );
+   enter_internal( hop_get_timestamp_no_core(), (hop_str_ptr_t)fileName, line, (hop_str_ptr_t)fctName, zone );
 }
 
-void hop_enter_dynamic_string( const char* fileName, hop_linenb_t line, const char* fctName )
+void hop_enter_dynamic_string( const char* fileName, hop_linenb_t line, const char* fctName, hop_zone_t zone )
 {
    if( HOP_UNLIKELY( !check_or_create_local_context( &tl_context ) ) )
          return;
@@ -611,7 +611,8 @@ void hop_enter_dynamic_string( const char* fileName, hop_linenb_t line, const ch
        hop_get_timestamp_no_core() | 1ULL,
        (hop_str_ptr_t)fileName,
        line,
-       add_dynamic_string_to_db( &tl_context, fctName ) );
+       add_dynamic_string_to_db( &tl_context, fctName ),
+       zone );
 }
 
 void hop_leave()
@@ -713,7 +714,8 @@ static void enter_internal(
     hop_timestamp_t ts,
     hop_str_ptr_t fileName,
     hop_linenb_t line,
-    hop_str_ptr_t fctName )
+    hop_str_ptr_t fctName,
+    hop_zone_t zone )
 {
    const uint32_t curCount = tl_context.traces.count;
    if( curCount == tl_context.traces.maxSize )
@@ -732,7 +734,7 @@ static void enter_internal(
    tl_context.traces.fileNameIds[curCount] = fileName;
    tl_context.traces.fctNameIds[curCount]  = fctName;
    tl_context.traces.lineNumbers[curCount] = line;
-   tl_context.traces.zones[curCount]       = tl_context.zoneId;
+   tl_context.traces.zones[curCount]       = zone;
    ++tl_context.traces.count;
 }
 
@@ -1041,7 +1043,6 @@ static void reset_traces( local_context_t* ctxt )
    ctxt->lockWaits.count = 0;
    ctxt->openTraceIdx    = 0;
    ctxt->traceLevel      = 0;
-   ctxt->zoneId          = 0;
    // _cores.clear();
 }
 
@@ -1091,9 +1092,9 @@ static hop_bool_t add_string_to_db_internal(
 static hop_str_ptr_t add_string_to_db( local_context_t* ctxt, const char* strId )
 {
    // Early return on NULL
-   if( str == 0 ) return 0;
+   if( strId == 0 ) return 0;
 
-   return add_string_to_db_internal( ctxt, strId, strId, strlen( strId ) );
+   return add_string_to_db_internal( ctxt, (hop_str_ptr_t)strId, strId, strlen( strId ) );
 }
 
 static hop_str_ptr_t add_dynamic_string_to_db( local_context_t* ctxt, const char* dynStr )

@@ -17,8 +17,8 @@ int main()
     hop_core_t core;
     for( int i = 0; i < 100; ++i )
     {
-       HOP_ENTER_FUNC();
-       HOP_ENTER("TESSST");
+       HOP_ENTER_FUNC( 0 );
+       HOP_ENTER("TESSST", 0);
        HOP_LEAVE();
 
        fakeLock( (void*) &g_fakelock );
