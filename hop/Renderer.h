@@ -11,7 +11,6 @@ bool initialize( SDL_Window* window );
 void terminate();
 const char* sdlRenderDriverHint();
 void renderDrawlist( ImDrawData* draw_data );
-void present();
 void setVSync( bool on );
 
 } // namespace renderer

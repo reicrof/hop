@@ -15,7 +15,7 @@ static id<MTLDevice> g_device;
 static id<MTLCommandQueue> g_queue;
 static id<MTLTexture> g_texture;
 static id<MTLRenderPipelineState> g_pipelineState;
-static const CAMetalLayer* g_swapchain;
+static CAMetalLayer* g_swapchain;
 
 static constexpr uint32_t MAX_FRAME_IN_FLIGHT     = 3;
 static constexpr uint32_t DEFAULT_GPU_BUFFER_SIZE = 16;//1024 * 1024U;
@@ -52,7 +52,7 @@ static NSString* shaderSrc =
      "    VertexOut out;\n"
      "    out.position = uniforms.projectionMatrix * float4(in.position, 0, 1);\n"
      "    out.texCoords = in.texCoords;\n"
-     "    out.color = float4(in.color.argb) / float4(255.0);\n"
+     "    out.color = float4(in.color) / float4(255.0);\n"
      "    return out;\n"
      "}\n"
      "\n"
@@ -81,8 +81,8 @@ static MTLPixelFormat sdlPxlFmtToMtlPxlFmt( uint32_t fmt )
 static void setOrthoMatrix(
     float left,
     float right,
-    float top,
     float bottom,
+    float top,
     float zNear,
     float zFar,
     float mat[4][4] )
@@ -90,10 +90,11 @@ static void setOrthoMatrix(
    memset( mat, 0, 16 * sizeof(float) );
    mat[0][0] = 2.0f / ( right - left );
    mat[1][1] = 2.0f / ( top - bottom );
-   mat[2][2] = -2.0f / ( zFar - zNear );
-   mat[3][0] = -( right + left ) / ( right - left );
-   mat[3][1] = -( top + bottom ) / ( top - bottom );
-   mat[3][2] = -( zFar + zNear ) / ( zFar - zNear );
+   mat[2][2] = 1.0f / ( zFar - zNear );
+   mat[3][0] = (left + right) / (left - right);
+   mat[3][1] = (top + bottom) / (bottom - top);
+   mat[3][2] = zNear / (zNear - zFar);
+   mat[3][3] = 1.0f;
 }
 
 // Acquire buffers from the current frame and reallocate them if they are too small.
@@ -234,11 +235,6 @@ void renderDrawlist( ImDrawData* drawData )
    static uint32_t curFrame = 0;
    @autoreleasepool
    {
-      const float fbWidth  = (float)( drawData->DisplaySize.x * drawData->FramebufferScale.x );
-      const float fbHeight = (float)( drawData->DisplaySize.y * drawData->FramebufferScale.y );
-
-      if( std::abs( fbWidth ) < 0.001 || std::abs( fbHeight ) < 0.001 ) return;
-
       const size_t vertBufferSize = drawData->TotalVtxCount * sizeof( ImDrawVert );
       const size_t idxBufferSize  = drawData->TotalIdxCount * sizeof( ImDrawIdx );
 
@@ -267,17 +263,23 @@ void renderDrawlist( ImDrawData* drawData )
          [gpuBuffers.index didModifyRange:NSMakeRange( 0, idxBufferSize )];
       }
 
+      id<CAMetalDrawable> surface = [g_swapchain nextDrawable];
+      const float fbWidth  = [surface.texture width];
+      const float fbHeight = [surface.texture height];
+
       MTLViewport viewport = {};
       viewport.width       = fbWidth;
       viewport.height      = fbHeight;
       viewport.zfar        = 1.0;
 
+      MTLScissorRect sc = {};
+      sc.width  = (int)fbWidth;
+      sc.height = (int)fbHeight;
+
       MTLRenderPassDescriptor* pass        = [MTLRenderPassDescriptor renderPassDescriptor];
       pass.colorAttachments[0].clearColor  = MTLClearColorMake( 0, 0, 0, 1 );
       pass.colorAttachments[0].loadAction  = MTLLoadActionClear;
       pass.colorAttachments[0].storeAction = MTLStoreActionStore;
-
-      id<CAMetalDrawable> surface      = [g_swapchain nextDrawable];
       pass.colorAttachments[0].texture = surface.texture;
 
       id<MTLCommandBuffer> buffer         = [g_queue commandBuffer];
@@ -285,6 +287,7 @@ void renderDrawlist( ImDrawData* drawData )
 
       [encoder setRenderPipelineState:g_pipelineState];
       [encoder setViewport:viewport];
+      [encoder setScissorRect:sc];
       [encoder setVertexBuffer:gpuBuffers.vertex offset:0 atIndex:0];
 
       float orthoMat[4][4];
@@ -305,17 +308,7 @@ void renderDrawlist( ImDrawData* drawData )
             const ImDrawCmd* cmd = &cmdList->CmdBuffer[i];
             assert( !cmd->UserCallback );  // We do not support user callback yet.
 
-            MTLScissorRect sc;
-            sc.x      = (int)hop::clamp( cmd->ClipRect.x, 0.0f, fbWidth );
-            sc.y      = (int)hop::clamp( fbHeight - cmd->ClipRect.w, 0.0f, fbWidth );
-            sc.width  = (int)hop::clamp( cmd->ClipRect.z - cmd->ClipRect.x, 0.0f, fbWidth - sc.x );
-            sc.height = (int)hop::clamp( cmd->ClipRect.w - cmd->ClipRect.y, 0.0f, fbHeight - sc.y );
-            [encoder setScissorRect:sc];
-
-            if( cmd->TextureId )
-               [encoder setFragmentTexture:(id<MTLTexture>)(cmd->TextureId)atIndex:0];
-            //[encoder setFragmentTexture:(__bridge id<MTLTexture>)(pcmd->TextureId) atIndex:0];
-
+            [encoder setFragmentTexture:(id<MTLTexture>)(cmd->TextureId)atIndex:0];
             [encoder drawIndexedPrimitives:MTLPrimitiveTypeTriangle
                                 indexCount:cmd->ElemCount
                                  indexType:idxType
@@ -334,6 +327,9 @@ void renderDrawlist( ImDrawData* drawData )
    curFrame = ( curFrame + 1 ) % MAX_FRAME_IN_FLIGHT;
 }
 
-void setVSync( bool on ) { SDL_GL_SetSwapInterval( (int)on ); }
+void setVSync( bool on )
+{
+   g_swapchain.displaySyncEnabled = on;
+}
 
 }  // namespace renderer

@@ -3,17 +3,22 @@ project (hop)
 
 set( CMAKE_VERBOSE_MAKEFILE on )
 
+# Options
+option( USE_OS_FILE_DIALOG "Use the OS provided file dialog" ON )
+option( USE_METAL_RENDERER "Use Metal renderer backend (MacOs only)" ON )
+
 # includes cmake/FindSDL2.cmake
 set(CMAKE_MODULE_PATH ${PROJECT_SOURCE_DIR}/cmake)
 find_package(SDL2 REQUIRED)
+
+# Find OpenGL if necessary
+if(NOT APPLE OR NOT USE_METAL_RENDERER )
 find_package(OpenGL REQUIRED)
+endif()
 
 set( default_build_type "Release" )
 set( CMAKE_CXX_STANDARD 14 )
-set(ROOT_DIR ${CMAKE_SOURCE_DIR})
-
-# Option
-option( USE_OS_FILE_DIALOG "Use the OS provided file dialog" ON )
+set( ROOT_DIR ${CMAKE_SOURCE_DIR} )
 
 #####################
 ### Platform specific
@@ -24,7 +29,10 @@ if(UNIX)
    set( CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -Wextra -pedantic -Werror=switch -ffast-math -fno-exceptions -fno-rtti -Wstrict-aliasing=2 " )
    if(APPLE)
         set( CMAKE_OSX_DEPLOYMENT_TARGET 10.11 )
-        set( HOP_RENDERER_IMPL "hop/renderer/RendererMetal.mm" )
+        if( USE_METAL_RENDERER )
+           set( CMAKE_OSX_DEPLOYMENT_TARGET 10.13 )
+           set( HOP_RENDERER_IMPL "hop/renderer/RendererMetal.mm" )
+        endif()
         set( NOC_IMPL_FILE "noc_file_dialog/noc_file_dialog.mm")
         set( NOC_IMPL_DEFINE "NOC_FILE_DIALOG_OSX" )
 

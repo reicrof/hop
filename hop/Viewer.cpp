@@ -749,7 +749,7 @@ void Viewer::onNewFrame(
    ImGuiIO& io = ImGui::GetIO();
 
    // Setup display size (every frame to accommodate for window resizing)
-   io.DisplaySize = ImVec2( (float)width, (float)height );
+   io.DisplaySize = ImVec2( width, height );
 
    // Setup time step
    io.DeltaTime = std::max( deltaMs * 0.001f, 0.00001f );  // ImGui expect seconds
@@ -846,8 +846,11 @@ void Viewer::draw( float windowWidth, float windowHeight )
       hop::drawStatsWindow( hop::g_stats );
    }
 
-   // Create the draw commands
-   ImGui::Render();
+   {
+      // Create the draw commands
+      HOP_PROF( "Create ImGui drawlist" );
+      ImGui::Render();
+   }
 
    // Do the actual render
    renderer::renderDrawlist( ImGui::GetDrawData() );

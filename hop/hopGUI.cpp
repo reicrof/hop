@@ -237,7 +237,7 @@ static hop::ProcessID startViewer( SDL_Window* window, const hop::LaunchOptions&
       g_mouseWheel = 0;
       lastFrameTime = curTime;
 
-      viewer.draw( wndWidth, wndHeight);
+      viewer.draw( wndWidth, wndHeight );
 
       auto frameEnd = ClockType::now();
       hop::g_stats.frameTimeMs = duration<double, std::milli>( ( frameEnd - frameStart ) ).count();
