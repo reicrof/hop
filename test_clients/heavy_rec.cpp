@@ -78,6 +78,7 @@ int main( int argc, const char** argv )
    if( argc > 1 )
       threadNum = atoi( argv[1] );
 
+   HOP_ZONE(1);
    std::vector< std::thread > threads;
    for( int i = 0; i < threadNum; ++i )
       threads.emplace_back( [](){ while(g_run) { startRec(); } } );

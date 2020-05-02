@@ -90,6 +90,9 @@ For more information, please refer to <http://unlicense.org/>
 // is being unlocked.
 #define HOP_PROF_MUTEX_UNLOCK( x ) HOP_MUTEX_UNLOCK_EVENT( x )
 
+// The zone id specified must be between 0-255, where the default zone is 0
+#define HOP_ZONE( x ) HOP_ZONE_GUARD( __LINE__, ( x ) )
+
 #endif
 
 #if defined(__cplusplus) && !defined(HOP_CPP)
@@ -165,29 +168,31 @@ HOP_EXPORT void hop_lock_release( void* mutexAddr );
 
 namespace hop {
    struct Guard {
-      Guard(const char* fileName, hop_linenb_t lineNb, const char* fctName) noexcept {
-         hop_enter(fileName, lineNb, fctName, 0);
-         //_zone     = ClientManager::StartProfile();
-      }
-      ~Guard() { hop_leave(); }
+      Guard(const char* fileName, hop_linenb_t lineNb, const char* fctName) noexcept;
+      ~Guard();
    };
    struct DynStringGuard {
-      DynStringGuard(const char* fileName, hop_linenb_t lineNb, const char* fctName) noexcept {
-         hop_enter_dynamic_string(fileName, lineNb, fctName, 0);
-      }
-      ~DynStringGuard() { hop_leave(); }
+      DynStringGuard(const char* fileName, hop_linenb_t lineNb, const char* fctName) noexcept;
+      ~DynStringGuard();
    };
    struct LockWaitGuard {
-      LockWaitGuard(void* mutAddr) noexcept { hop_acquire_lock(mutAddr); }
-      ~LockWaitGuard() { hop_lock_acquired(); };
+      LockWaitGuard(void* mutAddr) noexcept;
+      ~LockWaitGuard();
+   };
+   struct ZoneGuard {
+      ZoneGuard( hop_zone_t zone ) noexcept;
+      ~ZoneGuard();
+      hop_zone_t _previousZone;
    };
 }// namespace hop
 
+#define HOP_COMBINE( X, Y ) X##Y
 #define HOP_PROF_ID_GUARD( ID, ARGS ) hop::Guard ID ARGS
 #define HOP_PROF_GUARD_VAR( LINE, ARGS ) hop::Guard HOP_COMBINE( guard, LINE ) ARGS
 #define HOP_PROF_DYN_STRING_GUARD_VAR( LINE, ARGS ) hop::DynStringGuard HOP_COMBINE( hopProfGuard, LINE ) ARGS
 #define HOP_MUTEX_LOCK_GUARD_VAR( LINE, ARGS ) hop::LockWaitGuard HOP_COMBINE( hopMutexLock, LINE ) ARGS
 #define HOP_MUTEX_UNLOCK_EVENT( x ) hop_lock_release( (x) )
+#define HOP_ZONE_GUARD( LINE, ARGS ) hop::ZoneGuard HOP_COMBINE( hopZoneGuard, LINE ) ARGS
 
 #endif // HOP_CPP
 
@@ -417,11 +422,6 @@ typedef uint32_t hop_shared_memory_state;
 
 typedef struct hop_hash_set* hop_hash_set_t;
 
-/*
- * Copyright (c) 2016 Mindaugas Rasiukevicius <rmind at noxt eu>
- * Forward declaration only. See the actual implementation for
- * the full LICENSE
- */
 #ifdef HOP_CPP
 
 #include <atomic>
@@ -435,6 +435,32 @@ typedef struct hop_hash_set* hop_hash_set_t;
 #define hop_atomic_fetch_add_explicit     std::atomic_fetch_add_explicit
 #define hop_atomic_compare_exchange_weak  std::atomic_compare_exchange_weak
 
+/**
+ * Internal C++ implementation of the guards
+ */
+hop_thread_local hop_zone_t tl_zone = HOP_ZONE_DEFAULT;
+
+hop::Guard::Guard( const char* fileName, hop_linenb_t lineNb, const char* fctName ) noexcept
+{
+   hop_enter( fileName, lineNb, fctName, tl_zone );
+}
+hop::Guard::~Guard() { hop_leave(); }
+hop::DynStringGuard::DynStringGuard(
+    const char* fileName,
+    hop_linenb_t lineNb,
+    const char* fctName ) noexcept
+{
+   hop_enter_dynamic_string( fileName, lineNb, fctName, tl_zone );
+}
+hop::DynStringGuard::~DynStringGuard() { hop_leave(); }
+hop::LockWaitGuard::LockWaitGuard( void* mutAddr ) noexcept { hop_acquire_lock( mutAddr ); }
+hop::LockWaitGuard::~LockWaitGuard() { hop_lock_acquired(); };
+hop::ZoneGuard::ZoneGuard( hop_zone_t zone ) noexcept
+{
+   _previousZone = tl_zone;
+   tl_zone       = zone;
+}
+hop::ZoneGuard::~ZoneGuard() { tl_zone = _previousZone; }
 #else
 
 #ifndef atomic_compare_exchange_weak
@@ -461,6 +487,11 @@ typedef struct hop_hash_set* hop_hash_set_t;
 
 #endif
 
+/*
+ * Copyright (c) 2016 Mindaugas Rasiukevicius <rmind at noxt eu>
+ * Forward declaration only. See the actual implementation for
+ * the full LICENSE
+ */
 typedef struct ringbuf ringbuf_t;
 typedef struct ringbuf_worker ringbuf_worker_t;
 typedef uint64_t	ringbuf_off_t;
@@ -2163,77 +2194,6 @@ ringbuf_release(ringbuf_t* rbuf, size_t nbytes)
 #if 0
 
 
-class Client;
-class SharedMemory;
-
-class HOP_EXPORT ClientManager
-{
-  public:
-   static Client* Get();
-   static hop_zone_t StartProfile();
-   static hop_str_ptr_t StartProfileDynString( const char*, hop_zone_t* );
-   static void EndProfile(
-       hop_str_ptr_t fileName,
-       hop_str_ptr_t fctName,
-       hop_timestamp_t start,
-       hop_timestamp_t end,
-       hop_linenb_t lineNb,
-       hop_zone_t zone,
-       hop_core_t core );
-   static void EndLockWait( void* mutexAddr, hop_timestamp_t start, hop_timestamp_t end );
-   static void UnlockEvent( void* mutexAddr, hop_timestamp_t time );
-   static hop_zone_t PushNewZone( hop_zone_t newZone );
-   
-   static SharedMemory& sharedMemory() HOP_NOEXCEPT;
-};
-
-class LockWaitGuard
-{
-   hop_timestamp_t start;
-   void* mutexAddr;
-  public:
-   LockWaitGuard( void* mutAddr ) : start( getTimeStamp() ), mutexAddr( mutAddr ) {}
-   ~LockWaitGuard() { ClientManager::EndLockWait( mutexAddr, start, getTimeStamp() ); }
-};
-
-class ProfGuardDynamicString
-{
-  public:
-   ProfGuardDynamicString( const char* fileName, hop_linenb_t lineNb, const char* fctName ) HOP_NOEXCEPT
-       : _start( getTimeStamp() | 1ULL ),  // Set the first bit to 1 to signal dynamic strings
-         _fileName( reinterpret_cast<hop_str_ptr_t>( fileName ) ),
-         _lineNb( lineNb )
-   {
-      _fctName = ClientManager::StartProfileDynString( fctName, &_zone );
-   }
-   ~ProfGuardDynamicString()
-   {
-      ClientManager::EndProfile( _fileName, _fctName, _start, getTimeStamp(), _lineNb, _zone, 0 );
-   }
-
-  private:
-   hop_timestamp_t _start;
-   hop_str_ptr_t _fileName;
-   hop_str_ptr_t _fctName;
-   hop_linenb_t _lineNb;
-   hop_zone_t _zone;
-};
-
-class ZoneGuard
-{
-  public:
-   ZoneGuard( hop_zone_t newZone ) HOP_NOEXCEPT
-   {
-      _prevZoneId = ClientManager::PushNewZone( newZone );
-   }
-   ~ZoneGuard() { ClientManager::PushNewZone( _prevZoneId ); }
-
-  private:
-   hop_zone_t _prevZoneId;
-};
-
-
-}  // namespace hop
 
 typedef struct hop_hash_set* hop_hash_set_t;
 hop_hash_set_t hop_hash_set_create();
