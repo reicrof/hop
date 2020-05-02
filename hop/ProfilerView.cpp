@@ -25,7 +25,7 @@
 
 extern bool g_run;
 
-static int closestLodLevel( hop::TimeDuration timelineDuration )
+static int closestLodLevel( hop::hop_timeduration_t timelineDuration )
 {
    int lodLvl = 0;
    while( lodLvl < hop::LOD_COUNT - 1 && timelineDuration > hop::LOD_CYCLES[lodLvl] )
@@ -45,7 +45,7 @@ void hop::ProfilerView::fetchClientData()
    _profiler.fetchClientData();
 }
 
-void hop::ProfilerView::update( float globalTimeMs, TimeDuration timelineDuration )
+void hop::ProfilerView::update( float globalTimeMs, hop_timeduration_t timelineDuration )
 {
    HOP_PROF_FUNC();
    _highlightValue = (std::sin( 0.007f * globalTimeMs ) * 0.8f + 1.0f) / 2.0f;

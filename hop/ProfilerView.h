@@ -17,7 +17,7 @@ class ProfilerView
 public:
    ProfilerView( Profiler::SourceType type, int processId, const char* str );
    void fetchClientData();
-   void update( float globalTimeMs, TimeDuration timelineDuration );
+   void update( float globalTimeMs, hop_timeduration_t timelineDuration );
    void draw( float drawPosX, float drawPosY, const TimelineInfo& tlInfo, TimelineMsgArray* msgArray );
 
    bool handleHotkey();

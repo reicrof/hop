@@ -13,14 +13,14 @@ namespace hop
 struct Entries;
 //struct LockWaitData;
 
-extern TimeDuration LOD_CYCLES[9];
+extern hop_timeduration_t LOD_CYCLES[9];
 constexpr int LOD_COUNT = sizeof( LOD_CYCLES ) / sizeof( LOD_CYCLES[0] );
 
 struct LodInfo
 {
-   TimeStamp start, end;
+   hop_timestamp_t start, end;
    size_t index;
-   Depth_t depth;
+   hop_depth_t depth;
    bool loded;
    bool operator<( const LodInfo& rhs ) const noexcept { return end < rhs.end; }
 };
@@ -40,14 +40,14 @@ void appendLods( LodsData& lodData, const Entries& entries );
 void appendCoreEventLods(
     LodsData& lodData,
     const Entries& entries,
-    const hop::Deque<Core_t>& cores );
+    const hop::Deque<hop_core_t>& cores );
 
 std::pair<size_t, size_t> visibleIndexSpan(
     const LodsArray& lodsArr,
     int lodLvl,
-    TimeStamp absoluteStart,
-    TimeStamp absoluteEnd,
-    Depth_t minDepth );
+    hop_timestamp_t absoluteStart,
+    hop_timestamp_t absoluteEnd,
+    hop_depth_t minDepth );
 
 }
 

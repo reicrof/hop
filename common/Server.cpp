@@ -154,7 +154,7 @@ bool Server::start( int inPid, const char* name )
          {
             HOP_PROF( "Server - Handling new messages" );
             pollFailedCount = 0;
-            const TimeStamp minTimestamp = _sharedMem.lastResetTimestamp();
+            const hop_timestamp_t minTimestamp = _sharedMem.lastResetTimestamp();
             size_t bytesRead = 0;
             while ( bytesRead < bytesToRead )
             {
@@ -289,7 +289,7 @@ void Server::getPendingData( PendingData& data )
    _sharedPendingData.clear();
 }
 
-bool Server::addUniqueThreadName( uint32_t threadIndex, StrPtr_t name )
+bool Server::addUniqueThreadName( uint32_t threadIndex, hop_str_ptr_t name )
 {
    bool newInsert = false;
    if ( _threadNamesReceived.size() <= threadIndex )
@@ -306,7 +306,7 @@ bool Server::addUniqueThreadName( uint32_t threadIndex, StrPtr_t name )
    return newInsert;
 }
 
-size_t Server::handleNewMessage( uint8_t* data, size_t maxSize, TimeStamp minTimestamp )
+size_t Server::handleNewMessage( uint8_t* data, size_t maxSize, hop_timestamp_t minTimestamp )
 {
    uint8_t* bufPtr = data;
    const MsgInfo* msgInfo = (const MsgInfo*)bufPtr;
@@ -353,13 +353,13 @@ size_t Server::handleNewMessage( uint8_t* data, size_t maxSize, TimeStamp minTim
           if ( tracesCount > 0 )
           {
              TraceData traceData;
-             const TimeStamp* starts = (const TimeStamp*)bufPtr;
-             const TimeStamp* ends = starts + tracesCount;
-             const StrPtr_t* fileNames = (const StrPtr_t*)( ends + tracesCount );
-             const StrPtr_t* fctNames = fileNames + tracesCount;
-             const LineNb_t* lineNbs = (const LineNb_t*)( fctNames + tracesCount );
-             const Depth_t* depths = (const Depth_t*)( lineNbs + tracesCount );
-             const ZoneId_t* zones = (const ZoneId_t*)( depths + tracesCount );
+             const hop_timestamp_t* starts = (const hop_timestamp_t*)bufPtr;
+             const hop_timestamp_t* ends = starts + tracesCount;
+             const hop_str_ptr_t* fileNames = (const hop_str_ptr_t*)( ends + tracesCount );
+             const hop_str_ptr_t* fctNames = fileNames + tracesCount;
+             const hop_linenb_t* lineNbs = (const hop_linenb_t*)( fctNames + tracesCount );
+             const hop_depth_t* depths = (const hop_depth_t*)( lineNbs + tracesCount );
+             const hop_zone_t* zones = (const hop_zone_t*)( depths + tracesCount );
 
              traceData.entries.ends.append( ends, ends + tracesCount );
              traceData.entries.starts.append( starts, starts + tracesCount );
@@ -380,9 +380,9 @@ size_t Server::handleNewMessage( uint8_t* data, size_t maxSize, TimeStamp minTim
              assert_is_sorted( traceData.entries.ends.begin(), traceData.entries.ends.end() );
 
              bufPtr +=
-                 ( ( sizeof( TimeStamp ) + sizeof( TimeStamp ) + sizeof( Depth_t ) +
-                     sizeof( StrPtr_t ) + sizeof( StrPtr_t ) + sizeof( LineNb_t ) +
-                     sizeof( ZoneId_t ) ) *
+                 ( ( sizeof( hop_timestamp_t ) + sizeof( hop_timestamp_t ) + sizeof( hop_depth_t ) +
+                     sizeof( hop_str_ptr_t ) + sizeof( hop_str_ptr_t ) + sizeof( hop_linenb_t ) +
+                     sizeof( hop_zone_t ) ) *
                    tracesCount );
              assert( ( size_t )( bufPtr - data ) <= maxSize );
 
@@ -400,7 +400,7 @@ size_t Server::handleNewMessage( uint8_t* data, size_t maxSize, TimeStamp minTim
          const uint32_t lwCount = msgInfo->lockwaits.count;
 
          LockWaitData lockwaitData;
-         Depth_t maxDepth = 0;
+         hop_depth_t maxDepth = 0;
          for ( uint32_t i = 0; i < lwCount; ++i )
          {
             lockwaitData.entries.ends.push_back( lws[i].end );

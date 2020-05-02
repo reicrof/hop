@@ -12,7 +12,7 @@ struct TimelineTrack;
 
 struct TraceDetail
 {
-   TraceDetail( size_t traceId, TimeStamp excTime )
+   TraceDetail( size_t traceId, hop_timestamp_t excTime )
        : inclusiveTimeInNanos( 0 ),
          exclusiveTimeInNanos( excTime ),
          inclusivePct( 1.0f ),
@@ -22,8 +22,8 @@ struct TraceDetail
       traceIds.push_back( traceId );
    }
    std::vector< size_t > traceIds;
-   TimeStamp inclusiveTimeInNanos;
-   TimeStamp exclusiveTimeInNanos;
+   hop_timestamp_t inclusiveTimeInNanos;
+   hop_timestamp_t exclusiveTimeInNanos;
    float inclusivePct;
    float exclusivePct;
 };
@@ -45,9 +45,9 @@ struct TraceDetailDrawResult
 
 struct TraceStats
 {
-   StrPtr_t fctNameId;
+   hop_str_ptr_t fctNameId;
    size_t count;
-   TimeDuration min, max, median;
+   hop_timeduration_t min, max, median;
    std::vector< float > displayableDurations;
    bool open{false};
    bool focus{false};

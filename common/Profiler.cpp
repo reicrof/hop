@@ -66,12 +66,12 @@ const StringDb& Profiler::stringDb() const
    return _strDb;
 }
 
-TimeStamp Profiler::earliestTimestamp() const
+hop_timestamp_t Profiler::earliestTimestamp() const
 {
    return _earliestTimeStamp;
 }
 
-TimeStamp Profiler::latestTimestamp() const
+hop_timestamp_t Profiler::latestTimestamp() const
 {
    return _latestTimeStamp;
 }
@@ -151,7 +151,7 @@ void Profiler::addTraces( const TraceData& traces, uint32_t threadIndex )
    if ( _tracks[threadIndex]._traces.entries.ends.empty() )
    {
       // Find the earliest trace
-      const TimeStamp newEarliestTime =
+      const hop_timestamp_t newEarliestTime =
          *std::min_element( traces.entries.starts.begin(), traces.entries.starts.end() );
       // Set the timeline absolute start time to this new value
       if ( _earliestTimeStamp == 0 || newEarliestTime < _earliestTimeStamp )
@@ -217,7 +217,7 @@ void Profiler::addCoreEvents( const CoreEventData& coreEvents, uint32_t threadIn
    }
 }
 
-void Profiler::addThreadName( StrPtr_t name, uint32_t threadIndex )
+void Profiler::addThreadName( hop_str_ptr_t name, uint32_t threadIndex )
 {
    // Check if new thread
    if ( threadIndex >= _tracks.size() )

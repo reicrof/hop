@@ -38,8 +38,8 @@ public:
    SharedMemory::ConnectionState connectionState() const;
    const std::vector<TimelineTrack>& timelineTracks() const;
    const StringDb& stringDb() const;
-   TimeStamp earliestTimestamp() const;
-   TimeStamp latestTimestamp() const;
+   hop_timestamp_t earliestTimestamp() const;
+   hop_timestamp_t latestTimestamp() const;
 
    void setRecording( bool recording );
    void fetchClientData();
@@ -48,7 +48,7 @@ public:
    void addLockWaits( const LockWaitData& lockWaits, uint32_t threadIndex);
    void addUnlockEvents(const std::vector<UnlockEvent>& unlockEvents, uint32_t threadIndex);
    void addCoreEvents( const CoreEventData& coreEvents, uint32_t threadIndex );
-   void addThreadName( StrPtr_t name, uint32_t threadIndex );
+   void addThreadName( hop_str_ptr_t name, uint32_t threadIndex );
    void clear();
 
    bool saveToFile( const char* path );
@@ -65,8 +65,8 @@ private:
    Server _server;
    Server::PendingData _serverPendingData;
 
-   TimeStamp _earliestTimeStamp;
-   TimeStamp _latestTimeStamp;
+   hop_timestamp_t _earliestTimeStamp;
+   hop_timestamp_t _latestTimeStamp;
 };
 
 }  // namespace hop

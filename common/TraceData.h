@@ -13,15 +13,15 @@ static constexpr size_t INVALID_IDX = std::numeric_limits<size_t>::max();
 
 struct Entries
 {
-   hop::Deque< TimeStamp > starts;
-   hop::Deque< TimeStamp > ends;
-   hop::Deque< Depth_t > depths;
+   hop::Deque< hop_timestamp_t > starts;
+   hop::Deque< hop_timestamp_t > ends;
+   hop::Deque< hop_depth_t > depths;
 
    void clear();
    void append( const Entries& newEntries );
    Entries copy() const;
 
-   Depth_t maxDepth{ 0 };
+   hop_depth_t maxDepth{ 0 };
 };
 
 struct TraceData
@@ -40,11 +40,11 @@ struct TraceData
    Entries entries;
 
    //Indexes of the name in the string database
-   hop::Deque< StrPtr_t > fileNameIds;
-   hop::Deque< StrPtr_t > fctNameIds;
+   hop::Deque< hop_str_ptr_t > fileNameIds;
+   hop::Deque< hop_str_ptr_t > fctNameIds;
 
-   hop::Deque< LineNb_t > lineNbs;
-   hop::Deque< ZoneId_t > zones;
+   hop::Deque< hop_linenb_t > lineNbs;
+   hop::Deque< hop_zone_t > zones;
 };
 
 struct LockWaitData
@@ -59,7 +59,7 @@ struct LockWaitData
 
    Entries entries;
    hop::Deque< void* > mutexAddrs;
-   hop::Deque< TimeStamp > lockReleases;
+   hop::Deque< hop_timestamp_t > lockReleases;
 };
 
 struct CoreEventData
@@ -73,7 +73,7 @@ struct CoreEventData
    void clear();
 
    Entries entries;
-   hop::Deque<Core_t> cores;
+   hop::Deque<hop_core_t> cores;
 };
 
 // Data serialization

@@ -34,17 +34,17 @@ static float PADDED_TRACE_SIZE = TRACE_HEIGHT + TRACE_VERTICAL_PADDING;
 
 struct HighlightInfo
 {
-   hop::TimeStamp start, end;
+   hop::hop_timestamp_t start, end;
    uint32_t threadIdx;
-   hop::Depth_t depth;
+   hop::hop_depth_t depth;
 };
 
 struct LockOwnerInfo
 {
-   LockOwnerInfo( hop::TimeDuration dur, uint32_t tIdx ) : lockDuration( dur ), threadIndex( tIdx )
+   LockOwnerInfo( hop::hop_timeduration_t dur, uint32_t tIdx ) : lockDuration( dur ), threadIndex( tIdx )
    {
    }
-   hop::TimeDuration lockDuration{0};
+   hop::hop_timeduration_t lockDuration{0};
    uint32_t threadIndex{0};
 };
 
@@ -165,7 +165,7 @@ template <typename LodIt>
 static void createDrawData(
     LodIt it,
     size_t count,
-    hop::TimeStamp absStart,
+    hop::hop_timestamp_t absStart,
     float cyclesPerPxl,
     float* __restrict startsPxl,
     float* __restrict deltaPxl )
@@ -187,8 +187,8 @@ static void createDrawData(
 /*
    Customization point for the draw entries function
 */
-using GetEntryLabel = int (*)( const hop::TimelineTrackDrawData& data, uint32_t threadIdx, size_t entryIdx, hop::TimeDuration duration, uint32_t arrSize, char* arr );
-static int traceLabelWithTime( const hop::TimelineTrackDrawData& data, uint32_t threadIdx, size_t entryIdx, hop::TimeDuration duration, uint32_t arrSize, char* arr )
+using GetEntryLabel = int (*)( const hop::TimelineTrackDrawData& data, uint32_t threadIdx, size_t entryIdx, hop::hop_timeduration_t duration, uint32_t arrSize, char* arr );
+static int traceLabelWithTime( const hop::TimelineTrackDrawData& data, uint32_t threadIdx, size_t entryIdx, hop::hop_timeduration_t duration, uint32_t arrSize, char* arr )
 {
    const auto& tracesData = data.profiler.timelineTracks()[threadIdx]._traces;
    const char* label = data.profiler.stringDb().getString( tracesData.fctNameIds[entryIdx] );
@@ -198,11 +198,11 @@ static int traceLabelWithTime( const hop::TimelineTrackDrawData& data, uint32_t 
 
    return snprintf( arr, arrSize, "%s (%s)", label, fmtTime );
 }
-static int lockwaitLabelWithTime( const hop::TimelineTrackDrawData&, uint32_t, size_t, hop::TimeDuration, uint32_t arrSize, char* arr )
+static int lockwaitLabelWithTime( const hop::TimelineTrackDrawData&, uint32_t, size_t, hop::hop_timeduration_t, uint32_t arrSize, char* arr )
 {
    return snprintf( arr, arrSize, "%s", "Lock wait" );
 }
-static int coreEventLabel( const hop::TimelineTrackDrawData& data, uint32_t threadIdx, size_t entryIdx, hop::TimeDuration, uint32_t arrSize, char* arr )
+static int coreEventLabel( const hop::TimelineTrackDrawData& data, uint32_t threadIdx, size_t entryIdx, hop::hop_timeduration_t, uint32_t arrSize, char* arr )
 {
    const auto& coreEvents = data.profiler.timelineTracks()[threadIdx]._coreEvents;
    return snprintf( arr, arrSize, "Core %u", coreEvents.cores[entryIdx] );
@@ -211,7 +211,7 @@ static int coreEventLabel( const hop::TimelineTrackDrawData& data, uint32_t thre
 using GetEntryColor = uint32_t (*)( const hop::TimelineTrackDrawData& data, uint32_t threadIdx, size_t entryIdx );
 static uint32_t getTraceColor( const hop::TimelineTrackDrawData& data, uint32_t threadIdx, size_t entryIdx )
 {
-   const hop::ZoneId_t zoneId = data.profiler.timelineTracks()[threadIdx]._traces.zones[entryIdx];
+   const hop::hop_zone_t zoneId = data.profiler.timelineTracks()[threadIdx]._traces.zones[entryIdx];
    return hop::options::zoneColors()[zoneId];
 }
 static uint32_t getLockWaitColor( const hop::TimelineTrackDrawData&, uint32_t, size_t )
@@ -229,7 +229,7 @@ static void drawHoveredTracePopup( const hop::TimelineTrackDrawData& data, uint3
 {
    char strBuffer[512];
    const auto& tracesData = data.profiler.timelineTracks()[threadIndex]._traces;
-   const hop::TimeDuration delta = tracesData.entries.ends[ entryIndex ] - tracesData.entries.starts[ entryIndex ];
+   const hop::hop_timeduration_t delta = tracesData.entries.ends[ entryIndex ] - tracesData.entries.starts[ entryIndex ];
    const int charWritten = traceLabelWithTime( data, threadIndex, entryIndex, delta, sizeof( strBuffer ), strBuffer );
    
    snprintf(
@@ -263,7 +263,7 @@ static void drawHoveredTracePopup( const hop::TimelineTrackDrawData& data, uint3
 
 static void drawHoveredLockWaitPopup(
     const void* mutexAddr,
-    hop::TimeDuration duration,
+    hop::hop_timeduration_t duration,
     const std::vector<LockOwnerInfo>& locksInfo,
     bool drawAsCycles,
     float cpuFreqGHz )
@@ -327,12 +327,12 @@ static size_t drawEntries(
    using namespace hop;
 
    // Get all the timing boundaries
-   const TimeStamp globalStartTime  = data.timeline.globalStartTime;
-   const TimeStamp relativeStart    = data.timeline.relativeStartTime;
-   const TimeDuration timelineRange = data.timeline.duration;
+   const hop_timestamp_t globalStartTime  = data.timeline.globalStartTime;
+   const hop_timestamp_t relativeStart    = data.timeline.relativeStartTime;
+   const hop_timeduration_t timelineRange = data.timeline.duration;
 
-   const TimeStamp absoluteStart    = relativeStart + globalStartTime;
-   const TimeStamp absoluteEnd      = absoluteStart + timelineRange;
+   const hop_timestamp_t absoluteStart    = relativeStart + globalStartTime;
+   const hop_timestamp_t absoluteEnd      = absoluteStart + timelineRange;
 
    // The time range to draw in absolute time
    const auto spanIndex =
@@ -474,8 +474,8 @@ static void drawHighlightedTraces(
    ImDrawList* drawList               = ImGui::GetWindowDrawList();
    const float wndWidth               = ImGui::GetWindowWidth();
    const uint32_t color               = 0x00FFFFFF | (uint32_t(highlightVal * 255.0f) << 24);
-   const hop::TimeDuration tlDuration = data.timeline.duration;
-   const hop::TimeDuration tlStart    = data.timeline.globalStartTime + data.timeline.relativeStartTime;
+   const hop::hop_timeduration_t tlDuration = data.timeline.duration;
+   const hop::hop_timeduration_t tlStart    = data.timeline.globalStartTime + data.timeline.relativeStartTime;
    for( const auto& trace : traceToHighlight )
    {
       const float startPxl = hop::cyclesToPxl<float>( wndWidth, tlDuration, trace.start - tlStart );
@@ -502,9 +502,9 @@ static void handleHoveredTrace(
       ImGui::EndTooltip();
 
       const auto& traceData = data.profiler.timelineTracks()[threadIndex]._traces;
-      const hop::TimeStamp start = traceData.entries.starts[hoveredIdx];
-      const hop::TimeStamp end   = traceData.entries.ends[hoveredIdx];
-      const hop::Depth_t depth   = traceData.entries.depths[hoveredIdx];
+      const hop::hop_timestamp_t start = traceData.entries.starts[hoveredIdx];
+      const hop::hop_timestamp_t end   = traceData.entries.ends[hoveredIdx];
+      const hop::hop_depth_t depth   = traceData.entries.depths[hoveredIdx];
 
       const bool rightMouseClicked = ImGui::IsMouseReleased( 1 );
       const bool leftMouseDblClicked = ImGui::IsMouseDoubleClicked( 0 );
@@ -541,15 +541,15 @@ static std::vector<LockOwnerInfo> highlightLockOwner(
    const std::vector<TimelineTrack>& tlt = data.profiler.timelineTracks();
 
    // Info of the currently highlighted lock wait
-   const TimeStamp highlightedLWEnd   = tlt[threadIdx]._lockWaits.entries.ends[hoveredLwIndex];
-   const TimeStamp highlightedLWStart = tlt[threadIdx]._lockWaits.entries.starts[hoveredLwIndex];
+   const hop_timestamp_t highlightedLWEnd   = tlt[threadIdx]._lockWaits.entries.ends[hoveredLwIndex];
+   const hop_timestamp_t highlightedLWStart = tlt[threadIdx]._lockWaits.entries.starts[hoveredLwIndex];
 
    // Data for drawing the owner's highlight
    ImDrawList* DrawList          = ImGui::GetOverlayDrawList();
    const float wndWidth          = ImGui::GetWindowWidth();
    const int highlightAlpha      = 70.0f * data.highlightValue;
-   const TimeDuration tlDuration = data.timeline.duration;
-   const TimeDuration tlStart    = data.timeline.globalStartTime + data.timeline.relativeStartTime;   
+   const hop_timeduration_t tlDuration = data.timeline.duration;
+   const hop_timeduration_t tlStart    = data.timeline.globalStartTime + data.timeline.relativeStartTime;   
 
    // Go through all the threads and find the one that owned the lock during the
    // highlighted periods
@@ -572,13 +572,13 @@ static std::vector<LockOwnerInfo> highlightLockOwner(
       {
          if( lockWaits.mutexAddrs[lockDataIdx] == highlightedMutexAddr )
          {
-            const TimeStamp lockWaitEndTime = lockWaits.entries.ends[lockDataIdx];
-            const TimeStamp unlockTime      = lockWaits.lockReleases[lockDataIdx];
+            const hop_timestamp_t lockWaitEndTime = lockWaits.entries.ends[lockDataIdx];
+            const hop_timestamp_t unlockTime      = lockWaits.lockReleases[lockDataIdx];
 
             // We've gone to far, so early break
             if( unlockTime != 0 && unlockTime < highlightedLWStart ) break;
 
-            const TimeDuration lockHoldDuration = unlockTime - lockWaitEndTime;
+            const hop_timeduration_t lockHoldDuration = unlockTime - lockWaitEndTime;
 
             // Add info to result vector
             bool added = false;
@@ -622,9 +622,9 @@ static void handleHoveredLockWait(
    if( hoveredIdx != hop::INVALID_IDX )
    {
       const auto& lwData               = data.profiler.timelineTracks()[threadIdx]._lockWaits;
-      const hop::TimeStamp start       = lwData.entries.starts[hoveredIdx];
-      const hop::TimeStamp end         = lwData.entries.ends[hoveredIdx];
-      const hop::Depth_t depth         = lwData.entries.depths[hoveredIdx];
+      const hop::hop_timestamp_t start       = lwData.entries.starts[hoveredIdx];
+      const hop::hop_timestamp_t end         = lwData.entries.ends[hoveredIdx];
+      const hop::hop_depth_t depth         = lwData.entries.depths[hoveredIdx];
       const void* highlightedMutexAddr = lwData.mutexAddrs[hoveredIdx];
 
       const std::vector<LockOwnerInfo> lockOwnerInfo =
@@ -746,7 +746,7 @@ void TimelineTracksView::update( const hop::Profiler& profiler )
       appendCoreEventLods( _tracks[i].coreEventLodsData, coreEntries, track._coreEvents.cores );
 
       // Update max depth as well in case it has changed
-      const Depth_t newMaxDepth = std::max( traceEntries.maxDepth, lwEntries.maxDepth );
+      const hop_depth_t newMaxDepth = std::max( traceEntries.maxDepth, lwEntries.maxDepth );
       _tracks[i].maxDepth       = newMaxDepth;
    }
 
@@ -897,9 +897,9 @@ void TimelineTracksView::drawSearchWindow(
    {
       const auto& timelinetrack    = tracksData[selection.hoveredThreadIdx];
 
-      const TimeStamp absStartTime = timelinetrack._traces.entries.starts[selection.hoveredTraceIdx];
-      const TimeStamp absEndTime   = timelinetrack._traces.entries.ends[selection.hoveredTraceIdx];
-      const Depth_t depth          = timelinetrack._traces.entries.depths[selection.hoveredTraceIdx];
+      const hop_timestamp_t absStartTime = timelinetrack._traces.entries.starts[selection.hoveredTraceIdx];
+      const hop_timestamp_t absEndTime   = timelinetrack._traces.entries.ends[selection.hoveredTraceIdx];
+      const hop_depth_t depth          = timelinetrack._traces.entries.depths[selection.hoveredTraceIdx];
 
       traceToHighlight.emplace_back( HighlightInfo{ absStartTime, absEndTime, selection.hoveredThreadIdx, depth } );
 
@@ -909,7 +909,7 @@ void TimelineTracksView::drawSearchWindow(
          // If the thread was hidden, display it so we can see the selected trace
          setTrackHeight( selection.selectedThreadIdx, 9999.0f );
 
-         const TimeStamp startTime = absStartTime - data.timeline.globalStartTime;
+         const hop_timestamp_t startTime = absStartTime - data.timeline.globalStartTime;
          const float verticalPosPxl = _tracks[selection.selectedThreadIdx].absoluteDrawPos[1] +
                                     ( depth * PADDED_TRACE_SIZE ) -
                                     ( 3 * PADDED_TRACE_SIZE );
@@ -938,9 +938,9 @@ void TimelineTracksView::drawTraceDetailsWindow(
    const auto& entries = data.profiler.timelineTracks()[traceDetailRes.hoveredThreadIdx]._traces.entries;
    if( traceDetailRes.clicked )
    {
-      Depth_t minDepth = std::numeric_limits< Depth_t >::max();
-      TimeStamp minTime = std::numeric_limits< TimeStamp >::max();
-      TimeStamp maxTime = std::numeric_limits< TimeStamp >::min();
+      hop_depth_t minDepth = std::numeric_limits< hop_depth_t >::max();
+      hop_timestamp_t minTime = std::numeric_limits< hop_timestamp_t >::max();
+      hop_timestamp_t maxTime = std::numeric_limits< hop_timestamp_t >::min();
       for( size_t idx : traceDetailRes.hoveredTraceIds )
       {
          minDepth = std::min( entries.depths[ idx ], minDepth );

@@ -107,10 +107,10 @@ void CoreEventData::clear()
 static size_t serializedSize( const hop::Entries& entries )
 {
    const size_t entriesCount = entries.ends.size();
-   const size_t size = sizeof( hop::Depth_t ) +                        // Max depth
-                       sizeof( hop::TimeStamp ) * entriesCount +       // starts
-                       sizeof( hop::TimeStamp ) * entriesCount +       // ends
-                       sizeof( hop::Depth_t ) * entriesCount;          // depths
+   const size_t size = sizeof( hop::hop_depth_t ) +                        // Max depth
+                       sizeof( hop::hop_timestamp_t ) * entriesCount +       // starts
+                       sizeof( hop::hop_timestamp_t ) * entriesCount +       // ends
+                       sizeof( hop::hop_depth_t ) * entriesCount;          // depths
    return size;
 }
 
@@ -122,25 +122,25 @@ static size_t serialize( const hop::Entries& entries, char* dst )
    (void)tracesCount;
 
    // Max depth
-   memcpy( &dst[i], &entries.maxDepth, sizeof( hop::Depth_t ) );
-   i += sizeof( hop::Depth_t );
+   memcpy( &dst[i], &entries.maxDepth, sizeof( hop::hop_depth_t ) );
+   i += sizeof( hop::hop_depth_t );
 
    // ends
    {
-      std::copy( entries.ends.begin(), entries.ends.end(), (hop::TimeStamp*)&dst[i] );
-      i += sizeof( hop::TimeStamp ) * tracesCount;
+      std::copy( entries.ends.begin(), entries.ends.end(), (hop::hop_timestamp_t*)&dst[i] );
+      i += sizeof( hop::hop_timestamp_t ) * tracesCount;
    }
 
    // starts
    {
-      std::copy( entries.starts.begin(), entries.starts.end(), (hop::TimeStamp*)&dst[i] );
-      i += sizeof( hop::TimeStamp ) * tracesCount;
+      std::copy( entries.starts.begin(), entries.starts.end(), (hop::hop_timestamp_t*)&dst[i] );
+      i += sizeof( hop::hop_timestamp_t ) * tracesCount;
    }
 
    // depths
    {
-      std::copy( entries.depths.begin(), entries.depths.end(), (hop::Depth_t*)&dst[i] );
-      i += sizeof( hop::Depth_t ) * tracesCount;
+      std::copy( entries.depths.begin(), entries.depths.end(), (hop::hop_depth_t*)&dst[i] );
+      i += sizeof( hop::hop_depth_t ) * tracesCount;
    }
 
    return i;
@@ -150,22 +150,22 @@ static size_t deserialize( const char* src, size_t count, hop::Entries& entries 
 {
    size_t i = 0;
 
-   entries.maxDepth = *(hop::Depth_t*)&src[i];
-   i += sizeof( hop::Depth_t );
+   entries.maxDepth = *(hop::hop_depth_t*)&src[i];
+   i += sizeof( hop::hop_depth_t );
 
    {  // ends
-      std::copy((hop::TimeStamp*)&src[i], ((hop::TimeStamp*) &src[i]) + count, std::back_inserter(entries.ends));
-      i += sizeof( hop::TimeStamp ) * count;
+      std::copy((hop::hop_timestamp_t*)&src[i], ((hop::hop_timestamp_t*) &src[i]) + count, std::back_inserter(entries.ends));
+      i += sizeof( hop::hop_timestamp_t ) * count;
    }
 
    {  // starts
-      std::copy((hop::TimeStamp*)&src[i], ((hop::TimeStamp*)&src[i]) + count, std::back_inserter(entries.starts));
-      i += sizeof( hop::TimeStamp ) * count;
+      std::copy((hop::hop_timestamp_t*)&src[i], ((hop::hop_timestamp_t*)&src[i]) + count, std::back_inserter(entries.starts));
+      i += sizeof( hop::hop_timestamp_t ) * count;
    }
 
    {  // depths
-      std::copy((hop::Depth_t*)&src[i], ((hop::Depth_t*) &src[i]) + count, std::back_inserter(entries.depths));
-      i += sizeof( hop::Depth_t ) * count;
+      std::copy((hop::hop_depth_t*)&src[i], ((hop::hop_depth_t*) &src[i]) + count, std::back_inserter(entries.depths));
+      i += sizeof( hop::hop_depth_t ) * count;
    }
 
    return i;
@@ -177,9 +177,9 @@ size_t serializedSize( const TraceData& td )
    const size_t size =
        sizeof( size_t ) +                           // Traces count
        serializedSize( td.entries ) +               // Entries size
-       sizeof( hop::StrPtr_t ) * tracesCount * 2 +  // fileNameId and fctNameIds
-       sizeof( hop::LineNb_t ) * tracesCount +      // lineNbs
-       sizeof( hop::ZoneId_t ) * tracesCount;       // zones
+       sizeof( hop::hop_str_ptr_t ) * tracesCount * 2 +  // fileNameId and fctNameIds
+       sizeof( hop::hop_linenb_t ) * tracesCount +      // lineNbs
+       sizeof( hop::hop_zone_t ) * tracesCount;       // zones
 
    return size;
 }
@@ -198,26 +198,26 @@ size_t serialize( const TraceData& td, char* dst )
 
    // fileNameIds
    {
-      std::copy( td.fileNameIds.begin(), td.fileNameIds.end(), (hop::StrPtr_t*)&dst[i] );
-      i += sizeof( hop::StrPtr_t ) * tracesCount;
+      std::copy( td.fileNameIds.begin(), td.fileNameIds.end(), (hop::hop_str_ptr_t*)&dst[i] );
+      i += sizeof( hop::hop_str_ptr_t ) * tracesCount;
    }
 
    // fctNameIds
    {
-      std::copy( td.fctNameIds.begin(), td.fctNameIds.end(), (hop::StrPtr_t*)&dst[i] );
-      i += sizeof( hop::StrPtr_t ) * tracesCount;
+      std::copy( td.fctNameIds.begin(), td.fctNameIds.end(), (hop::hop_str_ptr_t*)&dst[i] );
+      i += sizeof( hop::hop_str_ptr_t ) * tracesCount;
    }
 
    // lineNbs
    {
-      std::copy( td.lineNbs.begin(), td.lineNbs.end(), (hop::LineNb_t*)&dst[i] );
-      i += sizeof( hop::LineNb_t ) * tracesCount;
+      std::copy( td.lineNbs.begin(), td.lineNbs.end(), (hop::hop_linenb_t*)&dst[i] );
+      i += sizeof( hop::hop_linenb_t ) * tracesCount;
    }
 
    // zones
    {
-      std::copy( td.zones.begin(), td.zones.end(), (hop::ZoneId_t*)&dst[i] );
-      i += sizeof( hop::ZoneId_t ) * tracesCount;
+      std::copy( td.zones.begin(), td.zones.end(), (hop::hop_zone_t*)&dst[i] );
+      i += sizeof( hop::hop_zone_t ) * tracesCount;
    }
 
    return i;
@@ -235,23 +235,23 @@ size_t deserialize( const char* src, TraceData& td )
    i += deserialize( &src[i], tracesCount, td.entries );
 
    {  // fileNames
-      std::copy((hop::StrPtr_t*)&src[i], ((hop::StrPtr_t*)&src[i]) + tracesCount, std::back_inserter(td.fileNameIds));
-      i += sizeof( hop::StrPtr_t ) * tracesCount;
+      std::copy((hop::hop_str_ptr_t*)&src[i], ((hop::hop_str_ptr_t*)&src[i]) + tracesCount, std::back_inserter(td.fileNameIds));
+      i += sizeof( hop::hop_str_ptr_t ) * tracesCount;
    }
 
    {  // fctnames
-      std::copy((hop::StrPtr_t*) &src[i], ((hop::StrPtr_t*)&src[i]) + tracesCount, std::back_inserter(td.fctNameIds));
-      i += sizeof( hop::StrPtr_t ) * tracesCount;
+      std::copy((hop::hop_str_ptr_t*) &src[i], ((hop::hop_str_ptr_t*)&src[i]) + tracesCount, std::back_inserter(td.fctNameIds));
+      i += sizeof( hop::hop_str_ptr_t ) * tracesCount;
    }
 
    {  // lineNbs
-      std::copy((hop::LineNb_t*)&src[i], ((hop::LineNb_t*)&src[i]) + tracesCount, std::back_inserter(td.lineNbs));
-      i += sizeof( hop::LineNb_t ) * tracesCount;
+      std::copy((hop::hop_linenb_t*)&src[i], ((hop::hop_linenb_t*)&src[i]) + tracesCount, std::back_inserter(td.lineNbs));
+      i += sizeof( hop::hop_linenb_t ) * tracesCount;
    }
 
    {  // zones
-      std::copy((hop::ZoneId_t*)&src[i], ((hop::ZoneId_t*)&src[i]) + tracesCount, std::back_inserter(td.zones));
-      i += sizeof( hop::ZoneId_t ) * tracesCount;
+      std::copy((hop::hop_zone_t*)&src[i], ((hop::hop_zone_t*)&src[i]) + tracesCount, std::back_inserter(td.zones));
+      i += sizeof( hop::hop_zone_t ) * tracesCount;
    }
 
    return i;
@@ -263,7 +263,7 @@ size_t serializedSize( const LockWaitData& lw )
    const size_t size = sizeof( size_t ) +                              // LockWaits count
                        serializedSize( lw.entries ) +                  // Entries size
                        sizeof( void* ) * lockwaitsCount +              // mutexAddrs
-                       sizeof( hop::TimeStamp ) * lockwaitsCount;      // lockReleases
+                       sizeof( hop::hop_timestamp_t ) * lockwaitsCount;      // lockReleases
    return size;
 }
 
@@ -284,8 +284,8 @@ size_t serialize( const LockWaitData& lw, char* dst )
    i += sizeof( void* ) * lockwaitsCount;
 
    // lockReleases
-   std::copy( lw.lockReleases.begin(), lw.lockReleases.end(), (hop::TimeStamp*)&dst[i] );
-   i += sizeof( hop::TimeStamp ) * lockwaitsCount;
+   std::copy( lw.lockReleases.begin(), lw.lockReleases.end(), (hop::hop_timestamp_t*)&dst[i] );
+   i += sizeof( hop::hop_timestamp_t ) * lockwaitsCount;
 
    return i;
 }
@@ -305,8 +305,8 @@ size_t deserialize( const char* src, LockWaitData& lw )
    i += sizeof( void* ) * lwCounts;
 
    // lockReleases
-   std::copy((hop::TimeStamp*)&src[i], ((hop::TimeStamp*) &src[i]) + lwCounts, std::back_inserter(lw.lockReleases));
-   i += sizeof( hop::TimeStamp ) * lwCounts;
+   std::copy((hop::hop_timestamp_t*)&src[i], ((hop::hop_timestamp_t*) &src[i]) + lwCounts, std::back_inserter(lw.lockReleases));
+   i += sizeof( hop::hop_timestamp_t ) * lwCounts;
 
    return i;
 }
@@ -331,7 +331,7 @@ size_t serialize( const CoreEventData& ced, char* dst )
    i += serialize( ced.entries, &dst[i] );
 
    // Core Events
-   std::copy( ced.cores.begin(), ced.cores.end(), (Core_t*)&dst[i] );
+   std::copy( ced.cores.begin(), ced.cores.end(), (hop_core_t*)&dst[i] );
    i += sizeof( ced.cores[0] ) * coreEventCount;
 
    return i;
@@ -347,7 +347,7 @@ size_t deserialize( const char* src, CoreEventData& ced )
    i += deserialize( &src[i], count, ced.entries );
 
    // Core Events
-   std::copy((Core_t*)&src[i], ((Core_t*) &src[i]) + count, std::back_inserter(ced.cores));
+   std::copy((hop_core_t*)&src[i], ((hop_core_t*) &src[i]) + count, std::back_inserter(ced.cores));
    i += sizeof( ced.cores[0] ) * count;
 
    return i;

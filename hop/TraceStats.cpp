@@ -20,7 +20,7 @@ namespace
 {
 struct TraceVecSetItem
 {
-   TraceVecSetItem( hop::StrPtr_t fName, hop::LineNb_t lineNb, hop::StrPtr_t tName, size_t index )
+   TraceVecSetItem( hop::hop_str_ptr_t fName, hop::hop_linenb_t lineNb, hop::hop_str_ptr_t tName, size_t index )
        : fileName( fName ), traceName( tName ), indexInVec( index ), line( lineNb )
    {
    }
@@ -28,10 +28,10 @@ struct TraceVecSetItem
    {
       return lhs.fileName == rhs.fileName && lhs.traceName == rhs.traceName && lhs.line == rhs.line;
    }
-   hop::StrPtr_t fileName;
-   hop::StrPtr_t traceName;
+   hop::hop_str_ptr_t fileName;
+   hop::hop_str_ptr_t traceName;
    size_t indexInVec;
-   hop::LineNb_t line;
+   hop::hop_linenb_t line;
 };
 
 template <typename CMP>
@@ -121,7 +121,7 @@ namespace std
    {
       size_t operator()( const TraceVecSetItem& t ) const
       {
-         return std::hash<hop::LineNb_t>()( t.line ) ^ std::hash<hop::StrPtr_t>()( t.traceName ) ^ std::hash<hop::StrPtr_t>()( t.fileName );
+         return std::hash<hop::hop_linenb_t>()( t.line ) ^ std::hash<hop::hop_str_ptr_t>()( t.traceName ) ^ std::hash<hop::hop_str_ptr_t>()( t.fileName );
       }
    };
 }
@@ -160,7 +160,7 @@ static std::vector<hop::TraceDetail> mergeTraceDetails( const hop::TraceData& tr
 
    // Compute the inclusive time. Tje inclusive time can be seen as the union of the time
    // a function spent, regardless of its depth
-   std::vector< TimeStamp > startTimes, endTimes;
+   std::vector< hop_timestamp_t > startTimes, endTimes;
    startTimes.reserve( 128 );
    endTimes.reserve( 128 );
    for( auto& t : mergedDetails )
@@ -169,12 +169,12 @@ static std::vector<hop::TraceDetail> mergeTraceDetails( const hop::TraceData& tr
       {
          // Try to merge it with exsiting time
          bool merged = false;
-         const TimeStamp end = traces.entries.ends[ idx ];
-         const TimeStamp start = traces.entries.starts[ idx ];
+         const hop_timestamp_t end = traces.entries.ends[ idx ];
+         const hop_timestamp_t start = traces.entries.starts[ idx ];
          for( size_t i = 0; i < endTimes.size(); ++i )
          {
-            const TimeStamp curStart = startTimes[i];
-            const TimeStamp curEnd = endTimes[i];
+            const hop_timestamp_t curStart = startTimes[i];
+            const hop_timestamp_t curEnd = endTimes[i];
 
             // If it is fully contained in the trace, there is nothing to do
             if( end <= curEnd && start >= curStart )
@@ -215,7 +215,7 @@ static std::vector<hop::TraceDetail> mergeTraceDetails( const hop::TraceData& tr
 
       // Now that we have the union of the start/end times, compute
       // the sum of the elapsed time.
-      TimeStamp inclusiveTime = 0;
+      hop_timestamp_t inclusiveTime = 0;
       for( size_t i = 0; i < startTimes.size(); ++i )
       {
          inclusiveTime += endTimes[i] - startTimes[i];
@@ -238,7 +238,7 @@ gatherTraceDetails( const hop::TraceData& traces, size_t traceId )
    std::vector<TraceDetail> traceDetails;
 
    // Find the traces to analyze
-   const TimeStamp firstTraceTime = traces.entries.starts[traceId];
+   const hop_timestamp_t firstTraceTime = traces.entries.starts[traceId];
 
    size_t firstTraceId = traceId;
    while ( firstTraceId > 0 && traces.entries.ends[firstTraceId] >= firstTraceTime ) firstTraceId--;
@@ -251,16 +251,16 @@ gatherTraceDetails( const hop::TraceData& traces, size_t traceId )
 
    traceDetails.reserve( traceId - firstTraceId );
 
-   const Depth_t maxDepth = *std::max_element(
+   const hop_depth_t maxDepth = *std::max_element(
        traces.entries.depths.begin() + firstTraceId, traces.entries.depths.begin() + traceId + 1 );
-   std::vector<TimeStamp> accumulatedTimePerDepth( maxDepth + 1, 0 );
+   std::vector<hop_timestamp_t> accumulatedTimePerDepth( maxDepth + 1, 0 );
 
-   Depth_t lastDepth = traces.entries.depths[firstTraceId];
+   hop_depth_t lastDepth = traces.entries.depths[firstTraceId];
    for ( size_t i = firstTraceId; i <= traceId; ++i )
    {
-      const TimeStamp delta  = traces.entries.ends[i] - traces.entries.starts[i];
-      const Depth_t curDepth = traces.entries.depths[i];
-      TimeStamp excTime = delta;
+      const hop_timestamp_t delta  = traces.entries.ends[i] - traces.entries.starts[i];
+      const hop_depth_t curDepth = traces.entries.depths[i];
+      hop_timestamp_t excTime = delta;
 
       if ( curDepth == lastDepth )
       {
@@ -288,7 +288,7 @@ gatherTraceDetails( const hop::TraceData& traces, size_t traceId )
 
 static void finalizeTraceDetails(
     std::vector<hop::TraceDetail>& details,
-    hop::TimeDuration totalTime )
+    hop::hop_timeduration_t totalTime )
 {
    HOP_PROF_FUNC();
 
@@ -317,7 +317,7 @@ createTraceDetails( const TraceData& traces, uint32_t threadIndex, size_t traceI
 {
    HOP_PROF_FUNC();
 
-   const TimeStamp totalDelta = traces.entries.ends[traceId] - traces.entries.starts[traceId];
+   const hop_timestamp_t totalDelta = traces.entries.ends[traceId] - traces.entries.starts[traceId];
 
    std::vector<TraceDetail> traceDetails = mergeTraceDetails( traces, gatherTraceDetails( traces, traceId ) );
    finalizeTraceDetails( traceDetails, totalDelta );
@@ -332,12 +332,12 @@ createTraceDetails( const TraceData& traces, uint32_t threadIndex, size_t traceI
 
 TraceStats createTraceStats( const TraceData& traces, uint32_t, size_t traceId )
 {
-   const StrPtr_t fileName = traces.fileNameIds[traceId];
-   const StrPtr_t fctName             = traces.fctNameIds[traceId];
-   const LineNb_t lineNb              = traces.lineNbs[traceId];
+   const hop_str_ptr_t fileName = traces.fileNameIds[traceId];
+   const hop_str_ptr_t fctName             = traces.fctNameIds[traceId];
+   const hop_linenb_t lineNb              = traces.lineNbs[traceId];
 
    TraceStats stats;
-   stats.min       = std::numeric_limits<TimeDuration>::max();
+   stats.min       = std::numeric_limits<hop_timeduration_t>::max();
    stats.max       = 0;
    stats.median    = 0;
    stats.count     = 0;
@@ -351,7 +351,7 @@ TraceStats createTraceStats( const TraceData& traces, uint32_t, size_t traceId )
       if( traces.fileNameIds[i] == fileName && traces.fctNameIds[i] == fctName &&
           traces.lineNbs[i] == lineNb )
       {
-         const TimeDuration delta = traces.entries.ends[i] - traces.entries.starts[i];
+         const hop_timeduration_t delta = traces.entries.ends[i] - traces.entries.starts[i];
          stats.displayableDurations.push_back( (float)delta );
          medianValues.push_back( delta );
          stats.min = std::min( stats.min, delta );
@@ -382,7 +382,7 @@ TraceDetails createGlobalTraceDetails( const TraceData& traces, uint32_t threadI
    std::vector<hop::TraceDetail> traceDetails;
    traceDetails.reserve( 1024 );
 
-   TimeDuration totalTime = 0;
+   hop_timeduration_t totalTime = 0;
    for( size_t i = 0; i < traces.entries.depths.size(); ++i )
    {
       if( traces.entries.depths[i] == 0 )
@@ -530,7 +530,7 @@ TraceDetailDrawResult drawTraceDetails(
          for ( size_t i = 0; i < details.details.size(); ++i )
          {
             const size_t traceId = details.details[i].traceIds[0];
-            const StrPtr_t fctIdx = track._traces.fctNameIds[traceId];
+            const hop_str_ptr_t fctIdx = track._traces.fctNameIds[traceId];
             snprintf( traceName, sizeof( traceName ), "%s", strDb.getString( fctIdx ) );
             if ( ImGui::Selectable(
                      traceName, selected == i, ImGuiSelectableFlags_SpanAllColumns ) )

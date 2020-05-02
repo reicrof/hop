@@ -35,7 +35,7 @@ class Server
        std::unordered_map< uint32_t, std::vector<UnlockEvent> > unlockEventsPerThread;
        std::unordered_map< uint32_t, CoreEventData > coreEventsPerThread;
 
-       std::vector< std::pair< uint32_t, StrPtr_t > > threadNames;
+       std::vector< std::pair< uint32_t, hop_str_ptr_t > > threadNames;
 
        void clear();
        void swap(PendingData& rhs);
@@ -48,8 +48,8 @@ class Server
    bool tryConnect( int32_t pid, SharedMemory::ConnectionState& newState );
 
    // Returns the number of bytes processed
-   size_t handleNewMessage( uint8_t* data, size_t maxSize, TimeStamp minTimestamp );
-   bool addUniqueThreadName( uint32_t threadIndex, StrPtr_t name );
+   size_t handleNewMessage( uint8_t* data, size_t maxSize, hop_timestamp_t minTimestamp );
+   bool addUniqueThreadName( uint32_t threadIndex, hop_str_ptr_t name );
 
    void clearPendingMessages();
 
@@ -71,7 +71,7 @@ class Server
 
    hop::Mutex _sharedPendingDataMutex;
    PendingData _sharedPendingData;
-   std::vector< StrPtr_t > _threadNamesReceived;
+   std::vector< hop_str_ptr_t > _threadNamesReceived;
 };
 
 }  // namespace hop

@@ -16,8 +16,8 @@
 
 #include <cstdlib> // fix for std::abs for older libc++ impl
 
-static constexpr hop::TimeDuration MIN_CYCLES_TO_DISPLAY = 1000;
-static constexpr hop::TimeDuration MAX_CYCLES_TO_DISPLAY = 1800000000000;
+static constexpr hop::hop_timeduration_t MIN_CYCLES_TO_DISPLAY = 1000;
+static constexpr hop::hop_timeduration_t MAX_CYCLES_TO_DISPLAY = 1800000000000;
 static constexpr float TIMELINE_TOTAL_HEIGHT = 50.0f;
 
 using TimelineTextPositions = std::vector<std::pair<ImVec2, int64_t> >;
@@ -398,7 +398,7 @@ void Timeline::drawOverlay()
       const auto minmaxCycles = std::minmax( _rangeZoomCycles[0], _rangeZoomCycles[1] );
       const float startPxl =
           cyclesToPxl<float>( windowSize.x, _duration, minmaxCycles.first - _timelineStart );
-      const TimeDuration deltaCycles = minmaxCycles.second - minmaxCycles.first;
+      const hop_timeduration_t deltaCycles = minmaxCycles.second - minmaxCycles.first;
       const float durationPxl = cyclesToPxl( windowSize.x, _duration, deltaCycles );
 
       ImDrawList* drawList = ImGui::GetWindowDrawList();
@@ -412,7 +412,7 @@ void Timeline::drawOverlay()
       const auto minmaxCycles = std::minmax( _rangeSelectTimeStamp[0], _rangeSelectTimeStamp[1] );
       const float startPxl =
           cyclesToPxl<float>( windowSize.x, _duration, minmaxCycles.first - _timelineStart );
-      const TimeDuration deltaCycles = minmaxCycles.second - minmaxCycles.first;
+      const hop_timeduration_t deltaCycles = minmaxCycles.second - minmaxCycles.first;
       const float durationPxl = cyclesToPxl( windowSize.x, _duration, deltaCycles );
 
       char durationText[32] = {};
@@ -586,10 +586,10 @@ void Timeline::handleMouseDrag( float mouseInCanvasX, float /*mouseInCanvasY*/ )
        pushNavigationState();
 
        const auto minmaxPos = std::minmax( _rangeZoomCycles[0], _rangeZoomCycles[1] );
-       const TimeDuration newZoomDuration = minmaxPos.second - minmaxPos.first;
+       const hop_timeduration_t newZoomDuration = minmaxPos.second - minmaxPos.first;
 
        // Number of cycles that are clamped if we are past the minimum zoom possible
-       const TimeDuration deltaClamped =
+       const hop_timeduration_t deltaClamped =
            newZoomDuration < MIN_CYCLES_TO_DISPLAY ? MIN_CYCLES_TO_DISPLAY - newZoomDuration : 0;
        setStartTime( minmaxPos.first - (deltaClamped/2) );
        setZoom( newZoomDuration );
@@ -646,41 +646,41 @@ void Timeline::setRealtime( bool isRealtime ) noexcept
    _realtime = isRealtime;
 }
 
-hop::TimeStamp Timeline::globalStartTime() const noexcept
+hop::hop_timestamp_t Timeline::globalStartTime() const noexcept
 {
    return _globalStartTime;
 }
 
-hop::TimeStamp Timeline::globalEndTime() const noexcept
+hop::hop_timestamp_t Timeline::globalEndTime() const noexcept
 {
    return _globalEndTime;
 }
 
-void Timeline::setGlobalStartTime( TimeStamp time ) noexcept
+void Timeline::setGlobalStartTime( hop_timestamp_t time ) noexcept
 {
    _globalStartTime = time;
 }
 
-void Timeline::setGlobalEndTime( TimeStamp time ) noexcept
+void Timeline::setGlobalEndTime( hop_timestamp_t time ) noexcept
 {
    _globalEndTime = time;
 }
 
-TimeStamp Timeline::relativeStartTime() const noexcept { return _timelineStart; }
+hop_timestamp_t Timeline::relativeStartTime() const noexcept { return _timelineStart; }
 
-TimeStamp Timeline::relativeEndTime() const noexcept { return _timelineStart + _duration; }
+hop_timestamp_t Timeline::relativeEndTime() const noexcept { return _timelineStart + _duration; }
 
-TimeStamp Timeline::absoluteStartTime() const noexcept
+hop_timestamp_t Timeline::absoluteStartTime() const noexcept
 {
    return _globalStartTime + _timelineStart;
 }
 
-TimeStamp Timeline::absoluteEndTime() const noexcept
+hop_timestamp_t Timeline::absoluteEndTime() const noexcept
 {
    return absoluteStartTime() + _duration;
 }
 
-TimeDuration Timeline::duration() const noexcept { return _duration; }
+hop_timeduration_t Timeline::duration() const noexcept { return _duration; }
 
 float Timeline::verticalPosPxl() const noexcept
 {
@@ -730,7 +730,7 @@ void Timeline::moveVerticalPositionPxl( float positionPxl, AnimationType animTyp
    }
 }
 
-void Timeline::moveToAbsoluteTime( TimeStamp time, AnimationType animType ) noexcept
+void Timeline::moveToAbsoluteTime( hop_timestamp_t time, AnimationType animType ) noexcept
 {
    moveToTime( time - _globalStartTime, animType );
 }
@@ -751,7 +751,7 @@ void Timeline::moveToPresentTime( AnimationType animType ) noexcept
    moveToTime( ( _globalEndTime - _globalStartTime ), animType );
 }
 
-void Timeline::frameToTime( int64_t time, TimeDuration duration, bool pushNavState ) noexcept
+void Timeline::frameToTime( int64_t time, hop_timeduration_t duration, bool pushNavState ) noexcept
 {
    if( pushNavState ) pushNavigationState();
 
@@ -759,12 +759,12 @@ void Timeline::frameToTime( int64_t time, TimeDuration duration, bool pushNavSta
    setZoom( duration );
 }
 
-void Timeline::frameToAbsoluteTime( TimeStamp time, TimeDuration duration, bool pushNavState ) noexcept
+void Timeline::frameToAbsoluteTime( hop_timestamp_t time, hop_timeduration_t duration, bool pushNavState ) noexcept
 {
    frameToTime( time - _globalStartTime, duration, pushNavState );
 }
 
-void Timeline::setZoom( TimeDuration timelineDuration, AnimationType animType )
+void Timeline::setZoom( hop_timeduration_t timelineDuration, AnimationType animType )
 {
    _animationState.targetTimelineRange = hop::clamp( timelineDuration, MIN_CYCLES_TO_DISPLAY, MAX_CYCLES_TO_DISPLAY );
    _animationState.type = animType;
@@ -797,7 +797,7 @@ void Timeline::zoomOn( int64_t cycleToZoomOn, float zoomFactor )
 
 void Timeline::nextBookmark() noexcept
 {
-   const TimeStamp timelineCenter = _timelineStart + _duration / 2;
+   const hop_timestamp_t timelineCenter = _timelineStart + _duration / 2;
    const auto delta = std::abs( _duration * 0.01 );
    auto it = _bookmarks.times.begin();
    while( it != _bookmarks.times.end() )
@@ -813,7 +813,7 @@ void Timeline::nextBookmark() noexcept
 
 void Timeline::previousBookmark() noexcept
 {
-   const TimeStamp timelineCenter = _timelineStart + _duration / 2;
+   const hop_timestamp_t timelineCenter = _timelineStart + _duration / 2;
    const auto delta = std::abs( _duration * 0.01 );
    auto it = _bookmarks.times.rbegin();
    while( it != _bookmarks.times.rend() )
@@ -866,13 +866,13 @@ void Timeline::redoNavigation() noexcept
 
 size_t serializedSize( const Timeline& timeline )
 {
-   return sizeof( size_t ) + sizeof( TimeStamp ) * timeline._bookmarks.times.size();
+   return sizeof( size_t ) + sizeof( hop_timestamp_t ) * timeline._bookmarks.times.size();
 }
 
 size_t serialize( const Timeline& timeline, char* data )
 {
    const size_t bookmarkCount = timeline._bookmarks.times.size();
-   const size_t bookmarksSize = sizeof( TimeStamp ) * bookmarkCount;
+   const size_t bookmarksSize = sizeof( hop_timestamp_t ) * bookmarkCount;
    memcpy( &data[0], &bookmarkCount, sizeof( size_t ) );
    memcpy( &data[0] + sizeof( size_t ), timeline._bookmarks.times.data(), bookmarksSize );
    return serializedSize(timeline);
@@ -882,9 +882,9 @@ size_t deserialize( const char* data, Timeline& timeline )
 {
    size_t i = 0;
    const size_t* bookmarkCount = (size_t*)&data[i];
-   const size_t bookmarksSize = (*bookmarkCount) * sizeof( TimeStamp );
+   const size_t bookmarksSize = (*bookmarkCount) * sizeof( hop_timestamp_t );
    i += sizeof( size_t );
-   timeline._bookmarks.times.assign( (TimeStamp*)&data[i], (TimeStamp*)(&data[i] + bookmarksSize ) );
+   timeline._bookmarks.times.assign( (hop_timestamp_t*)&data[i], (hop_timestamp_t*)(&data[i] + bookmarksSize ) );
    return bookmarksSize + sizeof( size_t );
 }
 

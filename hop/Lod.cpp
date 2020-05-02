@@ -7,29 +7,29 @@
 
 static constexpr float MIN_TRACE_LENGTH_PXL = 15.0f;
 static constexpr float MIN_GAP_PXL = 5.0f;
-static hop::TimeDuration LOD_MIN_GAP_CYCLES[hop::LOD_COUNT] = {0};
-static hop::TimeDuration LOD_MIN_TRACE_LENGTH_CYCLES[hop::LOD_COUNT] = {0};
+static hop::hop_timeduration_t LOD_MIN_GAP_CYCLES[hop::LOD_COUNT] = {0};
+static hop::hop_timeduration_t LOD_MIN_TRACE_LENGTH_CYCLES[hop::LOD_COUNT] = {0};
 
 static bool canBeLoded(
     int lodLevel,
-    hop::TimeDuration timeBetweenTrace,
-    hop::TimeDuration lastTraceDelta,
-    hop::TimeDuration newTraceDelta )
+    hop::hop_timeduration_t timeBetweenTrace,
+    hop::hop_timeduration_t lastTraceDelta,
+    hop::hop_timeduration_t newTraceDelta )
 {
-   const hop::TimeDuration minTraceSize = LOD_MIN_TRACE_LENGTH_CYCLES[lodLevel];
-   const hop::TimeDuration minTimeBetweenTrace = LOD_MIN_GAP_CYCLES[lodLevel];
+   const hop::hop_timeduration_t minTraceSize = LOD_MIN_TRACE_LENGTH_CYCLES[lodLevel];
+   const hop::hop_timeduration_t minTimeBetweenTrace = LOD_MIN_GAP_CYCLES[lodLevel];
    return lastTraceDelta < minTraceSize && newTraceDelta < minTraceSize &&
           timeBetweenTrace < minTimeBetweenTrace;
 }
 
-static inline hop::TimeDuration delta( const hop::LodInfo& lod )
+static inline hop::hop_timeduration_t delta( const hop::LodInfo& lod )
 {
    return lod.end - lod.start;
 }
 
 namespace hop
 {
-TimeDuration LOD_CYCLES[9] = {1000, 200000, 30000000, 300000000, 600000000, 6000000000, 20000000000, 200000000000, 600000000000 };
+hop_timeduration_t LOD_CYCLES[9] = {1000, 200000, 30000000, 300000000, 600000000, 6000000000, 20000000000, 200000000000, 600000000000 };
 
 void setupLODResolution( uint32_t sreenResolutionX )
 {
@@ -73,12 +73,12 @@ LodsArray computeLods( const Entries& entries, size_t idOffset )
       for ( const auto& l : *lastComputedLod )
       {
          ssize_t lodedTraceIdx = -1;
-         const Depth_t depth = l.depth;
+         const hop_depth_t depth = l.depth;
          if( lastTraceAtDepth[depth] >= 0 )
          {
             const ssize_t lastTraceAtDepthIndex = lastTraceAtDepth[depth];
             auto& lastTrace = resLods[lodLvl][lastTraceAtDepthIndex];
-            const TimeDuration timeBetweenTrace = l.start - lastTrace.end;
+            const hop_timeduration_t timeBetweenTrace = l.start - lastTrace.end;
             if( canBeLoded( lodLvl, timeBetweenTrace, delta( lastTrace ), delta(l) ) )
             {
                assert( lastTrace.depth == depth );
@@ -91,7 +91,7 @@ LodsArray computeLods( const Entries& entries, size_t idOffset )
                      --idx;
                }
 
-               const TimeStamp newStartTime = lastTrace.start;  // Keep around as it will be
+               const hop_timestamp_t newStartTime = lastTrace.start;  // Keep around as it will be
                resLods[lodLvl].erase(
                    resLods[lodLvl].begin() + lastTraceAtDepthIndex,
                    resLods[lodLvl].begin() + lastTraceAtDepthIndex + 1 );
@@ -187,7 +187,7 @@ void appendLods( LodsData& dst, const Entries& entries )
 }
 
 LodsArray
-computeCoreEventLods( const Entries& entries, const hop::Deque<Core_t>& cores, size_t idOffset )
+computeCoreEventLods( const Entries& entries, const hop::Deque<hop_core_t>& cores, size_t idOffset )
 {
    HOP_PROF_FUNC();
 
@@ -245,7 +245,7 @@ computeCoreEventLods( const Entries& entries, const hop::Deque<Core_t>& cores, s
    return resLods;
 }
 
-void appendCoreEventLods( LodsData& dst, const Entries& entries, const hop::Deque<Core_t>& cores )
+void appendCoreEventLods( LodsData& dst, const Entries& entries, const hop::Deque<hop_core_t>& cores )
 {
    if( entries.ends.size() <= dst.idOffset ) return;
 
@@ -293,9 +293,9 @@ void appendCoreEventLods( LodsData& dst, const Entries& entries, const hop::Dequ
 std::pair<size_t, size_t> visibleIndexSpan(
     const LodsArray& lodsArr,
     int lodLvl,
-    TimeStamp absoluteStart,
-    TimeStamp absoluteEnd,
-    Depth_t lowestDepth )
+    hop_timestamp_t absoluteStart,
+    hop_timestamp_t absoluteEnd,
+    hop_depth_t lowestDepth )
 {
    auto span = std::make_pair( hop::INVALID_IDX, hop::INVALID_IDX );
 

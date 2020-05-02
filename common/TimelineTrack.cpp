@@ -29,12 +29,12 @@ static void keepLatestLockWaitsRecords( hop::LockWaitsRecords* records, uint32_t
 
 namespace hop
 {
-void TimelineTrack::setName( StrPtr_t name ) noexcept
+void TimelineTrack::setName( hop_str_ptr_t name ) noexcept
 {
    _trackName = name;
 }
 
-StrPtr_t TimelineTrack::name() const noexcept
+hop_str_ptr_t TimelineTrack::name() const noexcept
 {
    return _trackName;
 }
@@ -99,7 +99,7 @@ void TimelineTrack::addCoreEvents( const CoreEventData& coreEvents )
    _coreEvents.append( coreEvents );
 }
 
-Depth_t TimelineTrack::maxDepth() const noexcept
+hop_depth_t TimelineTrack::maxDepth() const noexcept
 {
    return _traces.entries.maxDepth;
 }

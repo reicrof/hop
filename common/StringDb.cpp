@@ -37,8 +37,8 @@ void StringDb::addStringData( const char* inData, size_t count )
 
    while ( i < count )
    {
-      StrPtr_t strPtr = *( (StrPtr_t*)&inData[i] );
-      i += sizeof( StrPtr_t );
+      hop_str_ptr_t strPtr = *( (hop_str_ptr_t*)&inData[i] );
+      i += sizeof( hop_str_ptr_t );
 
       auto& strIndex = _stringIndices[strPtr];
       const size_t stringLen = alignOn( strlen( &inData[i] ) + 1, 8 );
@@ -59,7 +59,7 @@ void StringDb::addStringData( const std::vector<char>& inData )
    addStringData( inData.data(), inData.size() );
 }
 
-size_t StringDb::getStringIndex( hop::StrPtr_t strId ) const
+size_t StringDb::getStringIndex( hop::hop_str_ptr_t strId ) const
 {
    // Early return on NULL
    if( strId == 0 ) { return 0; }
@@ -94,7 +94,7 @@ std::vector< size_t > StringDb::findStringIndexMatching( const char* substrToFin
    return indices;
 }
 
-static constexpr size_t keySize = sizeof( hop::StrPtr_t );
+static constexpr size_t keySize = sizeof( hop::hop_str_ptr_t );
 static constexpr size_t valueSize = sizeof( size_t );
 static constexpr size_t mapEntrySize = keySize + valueSize;
 
@@ -151,7 +151,7 @@ size_t deserialize( const char* data, StringDb& strDb )
    const size_t mapStart = 2 * sizeof( uint32_t );
    for( uint32_t i = 0; i < entryCount; ++i )
    {
-      hop::StrPtr_t key = *(hop::StrPtr_t*)&data[2*sizeof( uint32_t ) + i * mapEntrySize ];
+      hop::hop_str_ptr_t key = *(hop::hop_str_ptr_t*)&data[2*sizeof( uint32_t ) + i * mapEntrySize ];
       size_t value = *(size_t*)&data[(2*sizeof( uint32_t ) + i * mapEntrySize) + keySize ];
       strDb._stringIndices[ key ] = value;
    }

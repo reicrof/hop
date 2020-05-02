@@ -18,19 +18,19 @@ struct LockWaitsRecords
 
 struct TimelineTrack
 {
-   void setName( StrPtr_t name ) noexcept;
-   StrPtr_t name() const noexcept;
+   void setName( hop_str_ptr_t name ) noexcept;
+   hop_str_ptr_t name() const noexcept;
    void addTraces( const TraceData& traces );
    void addLockWaits( const LockWaitData& lockWaits );
    void addUnlockEvents(const std::vector<UnlockEvent>& unlockEvents);
    void addCoreEvents( const CoreEventData& coreEvents );
-   Depth_t maxDepth() const noexcept;
+   hop_depth_t maxDepth() const noexcept;
    bool empty() const;
 
    TraceData _traces;
    LockWaitData _lockWaits;
    CoreEventData _coreEvents;
-   StrPtr_t _trackName{0};
+   hop_str_ptr_t _trackName{0};
 
    std::unordered_map< void*, LockWaitsRecords > _lockWaitsPerMutex;
 };

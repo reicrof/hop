@@ -52,7 +52,7 @@ public:
       float absoluteDrawPos[2];
       float relativePosY; // The absolute position ignores the scroll but not the relative
       float trackHeight{9999.0f};
-      Depth_t maxDepth;
+      hop_depth_t maxDepth;
    };
    struct ContextMenu
    {

@@ -14,9 +14,9 @@ namespace hop
       float canvasPosX;
       float canvasPosY;
       float scrollAmount;
-      TimeStamp globalStartTime;
-      TimeStamp relativeStartTime;
-      TimeDuration duration;
+      hop_timestamp_t globalStartTime;
+      hop_timestamp_t relativeStartTime;
+      hop_timeduration_t duration;
       bool mouseDragging;
       bool useCycles;
    };
@@ -33,8 +33,8 @@ namespace hop
    {
       struct FrameToTime
       {
-         TimeStamp time;
-         TimeDuration duration;
+         hop_timestamp_t time;
+         hop_timeduration_t duration;
          bool pushNavState;
       };
 
@@ -61,7 +61,7 @@ namespace hop
       TimelineMsgArray() : count(0) {}
       unsigned size() const { return count; }
       const TimelineMessage& operator[]( unsigned index ) const { return messages[index]; };
-      void addFrameTimeMsg( TimeStamp time, TimeDuration duration, bool pushNavState, bool absTime )
+      void addFrameTimeMsg( hop_timestamp_t time, hop_timeduration_t duration, bool pushNavState, bool absTime )
       {
          assert( count < MAX_MSG_COUNT );
          TimelineMessage* msg = &messages[count++];

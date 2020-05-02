@@ -102,7 +102,7 @@ void findTraces( const char* string, const StringDb& strDb, const std::vector<ho
    }
 
    // Sort them by duration
-   sortSearchResOnDuration( result, tracks, std::greater<TimeStamp>() );
+   sortSearchResOnDuration( result, tracks, std::greater<hop_timestamp_t>() );
 }
 
 SearchSelection drawSearchResult(
@@ -176,9 +176,9 @@ SearchSelection drawSearchResult(
             descending = !descending;
 
             if ( descending )
-               sortSearchResOnTime( searchRes, tracks, std::greater<TimeStamp>() );
+               sortSearchResOnTime( searchRes, tracks, std::greater<hop_timestamp_t>() );
             else
-               sortSearchResOnTime( searchRes, tracks, std::less<TimeStamp>() );
+               sortSearchResOnTime( searchRes, tracks, std::less<hop_timestamp_t>() );
          }
          ImGui::NextColumn();
          if ( ImGui::Button( "Trace Name" ) )
@@ -198,9 +198,9 @@ SearchSelection drawSearchResult(
             descending = !descending;
 
             if ( descending )
-               sortSearchResOnDuration( searchRes, tracks, std::greater<TimeStamp>() );
+               sortSearchResOnDuration( searchRes, tracks, std::greater<hop_timestamp_t>() );
             else
-               sortSearchResOnDuration( searchRes, tracks, std::less<TimeStamp>() );
+               sortSearchResOnDuration( searchRes, tracks, std::less<hop_timestamp_t>() );
          }
          ImGui::NextColumn();
          ImGui::Separator();
@@ -234,9 +234,9 @@ SearchSelection drawSearchResult(
             const auto& traceIdThreadId = searchRes.tracesIdxThreadIdx[i];
             const auto& ti              = tracks[traceIdThreadId.second];
             const size_t traceId        = traceIdThreadId.first;
-            const TimeStamp start       = ti._traces.entries.starts[traceId];
-            const TimeStamp end         = ti._traces.entries.ends[traceId];
-            const TimeDuration delta    = end - start;
+            const hop_timestamp_t start       = ti._traces.entries.starts[traceId];
+            const hop_timestamp_t end         = ti._traces.entries.ends[traceId];
+            const hop_timeduration_t delta    = end - start;
 
             hop::formatCyclesTimepointToDisplay(
                 start - tlInfo.globalStartTime,
