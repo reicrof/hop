@@ -41,6 +41,9 @@ For more information, please refer to <http://unlicense.org/>
 
 #else  // Hop is enabled so we declare the macros and functions
 
+/**
+ * Platform specific function names
+ */
 #if defined( _MSC_VER )
 #define HOP_FCT_NAME __FUNCTION__
 #define HOP_EXPORT   __declspec( dllexport )
@@ -49,14 +52,44 @@ For more information, please refer to <http://unlicense.org/>
 #define HOP_EXPORT
 #endif
 
-// MSVC is not fully C compliant, so we will compile this file as C++ to get all
-// the required features
+/**
+ * HOP_CPP
+ * This macro enables the C++ interface. It is enable by default under MSVC
+ * as the support for C is not quite there yet.
+ */
 #if !defined(HOP_CPP) && defined(_MSC_VER) && defined(__cplusplus)
 #define HOP_CPP
 #endif
 
+/**
+ * Define the C++ interface for HOP. Uses C++ ctor/dtor to create guards that
+ * automatically start/end tracing.
+ */
 #ifdef HOP_CPP
+/************************************************************/
+/*         THESE ARE THE C++ MACROS YOU SHOULD USE          */
+/************************************************************/
+
+// Create a new profiling trace with specified name. Name must be static
 #define HOP_PROF_FUNC() HOP_PROF_ID_GUARD( hop__, ( __FILE__, __LINE__, HOP_FCT_NAME ) )
+
+// Create a new profiling trace with specified name. Name must be static
+#define HOP_PROF( x ) HOP_PROF_GUARD_VAR( __LINE__, ( __FILE__, __LINE__, ( x ) ) )
+
+// Create a new profiling trace for dynamic strings. Please use sparingly as they will incur more
+// slowdown
+#define HOP_PROF_DYN_NAME( x ) \
+   HOP_PROF_DYN_STRING_GUARD_VAR( __LINE__, ( __FILE__, __LINE__, ( x ) ) )
+
+// Create a trace that represent the time waiting for a mutex. You need to provide
+// a pointer to the mutex that is being locked
+#define HOP_PROF_MUTEX_LOCK( x ) HOP_MUTEX_LOCK_GUARD_VAR( __LINE__, ( x ) )
+
+// Create an event that correspond to the unlock of the specified mutex. This is
+// used to provide stall region. You should provide a pointer to the mutex that
+// is being unlocked.
+#define HOP_PROF_MUTEX_UNLOCK( x ) HOP_MUTEX_UNLOCK_EVENT( x )
+
 #endif
 
 #if defined(__cplusplus) && !defined(HOP_CPP)
@@ -65,7 +98,7 @@ extern "C"
 #endif
 
 /************************************************************/
-/*           THESE ARE THE MACROS YOU SHOULD USE            */
+/*         THESE ARE THE C MACROS YOU SHOULD USE            */
 /************************************************************/
 
 #define HOP_INTIALIZE() hop_initialize()
@@ -78,11 +111,6 @@ extern "C"
 #define HOP_ACQUIRE_LOCK( x ) hop_acquire_lock( (x) )
 #define HOP_LOCK_ACQUIRED()   hop_lock_acquired()
 #define HOP_RELEASE_LOCK( x ) hop_lock_release( (x) )
-
-/* Utility macros */
-#define HOP_VERSION 0.91f
-#define HOP_ZONE_MAX 255
-#define HOP_ZONE_DEFAULT 0
 
 /************************************************************/
 /*           THESE ARE THE MACROS YOU CAN MODIFY            */
@@ -136,16 +164,36 @@ HOP_EXPORT void hop_lock_release( void* mutexAddr );
 #ifdef HOP_CPP
 
 namespace hop {
-struct Guard {
-   Guard( const char* fileName, hop_linenb_t lineNb, const char* fctName ) noexcept {
-      hop_enter( fileName, lineNb, fctName, 0 );
-      //_zone     = ClientManager::StartProfile();
-   }
-   ~Guard() { hop_leave(); }
-};
-} // namespace hop
+   struct Guard {
+      Guard(const char* fileName, hop_linenb_t lineNb, const char* fctName) noexcept {
+         hop_enter(fileName, lineNb, fctName, 0);
+         //_zone     = ClientManager::StartProfile();
+      }
+      ~Guard() { hop_leave(); }
+   };
+   struct DynStringGuard {
+      DynStringGuard(const char* fileName, hop_linenb_t lineNb, const char* fctName) noexcept {
+         hop_enter_dynamic_string(fileName, lineNb, fctName, 0);
+      }
+      ~DynStringGuard() { hop_leave(); }
+   };
+   struct LockWaitGuard {
+      LockWaitGuard(void* mutAddr) noexcept { hop_acquire_lock(mutAddr); }
+      ~LockWaitGuard() { hop_lock_acquired(); };
+   };
+}// namespace hop
+
 #define HOP_PROF_ID_GUARD( ID, ARGS ) hop::Guard ID ARGS
-#endif
+#define HOP_PROF_GUARD_VAR( LINE, ARGS ) hop::Guard HOP_COMBINE( guard, LINE ) ARGS
+#define HOP_PROF_DYN_STRING_GUARD_VAR( LINE, ARGS ) hop::DynStringGuard HOP_COMBINE( hopProfGuard, LINE ) ARGS
+#define HOP_MUTEX_LOCK_GUARD_VAR( LINE, ARGS ) hop::LockWaitGuard HOP_COMBINE( hopMutexLock, LINE ) ARGS
+#define HOP_MUTEX_UNLOCK_EVENT( x ) hop_lock_release( (x) )
+
+#endif // HOP_CPP
+
+#define HOP_VERSION 0.91f
+#define HOP_ZONE_MAX 255
+#define HOP_ZONE_DEFAULT 0
 
 /************************************************************/
 /*          EVERYTHING AFTER THIS IS IMPL DETAILS           */
@@ -2183,18 +2231,6 @@ class ZoneGuard
   private:
    hop_zone_t _prevZoneId;
 };
-
-#define HOP_PROF_GUARD_VAR( LINE, ARGS ) hop::ProfGuard HOP_COMBINE( hopProfGuard, LINE ) ARGS
-#define HOP_PROF_ID_GUARD( ID, ARGS ) hop::ProfGuard ID ARGS
-#define HOP_PROF_ID_SPLIT( ID, ARGS ) ID.reset ARGS
-#define HOP_PROF_DYN_STRING_GUARD_VAR( LINE, ARGS ) \
-   hop::ProfGuardDynamicString HOP_COMBINE( hopProfGuard, LINE ) ARGS
-#define HOP_MUTEX_LOCK_GUARD_VAR( LINE, ARGS ) \
-   hop::LockWaitGuard HOP_COMBINE( hopMutexLock, LINE ) ARGS
-#define HOP_MUTEX_UNLOCK_EVENT( x ) hop::ClientManager::UnlockEvent( x, hop::getTimeStamp() );
-#define HOP_ZONE_GUARD( LINE, ARGS ) hop::ZoneGuard HOP_COMBINE( hopZoneGuard, LINE ) ARGS
-
-#define HOP_COMBINE( X, Y ) X##Y
 
 
 }  // namespace hop
