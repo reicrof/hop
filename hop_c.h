@@ -670,7 +670,7 @@ int hop_hash_set_insert( hop_hash_set_t set, const void* value );
 /* Misc functions */
 static uint32_t atomic_set_bit( hop_atomic_uint32* value, uint32_t bitToSet );
 static uintptr_t atomic_clear_bit( hop_atomic_uint32* value, uint32_t bitToSet );
-static float estimate_cpu_freq_mhz();
+static float cpu_freq_mhz();
 
 /************************************************************/
 /*                Internal Implementation                   */
@@ -913,7 +913,7 @@ create_shared_memory( int pid, uint64_t requestedSize, hop_bool_t isConsumer )
       ipcSegment->clientVersion            = HOP_VERSION;
       ipcSegment->maxThreadNb              = HOP_MAX_THREAD_NB;
       ipcSegment->requestedSize            = HOP_SHARED_MEM_SIZE;
-      ipcSegment->clientCPUFreqMhz         = estimate_cpu_freq_mhz();
+      ipcSegment->clientCPUFreqMhz         = cpu_freq_mhz();
       ipcSegment->lastResetTimeStamp       = hop_get_timestamp_no_core();
 
       // Take a local copy as we do not want to expose the ring buffer before it is
@@ -1681,6 +1681,17 @@ static void set_last_heartbeat( hop_shared_memory* mem, hop_timestamp_t t )
    hop_atomic_store_explicit( &mem->ipcSegment->lastHeartbeatTimeStamp, t, hop_memory_order_seq_cst );
 }
 
+#if defined(__APPLE__)
+#include <sys/sysctl.h>
+float apple_get_cpu_freq_mhz()
+{
+   size_t freq;
+   size_t len = sizeof( freq );
+   sysctlbyname( "hw.cpufrequency_max", &freq, &len, NULL, 0 );
+   return freq / 1000000.0f;
+}
+#else // On other platform I have not found (or did not look hard enough) a way
+      // to get the cpu frequenncy. So just estimate it using OS native timer
 #ifdef _MSC_VER
 typedef LARGE_INTEGER hop_os_timestamp;
 static void os_timestamp_start( LARGE_INTEGER* timestamp )
@@ -1700,7 +1711,7 @@ static uint64_t os_timestamp_delta_us( LARGE_INTEGER* start )
    delta.QuadPart *= 1000000;
    return delta.QuadPart / freq.QuadPart;
 }
-#else
+#elif defined(__linux__)
 #include <time.h> // clock_gettime
 typedef timespec hop_os_timestamp;
 static void os_timestamp_start( timespec* timestamp )
@@ -1713,10 +1724,10 @@ static uint64_t os_timestamp_delta_us( timespec* start )
    clock_gettime( CLOCK_PROCESS_CPUTIME_ID, &end );
 
    const uint64_t deltaUs =
-       ( end.tv_sec - start.tv_sec ) * 1000000 + ( end.tv_nsec - start.tv_nsec ) / 1000;
+       ( end.tv_sec - start->tv_sec ) * 1000000 + ( end.tv_nsec - start->tv_nsec ) / 1000;
    return deltaUs;
 }
-#endif
+#endif // _MSC_VER
 
 static float estimate_cpu_freq_mhz()
 {
@@ -1740,6 +1751,16 @@ static float estimate_cpu_freq_mhz()
    const uint64_t deltaCycles = endCycleCount - startCycleCount;
    const uint64_t usInASecond = 1000000; 
    return deltaCycles * usInASecond / (float)deltaUs;;
+}
+#endif // estimate_cpu_freq_mhz
+
+static float cpu_freq_mhz()
+{
+#ifdef __APPLE__
+   return apple_get_cpu_freq_mhz();
+#else
+   return estimate_cpu_freq_mhz();
+#endif
 }
 
 /************************************************************/
