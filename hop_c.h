@@ -160,7 +160,7 @@ HOP_EXPORT void hop_acquire_lock( void* mutexAddr );
 HOP_EXPORT void hop_lock_acquired();
 HOP_EXPORT void hop_lock_release( void* mutexAddr );
 HOP_EXPORT uint64_t hop_ipc_memory_size();
-HOP_EXPORT float hop_client_cpu_frequency();
+HOP_EXPORT float hop_client_tsc_frequency();
 
 #if defined(__cplusplus) && !defined(HOP_CPP)
 }
@@ -537,7 +537,7 @@ struct ringbuf {
 typedef struct hop_ipc_segment
 {
    float clientVersion;
-   float clientCPUFreqMhz;
+   float clientTSCFreqMhz;
    uint32_t maxThreadNb;
    uint64_t requestedSize;
    hop_atomic_uint64 lastResetTimeStamp;
@@ -670,7 +670,7 @@ int hop_hash_set_insert( hop_hash_set_t set, const void* value );
 /* Misc functions */
 static uint32_t atomic_set_bit( hop_atomic_uint32* value, uint32_t bitToSet );
 static uintptr_t atomic_clear_bit( hop_atomic_uint32* value, uint32_t bitToSet );
-static float cpu_freq_mhz();
+static float tsc_freq_mhz();
 
 /************************************************************/
 /*                Internal Implementation                   */
@@ -801,12 +801,12 @@ uint64_t hop_ipc_memory_size()
    return size;
 }
 
-float hop_client_cpu_frequency()
+float hop_client_tsc_frequency()
 {
    float freq = -1.0f;
    if( g_sharedMemory && g_sharedMemory->ipcSegment )
    {
-      freq = g_sharedMemory->ipcSegment->clientCPUFreqMhz;
+      freq = g_sharedMemory->ipcSegment->clientTSCFreqMhz;
    }
    return freq;
 }
@@ -913,7 +913,7 @@ create_shared_memory( int pid, uint64_t requestedSize, hop_bool_t isConsumer )
       ipcSegment->clientVersion            = HOP_VERSION;
       ipcSegment->maxThreadNb              = HOP_MAX_THREAD_NB;
       ipcSegment->requestedSize            = HOP_SHARED_MEM_SIZE;
-      ipcSegment->clientCPUFreqMhz         = cpu_freq_mhz();
+      ipcSegment->clientTSCFreqMhz         = tsc_freq_mhz();
       ipcSegment->lastResetTimeStamp       = hop_get_timestamp_no_core();
 
       // Take a local copy as we do not want to expose the ring buffer before it is
@@ -1683,7 +1683,7 @@ static void set_last_heartbeat( hop_shared_memory* mem, hop_timestamp_t t )
 
 #if defined(__APPLE__)
 #include <sys/sysctl.h>
-float apple_get_cpu_freq_mhz()
+float apple_get_tsc_freq_mhz()
 {
    size_t freq;
    size_t len = sizeof( freq );
@@ -1691,7 +1691,7 @@ float apple_get_cpu_freq_mhz()
    return freq / 1000000.0f;
 }
 #else // On other platform I have not found (or did not look hard enough) a way
-      // to get the cpu frequenncy. So just estimate it using OS native timer
+      // to get the tsc frequency. So just estimate it using OS native timer
 #ifdef _MSC_VER
 typedef LARGE_INTEGER hop_os_timestamp;
 static void os_timestamp_start( LARGE_INTEGER* timestamp )
@@ -1702,7 +1702,7 @@ static uint64_t os_timestamp_delta_us( LARGE_INTEGER* start )
 {
    LARGE_INTEGER freq, end;
    if( !QueryPerformanceFrequency( &freq ) ) {
-      fprintf( stderr, "Unable to query performance counter. CPU frequency will be wrong\n" );
+      fprintf( stderr, "Unable to query performance counter. TSC frequency will be wrong\n" );
       return 100;
    }
    QueryPerformanceCounter( &end );
@@ -1729,7 +1729,9 @@ static uint64_t os_timestamp_delta_us( timespec* start )
 }
 #endif // _MSC_VER
 
-static float estimate_cpu_freq_mhz()
+// There is a way to get the exact frequency of the TSC, but on Linux it requires the use
+// of a kernel module as described : https://github.com/trailofbits/tsc_freq_khz#building-and-usage
+static float estimate_tsc_freq_mhz()
 {
    volatile uint64_t dummy = 0;
    // Do a quick warmup first
@@ -1752,14 +1754,14 @@ static float estimate_cpu_freq_mhz()
    const uint64_t usInASecond = 1000000; 
    return deltaCycles * usInASecond / (float)deltaUs;;
 }
-#endif // estimate_cpu_freq_mhz
+#endif // estimate_tsc_freq_mhz
 
-static float cpu_freq_mhz()
+static float tsc_freq_mhz()
 {
 #ifdef __APPLE__
-   return apple_get_cpu_freq_mhz();
+   return apple_get_tsc_freq_mhz();
 #else
-   return estimate_cpu_freq_mhz();
+   return estimate_tsc_freq_mhz();
 #endif
 }
 
