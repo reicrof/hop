@@ -159,6 +159,8 @@ HOP_EXPORT void hop_leave();
 HOP_EXPORT void hop_acquire_lock( void* mutexAddr );
 HOP_EXPORT void hop_lock_acquired();
 HOP_EXPORT void hop_lock_release( void* mutexAddr );
+HOP_EXPORT uint64_t hop_ipc_memory_size();
+HOP_EXPORT float hop_client_cpu_frequency();
 
 #if defined(__cplusplus) && !defined(HOP_CPP)
 }
@@ -535,12 +537,12 @@ struct ringbuf {
 typedef struct hop_ipc_segment
 {
    float clientVersion;
+   float clientCPUFreqMhz;
    uint32_t maxThreadNb;
    uint64_t requestedSize;
    hop_atomic_uint64 lastResetTimeStamp;
    hop_atomic_uint64 lastHeartbeatTimeStamp;
    hop_atomic_uint32 state;
-   hop_bool_t usingStdChronoTimeStamps;
 
    hop_byte_t* data;
    ringbuf_t ringbuf;
@@ -668,6 +670,7 @@ int hop_hash_set_insert( hop_hash_set_t set, const void* value );
 /* Misc functions */
 static uint32_t atomic_set_bit( hop_atomic_uint32* value, uint32_t bitToSet );
 static uintptr_t atomic_clear_bit( hop_atomic_uint32* value, uint32_t bitToSet );
+static float estimate_cpu_freq_mhz();
 
 /************************************************************/
 /*                Internal Implementation                   */
@@ -691,6 +694,24 @@ hop_bool_t hop_initialize()
 void hop_shutdown()
 {
    destroy_shared_memory();
+}
+
+void hop_set_thread_name( hop_str_ptr_t name )
+{
+   if( tl_context.threadNameBuffer[0] == '\0' )
+   {
+      HOP_STRNCPY(
+          &tl_context.threadNameBuffer[0],
+          (const char*)name,
+          sizeof( tl_context.threadNameBuffer ) - 1 );
+      tl_context.threadNameBuffer[sizeof( tl_context.threadNameBuffer ) - 1] = '\0';
+
+      if( local_context_valid( &tl_context ) )
+      {
+         tl_context.threadName =
+             add_dynamic_string_to_db( &tl_context, tl_context.threadNameBuffer );
+      }
+   }
 }
 
 void hop_enter( const char* fileName, hop_linenb_t line, const char* fctName, hop_zone_t zone )
@@ -770,22 +791,24 @@ void hop_lock_release( void* mutexAddr )
    push_event( &tl_context.unlocks, &ev );
 }
 
-void hop_set_thread_name( hop_str_ptr_t name )
+uint64_t hop_ipc_memory_size()
 {
-   if( tl_context.threadNameBuffer[0] == '\0' )
+   uint64_t size = 0;
+   if( g_sharedMemory && g_sharedMemory->ipcSegment )
    {
-      HOP_STRNCPY(
-          &tl_context.threadNameBuffer[0],
-          (const char*)name,
-          sizeof( tl_context.threadNameBuffer ) - 1 );
-      tl_context.threadNameBuffer[sizeof( tl_context.threadNameBuffer ) - 1] = '\0';
-
-      if( local_context_valid( &tl_context ) )
-      {
-         tl_context.threadName =
-             add_dynamic_string_to_db( &tl_context, tl_context.threadNameBuffer );
-      }
+      size = g_sharedMemory->ipcSegment->requestedSize;
    }
+   return size;
+}
+
+float hop_client_cpu_frequency()
+{
+   float freq = -1.0f;
+   if( g_sharedMemory && g_sharedMemory->ipcSegment )
+   {
+      freq = g_sharedMemory->ipcSegment->clientCPUFreqMhz;
+   }
+   return freq;
 }
 
 static hop_timestamp_t hop_rdtscp( uint32_t* aux )
@@ -890,7 +913,7 @@ create_shared_memory( int pid, uint64_t requestedSize, hop_bool_t isConsumer )
       ipcSegment->clientVersion            = HOP_VERSION;
       ipcSegment->maxThreadNb              = HOP_MAX_THREAD_NB;
       ipcSegment->requestedSize            = HOP_SHARED_MEM_SIZE;
-      ipcSegment->usingStdChronoTimeStamps = hop_false;
+      ipcSegment->clientCPUFreqMhz         = estimate_cpu_freq_mhz();
       ipcSegment->lastResetTimeStamp       = hop_get_timestamp_no_core();
 
       // Take a local copy as we do not want to expose the ring buffer before it is
@@ -1656,6 +1679,67 @@ static hop_bool_t should_send_heartbeat( hop_shared_memory* mem, hop_timestamp_t
 static void set_last_heartbeat( hop_shared_memory* mem, hop_timestamp_t t )
 {
    hop_atomic_store_explicit( &mem->ipcSegment->lastHeartbeatTimeStamp, t, hop_memory_order_seq_cst );
+}
+
+#ifdef _MSC_VER
+typedef LARGE_INTEGER hop_os_timestamp;
+static void os_timestamp_start( LARGE_INTEGER* timestamp )
+{
+   QueryPerformanceCounter( timestamp );
+}
+static uint64_t os_timestamp_delta_us( LARGE_INTEGER* start )
+{
+   LARGE_INTEGER freq, end;
+   if( !QueryPerformanceFrequency( &freq ) ) {
+      fprintf( stderr, "Unable to query performance counter. CPU frequency will be wrong\n" );
+      return 100;
+   }
+   QueryPerformanceCounter( &end );
+   LARGE_INTEGER delta;
+   delta.QuadPart = end.QuadPart - start->QuadPart;
+   delta.QuadPart *= 1000000;
+   return delta.QuadPart / freq.QuadPart;
+}
+#else
+#include <time.h> // clock_gettime
+typedef timespec hop_os_timestamp;
+static void os_timestamp_start( timespec* timestamp )
+{
+   clock_gettime( CLOCK_PROCESS_CPUTIME_ID, &timestamp );
+}
+static uint64_t os_timestamp_delta_us( timespec* start )
+{
+   timespec end;
+   clock_gettime( CLOCK_PROCESS_CPUTIME_ID, &end );
+
+   const uint64_t deltaUs =
+       ( end.tv_sec - start.tv_sec ) * 1000000 + ( end.tv_nsec - start.tv_nsec ) / 1000;
+   return deltaUs;
+}
+#endif
+
+static float estimate_cpu_freq_mhz()
+{
+   volatile uint64_t dummy = 0;
+   // Do a quick warmup first
+   uint32_t dummyCore;
+   for (int i = 0; i < 1000; ++i) { ++dummy; hop_rdtscp( &dummyCore ); }
+
+   // Start timer and get current cycle count
+   hop_os_timestamp startTime;
+   os_timestamp_start( &startTime );
+   const hop_timestamp_t startCycleCount = hop_rdtscp( &dummyCore );
+
+   // Make the cpu work 'hard'
+   for( int i = 0; i < 2000000; ++i ) dummy += i;
+
+   // Stop timer and get end cycle count
+   const hop_timestamp_t endCycleCount = hop_rdtscp( &dummyCore );
+
+   const uint64_t deltaUs     = os_timestamp_delta_us( &startTime );
+   const uint64_t deltaCycles = endCycleCount - startCycleCount;
+   const uint64_t usInASecond = 1000000; 
+   return deltaCycles * usInASecond / (float)deltaUs;;
 }
 
 /************************************************************/

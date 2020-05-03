@@ -13,6 +13,7 @@ struct ProcessInfo
    char name[64];
 };
 
+// TODO HOP_C remove when the transition to C is completed
 void cpuid( int reg[4], int fctId );
 
 ProcessInfo getProcessInfoFromPID( ProcessID pid );

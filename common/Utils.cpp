@@ -7,6 +7,8 @@
 namespace hop
 {
 
+
+// TODO HOP_C remove when the transition to C is completed
 static float estimateCpuFreqHz()
 {
    using namespace std::chrono;
@@ -33,6 +35,7 @@ static float estimateCpuFreqHz()
    return deltaCycles * countPerSec;
 }
 
+// TODO HOP_C remove when the transition to C is completed
 float getCpuFreqGHz()
 {
    static float cpuFreq = 0;
