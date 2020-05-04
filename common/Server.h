@@ -23,7 +23,7 @@ class Server
    void stop();
    void clear();
    const char* processInfo( int* processId ) const;
-   SharedMemory::ConnectionState connectionState() const;
+   hop_connection_state connectionState() const;
    size_t sharedMemorySize() const;
    float cpuFreqGHz() const;
 
@@ -45,7 +45,7 @@ class Server
 
   private:
    // Return wether or not we should retry to connect and fill the connection state
-   bool tryConnect( int32_t pid, SharedMemory::ConnectionState& newState );
+   bool tryConnect( int32_t pid, hop_connection_state& newState );
 
    // Returns the number of bytes processed
    size_t handleNewMessage( uint8_t* data, size_t maxSize, hop_timestamp_t minTimestamp );
@@ -61,7 +61,7 @@ class Server
    mutable hop::Mutex _stateMutex;
    struct ServerState
    {
-      SharedMemory::ConnectionState connectionState;
+      hop_connection_state connectionState;
       std::string processName;
       int pid{-1};
       bool running{false};

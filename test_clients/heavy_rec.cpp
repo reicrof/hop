@@ -6,7 +6,7 @@
 
 #define HOP_IMPLEMENTATION
 #define HOP_CPP
-#include <hop_c.h>
+#include <Hop.h>
 
 class MyMutex
 {

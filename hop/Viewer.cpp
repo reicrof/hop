@@ -330,37 +330,37 @@ static bool drawDeleteTracesButton( const ImVec2& drawPos, bool active )
    return hovering && active && ImGui::IsMouseClicked( 0 );
 }
 
-static void drawStatusIcon( const ImVec2 drawPos, hop::SharedMemory::ConnectionState state )
+static void drawStatusIcon( const ImVec2 drawPos, hop_connection_state state )
 {
    ImColor col( 0.5f, 0.5f, 0.5f );
    const char* msg = nullptr;
    switch ( state )
    {
-      case hop::SharedMemory::NO_TARGET_PROCESS:
+      case HOP_NO_TARGET_PROCESS:
          col = ImColor( 0.6f, 0.6f, 0.6f );
          msg = "No target process";
          break;
-      case hop::SharedMemory::NOT_CONNECTED:
+      case HOP_NOT_CONNECTED:
          col = ImColor( 0.8f, 0.0f, 0.0f );
          msg = "No shared memory found";
          break;
-      case hop::SharedMemory::CONNECTED:
+      case HOP_CONNECTED:
          col = ImColor( 0.0f, 0.8f, 0.0f );
          msg = "Connected";
          break;
-      case hop::SharedMemory::CONNECTED_NO_CLIENT:
+      case HOP_CONNECTED_NO_CLIENT:
          col = ImColor( 0.8f, 0.8f, 0.0f );
          msg = "Connected to shared memory, but no client";
          break;
-      case hop::SharedMemory::PERMISSION_DENIED:
+      case HOP_PERMISSION_DENIED:
          col = ImColor( 0.6f, 0.2f, 0.0f );
          msg = "Permission to shared memory denied";
          break;
-      case hop::SharedMemory::INVALID_VERSION:
+      case HOP_INVALID_VERSION:
          col = ImColor( 0.6f, 0.2f, 0.0f );
          msg = "Client version does not match viewer version";
          break;
-      case hop::SharedMemory::UNKNOWN_CONNECTION_ERROR:
+      case HOP_UNKNOWN_CONNECTION_ERROR:
          col = ImColor( 0.4f, 0.0f, 0.0f );
          msg = "Unknown connection error";
          break;

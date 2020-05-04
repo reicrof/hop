@@ -51,7 +51,7 @@ bool Profiler::recording() const
    return _recording;
 }
 
-SharedMemory::ConnectionState Profiler::connectionState() const
+hop_connection_state Profiler::connectionState() const
 {
    return _server.connectionState();
 }

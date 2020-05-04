@@ -55,19 +55,19 @@ static int mergeAndRemoveDuplicates( hop::CoreEvent* coreEvents, uint32_t count,
    return std::distance( coreEvents, newEnd );
 }
 
-static hop::SharedMemory::ConnectionState updateConnectionState(
+static hop_connection_state updateConnectionState(
     const hop::SharedMemory& sharedMem,
     int pollFailCount )
 {
-   hop::SharedMemory::ConnectionState state = hop::SharedMemory::CONNECTED;
+   hop_connection_state state = HOP_CONNECTED;
    const bool producerLost =
        !sharedMem.hasConnectedProducer() || pollFailCount > POLL_COUNT_FAIL_DISCONNECTION;
    if( producerLost )
    {
       // We have lost the producer. Check if it is becaused the process was terminated or
       // if it is simply not feeling chatty
-      state = hop::processAlive( sharedMem.pid() ) ? hop::SharedMemory::CONNECTED_NO_CLIENT
-                                                   : hop::SharedMemory::NOT_CONNECTED;
+      state = hop::processAlive( sharedMem.pid() ) ? HOP_CONNECTED_NO_CLIENT
+                                                   : HOP_NOT_CONNECTED;
    }
    return state;
 }
@@ -81,11 +81,11 @@ bool Server::start( int inPid, const char* name )
    _state.running = true;
    _state.pid = -1;
    _state.processName = name;
-   _state.connectionState = SharedMemory::NOT_CONNECTED;
+   _state.connectionState = HOP_NOT_CONNECTED;
 
    _thread = std::thread( [this, inPid]() {
       int pollFailedCount = 0;
-      SharedMemory::ConnectionState prevConnectionState = SharedMemory::NOT_CONNECTED;
+      hop_connection_state prevConnectionState = HOP_NOT_CONNECTED;
 
       uint32_t reconnectTimeoutMs = 10;
       while ( true )
@@ -102,7 +102,7 @@ bool Server::start( int inPid, const char* name )
                continue; // No connection, let's retry
             }
 
-            if( prevConnectionState != SharedMemory::CONNECTED  )
+            if( prevConnectionState != HOP_CONNECTED )
                break; // No connection was found and we should not retry.
             
             printf( "Connection to shared data successful.\n" );
@@ -113,7 +113,7 @@ bool Server::start( int inPid, const char* name )
          // Check if its been a while since we have been signaleds
          const auto newConnectionState =
              updateConnectionState( _sharedMem, pollFailedCount );
-         const bool clientAlive = newConnectionState != SharedMemory::NOT_CONNECTED;
+         const bool clientAlive = newConnectionState != HOP_NOT_CONNECTED;
 
          // Check and update current server state
          {
@@ -128,7 +128,7 @@ bool Server::start( int inPid, const char* name )
                _stringDb.clear();
                clearPendingMessages();
                _state.clearingRequested = false;
-               _sharedMem.setResetTimestamp( getTimeStamp() );
+               hop_update_reset_timestamp( _sharedMem );
                _threadNamesReceived.clear();
                continue;
             }
@@ -143,25 +143,24 @@ bool Server::start( int inPid, const char* name )
             if( !clientAlive )
             {
                _state.pid = -1;
-               _sharedMem.destroy();
+               hop_destroy_shared_memory( _sharedMem );
                continue;
             }
          }
 
-         size_t offset = 0;
-         const size_t bytesToRead = ringbuf_consume( _sharedMem.ringbuffer(), &offset );
-         if ( bytesToRead > 0 )
+         size_t bytesToRead = 0;
+         if( hop_byte_t* data = hop_consume_shared_memory( _sharedMem, &bytesToRead ) )
          {
             HOP_PROF( "Server - Handling new messages" );
             pollFailedCount = 0;
-            const hop_timestamp_t minTimestamp = _sharedMem.lastResetTimestamp();
+            const hop_timestamp_t minTimestamp = hop_get_reset_timestamp( _sharedMem );
             size_t bytesRead = 0;
             while ( bytesRead < bytesToRead )
             {
-               bytesRead += handleNewMessage(
-                   &_sharedMem.data()[offset + bytesRead], bytesToRead - bytesRead, minTimestamp );
+               bytesRead +=
+                   handleNewMessage( data + bytesRead, bytesToRead - bytesRead, minTimestamp );
             }
-            ringbuf_release( _sharedMem.ringbuffer(), bytesToRead );
+            hop_release_shared_memory( _sharedMem, bytesToRead );
          }
          else
          {
@@ -189,16 +188,17 @@ bool Server::start( int inPid, const char* name )
    return true;
 }
 
-bool Server::tryConnect( int32_t pid, SharedMemory::ConnectionState& newState )
+bool Server::tryConnect( int32_t pid, hop_connection_state& newState )
 {
    HOP_PROF_FUNC();
 
    const hop::ProcessInfo procInfo =
        pid != -1 ? hop::getProcessInfoFromPID( pid )
                    : hop::getProcessInfoFromProcessName( _state.processName.c_str() );
-   newState = _sharedMem.create( procInfo.pid, 0 /*will be define in shared metadata*/, true );
+   _sharedMem = hop_create_shared_memory(
+       procInfo.pid, 0 /*will be define in shared metadata*/, true, newState );
 
-   if( newState != SharedMemory::CONNECTED )
+   if( newState != HOP_CONNECTED )
    {
       {  // Update state then go to sleep a few MS
          std::lock_guard<hop::Mutex> guard( _stateMutex );
@@ -214,7 +214,7 @@ bool Server::tryConnect( int32_t pid, SharedMemory::ConnectionState& newState )
    clearPendingMessages();
 
    std::lock_guard<hop::Mutex> guard( _stateMutex );
-   _sharedMem.setListeningConsumer( _state.recording );
+   hop_set_listening_consumer( _sharedMem, _state.recording );
 
    _state.connectionState = newState;
    _state.pid             = procInfo.pid;
@@ -237,7 +237,7 @@ const char* Server::processInfo( int* processId ) const
    return _state.processName.empty() ? noProcessStr : _state.processName.c_str();
 }
 
-SharedMemory::ConnectionState Server::connectionState() const
+hop_connection_state Server::connectionState() const
 {
    std::lock_guard<hop::Mutex> guard( _stateMutex );
    return _state.connectionState;
@@ -245,40 +245,19 @@ SharedMemory::ConnectionState Server::connectionState() const
 
 size_t Server::sharedMemorySize() const
 {
-   if ( _sharedMem.valid() )
-   {
-      return _sharedMem.sharedMetaInfo()->requestedSize;
-   }
-
-   return 0;
+   return hop_ipc_memory_size( _sharedMem );
 }
 
 float Server::cpuFreqGHz() const
 {
-   if( _cpuFreqGHz == 0 && _sharedMem.valid() )
-   {
-      if( _sharedMem.sharedMetaInfo()->usingStdChronoTimeStamps )
-      {
-         // Using std::chrono means we are already using nanoseconds -> 1Ghz
-         _cpuFreqGHz = 1.0f;
-      }
-      else
-      {
-         _cpuFreqGHz = hop::getCpuFreqGHz();
-      }
-   }
-
-   return _cpuFreqGHz;
+   return hop_client_tsc_frequency( _sharedMem );
 }
 
 void Server::setRecording( bool recording )
 {
    std::lock_guard<hop::Mutex> guard( _stateMutex );
    _state.recording = recording;
-   if ( _sharedMem.valid() )
-   {
-      _sharedMem.setListeningConsumer( recording );
-   }
+   hop_set_listening_consumer( recording );
 }
 
 void Server::getPendingData( PendingData& data )
@@ -479,10 +458,10 @@ size_t Server::handleNewMessage( uint8_t* data, size_t maxSize, hop_timestamp_t 
 
 void Server::clearPendingMessages()
 {
-   size_t offset = 0;
-   while ( size_t bytesToRead = ringbuf_consume( _sharedMem.ringbuffer(), &offset ) )
+   size_t size = 0;
+   while( hop_byte_t data = hop_consume_shared_memory( _sharedMem, &size ) )
    {
-      ringbuf_release( _sharedMem.ringbuffer(), bytesToRead );
+      hop_release_shared_memory( _sharedMem, size );
    }
 }
 
@@ -508,11 +487,8 @@ void Server::stop()
 
    if( wasRunning )
    {
-      if( _sharedMem.valid() )
-      {
-         _sharedMem.setListeningConsumer( false );
-         _sharedMem.setConnectedConsumer( false );
-      }
+      hop_set_listeneing_consumer( _sharedMem, false );
+      hop_set_connected_consumer( _sharedMem, false );
 
       if( _thread.joinable() )
       {

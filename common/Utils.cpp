@@ -7,46 +7,6 @@
 namespace hop
 {
 
-
-// TODO HOP_C remove when the transition to C is completed
-static float estimateCpuFreqHz()
-{
-   using namespace std::chrono;
-   uint32_t cpu;
-   volatile uint64_t dummy = 0;
-   // Do a quick warmup first
-   for( int i = 0; i < 1000; ++i ) { ++dummy; hop::rdtscp( cpu ); }
-
-   // Start timer and get current cycle count
-   const auto startTime = high_resolution_clock::now();
-   const uint64_t startCycleCount = hop::rdtscp( cpu );
-
-   // Make the cpu work hard
-   for( int i = 0; i < 2000000; ++i ) { dummy += i; }
-
-   // Stop timer and get end cycle count
-   const uint64_t endCycleCount = hop::rdtscp( cpu );
-   const auto endTime = high_resolution_clock::now();
-
-   const uint64_t deltaCycles = endCycleCount - startCycleCount;
-   const auto deltaTimeNs = duration_cast<nanoseconds>( endTime - startTime );
-
-   double countPerSec = duration<double>( seconds( 1 ) ) / deltaTimeNs;
-   return deltaCycles * countPerSec;
-}
-
-// TODO HOP_C remove when the transition to C is completed
-float getCpuFreqGHz()
-{
-   static float cpuFreq = 0;
-   if( cpuFreq == 0 )
-   {
-      cpuFreq = estimateCpuFreqHz() / 1000000000.0;
-   }
-
-   return cpuFreq;
-}
-
 bool supportsRDTSCP()
 {
    int reg[4];

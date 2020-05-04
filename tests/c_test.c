@@ -1,8 +1,7 @@
 #include <stdlib.h>
 
-#undef HOP_ENABLED
 #define HOP_IMPLEMENTATION
-#include "hop_c.h"
+#include <Hop.h>
 
 static int g_fakelock;
 

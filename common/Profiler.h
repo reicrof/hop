@@ -35,7 +35,7 @@ public:
    ProfilerStats stats() const;
    SourceType sourceType() const;
    bool recording() const;
-   SharedMemory::ConnectionState connectionState() const;
+   hop_connection_state connectionState() const;
    const std::vector<TimelineTrack>& timelineTracks() const;
    const StringDb& stringDb() const;
    hop_timestamp_t earliestTimestamp() const;
