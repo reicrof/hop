@@ -13,32 +13,17 @@
 #include <vector>
 
 #define HOP_IMPLEMENTATION
+#define HOP_CPP
 #include <Hop.h>
 
-class MyMutex
-{
-public:
-   void lock()
-   {
-      HOP_PROF_MUTEX_LOCK( &m );
-      m.lock();
-   }
-
-   void unlock()
-   {
-      HOP_PROF_MUTEX_UNLOCK( &m );
-      m.unlock();
-   }
-
-   std::mutex m;
-};
+#include <common/Mutex.h>
 
 bool g_run = true;
-MyMutex g_mutex0;
-MyMutex g_mutex1;
+hop::Mutex g_mutex0;
+hop::Mutex g_mutex1;
 
 static std::atomic<int> workerId{0};
-void testMutex( MyMutex& m, int mtxId, std::chrono::microseconds sleepTime )
+void testMutex( hop::Mutex& m, int mtxId, std::chrono::microseconds sleepTime )
 {
    HOP_ZONE( 1 );
    char name[256];
@@ -50,7 +35,7 @@ void testMutex( MyMutex& m, int mtxId, std::chrono::microseconds sleepTime )
    HOP_PROF_DYN_NAME( &profGuardName[13] );
 
    {
-   std::lock_guard<MyMutex> g(m);
+   std::lock_guard<hop::Mutex> g(m);
    HOP_PROF_DYN_NAME( profGuardName );
    std::this_thread::sleep_for( sleepTime );
    }

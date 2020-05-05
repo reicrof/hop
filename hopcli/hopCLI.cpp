@@ -327,7 +327,7 @@ int main( int argc, char* argv[] )
    showPrompt();
    while ( g_run.load() )
    {
-      HOP_PROF( "Main Loop" );
+      HOP_ENTER( "Main Loop", 0 );
 
       profiler->fetchClientData();
       if( processCommands( profiler.get() ) )
@@ -336,6 +336,7 @@ int main( int argc, char* argv[] )
       }
 
       std::this_thread::sleep_for( std::chrono::milliseconds( 5 ) );
+      HOP_LEAVE();
    }
 
    assert( opts.saveFilePath );

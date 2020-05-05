@@ -25,7 +25,7 @@
 
 extern bool g_run;
 
-static int closestLodLevel( hop::hop_timeduration_t timelineDuration )
+static int closestLodLevel( hop_timeduration_t timelineDuration )
 {
    int lodLvl = 0;
    while( lodLvl < hop::LOD_COUNT - 1 && timelineDuration > hop::LOD_CYCLES[lodLvl] )

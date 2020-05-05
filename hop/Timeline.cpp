@@ -16,8 +16,8 @@
 
 #include <cstdlib> // fix for std::abs for older libc++ impl
 
-static constexpr hop::hop_timeduration_t MIN_CYCLES_TO_DISPLAY = 1000;
-static constexpr hop::hop_timeduration_t MAX_CYCLES_TO_DISPLAY = 1800000000000;
+static constexpr hop_timeduration_t MIN_CYCLES_TO_DISPLAY = 1000;
+static constexpr hop_timeduration_t MAX_CYCLES_TO_DISPLAY = 1800000000000;
 static constexpr float TIMELINE_TOTAL_HEIGHT = 50.0f;
 
 using TimelineTextPositions = std::vector<std::pair<ImVec2, int64_t> >;
@@ -646,12 +646,12 @@ void Timeline::setRealtime( bool isRealtime ) noexcept
    _realtime = isRealtime;
 }
 
-hop::hop_timestamp_t Timeline::globalStartTime() const noexcept
+hop_timestamp_t Timeline::globalStartTime() const noexcept
 {
    return _globalStartTime;
 }
 
-hop::hop_timestamp_t Timeline::globalEndTime() const noexcept
+hop_timestamp_t Timeline::globalEndTime() const noexcept
 {
    return _globalEndTime;
 }

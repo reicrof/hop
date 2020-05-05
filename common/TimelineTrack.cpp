@@ -41,17 +41,17 @@ hop_str_ptr_t TimelineTrack::name() const noexcept
 
 void TimelineTrack::addTraces( const TraceData& newTraces )
 {
-   HOP_ZONE( 1 );
-   HOP_PROF_FUNC();
+   HOP_ENTER_FUNC( 1 );
 
    _traces.append( newTraces );
 
    assert_is_sorted( _traces.entries.ends.begin(), _traces.entries.ends.end() );
+   HOP_LEAVE();
 }
 
 void TimelineTrack::addLockWaits( const LockWaitData& lockWaits )
 {
-   HOP_PROF_FUNC();
+   HOP_ENTER_FUNC( 2 );
    const size_t prevSize = _lockWaits.mutexAddrs.size();
    _lockWaits.append( lockWaits );
 
@@ -59,6 +59,7 @@ void TimelineTrack::addLockWaits( const LockWaitData& lockWaits )
    {
       addLockWaitsRecord( &_lockWaitsPerMutex[ lockWaits.mutexAddrs[i] ], prevSize + i );
    }
+   HOP_LEAVE();
 }
 
 void TimelineTrack::addUnlockEvents( const std::vector<UnlockEvent>& unlockEvents )
@@ -66,7 +67,7 @@ void TimelineTrack::addUnlockEvents( const std::vector<UnlockEvent>& unlockEvent
    // If we did not get any lock events prior to the unlock events, simply ignore them
    if( _lockWaits.entries.ends.empty() ) return;
 
-   HOP_PROF_FUNC();
+   HOP_ENTER_FUNC( 3 );
    for( const auto& ue : unlockEvents )
    {
       // Find the list of lockwaits that have not yet been associated with
@@ -91,12 +92,14 @@ void TimelineTrack::addUnlockEvents( const std::vector<UnlockEvent>& unlockEvent
             keepLatestLockWaitsRecords( &lwRecords, lwRecords.count - i );
       }
    }
+   HOP_LEAVE();
 }
 
 void TimelineTrack::addCoreEvents( const CoreEventData& coreEvents )
 {
-   HOP_PROF_FUNC();
+   HOP_ENTER_FUNC( 4 );
    _coreEvents.append( coreEvents );
+   HOP_LEAVE();
 }
 
 hop_depth_t TimelineTrack::maxDepth() const noexcept

@@ -91,7 +91,7 @@ ProfilerStats Profiler::stats() const
 
 void Profiler::fetchClientData()
 {
-   HOP_PROF_FUNC();
+   HOP_ENTER_FUNC( 0 );
 
    _server.getPendingData( _serverPendingData );
 
@@ -163,18 +163,19 @@ void Profiler::addTraces( const TraceData& traces, uint32_t threadIndex )
 
 void Profiler::addStringData( const std::vector<char>& strData )
 {
-   HOP_PROF_FUNC();
+   HOP_ENTER_FUNC( 0 );
    // We should read the string data even when not recording since the string data
    // is sent only once (the first time a function is used)
    if ( !strData.empty() )
    {
       _strDb.addStringData( strData );
    }
+   HOP_LEAVE();
 }
 
 void Profiler::addLockWaits( const LockWaitData& lockWaits, uint32_t threadIndex )
 {
-   HOP_PROF_FUNC();
+   HOP_ENTER_FUNC( 0 );
    // Check if new thread
    if ( threadIndex >= _tracks.size() )
    {
@@ -185,11 +186,12 @@ void Profiler::addLockWaits( const LockWaitData& lockWaits, uint32_t threadIndex
    {
       _tracks[threadIndex].addLockWaits( lockWaits );
    }
+   HOP_LEAVE();
 }
 
 void Profiler::addUnlockEvents( const std::vector<UnlockEvent>& unlockEvents, uint32_t threadIndex )
 {
-   HOP_PROF_FUNC();
+   HOP_ENTER_FUNC( 0 );
    // Check if new thread
    if ( threadIndex >= _tracks.size() )
    {
@@ -200,11 +202,12 @@ void Profiler::addUnlockEvents( const std::vector<UnlockEvent>& unlockEvents, ui
    {
       _tracks[threadIndex].addUnlockEvents( unlockEvents );
    }
+   HOP_LEAVE();
 }
 
 void Profiler::addCoreEvents( const CoreEventData& coreEvents, uint32_t threadIndex )
 {
-   HOP_PROF_FUNC();
+   HOP_ENTER_FUNC( 0 );
    // Check if new thread
    if ( threadIndex >= _tracks.size() )
    {
@@ -215,6 +218,7 @@ void Profiler::addCoreEvents( const CoreEventData& coreEvents, uint32_t threadIn
    {
       _tracks[threadIndex].addCoreEvents( coreEvents );
    }
+   HOP_LEAVE();
 }
 
 void Profiler::addThreadName( hop_str_ptr_t name, uint32_t threadIndex )
@@ -243,7 +247,7 @@ struct SaveFileHeader
 
 bool hop::Profiler::saveToFile( const char* savePath )
 {
-   HOP_PROF_FUNC();
+   HOP_ENTER( "Serializing", 0 );
    setRecording( false );
    // Compute the size of the serialized data
    const mz_ulong dbSerializedSize = serializedSize( _strDb );
@@ -262,8 +266,9 @@ bool hop::Profiler::saveToFile( const char* savePath )
    {
       index += serialize( _tracks[i], &data[index] );
    }
+   HOP_LEAVE();
 
-   HOP_PROF_SPLIT( "Compressing" );
+   HOP_ENTER( "Compressing", 0 );
    mz_ulong compressedSize = compressBound( totalSerializedSize );
    std::vector<char> compressedData( compressedSize );
    int compressionStatus = compress(
@@ -271,13 +276,15 @@ bool hop::Profiler::saveToFile( const char* savePath )
        &compressedSize,
        (const unsigned char*)&data[0],
        totalSerializedSize );
+   HOP_LEAVE();
+
    if( compressionStatus != Z_OK )
    {
       fprintf( stderr, "Compression failed. File not saved!" );
       return false;
    }
 
-   HOP_PROF_SPLIT( "Writing to disk" );
+   HOP_ENTER( "Writing to disk", 0 );
    std::ofstream of( savePath, std::ofstream::binary );
    if( of.is_open() )
    {
@@ -290,13 +297,14 @@ bool hop::Profiler::saveToFile( const char* savePath )
       of.write( (const char*)&header, sizeof( header ) );
       of.write( &compressedData[0], compressedSize );
    }
+   HOP_LEAVE();
 
    return of.good();
 }
 
 bool hop::Profiler::openFile( const char* path )
 {
-   HOP_PROF_FUNC();
+   HOP_ENTER( "Reading file", 0 );
    std::ifstream input( path, std::ifstream::binary );
    if( !input.is_open() ) return false;
 
@@ -304,6 +312,8 @@ bool hop::Profiler::openFile( const char* path )
 
    std::vector<char> data(
        ( std::istreambuf_iterator<char>( input ) ), ( std::istreambuf_iterator<char>() ) );
+
+   HOP_LEAVE();
 
    SaveFileHeader* header = (SaveFileHeader*)&data[0];
    if( header->magicNumber != MAGIC_NUMBER )
@@ -321,8 +331,9 @@ bool hop::Profiler::openFile( const char* path )
           HOP_VERSION );
       return false;
    }
+   
 
-   HOP_PROF_SPLIT( "Uncompressing" );
+   HOP_ENTER( "Uncompressing", 0 );
    std::vector<char> uncompressedData( header->uncompressedSize );
    mz_ulong uncompressedSize = uncompressedData.size();
 
@@ -331,13 +342,14 @@ bool hop::Profiler::openFile( const char* path )
        &uncompressedSize,
        (unsigned char*)&data[sizeof( SaveFileHeader )],
        data.size() - sizeof( SaveFileHeader ) );
+   HOP_LEAVE();
 
    if( uncompressStatus != Z_OK )
    {
       return false;
    }
 
-   HOP_PROF_SPLIT( "Updating data" );
+   HOP_ENTER( "Updating data", 0 );
 
    _loadedFileCpuFreqGHz = header->cpuFreqGHz;
 
@@ -356,6 +368,8 @@ bool hop::Profiler::openFile( const char* path )
       i += timelineTrackSize;
    }
    _srcType = SRC_TYPE_FILE;
+
+   HOP_LEAVE();
 
    return true;
 }

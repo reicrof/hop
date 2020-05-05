@@ -20,7 +20,7 @@ namespace
 {
 struct TraceVecSetItem
 {
-   TraceVecSetItem( hop::hop_str_ptr_t fName, hop::hop_linenb_t lineNb, hop::hop_str_ptr_t tName, size_t index )
+   TraceVecSetItem( hop_str_ptr_t fName, hop_linenb_t lineNb, hop_str_ptr_t tName, size_t index )
        : fileName( fName ), traceName( tName ), indexInVec( index ), line( lineNb )
    {
    }
@@ -28,10 +28,10 @@ struct TraceVecSetItem
    {
       return lhs.fileName == rhs.fileName && lhs.traceName == rhs.traceName && lhs.line == rhs.line;
    }
-   hop::hop_str_ptr_t fileName;
-   hop::hop_str_ptr_t traceName;
+   hop_str_ptr_t fileName;
+   hop_str_ptr_t traceName;
    size_t indexInVec;
-   hop::hop_linenb_t line;
+   hop_linenb_t line;
 };
 
 template <typename CMP>
@@ -121,7 +121,7 @@ namespace std
    {
       size_t operator()( const TraceVecSetItem& t ) const
       {
-         return std::hash<hop::hop_linenb_t>()( t.line ) ^ std::hash<hop::hop_str_ptr_t>()( t.traceName ) ^ std::hash<hop::hop_str_ptr_t>()( t.fileName );
+         return std::hash<hop_linenb_t>()( t.line ) ^ std::hash<hop_str_ptr_t>()( t.traceName ) ^ std::hash<hop_str_ptr_t>()( t.fileName );
       }
    };
 }
@@ -288,7 +288,7 @@ gatherTraceDetails( const hop::TraceData& traces, size_t traceId )
 
 static void finalizeTraceDetails(
     std::vector<hop::TraceDetail>& details,
-    hop::hop_timeduration_t totalTime )
+    hop_timeduration_t totalTime )
 {
    HOP_PROF_FUNC();
 

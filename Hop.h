@@ -142,14 +142,15 @@ extern "C"
 /************************************************************/
 
 #include <stdint.h> // integer types
-typedef uint64_t hop_timestamp_t;
-typedef int64_t  hop_timeduration_t;
-typedef uint64_t hop_str_ptr_t;
-typedef uint32_t hop_linenb_t;
-typedef uint32_t hop_core_t;
-typedef uint16_t hop_depth_t;
-typedef uint16_t hop_zone_t;
-typedef void*    hop_mutex_t;
+typedef uint64_t        hop_timestamp_t;
+typedef int64_t         hop_timeduration_t;
+typedef uint64_t        hop_str_ptr_t;
+typedef uint32_t        hop_linenb_t;
+typedef uint32_t        hop_core_t;
+typedef uint16_t        hop_depth_t;
+typedef uint16_t        hop_zone_t;
+typedef void*           hop_mutex_t;
+typedef unsigned char   hop_byte_t;
 
 typedef unsigned char hop_bool_t;
 static const hop_bool_t hop_false = 0;
@@ -252,34 +253,42 @@ namespace hop {
                        |_||_|\___/|_|
 */
 
-// Viewer Declarations
-#if defined( HOP_VIEWER ) || defined( HOP_IMPLEMENTATION )
-hop_shared_memory* hop_create_shared_memory(
-    int pid,
-    uint64_t requestedSize,
-    hop_bool_t isConsumer,
-    hop_connection_state* outConnection );
-void hop_destroy_shared_memory( hop_shared_memory* sharedMem );
-hop_byte_t hop_consume_shared_memory( hop_shared_memory* sharedMem, size_t* size );
-void hop_release_shared_memory( hop_shared_memory* sharedMem, size_t* size );
-void hop_set_listening_consumer( hop_shared_memory* mem, hop_bool_t );
-void hop_set_connected_consumer( hop_shared_memory* mem, hop_bool_t );
-void hop_update_reset_timestamp( hop_shared_memory* mem );
-hop_timestamp_t hop_get_reset_timestamp( hop_shared_memory* mem );
-uint64_t hop_ipc_memory_size( hop_shared_memory* mem );
-float hop_client_tsc_frequency( hop_shared_memory* mem );
-#endif // HOP_VIEWER
-
+/************************************************************/
+/*                   VIEWER DECLARATIONS                    */
+/************************************************************/
 #if defined(__cplusplus) && !defined(HOP_CPP)
 extern "C"
 {
 #endif
+
+#if defined( HOP_VIEWER ) || defined( HOP_IMPLEMENTATION )
+#include <string.h> // size_t, memcpy
+struct hop_shared_memory* hop_create_shared_memory(
+    int pid,
+    uint64_t requestedSize,
+    hop_bool_t isConsumer,
+    hop_connection_state* outConnection );
+void hop_destroy_shared_memory( struct hop_shared_memory* sharedMem );
+hop_byte_t* hop_consume_shared_memory( struct hop_shared_memory* sharedMem, size_t* size );
+void hop_release_shared_memory( struct hop_shared_memory* sharedMem, size_t size );
+void hop_set_listening_consumer( struct hop_shared_memory* mem, hop_bool_t );
+void hop_set_connected_consumer( struct hop_shared_memory* mem, hop_bool_t );
+hop_bool_t hop_has_connected_producer( const struct hop_shared_memory* mem );
+void hop_update_reset_timestamp( struct hop_shared_memory* mem );
+hop_timestamp_t hop_reset_timestamp( const struct hop_shared_memory* mem );
+uint64_t hop_ipc_memory_size( const struct hop_shared_memory* mem );
+float hop_client_tsc_frequency( const struct hop_shared_memory* mem );
+int hop_client_pid( const struct hop_shared_memory* mem );
+#endif // HOP_VIEWER
+
+/************************************************************/
+/*                 INTERNAL IMPLEMENTATION                  */
+/************************************************************/
 #if defined( HOP_IMPLEMENTATION )
 
 #include <errno.h>
 #include <math.h>   // fabsf
 #include <stdio.h>  // printf
-#include <string.h>
 
 #define HOP_MIN( a, b ) ( ( ( a ) < ( b ) ) ? ( a ) : ( b ) )
 #define HOP_MAX( a, b ) ( ( ( a ) > ( b ) ) ? ( a ) : ( b ) )
@@ -306,8 +315,6 @@ extern "C"
 #define hop_atomic_uint32   volatile uint32_t
 #define hop_atomic_int32    volatile int32_t
 #endif
-
-typedef unsigned char hop_byte_t;
 
 /************************************************************/
 /*                         WINDOWS                          */
@@ -657,7 +664,6 @@ static hop_bool_t check_or_create_local_context( local_context_t* ctxt );
 static hop_bool_t local_context_valid( local_context_t* ctxt );
 static void destroy_shared_memory( hop_shared_memory* sharedMem );
 
-static hop_bool_t has_connected_producer( hop_shared_memory* mem );
 static void set_connected_producer( hop_shared_memory* mem, hop_bool_t );
 static hop_bool_t has_connected_consumer( hop_shared_memory* mem );
 static hop_bool_t has_listening_consumer( hop_shared_memory* mem );
@@ -811,7 +817,7 @@ void hop_lock_release( void* mutexAddr )
    push_event( &tl_context.unlocks, &ev );
 }
 
-uint64_t hop_ipc_memory_size( hop_shared_memory* mem )
+uint64_t hop_ipc_memory_size( const hop_shared_memory* mem )
 {
    uint64_t size = 0;
    if( mem && mem->ipcSegment )
@@ -821,7 +827,7 @@ uint64_t hop_ipc_memory_size( hop_shared_memory* mem )
    return size;
 }
 
-float hop_client_tsc_frequency( hop_shared_memory* mem )
+float hop_client_tsc_frequency( const hop_shared_memory* mem )
 {
    float freq = -1.0f;
    if( mem && mem->ipcSegment )
@@ -942,7 +948,8 @@ hop_shared_memory* hop_create_shared_memory(
       if( ringbuf_setup( &ipcSegment->ringbuf, HOP_MAX_THREAD_NB, requestedSize ) < 0 )
       {
          hop_destroy_shared_memory( sharedMem );
-         return HOP_UNKNOWN_CONNECTION_ERROR;
+         *state = HOP_UNKNOWN_CONNECTION_ERROR;
+         return NULL;
       }
    }
    else  // Check if client has compatible version
@@ -955,7 +962,8 @@ hop_shared_memory* hop_create_shared_memory(
              ipcSegment->clientVersion,
              HOP_VERSION );
          hop_destroy_shared_memory( sharedMem );
-         return HOP_INVALID_VERSION;
+         *state = HOP_INVALID_VERSION;
+         return NULL;
       }
    }
 
@@ -1023,7 +1031,7 @@ void hop_destroy_shared_memory( hop_shared_memory* sharedMem )
    HOP_FREE( sharedMem );
 }
 
-hop_byte_t hop_consume_shared_memory( hop_shared_memory* sharedMem, size_t* size )
+hop_byte_t* hop_consume_shared_memory( hop_shared_memory* sharedMem, size_t* size )
 {
    if( !sharedMem || !sharedMem->ipcSegment )
    {
@@ -1031,7 +1039,7 @@ hop_byte_t hop_consume_shared_memory( hop_shared_memory* sharedMem, size_t* size
       return NULL;
    }
 
-   hop_byte_t data = NULL;
+   hop_byte_t* data = NULL;
    size_t offset = 0;
    *size = ringbuf_consume( &sharedMem->ipcSegment->ringbuf, &offset );
    if( *size > 0 )
@@ -1042,9 +1050,9 @@ hop_byte_t hop_consume_shared_memory( hop_shared_memory* sharedMem, size_t* size
    return data;
 }
 
-void hop_release_shared_memory( hop_shared_memory* sharedMem, size_t* size )
+void hop_release_shared_memory( hop_shared_memory* sharedMem, size_t size )
 {
-   ringbuf_release( _sharedMem.ringbuffer(), bytesToRead );
+   ringbuf_release( &sharedMem->ipcSegment->ringbuf, size );
 }
 
 static uint32_t align_on_uint32( uint32_t val, uint32_t alignment )
@@ -1145,11 +1153,6 @@ static hop_bool_t local_context_valid( local_context_t* ctxt )
 
 static void reset_string_data( local_context_t* ctxt )
 {
-   hop_hash_set_t stringHashSet;
-   uint32_t       stringDataSize;
-   uint32_t       stringDataCapacity;
-   char*          stringData;
-
    hop_hash_set_clear( ctxt->stringHashSet );
    ctxt->stringDataSize = 0;
    memset( ctxt->stringData, 0, ctxt->stringDataCapacity );
@@ -1665,7 +1668,7 @@ static uintptr_t atomic_clear_bit( hop_atomic_uint32* value, uint32_t bitToSet )
    return origValue;  // return value before change
 }
 
-static hop_bool_t has_connected_producer( hop_shared_memory* mem )
+hop_bool_t hop_has_connected_producer( const hop_shared_memory* mem )
 {
    return ( mem->ipcSegment->state & HOP_CONNECTED_PRODUCER ) > 0;
 }
@@ -1719,7 +1722,7 @@ void hop_update_reset_timestamp( hop_shared_memory* mem )
        hop_memory_order_seq_cst );
 }
 
-hop_timestamp_t hop_get_reset_timestamp( hop_shared_memory* mem )
+hop_timestamp_t hop_reset_timestamp( const hop_shared_memory* mem )
 {
    return hop_atomic_load_explicit(
        &mem->ipcSegment->lastResetTimeStamp, hop_memory_order_seq_cst );
@@ -1773,14 +1776,14 @@ static uint64_t os_timestamp_delta_us( LARGE_INTEGER* start )
 }
 #elif defined(__linux__)
 #include <time.h> // clock_gettime
-typedef timespec hop_os_timestamp;
-static void os_timestamp_start( timespec* timestamp )
+typedef struct timespec hop_os_timestamp;
+static void os_timestamp_start( struct timespec* timestamp )
 {
-   clock_gettime( CLOCK_PROCESS_CPUTIME_ID, &timestamp );
+   clock_gettime( CLOCK_PROCESS_CPUTIME_ID, timestamp );
 }
-static uint64_t os_timestamp_delta_us( timespec* start )
+static uint64_t os_timestamp_delta_us( struct timespec* start )
 {
-   timespec end;
+   struct timespec end;
    clock_gettime( CLOCK_PROCESS_CPUTIME_ID, &end );
 
    const uint64_t deltaUs =

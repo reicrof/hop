@@ -7,22 +7,22 @@
 
 static constexpr float MIN_TRACE_LENGTH_PXL = 15.0f;
 static constexpr float MIN_GAP_PXL = 5.0f;
-static hop::hop_timeduration_t LOD_MIN_GAP_CYCLES[hop::LOD_COUNT] = {0};
-static hop::hop_timeduration_t LOD_MIN_TRACE_LENGTH_CYCLES[hop::LOD_COUNT] = {0};
+static hop_timeduration_t LOD_MIN_GAP_CYCLES[hop::LOD_COUNT] = {0};
+static hop_timeduration_t LOD_MIN_TRACE_LENGTH_CYCLES[hop::LOD_COUNT] = {0};
 
 static bool canBeLoded(
     int lodLevel,
-    hop::hop_timeduration_t timeBetweenTrace,
-    hop::hop_timeduration_t lastTraceDelta,
-    hop::hop_timeduration_t newTraceDelta )
+    hop_timeduration_t timeBetweenTrace,
+    hop_timeduration_t lastTraceDelta,
+    hop_timeduration_t newTraceDelta )
 {
-   const hop::hop_timeduration_t minTraceSize = LOD_MIN_TRACE_LENGTH_CYCLES[lodLevel];
-   const hop::hop_timeduration_t minTimeBetweenTrace = LOD_MIN_GAP_CYCLES[lodLevel];
+   const hop_timeduration_t minTraceSize = LOD_MIN_TRACE_LENGTH_CYCLES[lodLevel];
+   const hop_timeduration_t minTimeBetweenTrace = LOD_MIN_GAP_CYCLES[lodLevel];
    return lastTraceDelta < minTraceSize && newTraceDelta < minTraceSize &&
           timeBetweenTrace < minTimeBetweenTrace;
 }
 
-static inline hop::hop_timeduration_t delta( const hop::LodInfo& lod )
+static inline hop_timeduration_t delta( const hop::LodInfo& lod )
 {
    return lod.end - lod.start;
 }

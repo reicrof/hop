@@ -13,6 +13,8 @@
 #include <unordered_map>
 #include <vector>
 
+struct hop_shared_memory;
+
 namespace hop
 {
 class Server
@@ -54,7 +56,7 @@ class Server
    void clearPendingMessages();
 
    std::thread _thread;
-   SharedMemory _sharedMem;
+   hop_shared_memory* _sharedMem;
    StringDb _stringDb;
 
    mutable float _cpuFreqGHz{0};

@@ -56,18 +56,18 @@ static int mergeAndRemoveDuplicates( hop::CoreEvent* coreEvents, uint32_t count,
 }
 
 static hop_connection_state updateConnectionState(
-    const hop::SharedMemory& sharedMem,
+    const hop_shared_memory* sharedMem,
     int pollFailCount )
 {
    hop_connection_state state = HOP_CONNECTED;
    const bool producerLost =
-       !sharedMem.hasConnectedProducer() || pollFailCount > POLL_COUNT_FAIL_DISCONNECTION;
+       !hop_has_connected_producer( sharedMem ) || pollFailCount > POLL_COUNT_FAIL_DISCONNECTION;
    if( producerLost )
    {
       // We have lost the producer. Check if it is becaused the process was terminated or
       // if it is simply not feeling chatty
-      state = hop::processAlive( sharedMem.pid() ) ? HOP_CONNECTED_NO_CLIENT
-                                                   : HOP_NOT_CONNECTED;
+      state = hop::processAlive( hop_client_pid( sharedMem ) ) ? HOP_CONNECTED_NO_CLIENT
+                                                               : HOP_NOT_CONNECTED;
    }
    return state;
 }
@@ -108,7 +108,7 @@ bool Server::start( int inPid, const char* name )
             printf( "Connection to shared data successful.\n" );
          }
 
-         HOP_PROF_FUNC();
+         HOP_ENTER_FUNC( 0 );
 
          // Check if its been a while since we have been signaleds
          const auto newConnectionState =
@@ -153,7 +153,7 @@ bool Server::start( int inPid, const char* name )
          {
             HOP_PROF( "Server - Handling new messages" );
             pollFailedCount = 0;
-            const hop_timestamp_t minTimestamp = hop_get_reset_timestamp( _sharedMem );
+            const hop_timestamp_t minTimestamp = hop_reset_timestamp( _sharedMem );
             size_t bytesRead = 0;
             while ( bytesRead < bytesToRead )
             {
@@ -181,6 +181,8 @@ bool Server::start( int inPid, const char* name )
             {
                std::this_thread::sleep_for( milliseconds( 500 ) );
             }
+
+            HOP_LEAVE();
          }
       }
    } );
@@ -459,7 +461,7 @@ size_t Server::handleNewMessage( uint8_t* data, size_t maxSize, hop_timestamp_t 
 void Server::clearPendingMessages()
 {
    size_t size = 0;
-   while( hop_byte_t data = hop_consume_shared_memory( _sharedMem, &size ) )
+   while( hop_byte_t* data = hop_consume_shared_memory( _sharedMem, &size ) )
    {
       hop_release_shared_memory( _sharedMem, size );
    }
@@ -487,7 +489,7 @@ void Server::stop()
 
    if( wasRunning )
    {
-      hop_set_listeneing_consumer( _sharedMem, false );
+      hop_set_listening_consumer( _sharedMem, false );
       hop_set_connected_consumer( _sharedMem, false );
 
       if( _thread.joinable() )
@@ -527,7 +529,7 @@ void Server::PendingData::clear()
 
 void Server::PendingData::swap( PendingData& rhs )
 {
-   HOP_PROF_FUNC();
+   HOP_ENTER_FUNC( 0 );
    using std::swap;
    swap( tracesPerThread, rhs.tracesPerThread );
    swap( stringData, rhs.stringData );
@@ -535,6 +537,7 @@ void Server::PendingData::swap( PendingData& rhs )
    swap( unlockEventsPerThread, rhs.unlockEventsPerThread );
    swap( coreEventsPerThread, rhs.coreEventsPerThread );
    swap( threadNames, rhs.threadNames );
+   HOP_LEAVE();
 }
 
 }  // namespace hop

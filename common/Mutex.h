@@ -11,14 +11,15 @@ namespace hop
    {
       void lock()
       {
-         HOP_PROF_MUTEX_LOCK( &_m );
+         HOP_ACQUIRE_LOCK( &_m );
          _m.lock();
+         HOP_LOCK_ACQUIRED();
       }
 
       void unlock()
       {
          _m.unlock();
-         HOP_PROF_MUTEX_UNLOCK( &_m );
+         HOP_RELEASE_LOCK( &_m );
       }
 
       std::mutex _m;

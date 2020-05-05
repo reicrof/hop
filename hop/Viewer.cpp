@@ -573,7 +573,7 @@ static void updateOptions( const hop::ProfilerView* selectedProf, hop::Stats& st
 }
 
 static void updateProfilers(
-    hop::hop_timeduration_t tlDuration,
+    hop_timeduration_t tlDuration,
     std::vector<std::unique_ptr<hop::ProfilerView> >& profilers,
     int selectedTab )
 {
