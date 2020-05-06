@@ -59,7 +59,6 @@ class Server
    hop_shared_memory* _sharedMem{nullptr};
    StringDb _stringDb;
 
-   mutable float _cpuFreqGHz{0};
    mutable hop::Mutex _stateMutex;
    struct ServerState
    {

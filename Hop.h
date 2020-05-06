@@ -364,7 +364,7 @@ int hop_client_pid( const struct hop_shared_memory* mem );
 #define HOP_ASSERT( x ) HOP_UNUSED( x )
 #else
 #include <assert.h>
-#define HOP_ASSERT( x ) ( (x) )
+#define HOP_ASSERT( x ) assert( x )
 #endif
 
 #ifdef HOP_CPP
@@ -2040,13 +2040,15 @@ do {								\
 int
 ringbuf_setup(ringbuf_t* rbuf, unsigned nworkers, size_t length)
 {
-   if (length >= RBUF_OFF_MASK) {
+   if( length >= RBUF_OFF_MASK )
+   {
       errno = EINVAL;
       return -1;
    }
-   memset(rbuf, 0, offsetof(ringbuf_t, workers[nworkers]));
-   rbuf->space = length;
-   rbuf->end = RBUF_OFF_MAX;
+   rbuf->next     = 0;
+   rbuf->written  = 0;
+   rbuf->space    = length;
+   rbuf->end      = RBUF_OFF_MAX;
    rbuf->nworkers = nworkers;
    return 0;
 }
@@ -2058,10 +2060,14 @@ void
 ringbuf_get_sizes(unsigned nworkers,
    size_t* ringbuf_size, size_t* ringbuf_worker_size)
 {
-   if (ringbuf_size)
-      *ringbuf_size = offsetof(ringbuf_t, workers[nworkers]);
-   if (ringbuf_worker_size)
-      *ringbuf_worker_size = sizeof(ringbuf_worker_t);
+   if( ringbuf_size )
+   {
+      *ringbuf_size = offsetof( ringbuf_t, workers ) + sizeof( ringbuf_worker_t ) * nworkers;
+   }
+   if( ringbuf_worker_size )
+   {
+      *ringbuf_worker_size = sizeof( ringbuf_worker_t );
+   }
 }
 
 /*
