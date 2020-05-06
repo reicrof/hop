@@ -34,7 +34,7 @@ class Server
        std::vector<char> stringData;
        std::unordered_map< uint32_t, TraceData > tracesPerThread;
        std::unordered_map< uint32_t, LockWaitData > lockWaitsPerThread;
-       std::unordered_map< uint32_t, std::vector<UnlockEvent> > unlockEventsPerThread;
+       std::unordered_map< uint32_t, std::vector<hop_unlock_event_t> > unlockEventsPerThread;
        std::unordered_map< uint32_t, CoreEventData > coreEventsPerThread;
 
        std::vector< std::pair< uint32_t, hop_str_ptr_t > > threadNames;

@@ -1,5 +1,5 @@
 #include "TestUtils.h"
-#include <common/HashSet.h>
+#include <tests/HashSet.h>
 
 #include <cassert>
 #include <chrono>

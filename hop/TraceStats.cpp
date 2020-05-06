@@ -41,8 +41,6 @@ static void sortTraceDetailOnName(
     const hop::StringDb& strDb,
     const CMP& cmp )
 {
-   HOP_PROF_FUNC();
-
    std::stable_sort(
        td.begin(),
        td.end(),
@@ -61,8 +59,6 @@ static void sortTraceDetailOnMember(
     MEMBER_T hop::TraceDetail::*memPtr,
     bool descending )
 {
-   HOP_PROF_FUNC();
-
    if ( descending )
    {
       auto cmp = std::greater<MEMBER_T>();
@@ -89,8 +85,6 @@ static void sortTraceDetailOnCount(
     std::vector<hop::TraceDetail>& td,
     bool descending )
 {
-   HOP_PROF_FUNC();
-
    if ( descending )
    {
       auto cmp = std::greater<size_t>();
@@ -128,7 +122,7 @@ namespace std
 
 static std::vector<hop::TraceDetail> mergeTraceDetails( const hop::TraceData& traces, const std::vector<hop::TraceDetail>& allDetails )
 {
-   HOP_PROF_FUNC();
+   HOP_ENTER_FUNC( 0 );
 
    using namespace hop;
    std::vector<TraceDetail> mergedDetails;
@@ -226,13 +220,14 @@ static std::vector<hop::TraceDetail> mergeTraceDetails( const hop::TraceData& tr
       endTimes.clear();
    }
 
+   HOP_LEAVE();
    return mergedDetails;
 }
 
 static std::vector<hop::TraceDetail>
 gatherTraceDetails( const hop::TraceData& traces, size_t traceId )
 {
-   HOP_PROF_FUNC();
+   HOP_ENTER_FUNC( 0 );
 
    using namespace hop;
    std::vector<TraceDetail> traceDetails;
@@ -283,6 +278,7 @@ gatherTraceDetails( const hop::TraceData& traces, size_t traceId )
       traceDetails.emplace_back( TraceDetail( i, excTime ) );
    }
 
+   HOP_LEAVE();
    return traceDetails;
 }
 
@@ -290,7 +286,7 @@ static void finalizeTraceDetails(
     std::vector<hop::TraceDetail>& details,
     hop_timeduration_t totalTime )
 {
-   HOP_PROF_FUNC();
+   HOP_ENTER_FUNC( 0 );
 
    using namespace hop;
    // Adjust the percentage
@@ -307,6 +303,7 @@ static void finalizeTraceDetails(
       return lhs.exclusivePct > rhs.exclusivePct;
    } );
 
+   HOP_LEAVE();
    assert( std::abs( totalPct - 1.0f ) < 0.01f || details.empty() );
 }
 
@@ -315,7 +312,7 @@ namespace hop
 TraceDetails
 createTraceDetails( const TraceData& traces, uint32_t threadIndex, size_t traceId )
 {
-   HOP_PROF_FUNC();
+   HOP_ENTER_FUNC( 0 );
 
    const hop_timestamp_t totalDelta = traces.entries.ends[traceId] - traces.entries.starts[traceId];
 
@@ -327,6 +324,8 @@ createTraceDetails( const TraceData& traces, uint32_t threadIndex, size_t traceI
    details.shouldFocusWindow = true;
    details.threadIndex = threadIndex;
    std::swap( details.details, traceDetails );
+
+   HOP_LEAVE();
    return details;
 }
 
@@ -375,7 +374,7 @@ TraceStats createTraceStats( const TraceData& traces, uint32_t, size_t traceId )
 
 TraceDetails createGlobalTraceDetails( const TraceData& traces, uint32_t threadIndex )
 {
-   HOP_PROF_FUNC();
+   HOP_ENTER_FUNC( 0 );
 
    TraceDetails details = {};
 
@@ -399,6 +398,8 @@ TraceDetails createGlobalTraceDetails( const TraceData& traces, uint32_t threadI
    details.open = true;
    details.threadIndex = threadIndex;
    std::swap( details.details, mergedDetails );
+
+   HOP_LEAVE();
    return details;
 }
 
@@ -409,8 +410,6 @@ TraceDetailDrawResult drawTraceDetails(
     bool drawAsCycles,
     float cpuFreqGHz )
 {
-   HOP_PROF_FUNC();
-
    static constexpr float pctColumnWidth = 65.0f;
    static constexpr float timeColumnWidth = 90.0f;
 

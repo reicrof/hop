@@ -43,8 +43,7 @@ void setupLODResolution( uint32_t sreenResolutionX )
 
 LodsArray computeLods( const Entries& entries, size_t idOffset )
 {
-   HOP_ZONE( 2 );
-   HOP_PROF_FUNC();
+   HOP_ENTER_FUNC( 2 );
    assert( LOD_MIN_GAP_CYCLES[LOD_COUNT - 1] > 0 && "LOD resolution was not setup" );
 
    LodsArray resLods;
@@ -54,19 +53,20 @@ LodsArray computeLods( const Entries& entries, size_t idOffset )
 
    // First LOD is usually never worth merging as they are too small
    {
-      HOP_PROF( "Copying first LOD level" );
+      HOP_ENTER( "Copying first LOD level", 3 );
       for( size_t i = idOffset; i < entries.ends.size(); ++i )
       {
          resLods[0].push_back(
              LodInfo{entries.starts[i], entries.ends[i], i, entries.depths[i], false} );
       }
+      HOP_LEAVE();
    }
 
    // Compute the LOD based on the previous LOD levels
    const hop::Deque<LodInfo>* lastComputedLod = &resLods[lodLvl];
    for ( lodLvl = 1; lodLvl < LOD_COUNT; ++lodLvl )
    {
-      HOP_PROF( "Computing next LOD lvl" );
+      HOP_ENTER( "Computing next LOD lvl", 4 );
 
       std::fill( lastTraceAtDepth.begin(), lastTraceAtDepth.end(), -1 );
       
@@ -117,8 +117,11 @@ LodsArray computeLods( const Entries& entries, size_t idOffset )
 
       // Update the last compute lod ptr
       lastComputedLod = &resLods[lodLvl];
+
+      HOP_LEAVE();
    }
 
+   HOP_LEAVE();
    return resLods;
 }
 
@@ -128,7 +131,7 @@ void appendLods( LodsData& dst, const Entries& entries )
 
    LodsArray src = computeLods( entries, dst.idOffset );
 
-   HOP_PROF_FUNC();
+   HOP_ENTER_FUNC( 2 );
 
    // Find the deepest depth
    int deepestDepth = 0;
@@ -184,14 +187,16 @@ void appendLods( LodsData& dst, const Entries& entries )
 
    // Update to the new offset
    dst.idOffset = entries.ends.size();
+
+   HOP_LEAVE();
 }
 
 LodsArray
 computeCoreEventLods( const Entries& entries, const hop::Deque<hop_core_t>& cores, size_t idOffset )
 {
-   HOP_PROF_FUNC();
-
    LodsArray resLods;
+
+   HOP_ENTER_FUNC( 2 );
 
    const auto mergeLodInfo = [&cores]( int lodLvl, LodInfo& lastEvent, const LodInfo& newEvent, LodsArray& resLods )
    {
@@ -214,7 +219,7 @@ computeCoreEventLods( const Entries& entries, const hop::Deque<hop_core_t>& core
       // First lod is always added
       resLods[lodLvl].push_back(
           LodInfo{entries.starts[idOffset], entries.ends[idOffset], idOffset, 0, false} );
-      HOP_PROF( "Compute first LOD level" );
+      HOP_ENTER( "Compute first LOD level", 3 );
       for ( size_t i = idOffset + 1; i < entries.ends.size(); ++i )
       {
          mergeLodInfo(
@@ -224,13 +229,14 @@ computeCoreEventLods( const Entries& entries, const hop::Deque<hop_core_t>& core
             resLods );
       }
       std::sort( resLods[lodLvl].begin(), resLods[lodLvl].end() );
+      HOP_LEAVE();
    }
 
    // Compute the LOD based on the previous LOD levels
    const hop::Deque<LodInfo>* lastComputedLod = &resLods[lodLvl];
    for ( lodLvl = 1; lodLvl < LOD_COUNT; ++lodLvl )
    {
-      HOP_PROF( "Computing next LOD lvl" );
+      HOP_ENTER( "Computing next LOD lvl", 3 );
       resLods[lodLvl].push_back( lastComputedLod->front() );
       for ( const auto& l : *lastComputedLod )
       {
@@ -240,7 +246,10 @@ computeCoreEventLods( const Entries& entries, const hop::Deque<hop_core_t>& core
 
       // Update the last compute lod ptr
       lastComputedLod = &resLods[lodLvl];
+      HOP_LEAVE();
    }
+
+   HOP_LEAVE();
 
    return resLods;
 }
@@ -251,7 +260,7 @@ void appendCoreEventLods( LodsData& dst, const Entries& entries, const hop::Dequ
 
    LodsArray src = computeCoreEventLods( entries, cores, dst.idOffset );
 
-   HOP_PROF_FUNC();
+   HOP_ENTER_FUNC( 2 );
 
    // For all LOD levels
    for( size_t lodLvl = 0; lodLvl < src.size(); ++lodLvl )
@@ -288,6 +297,8 @@ void appendCoreEventLods( LodsData& dst, const Entries& entries, const hop::Dequ
 
    // Update to the new offset
    dst.idOffset = entries.ends.size();
+
+   HOP_LEAVE();
 }
 
 std::pair<size_t, size_t> visibleIndexSpan(

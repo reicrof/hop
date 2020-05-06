@@ -46,7 +46,7 @@ public:
    void addStringData( const std::vector< char >& stringData );
    void addTraces( const TraceData& traces, uint32_t threadIndex );
    void addLockWaits( const LockWaitData& lockWaits, uint32_t threadIndex);
-   void addUnlockEvents(const std::vector<UnlockEvent>& unlockEvents, uint32_t threadIndex);
+   void addUnlockEvents(const std::vector<hop_unlock_event_t>& unlockEvents, uint32_t threadIndex);
    void addCoreEvents( const CoreEventData& coreEvents, uint32_t threadIndex );
    void addThreadName( hop_str_ptr_t name, uint32_t threadIndex );
    void clear();

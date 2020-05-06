@@ -196,7 +196,7 @@ void Profiler::addLockWaits( const LockWaitData& lockWaits, uint32_t threadIndex
    HOP_LEAVE();
 }
 
-void Profiler::addUnlockEvents( const std::vector<UnlockEvent>& unlockEvents, uint32_t threadIndex )
+void Profiler::addUnlockEvents( const std::vector<hop_unlock_event_t>& unlockEvents, uint32_t threadIndex )
 {
    HOP_ENTER_FUNC( 0 );
    // Check if new thread

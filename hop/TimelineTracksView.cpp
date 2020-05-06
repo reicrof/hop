@@ -170,7 +170,7 @@ static void createDrawData(
     float* __restrict startsPxl,
     float* __restrict deltaPxl )
 {
-   HOP_PROF_FUNC();
+   HOP_ENTER_FUNC( 0 );
    const float windowWidth = ImGui::GetWindowWidth();
    for( size_t i = 0; i < count; ++i, ++it )
    {
@@ -182,6 +182,7 @@ static void createDrawData(
       deltaPxl[i]  = hop::clamp(
           ( ( it->end - it->start ) / cyclesPerPxl ) + minMaxPxl.first, 1.0f, windowWidth );
    }
+   HOP_LEAVE();
 }
 
 /*
@@ -408,7 +409,7 @@ static size_t drawCoreLabels(
     const hop::TimelineTrackDrawData& data,
     const hop::LodsData& lodsData )
 {
-   HOP_PROF_FUNC();
+   HOP_ENTER_FUNC( 0 );
 
    const auto drawStart = std::chrono::system_clock::now();
 
@@ -419,6 +420,7 @@ static size_t drawCoreLabels(
    hop::g_stats.coreDrawingTimeMs +=
        std::chrono::duration<double, std::milli>( ( drawEnd - drawStart ) ).count();
 
+   HOP_LEAVE();
    return hoveredIdx;
 }
 
@@ -534,7 +536,7 @@ static std::vector<LockOwnerInfo> highlightLockOwner(
     size_t hoveredLwIndex )
 {
    using namespace hop;
-   HOP_PROF_FUNC();
+   HOP_ENTER_FUNC( 0 );
    std::vector<LockOwnerInfo> lockInfos;
    lockInfos.reserve( 16 );
 
@@ -608,6 +610,7 @@ static std::vector<LockOwnerInfo> highlightLockOwner(
       }
    }
 
+   HOP_LEAVE();
    return lockInfos;
 }
 
@@ -713,7 +716,7 @@ float TimelineTracksView::trackAbsoluteDrawPosY( uint32_t trackIdx ) const
 
 void TimelineTracksView::update( const hop::Profiler& profiler )
 {
-   HOP_PROF_FUNC();
+   HOP_ENTER_FUNC( 0 );
 
    const auto updateStart = std::chrono::system_clock::now();
 
@@ -757,6 +760,7 @@ void TimelineTracksView::update( const hop::Profiler& profiler )
    const auto updateEnd = std::chrono::system_clock::now();
    hop::g_stats.updatingTimeMs +=
        std::chrono::duration<double, std::milli>( ( updateEnd - updateStart ) ).count();
+   HOP_LEAVE();
 }
 
 void TimelineTracksView::draw( const TimelineTrackDrawData& data, TimelineMsgArray* msgArray )
@@ -882,7 +886,6 @@ void TimelineTracksView::drawSearchWindow(
    std::vector<HighlightInfo>& traceToHighlight,
    hop::TimelineMsgArray* msgArray )
 {
-   HOP_PROF_FUNC();
    using namespace hop;
 
    const auto& tracksData = data.profiler.timelineTracks();

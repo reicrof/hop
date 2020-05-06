@@ -17,8 +17,7 @@ static void sortSearchResOnTime(
     const std::vector<hop::TimelineTrack>& tracks,
     const CMP& cmp )
 {
-   HOP_PROF_FUNC();
-
+   HOP_ENTER_FUNC( 0 );
    std::stable_sort(
        sr.tracesIdxThreadIdx.begin(),
        sr.tracesIdxThreadIdx.end(),
@@ -28,6 +27,7 @@ static void sortSearchResOnTime(
               tracks[lhs.second]._traces.entries.starts[lhs.first],
               tracks[rhs.second]._traces.entries.starts[rhs.first] );
        } );
+   HOP_LEAVE();
 }
 
 template <typename CMP>
@@ -37,8 +37,7 @@ static void sortSearchResOnName(
     const hop::StringDb& strDb,
     const CMP& cmp )
 {
-   HOP_PROF_FUNC();
-
+   HOP_ENTER_FUNC( 0 );
    // TODO Fix this as it is not in alphabetic order
    std::stable_sort(
        sr.tracesIdxThreadIdx.begin(),
@@ -51,6 +50,7 @@ static void sortSearchResOnName(
                   strDb.getString( tracks[rhs.second]._traces.fctNameIds[rhs.first] ) ),
               0 );
        } );
+   HOP_LEAVE();
 }
 
 template <typename CMP>
@@ -59,8 +59,7 @@ static void sortSearchResOnDuration(
     const std::vector<hop::TimelineTrack>& tracks,
     const CMP& cmp )
 {
-   HOP_PROF_FUNC();
-
+   HOP_ENTER_FUNC( 0 );
    std::stable_sort(
        sr.tracesIdxThreadIdx.begin(),
        sr.tracesIdxThreadIdx.end(),
@@ -70,13 +69,14 @@ static void sortSearchResOnDuration(
               tracks[lhs.second]._traces.entries.ends[lhs.first] - tracks[lhs.second]._traces.entries.starts[lhs.first],
               tracks[rhs.second]._traces.entries.ends[rhs.first] - tracks[rhs.second]._traces.entries.starts[rhs.first] );
        } );
+   HOP_LEAVE();
 }
 
 namespace hop
 {
 void findTraces( const char* string, const StringDb& strDb, const std::vector<hop::TimelineTrack>& tracks, SearchResult& result )
 {
-   HOP_PROF_FUNC();
+   HOP_ENTER_FUNC( 0 );
 
    result.stringSearched = string;
    result.matchCount = 0;
@@ -103,6 +103,8 @@ void findTraces( const char* string, const StringDb& strDb, const std::vector<ho
 
    // Sort them by duration
    sortSearchResOnDuration( result, tracks, std::greater<hop_timestamp_t>() );
+
+   HOP_LEAVE();
 }
 
 SearchSelection drawSearchResult(
@@ -112,8 +114,6 @@ SearchSelection drawSearchResult(
    const std::vector<hop::TimelineTrack>& tracks,
    float cpuFreqGHz )
 {
-   HOP_PROF_FUNC();
-
    bool inputFocus = false;
    if ( searchRes.focusSearchWindow && searchRes.searchWindowOpen )
    {

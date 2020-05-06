@@ -848,8 +848,9 @@ void Viewer::draw( float windowWidth, float windowHeight )
 
    {
       // Create the draw commands
-      HOP_PROF( "Create ImGui drawlist" );
+      HOP_ENTER( "Create ImGui drawlist", 0 );
       ImGui::Render();
+      HOP_LEAVE();
    }
 
    // Do the actual render

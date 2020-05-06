@@ -62,7 +62,7 @@ void TimelineTrack::addLockWaits( const LockWaitData& lockWaits )
    HOP_LEAVE();
 }
 
-void TimelineTrack::addUnlockEvents( const std::vector<UnlockEvent>& unlockEvents )
+void TimelineTrack::addUnlockEvents( const std::vector<hop_unlock_event_t>& unlockEvents )
 {
    // If we did not get any lock events prior to the unlock events, simply ignore them
    if( _lockWaits.entries.ends.empty() ) return;

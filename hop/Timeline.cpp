@@ -198,7 +198,7 @@ void Timeline::update( float deltaTimeMs ) noexcept
 
 void Timeline::draw()
 {
-   HOP_PROF_FUNC();
+   HOP_ENTER_FUNC( 0 );
 
    const auto drawPos = ImGui::GetCursorPos() + ImVec2( 0.0f, 5.0f );
    _timelineDrawPosition[0] = drawPos.x;
@@ -316,6 +316,8 @@ void Timeline::draw()
    }
 
    ImGui::SetCursorScreenPos( ImVec2{drawPos.x, drawPos.y + TIMELINE_TOTAL_HEIGHT } );
+
+   HOP_LEAVE();
 }
 
 void Timeline::clear()

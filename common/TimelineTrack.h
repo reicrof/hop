@@ -6,6 +6,8 @@
 
 #include <unordered_map>
 
+struct hop_unlock_event_t;
+
 namespace hop
 {
 
@@ -22,7 +24,7 @@ struct TimelineTrack
    hop_str_ptr_t name() const noexcept;
    void addTraces( const TraceData& traces );
    void addLockWaits( const LockWaitData& lockWaits );
-   void addUnlockEvents(const std::vector<UnlockEvent>& unlockEvents);
+   void addUnlockEvents(const std::vector<hop_unlock_event_t>& unlockEvents);
    void addCoreEvents( const CoreEventData& coreEvents );
    hop_depth_t maxDepth() const noexcept;
    bool empty() const;

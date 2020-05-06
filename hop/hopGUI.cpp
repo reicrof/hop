@@ -206,7 +206,7 @@ static hop::ProcessID startViewer( SDL_Window* window, const hop::LaunchOptions&
    time_point<ClockType> lastFrameTime = ClockType::now();
    while ( g_run )
    {
-      HOP_PROF( "Main Loop" );
+      HOP_ENTER( "Main Loop", 0 );
       const auto frameStart = ClockType::now();
 
       const auto startFetch = frameStart;
@@ -241,6 +241,7 @@ static hop::ProcessID startViewer( SDL_Window* window, const hop::LaunchOptions&
 
       auto frameEnd = ClockType::now();
       hop::g_stats.frameTimeMs = duration<double, std::milli>( ( frameEnd - frameStart ) ).count();
+      HOP_LEAVE();
    }
 
    return childProcId;

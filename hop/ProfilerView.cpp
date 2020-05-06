@@ -47,13 +47,14 @@ void hop::ProfilerView::fetchClientData()
 
 void hop::ProfilerView::update( float globalTimeMs, hop_timeduration_t timelineDuration )
 {
-   HOP_PROF_FUNC();
+   HOP_ENTER_FUNC( 0 );
    _highlightValue = (std::sin( 0.007f * globalTimeMs ) * 0.8f + 1.0f) / 2.0f;
 
    // Update current lod level
    _lodLevel = closestLodLevel( timelineDuration );
 
    _trackViews.update( _profiler );
+   HOP_LEAVE();
 }
 
 void hop::ProfilerView::setRecording( bool recording )
@@ -73,7 +74,7 @@ bool hop::ProfilerView::openFile( const char* path )
 
 void hop::ProfilerView::draw( float drawPosX, float drawPosY, const TimelineInfo& tlInfo, TimelineMsgArray* msgArray )
 {
-   HOP_PROF_FUNC();
+   HOP_ENTER_FUNC( 0 );
    ImGui::SetCursorPos( ImVec2( drawPosX, drawPosY ) );
 
    if ( _trackViews.count() > 0 )
@@ -81,6 +82,7 @@ void hop::ProfilerView::draw( float drawPosX, float drawPosY, const TimelineInfo
       TimelineTrackDrawData drawData = { _profiler, tlInfo, _lodLevel, _highlightValue };
       _trackViews.draw( drawData, msgArray );
    }
+   HOP_LEAVE();
 }
 
 bool hop::ProfilerView::handleHotkey()

@@ -21,7 +21,7 @@ target_link_libraries( BlockAllocator_test PUBLIC ${PLATFORM_LINK_FLAGS} )
 add_executable (Deque_test Deque_test.cpp ${ROOT_DIR}/common/BlockAllocator.cpp ${platform_src} )
 target_link_libraries( Deque_test PUBLIC ${PLATFORM_LINK_FLAGS} )
 
-add_executable (HashSet_test HashSet_test.cpp ${ROOT_DIR}/common/HashSet.c )
+add_executable (HashSet_test HashSet_test.cpp ${ROOT_DIR}/tests/HashSet.c )
 target_link_libraries( HashSet_test PUBLIC ${PLATFORM_LINK_FLAGS} )
 
 add_executable (c_test c_test.c )

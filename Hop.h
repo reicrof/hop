@@ -140,8 +140,12 @@ extern "C"
 /************************************************************/
 /*                 PUBLIC HOP DECLARATIONS                  */
 /************************************************************/
-
 #include <stdint.h> // integer types
+
+#define HOP_VERSION 0.91f
+#define HOP_ZONE_MAX 255
+#define HOP_ZONE_DEFAULT 0
+
 typedef uint64_t        hop_timestamp_t;
 typedef int64_t         hop_timeduration_t;
 typedef uint64_t        hop_str_ptr_t;
@@ -156,6 +160,17 @@ typedef unsigned char hop_bool_t;
 static const hop_bool_t hop_false = 0;
 static const hop_bool_t hop_true = 1;
 
+typedef enum hop_msg_type
+{
+   HOP_PROFILER_TRACE,
+   HOP_PROFILER_STRING_DATA,
+   HOP_PROFILER_WAIT_LOCK,
+   HOP_PROFILER_UNLOCK_EVENT,
+   HOP_PROFILER_HEARTBEAT,
+   HOP_PROFILER_CORE_EVENT,
+   HOP_INVALID_MESSAGE
+} hop_msg_type;
+
 typedef enum hop_connection_state
 {
    HOP_NO_TARGET_PROCESS,
@@ -166,6 +181,49 @@ typedef enum hop_connection_state
    HOP_INVALID_VERSION,
    HOP_UNKNOWN_CONNECTION_ERROR
 } hop_connection_state;
+
+typedef struct hop_msg_info_t
+{
+   hop_msg_type type;
+   // Thread id from which the msg was sent
+   uint32_t threadIndex;
+   uint64_t threadId;
+   hop_timestamp_t timeStamp;
+   hop_str_ptr_t threadName;
+   uint32_t count;
+} hop_msg_info_t;
+
+typedef struct hop_traces_t
+{
+   uint32_t count;
+   uint32_t maxSize;
+   hop_timestamp_t *starts, *ends;  // Timestamp for start/end of this trace
+   hop_str_ptr_t* fileNameIds;      // Index into string array for the file name
+   hop_str_ptr_t* fctNameIds;       // Index into string array for the function name
+   hop_linenb_t* lineNumbers;       // Line at which the trace was inserted
+   hop_depth_t* depths;             // The depth in the callstack of this trace
+   hop_zone_t* zones;               // Zone to which this trace belongs
+} hop_traces_t;
+
+typedef struct hop_lock_wait_event_t
+{
+   hop_mutex_t mutexAddress;
+   hop_timestamp_t start, end;
+   hop_depth_t depth;
+   uint16_t padding;
+} hop_lock_wait_event_t;
+
+typedef struct hop_unlock_event_t
+{
+   hop_mutex_t mutexAddress;
+   hop_timestamp_t time;
+} hop_unlock_event_t;
+
+typedef struct hop_core_event_t
+{
+   hop_timestamp_t start, end;
+   hop_core_t core;
+} hop_core_event_t;
 
 // Hop actual function decl
 HOP_EXPORT hop_bool_t hop_initialize();
@@ -214,10 +272,6 @@ namespace hop {
 
 #endif // HOP_CPP
 
-#define HOP_VERSION 0.91f
-#define HOP_ZONE_MAX 255
-#define HOP_ZONE_DEFAULT 0
-
 /************************************************************/
 /*          EVERYTHING AFTER THIS IS IMPL DETAILS           */
 /************************************************************/
@@ -253,39 +307,18 @@ namespace hop {
                        |_||_|\___/|_|
 */
 
-/************************************************************/
-/*                   VIEWER DECLARATIONS                    */
-/************************************************************/
 #if defined(__cplusplus) && !defined(HOP_CPP)
 extern "C"
 {
 #endif
 
+/************************************************************/
+/*                   VIEWER DECLARATIONS                    */
+/************************************************************/
 #if defined( HOP_VIEWER ) || defined( HOP_IMPLEMENTATION )
 
-typedef enum hop_msg_type
-{
-   HOP_PROFILER_TRACE,
-   HOP_PROFILER_STRING_DATA,
-   HOP_PROFILER_WAIT_LOCK,
-   HOP_PROFILER_UNLOCK_EVENT,
-   HOP_PROFILER_HEARTBEAT,
-   HOP_PROFILER_CORE_EVENT,
-   HOP_INVALID_MESSAGE
-} hop_msg_type;
-
-typedef struct hop_msg_info
-{
-   hop_msg_type type;
-   // Thread id from which the msg was sent
-   uint32_t threadIndex;
-   uint64_t threadId;
-   hop_timestamp_t timeStamp;
-   hop_str_ptr_t threadName;
-   uint32_t count;
-} hop_msg_info;
-
 #include <string.h> // size_t, memcpy
+
 struct hop_shared_memory* hop_create_shared_memory(
     int pid,
     uint64_t requestedSize,
@@ -412,38 +445,6 @@ int HOP_GET_PID() { return getpid(); }
 /************************************************************/
 /*                Internal Declarations                     */
 /************************************************************/
-
-typedef struct hop_traces
-{
-   uint32_t count;
-   uint32_t maxSize;
-   hop_timestamp_t *starts, *ends;  // Timestamp for start/end of this trace
-   hop_str_ptr_t* fileNameIds;      // Index into string array for the file name
-   hop_str_ptr_t* fctNameIds;       // Index into string array for the function name
-   hop_linenb_t* lineNumbers;       // Line at which the trace was inserted
-   hop_depth_t* depths;             // The depth in the callstack of this trace
-   hop_zone_t* zones;               // Zone to which this trace belongs
-} hop_traces;
-
-typedef struct hop_lock_wait_event
-{
-   hop_mutex_t mutexAddress;
-   hop_timestamp_t start, end;
-   hop_depth_t depth;
-   uint16_t padding;
-} hop_lock_wait_event;
-
-typedef struct hop_unlock_event
-{
-   hop_mutex_t mutexAddress;
-   hop_timestamp_t time;
-} hop_unlock_event;
-
-typedef struct hop_core_event
-{
-   hop_timestamp_t start, end;
-   hop_core_t core;
-} hop_core_event;
 
 typedef enum hop_shared_memory_state_bits
 {
@@ -589,7 +590,7 @@ typedef struct hop_shared_memory
    hop_bool_t isConsumer;
 } hop_shared_memory;
 
-typedef struct hop_traces_t
+typedef struct hop_traces_t_t
 {
    uint32_t count;
    uint32_t maxSize;
@@ -599,12 +600,12 @@ typedef struct hop_traces_t
    hop_linenb_t* lineNumbers;       // Line at which the trace was inserted
    hop_depth_t* depths;             // The depth in the callstack of this trace
    hop_zone_t* zones;               // Zone to which this trace belongs
-} hop_traces_t;
+} hop_traces_t_t;
 
 typedef union hop_event {
-   hop_lock_wait_event lock_wait;
-   hop_unlock_event unlock;
-   hop_core_event core;
+   hop_lock_wait_event_t lock_wait;
+   hop_unlock_event_t unlock;
+   hop_core_event_t core;
 } hop_event;
 
 typedef struct hop_event_array_t
@@ -620,7 +621,7 @@ typedef struct hop_event_array_t
 typedef struct local_context_t
 {
    // Local client data
-   hop_traces_t traces;
+   hop_traces_t_t traces;
    uint32_t openTraceIdx;  // Index of the last opened trace
 
    hop_event_array_t lockWaits;
@@ -676,7 +677,7 @@ static hop_str_ptr_t add_dynamic_string_to_db( local_context_t* ctxt, const char
 static hop_str_ptr_t add_string_to_db( local_context_t* ctxt, const char* strId );
 static hop_bool_t should_send_heartbeat( hop_shared_memory* mem, hop_timestamp_t curTimestamp );
 static void flush_to_consumer(local_context_t* ctxt);
-static void alloc_traces( hop_traces_t* t, unsigned size );
+static void alloc_traces( hop_traces_t_t* t, unsigned size );
 static void push_event( hop_event_array_t* array, const hop_event* ev );
 static void enter_internal(
     hop_timestamp_t ts,
@@ -835,6 +836,11 @@ float hop_client_tsc_frequency( const hop_shared_memory* mem )
       freq = mem->ipcSegment->clientTSCFreqMhz;
    }
    return freq;
+}
+
+int hop_client_pid( const struct hop_shared_memory* mem )
+{
+   return mem->pid;
 }
 
 static hop_timestamp_t hop_rdtscp( uint32_t* aux )
@@ -1065,7 +1071,7 @@ static uint64_t align_on_uint64( uint64_t val, uint64_t alignment )
    return ( ( val + alignment - 1 ) & ~( alignment - 1 ) );
 }
 
-static void alloc_traces( hop_traces_t* t, unsigned size )
+static void alloc_traces( hop_traces_t_t* t, unsigned size )
 {
    t->maxSize     = size;
    t->starts      = (hop_timestamp_t*)HOP_REALLOC( t->starts, size * sizeof( hop_timestamp_t ) );
@@ -1077,7 +1083,7 @@ static void alloc_traces( hop_traces_t* t, unsigned size )
    t->zones       = (hop_zone_t*)HOP_REALLOC( t->zones, size * sizeof( hop_zone_t ) );
 }
 
-static void free_traces( hop_traces_t* t )
+static void free_traces( hop_traces_t_t* t )
 {
    free( t->starts );
    free( t->ends );
@@ -1086,17 +1092,17 @@ static void free_traces( hop_traces_t* t )
    free( t->fileNameIds );
    free( t->lineNumbers );
    free( t->zones );
-   memset( t, 0, sizeof( hop_traces_t ) );
+   memset( t, 0, sizeof( hop_traces_t_t ) );
 }
 
-static size_t traces_size( const hop_traces_t* t )
+static size_t traces_size( const hop_traces_t_t* t )
 {
    const size_t sliceSize = sizeof( hop_timestamp_t ) * 2 + +sizeof( hop_depth_t ) + sizeof( hop_str_ptr_t ) * 2 +
                             sizeof( hop_linenb_t ) + sizeof( hop_zone_t );
    return sliceSize * t->count;
 }
 
-static void copy_traces_to( const hop_traces_t* t, void* outBuffer )
+static void copy_traces_to( const hop_traces_t_t* t, void* outBuffer )
 {
    const uint32_t count = t->count;
 
@@ -1215,7 +1221,7 @@ static hop_bool_t create_local_context( local_context_t* ctxt )
 static void destroy_local_context( local_context_t* ctxt )
 {
    free_traces( &ctxt->traces );
-   free_event_arrau( &ctxt->lockWaits );
+   free_event_array( &ctxt->lockWaits );
    free_event_array( &ctxt->unlocks );
    HOP_FREE( ctxt->stringData );
 }
@@ -1481,7 +1487,7 @@ static hop_bool_t send_string_data( local_context_t* ctxt, hop_timestamp_t timeS
 
    HOP_ASSERT( ctxt->stringDataSize >= ctxt->sentStringDataSize );
    const uint32_t stringToSendSize = ctxt->stringDataSize - ctxt->sentStringDataSize;
-   const size_t msgSize            = sizeof( hop_msg_info ) + stringToSendSize;
+   const size_t msgSize            = sizeof( hop_msg_info_t ) + stringToSendSize;
 
    ringbuf_t* ringbuf = &g_sharedMemory->ipcSegment->ringbuf;
    hop_byte_t* bufferPtr = acquire_shared_chunk( ctxt, ringbuf, msgSize );
@@ -1496,8 +1502,8 @@ static hop_bool_t send_string_data( local_context_t* ctxt, hop_timestamp_t timeS
 
    // Fill the buffer with the header followed by the string data
    {
-      hop_msg_info* msgInfo = (hop_msg_info*)bufferPtr;
-      char* stringData      = (char*)( bufferPtr + sizeof( hop_msg_info ) );
+      hop_msg_info_t* msgInfo = (hop_msg_info_t*)bufferPtr;
+      char* stringData      = (char*)( bufferPtr + sizeof( hop_msg_info_t ) );
 
       msgInfo->type            = HOP_PROFILER_STRING_DATA;
       msgInfo->threadId        = ctxt->threadId;
@@ -1522,7 +1528,7 @@ static hop_bool_t send_string_data( local_context_t* ctxt, hop_timestamp_t timeS
 static hop_bool_t send_traces( local_context_t* ctxt, hop_timestamp_t timeStamp )
 {
    // Get size of profiling traces message
-   const size_t msgSize = sizeof( hop_msg_info ) + traces_size( &ctxt->traces );
+   const size_t msgSize = sizeof( hop_msg_info_t ) + traces_size( &ctxt->traces );
 
    ringbuf_t* ringbuf = &g_sharedMemory->ipcSegment->ringbuf;
    hop_byte_t* bufferPtr = acquire_shared_chunk( ctxt, ringbuf, msgSize );
@@ -1538,7 +1544,7 @@ static hop_bool_t send_traces( local_context_t* ctxt, hop_timestamp_t timeStamp 
 
    // Fill the buffer with the header followed by the trace data
    {
-      hop_msg_info* msgInfo    = (hop_msg_info*)bufferPtr;
+      hop_msg_info_t* msgInfo    = (hop_msg_info_t*)bufferPtr;
 
       msgInfo->type            = HOP_PROFILER_TRACE;
       msgInfo->threadId        = ctxt->threadId;
@@ -1548,7 +1554,7 @@ static hop_bool_t send_traces( local_context_t* ctxt, hop_timestamp_t timeStamp 
       msgInfo->count           = ctxt->traces.count;
 
       // Copy trace information into buffer to send
-      void* outBuffer = (void*)( bufferPtr + sizeof( hop_msg_info ) );
+      void* outBuffer = (void*)( bufferPtr + sizeof( hop_msg_info_t ) );
       copy_traces_to( &ctxt->traces, outBuffer );
    }
 
@@ -1567,7 +1573,7 @@ static hop_bool_t send_events(
 {
    if( array->count == 0 ) return hop_false;
 
-   const size_t msgSize = sizeof( hop_msg_info ) + array->count * sizeof( hop_event );
+   const size_t msgSize = sizeof( hop_msg_info_t ) + array->count * sizeof( hop_event );
 
    ringbuf_t* ringbuf = &g_sharedMemory->ipcSegment->ringbuf;
    hop_byte_t* bufferPtr = acquire_shared_chunk( ctxt, ringbuf, msgSize );
@@ -1581,14 +1587,14 @@ static hop_bool_t send_events(
       return hop_false;
    }
 
-   hop_msg_info* info = (hop_msg_info*)bufferPtr;
+   hop_msg_info_t* info = (hop_msg_info_t*)bufferPtr;
    info->type         = msgType;
    info->threadId     = ctxt->threadId;
    info->threadName   = ctxt->threadName;
    info->threadIndex  = ctxt->threadIndex;
    info->timeStamp    = timeStamp;
    info->count        = array->count;
-   bufferPtr += sizeof( hop_msg_info );
+   bufferPtr += sizeof( hop_msg_info_t );
    memcpy( bufferPtr, array->events, array->count * sizeof( *array->events ) );
 
    return hop_true;
@@ -1600,7 +1606,7 @@ static hop_bool_t send_heartbeat( local_context_t* ctxt, hop_timestamp_t timeSta
        &g_sharedMemory->ipcSegment->lastHeartbeatTimeStamp, timeStamp, hop_memory_order_seq_cst );
 
    ringbuf_t* ringbuf = &g_sharedMemory->ipcSegment->ringbuf;
-   hop_byte_t* bufferPtr = acquire_shared_chunk( ctxt, ringbuf, sizeof( hop_msg_info ) );
+   hop_byte_t* bufferPtr = acquire_shared_chunk( ctxt, ringbuf, sizeof( hop_msg_info_t ) );
    if( !bufferPtr )
    {
       fprintf(
@@ -1612,13 +1618,13 @@ static hop_bool_t send_heartbeat( local_context_t* ctxt, hop_timestamp_t timeSta
 
    // Fill the buffer with the lock message
    {
-      hop_msg_info* msgInfo = (hop_msg_info*)bufferPtr;
+      hop_msg_info_t* msgInfo = (hop_msg_info_t*)bufferPtr;
       msgInfo->type         = HOP_PROFILER_HEARTBEAT;
       msgInfo->threadId     = ctxt->threadId;
       msgInfo->threadName   = ctxt->threadName;
       msgInfo->threadIndex  = ctxt->threadIndex;
       msgInfo->timeStamp    = timeStamp;
-      bufferPtr += sizeof( hop_msg_info );
+      bufferPtr += sizeof( hop_msg_info_t );
    }
 
    ringbuf_produce( ringbuf, ctxt->ringbufWorker );
