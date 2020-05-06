@@ -300,6 +300,7 @@ int main( int argc, char* argv[] )
 
    hop::setupSignalHandlers( terminateCallback );
 
+   HOP_INTIALIZE();
    HOP_SET_THREAD_NAME( "Main" );
 
    std::unique_ptr<hop::Profiler> profiler;
@@ -350,6 +351,7 @@ int main( int argc, char* argv[] )
       hop::terminateProcess( childProcId );
    }
 
+   HOP_SHUTDOWN();
    hop::block_allocator::terminate();
 
    // The interpreter thread will leak since we cannot reliably have a std::getline that is either

@@ -33,24 +33,24 @@ static T merge_consecutive( T first, T last, BinaryPredicate pred, MergeFct merg
    return last - mergeCount;
 }
 
-static int mergeAndRemoveDuplicates( hop_core_event_t* coreEvents, uint32_t count, float cpuGHz )
+static int mergeAndRemoveDuplicates( hop_event* coreEvents, uint32_t count, float cpuGHz )
 {
    // Merge events that are less than 10 micro apart
    const uint64_t minCycles = hop::nanosToCycles( 10000, cpuGHz );
-   auto canMergeCore = [minCycles]( const hop_core_event_t& lhs, const hop_core_event_t& rhs ) {
-      return lhs.core == rhs.core &&
-             ( ( rhs.start < lhs.end || ( rhs.start - lhs.end ) < minCycles ) );
+   auto canMergeCore        = [minCycles]( const hop_event& lhs, const hop_event& rhs ) {
+      return lhs.core.core == rhs.core.core &&
+             ( ( rhs.core.start < lhs.core.end || ( rhs.core.start - lhs.core.end ) < minCycles ) );
    };
 
-   auto sameCore = []( const hop_core_event_t& lhs, const hop_core_event_t& rhs ) {
-      return lhs.core == rhs.core;
+   auto sameCore = []( const hop_event& lhs, const hop_event& rhs ) {
+      return lhs.core.core == rhs.core.core;
    };
 
    auto mergedEnd = merge_consecutive(
        coreEvents,
        coreEvents + count,
        canMergeCore,
-       []( hop_core_event_t& lhs, const hop_core_event_t& rhs ) { lhs.start = rhs.start; } );
+       []( hop_event& lhs, const hop_event& rhs ) { lhs.core.start = rhs.core.start; } );
    auto newEnd = std::unique( coreEvents, mergedEnd, sameCore );
    return std::distance( coreEvents, newEnd );
 }
@@ -91,20 +91,23 @@ bool Server::start( int inPid, const char* name )
       while ( true )
       {
          // Try to get the shared memory
-         while( connectionState != HOP_CONNECTED && tryConnect( inPid, connectionState ) )
+         if( !_sharedMem )
          {
-            // Sleep few ms before retrying. Increase timeout time each try
-            std::this_thread::sleep_for( std::chrono::milliseconds( reconnectTimeoutMs ) );
-            static constexpr uint32_t MAX_RECONNECT_TIMEOUT_MS = 500;
-            reconnectTimeoutMs = std::min( reconnectTimeoutMs + 10, MAX_RECONNECT_TIMEOUT_MS );
+            while( connectionState != HOP_CONNECTED && tryConnect( inPid, connectionState ) )
+            {
+               // Sleep few ms before retrying. Increase timeout time each try
+               std::this_thread::sleep_for( std::chrono::milliseconds( reconnectTimeoutMs ) );
+               static constexpr uint32_t MAX_RECONNECT_TIMEOUT_MS = 500;
+               reconnectTimeoutMs = std::min( reconnectTimeoutMs + 10, MAX_RECONNECT_TIMEOUT_MS );
+            }
+
+            if( connectionState != HOP_CONNECTED )
+               break;  // No connection was found and we are request to stop trying
+
+            printf( "Connection to shared data successful.\n" );
          }
 
-         if( connectionState != HOP_CONNECTED )
-            break;  // No connection was found and we are request to stop trying
-
-         printf( "Connection to shared data successful.\n" );
-
-         HOP_ENTER_FUNC( 0 );
+         HOP_ENTER( "Main Server Loop", 0 );
 
          // Check if its been a while since we have been signaleds
          const auto newConnectionState =
@@ -373,22 +376,23 @@ size_t Server::handleNewMessage( uint8_t* data, size_t maxSize, hop_timestamp_t 
        }
       case HOP_PROFILER_WAIT_LOCK:
       {
-         const hop_lock_wait_event_t* lws = (const hop_lock_wait_event_t*)bufPtr;
-         const uint32_t lwCount = msgInfo->count;
+         const size_t eventCount = msgInfo->count;
+         hop_event* events = (hop_event*)bufPtr;
+
+         bufPtr += eventCount * sizeof( hop_event );
+         assert( ( size_t )( bufPtr - data ) <= maxSize );
 
          LockWaitData lockwaitData;
          hop_depth_t maxDepth = 0;
-         for ( uint32_t i = 0; i < lwCount; ++i )
+         for ( uint32_t i = 0; i < eventCount; ++i )
          {
-            lockwaitData.entries.ends.push_back( lws[i].end );
-            lockwaitData.entries.starts.push_back( lws[i].start );
-            lockwaitData.entries.depths.push_back( lws[i].depth );
-            lockwaitData.mutexAddrs.push_back( lws[i].mutexAddress );
-            maxDepth = std::max( maxDepth, lws[i].depth );
+            lockwaitData.entries.ends.push_back( events[i].lock_wait.end );
+            lockwaitData.entries.starts.push_back( events[i].lock_wait.start );
+            lockwaitData.entries.depths.push_back( events[i].lock_wait.depth );
+            lockwaitData.mutexAddrs.push_back( events[i].lock_wait.mutexAddress );
+            maxDepth = std::max( maxDepth, events[i].lock_wait.depth );
          }
          lockwaitData.entries.maxDepth = maxDepth;
-
-         bufPtr += ( lwCount * sizeof( hop_lock_wait_event_t ) );
 
          // The ends time should already be sorted
          assert_is_sorted( lockwaitData.entries.ends.begin(), lockwaitData.entries.ends.end() );
@@ -402,50 +406,52 @@ size_t Server::handleNewMessage( uint8_t* data, size_t maxSize, hop_timestamp_t 
       case HOP_PROFILER_UNLOCK_EVENT:
       {
          const size_t eventCount = msgInfo->count;
-         hop_unlock_event_t* eventPtr = (hop_unlock_event_t*)bufPtr;
+         hop_event* events = (hop_event*)bufPtr;
 
-         bufPtr += eventCount * sizeof( hop_unlock_event_t );
+         bufPtr += eventCount * sizeof( hop_event );
          assert( ( size_t )( bufPtr - data ) <= maxSize );
 
          std::sort(
-             eventPtr, eventPtr + eventCount, []( const hop_unlock_event_t& lhs, const hop_unlock_event_t& rhs ) {
-                return lhs.time < rhs.time;
+             events, events + eventCount, []( const hop_event& lhs, const hop_event& rhs ) {
+                return lhs.unlock.time < rhs.unlock.time;
              } );
 
          // TODO: Could lock later when we received all the messages
          std::lock_guard<hop::Mutex> guard( _sharedPendingDataMutex );
          auto& unlocks = _sharedPendingData.unlockEventsPerThread[threadIndex];
-         unlocks.insert( unlocks.end(), eventPtr, eventPtr + eventCount );
+         for( size_t i = 0; i < eventCount; ++i )
+         {
+            unlocks.emplace_back( events[i].unlock );
+         }
 
-         return ( size_t )( bufPtr - data );
-      }
-      case HOP_PROFILER_HEARTBEAT:
-      {
          return ( size_t )( bufPtr - data );
       }
       case HOP_PROFILER_CORE_EVENT:
       {
          const size_t eventCount = msgInfo->count;
-         hop_core_event_t* coreEventsPtr = (hop_core_event_t*)bufPtr;
+         hop_event* events = (hop_event*)bufPtr;
 
-         // Must be done before removing duplicates
-         bufPtr += eventCount * sizeof( hop_core_event_t );
+         bufPtr += eventCount * sizeof( hop_event );
          assert( ( size_t )( bufPtr - data ) <= maxSize );
 
-         const size_t newCount = mergeAndRemoveDuplicates( coreEventsPtr, eventCount, cpuFreqGHz() );
+         const size_t newCount = mergeAndRemoveDuplicates( events, eventCount, cpuFreqGHz() );
 
          CoreEventData coresData;
          for ( uint32_t i = 0; i < newCount; ++i )
          {
-            coresData.entries.ends.push_back( coreEventsPtr[i].end );
-            coresData.entries.starts.push_back( coreEventsPtr[i].start );
-            coresData.cores.push_back( coreEventsPtr[i].core );
+            coresData.entries.ends.push_back( events[i].core.end );
+            coresData.entries.starts.push_back( events[i].core.start );
+            coresData.cores.push_back( events[i].core.core );
          }
          coresData.entries.depths.append( newCount, 0 );
 
          // TODO: Could lock later when we received all the messages
          std::lock_guard<hop::Mutex> guard( _sharedPendingDataMutex );
          _sharedPendingData.coreEventsPerThread[threadIndex].append( coresData );
+         return ( size_t )( bufPtr - data );
+      }
+      case HOP_PROFILER_HEARTBEAT:
+      {
          return ( size_t )( bufPtr - data );
       }
       default:

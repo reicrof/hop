@@ -56,8 +56,10 @@ static void rehash( hop_hash_set_t hs )
    const void** prev_table      = hs->table;
    const uint32_t prev_capacity = hs->capacity;
 
-   hs->capacity = prev_capacity * 2;
-   hs->table    = (const void**)calloc( hs->capacity, sizeof( const void* ) );
+   hs->capacity             = prev_capacity * 2;
+   const uint32_t tableSize = hs->capacity * sizeof( const void* );
+   hs->table                = (const void**)malloc( tableSize );
+   memset( hs->table, 0, tableSize );
 
    for( uint32_t i = 0; i < prev_capacity; ++i )
    {
@@ -69,15 +71,19 @@ static void rehash( hop_hash_set_t hs )
 
 hop_hash_set_t hop_hash_set_create()
 {
-   hop_hash_set* hs = (hop_hash_set*)calloc( 1, sizeof( hop_hash_set ) );
+   hop_hash_set* hs = (hop_hash_set*)malloc( sizeof( hop_hash_set ) );
    if( !hs ) return NULL;
+   memset( hs, 0, sizeof( hop_hash_set ) );
 
-   hs->table = (const void**)calloc( DEFAULT_TABLE_SIZE, sizeof( const void* ) );
+   const uint32_t tableSizeBytes = DEFAULT_TABLE_SIZE * sizeof( const void* );
+   hs->table                     = (const void**)malloc( tableSizeBytes );
    if( !hs->table )
    {
       free( hs );
       return NULL;
    }
+
+   memset( hs->table, 0, tableSizeBytes );
 
    hs->capacity = DEFAULT_TABLE_SIZE;
    return hs;

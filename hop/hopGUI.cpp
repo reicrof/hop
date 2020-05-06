@@ -292,6 +292,7 @@ int main( int argc, char* argv[] )
 
    createIcon( window );
 
+   HOP_INTIALIZE();
    HOP_SET_THREAD_NAME( "Main" );
 
    // Start the viewer and all its profilers
@@ -310,6 +311,7 @@ int main( int argc, char* argv[] )
    renderer::terminate();
    hop::block_allocator::terminate();
 
+   HOP_SHUTDOWN();
    SDL_DestroyWindow( window );
    SDL_Quit();
 }

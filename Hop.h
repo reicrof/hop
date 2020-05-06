@@ -225,6 +225,12 @@ typedef struct hop_core_event_t
    hop_core_t core;
 } hop_core_event_t;
 
+typedef union hop_event {
+   hop_lock_wait_event_t lock_wait;
+   hop_unlock_event_t unlock;
+   hop_core_event_t core;
+} hop_event;
+
 // Hop actual function decl
 HOP_EXPORT hop_bool_t hop_initialize();
 HOP_EXPORT void hop_shutdown();
@@ -602,12 +608,6 @@ typedef struct hop_traces_t_t
    hop_zone_t* zones;               // Zone to which this trace belongs
 } hop_traces_t_t;
 
-typedef union hop_event {
-   hop_lock_wait_event_t lock_wait;
-   hop_unlock_event_t unlock;
-   hop_core_event_t core;
-} hop_event;
-
 typedef struct hop_event_array_t
 {
    union hop_event* events;
@@ -900,6 +900,7 @@ hop_shared_memory* hop_create_shared_memory(
     hop_connection_state* state )
 {
    hop_shared_memory* sharedMem = (hop_shared_memory*)HOP_MALLOC( sizeof( hop_shared_memory ) );
+   memset( sharedMem, 0, sizeof( hop_shared_memory ) );
 
    char pidStr[16];
    snprintf( pidStr, sizeof( pidStr ), "%d", pid );
@@ -1009,7 +1010,7 @@ hop_shared_memory* hop_create_shared_memory(
 
 void hop_destroy_shared_memory( hop_shared_memory* sharedMem )
 {
-   if( sharedMem )
+   if( sharedMem && sharedMem->ipcSegment )
    {
       if( sharedMem->isConsumer )
       {
@@ -1020,18 +1021,14 @@ void hop_destroy_shared_memory( hop_shared_memory* sharedMem )
       {
          set_connected_producer( sharedMem, hop_false );
       }
-      
-      if( sharedMem->ipcSegment )
+
+      uint32_t state =
+          hop_atomic_load_explicit( &sharedMem->ipcSegment->state, hop_memory_order_seq_cst );
+      if( ( state & ( HOP_CONNECTED_PRODUCER | HOP_CONNECTED_CONSUMER ) ) == 0 )
       {
-         uint32_t state = hop_atomic_load_explicit( &sharedMem->ipcSegment->state, hop_memory_order_seq_cst );
-         if( ( state & ( HOP_CONNECTED_PRODUCER | HOP_CONNECTED_CONSUMER ) ) == 0 )
-         {
-            printf( "HOP - Cleaning up shared memory...\n" );
-            close_ipc_memory(
-                sharedMem->sharedMemPath,
-                sharedMem->sharedMemHandle,
-                sharedMem->ipcSegment );
-         }
+         printf( "HOP - Cleaning up shared memory...\n" );
+         close_ipc_memory(
+             sharedMem->sharedMemPath, sharedMem->sharedMemHandle, sharedMem->ipcSegment );
       }
    }
    HOP_FREE( sharedMem );
@@ -1901,11 +1898,13 @@ static int insert_internal( hop_hash_set_t hs, const void* value )
 
 static void rehash( hop_hash_set_t hs )
 {
-   const void** prev_table            = hs->table;
+   const void** prev_table      = hs->table;
    const uint32_t prev_capacity = hs->capacity;
 
-   hs->capacity = prev_capacity * 2;
-   hs->table    = (const void**)calloc( hs->capacity, sizeof( const void* ) );
+   hs->capacity             = prev_capacity * 2;
+   const uint32_t tableSize = hs->capacity * sizeof( const void* );
+   hs->table                = (const void**)HOP_MALLOC( tableSize );
+   memset( hs->table, 0, tableSize );
 
    for( uint32_t i = 0; i < prev_capacity; ++i )
    {
@@ -1917,15 +1916,19 @@ static void rehash( hop_hash_set_t hs )
 
 hop_hash_set_t hop_hash_set_create()
 {
-   hop_hash_set* hs = (hop_hash_set*)calloc( 1, sizeof( hop_hash_set ) );
+   hop_hash_set* hs = (hop_hash_set*)HOP_MALLOC( sizeof( hop_hash_set ) );
    if( !hs ) return NULL;
+   memset( hs, 0, sizeof( hop_hash_set ) );
 
-   hs->table = (const void**)calloc( DEFAULT_TABLE_SIZE, sizeof( const void* ) );
+   const uint32_t tableSizeBytes = DEFAULT_TABLE_SIZE * sizeof( const void* );
+   hs->table                     = (const void**)HOP_MALLOC( tableSizeBytes );
    if( !hs->table )
    {
       free( hs );
       return NULL;
    }
+
+   memset( hs->table, 0, tableSizeBytes );
 
    hs->capacity = DEFAULT_TABLE_SIZE;
    return hs;

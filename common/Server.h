@@ -56,7 +56,7 @@ class Server
    void clearPendingMessages();
 
    std::thread _thread;
-   hop_shared_memory* _sharedMem;
+   hop_shared_memory* _sharedMem{nullptr};
    StringDb _stringDb;
 
    mutable float _cpuFreqGHz{0};
