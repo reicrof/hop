@@ -151,7 +151,7 @@ bool Server::start( int inPid, const char* name )
          size_t bytesToRead = 0;
          if( hop_byte_t* data = hop_consume_shared_memory( _sharedMem, &bytesToRead ) )
          {
-            HOP_PROF( "Server - Handling new messages" );
+            HOP_ENTER( "Server - Handling new messages", 0 );
             pollFailedCount = 0;
             const hop_timestamp_t minTimestamp = hop_reset_timestamp( _sharedMem );
             size_t bytesRead = 0;
@@ -161,12 +161,13 @@ bool Server::start( int inPid, const char* name )
                    handleNewMessage( data + bytesRead, bytesToRead - bytesRead, minTimestamp );
             }
             hop_release_shared_memory( _sharedMem, bytesToRead );
+            HOP_LEAVE();
          }
          else
          {
+            HOP_ENTER( "Nothing sent...", 0 );
             // Nothing was sent
             ++pollFailedCount;
-            HOP_PROF( "Nothing send..." );
 
             // If we have a connected producer and we timed out, it simply means the app is either
             // not very productive or is being debuged. If we do not have a producer, it means the
@@ -192,13 +193,11 @@ bool Server::start( int inPid, const char* name )
 
 bool Server::tryConnect( int32_t pid, hop_connection_state& newState )
 {
-   HOP_PROF_FUNC();
-
    const hop::ProcessInfo procInfo =
        pid != -1 ? hop::getProcessInfoFromPID( pid )
                    : hop::getProcessInfoFromProcessName( _state.processName.c_str() );
    _sharedMem = hop_create_shared_memory(
-       procInfo.pid, 0 /*will be define in shared metadata*/, true, newState );
+       procInfo.pid, 0 /*will be define in shared metadata*/, true, &newState );
 
    if( newState != HOP_CONNECTED )
    {
@@ -259,15 +258,16 @@ void Server::setRecording( bool recording )
 {
    std::lock_guard<hop::Mutex> guard( _stateMutex );
    _state.recording = recording;
-   hop_set_listening_consumer( recording );
+   hop_set_listening_consumer( _sharedMem, recording );
 }
 
 void Server::getPendingData( PendingData& data )
 {
-   HOP_PROF_FUNC();
+   HOP_ENTER_FUNC( 0 );
    std::lock_guard<hop::Mutex> guard( _sharedPendingDataMutex );
    _sharedPendingData.swap( data );
    _sharedPendingData.clear();
+   HOP_LEAVE();
 }
 
 bool Server::addUniqueThreadName( uint32_t threadIndex, hop_str_ptr_t name )
@@ -289,12 +289,12 @@ bool Server::addUniqueThreadName( uint32_t threadIndex, hop_str_ptr_t name )
 
 size_t Server::handleNewMessage( uint8_t* data, size_t maxSize, hop_timestamp_t minTimestamp )
 {
-   uint8_t* bufPtr = data;
-   const MsgInfo* msgInfo = (const MsgInfo*)bufPtr;
-   const MsgType msgType = msgInfo->type;
-   const uint32_t threadIndex = msgInfo->threadIndex;
+   uint8_t* bufPtr             = data;
+   const hop_msg_info* msgInfo = (const hop_msg_info*)bufPtr;
+   const hop_msg_type msgType  = msgInfo->type;
+   const uint32_t threadIndex  = msgInfo->threadIndex;
 
-   bufPtr += sizeof( MsgInfo );
+   bufPtr += sizeof( hop_msg_info );
    assert( ( size_t )( bufPtr - data ) <= maxSize );
    (void)maxSize;  // Removed unused warning
 
@@ -310,7 +310,7 @@ size_t Server::handleNewMessage( uint8_t* data, size_t maxSize, hop_timestamp_t 
 
     switch ( msgType )
     {
-       case MsgType::PROFILER_STRING_DATA:
+       case HOP_PROFILER_STRING_DATA:
        {
           // Copy string and add it to database
           const size_t strSize = msgInfo->stringData.size;
@@ -328,7 +328,7 @@ size_t Server::handleNewMessage( uint8_t* data, size_t maxSize, hop_timestamp_t 
           }
           return ( size_t )( bufPtr - data );
        }
-       case MsgType::PROFILER_TRACE:
+       case HOP_PROFILER_TRACE:
        {
           const size_t tracesCount = msgInfo->traces.count;
           if ( tracesCount > 0 )
@@ -375,7 +375,7 @@ size_t Server::handleNewMessage( uint8_t* data, size_t maxSize, hop_timestamp_t 
           }
           return ( size_t )( bufPtr - data );
        }
-      case MsgType::PROFILER_WAIT_LOCK:
+      case HOP_PROFILER_WAIT_LOCK:
       {
          const LockWait* lws = (const LockWait*)bufPtr;
          const uint32_t lwCount = msgInfo->lockwaits.count;
@@ -403,7 +403,7 @@ size_t Server::handleNewMessage( uint8_t* data, size_t maxSize, hop_timestamp_t 
 
          return ( size_t )( bufPtr - data );
       }
-      case MsgType::PROFILER_UNLOCK_EVENT:
+      case HOP_PROFILER_UNLOCK_EVENT:
       {
          const size_t eventCount = msgInfo->unlockEvents.count;
          UnlockEvent* eventPtr = (UnlockEvent*)bufPtr;
@@ -423,11 +423,11 @@ size_t Server::handleNewMessage( uint8_t* data, size_t maxSize, hop_timestamp_t 
 
          return ( size_t )( bufPtr - data );
       }
-      case MsgType::PROFILER_HEARTBEAT:
+      case HOP_PROFILER_HEARTBEAT:
       {
          return ( size_t )( bufPtr - data );
       }
-      case MsgType::PROFILER_CORE_EVENT:
+      case HOP_PROFILER_CORE_EVENT:
       {
          const size_t eventCount = msgInfo->coreEvents.count;
          CoreEvent* coreEventsPtr = (CoreEvent*)bufPtr;
@@ -461,7 +461,7 @@ size_t Server::handleNewMessage( uint8_t* data, size_t maxSize, hop_timestamp_t 
 void Server::clearPendingMessages()
 {
    size_t size = 0;
-   while( hop_byte_t* data = hop_consume_shared_memory( _sharedMem, &size ) )
+   while( hop_consume_shared_memory( _sharedMem, &size ) )
    {
       hop_release_shared_memory( _sharedMem, size );
    }
@@ -501,7 +501,7 @@ void Server::stop()
 
 void Server::PendingData::clear()
 {
-   HOP_PROF_FUNC();
+   HOP_ENTER_FUNC( 0 );
 
    stringData.clear();
    for ( auto& traces : tracesPerThread )
@@ -525,6 +525,8 @@ void Server::PendingData::clear()
    }
 
    threadNames.clear();
+
+   HOP_LEAVE();
 }
 
 void Server::PendingData::swap( PendingData& rhs )

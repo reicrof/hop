@@ -262,6 +262,29 @@ extern "C"
 #endif
 
 #if defined( HOP_VIEWER ) || defined( HOP_IMPLEMENTATION )
+
+typedef enum hop_msg_type
+{
+   HOP_PROFILER_TRACE,
+   HOP_PROFILER_STRING_DATA,
+   HOP_PROFILER_WAIT_LOCK,
+   HOP_PROFILER_UNLOCK_EVENT,
+   HOP_PROFILER_HEARTBEAT,
+   HOP_PROFILER_CORE_EVENT,
+   HOP_INVALID_MESSAGE
+} hop_msg_type;
+
+typedef struct hop_msg_info
+{
+   hop_msg_type type;
+   // Thread id from which the msg was sent
+   uint32_t threadIndex;
+   uint64_t threadId;
+   hop_timestamp_t timeStamp;
+   hop_str_ptr_t threadName;
+   uint32_t count;
+} hop_msg_info;
+
 #include <string.h> // size_t, memcpy
 struct hop_shared_memory* hop_create_shared_memory(
     int pid,
@@ -389,28 +412,6 @@ int HOP_GET_PID() { return getpid(); }
 /************************************************************/
 /*                Internal Declarations                     */
 /************************************************************/
-
-typedef enum hop_msg_type
-{
-   HOP_PROFILER_TRACE,
-   HOP_PROFILER_STRING_DATA,
-   HOP_PROFILER_WAIT_LOCK,
-   HOP_PROFILER_UNLOCK_EVENT,
-   HOP_PROFILER_HEARTBEAT,
-   HOP_PROFILER_CORE_EVENT,
-   HOP_INVALID_MESSAGE
-} hop_msg_type;
-
-typedef struct hop_msg_info
-{
-   hop_msg_type type;
-   // Thread id from which the msg was sent
-   uint32_t threadIndex;
-   uint64_t threadId;
-   hop_timestamp_t timeStamp;
-   hop_str_ptr_t threadName;
-   uint32_t count;
-} hop_msg_info;
 
 typedef struct hop_traces
 {
@@ -662,7 +663,6 @@ static void* create_ipc_memory(
 static void close_ipc_memory( const HOP_CHAR* name, shm_handle handle, void* dataPtr );
 static hop_bool_t check_or_create_local_context( local_context_t* ctxt );
 static hop_bool_t local_context_valid( local_context_t* ctxt );
-static void destroy_shared_memory( hop_shared_memory* sharedMem );
 
 static void set_connected_producer( hop_shared_memory* mem, hop_bool_t );
 static hop_bool_t has_connected_consumer( hop_shared_memory* mem );
@@ -1137,6 +1137,11 @@ static void alloc_event_array( hop_event_array_t* array, uint32_t size )
    array->capacity = size;
 }
 
+static void free_event_array( hop_event_array_t* array )
+{
+   HOP_FREE( array->events );
+}
+
 static void push_event( hop_event_array_t* array, const hop_event* ev )
 {
    if( array->capacity == array->count )
@@ -1168,7 +1173,7 @@ static void reset_string_data( local_context_t* ctxt )
    }
 }
 
-static hop_bool_t local_context_create( local_context_t* ctxt )
+static hop_bool_t create_local_context( local_context_t* ctxt )
 {
    if( !g_sharedMemory )
    {
@@ -1205,6 +1210,14 @@ static hop_bool_t local_context_create( local_context_t* ctxt )
    reset_string_data( ctxt );
 
    return ctxt->ringbufWorker != NULL;
+}
+
+static void destroy_local_context( local_context_t* ctxt )
+{
+   free_traces( &ctxt->traces );
+   free_event_arrau( &ctxt->lockWaits );
+   free_event_array( &ctxt->unlocks );
+   HOP_FREE( ctxt->stringData );
 }
 
 static void reset_traces( local_context_t* ctxt )
@@ -1281,7 +1294,7 @@ static hop_str_ptr_t add_dynamic_string_to_db( local_context_t* ctxt, const char
 static hop_bool_t check_or_create_local_context( local_context_t* ctxt )
 {
    if( HOP_UNLIKELY( !local_context_valid( ctxt ) ) &&
-       HOP_UNLIKELY( !local_context_create( ctxt ) ) )
+       HOP_UNLIKELY( !create_local_context( ctxt ) ) )
    {
       return hop_false; // hop was not initialized properly before first trace
    }
@@ -1577,6 +1590,8 @@ static hop_bool_t send_events(
    info->count        = array->count;
    bufferPtr += sizeof( hop_msg_info );
    memcpy( bufferPtr, array->events, array->count * sizeof( *array->events ) );
+
+   return hop_true;
 }
 
 static hop_bool_t send_heartbeat( local_context_t* ctxt, hop_timestamp_t timeStamp )

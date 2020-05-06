@@ -97,30 +97,37 @@ void Profiler::fetchClientData()
 
    if ( _recording )
    {
-      HOP_PROF_SPLIT( "Fetching Str Data" );
-
+      HOP_ENTER( "Fetching Str Data", 0 );
       addStringData( _serverPendingData.stringData );
+      HOP_LEAVE();
 
-      HOP_PROF_SPLIT( "Fetching Traces" );
+      HOP_ENTER( "Fetching Traces", 0 );
       for( const auto& threadTraces : _serverPendingData.tracesPerThread )
       {
          addTraces( threadTraces.second, threadTraces.first );
       }
-      HOP_PROF_SPLIT( "Fetching Lock Waits" );
+      HOP_LEAVE();
+
+      HOP_ENTER( "Fetching Lock Waits", 0 );
       for( const auto& lockwaits : _serverPendingData.lockWaitsPerThread )
       {
          addLockWaits( lockwaits.second, lockwaits.first );
       }
-      HOP_PROF_SPLIT( "Fetching Unlock Events" );
+      HOP_LEAVE();
+
+      HOP_ENTER( "Fetching Unlock Events", 0 );
       for( const auto& unlockEvents : _serverPendingData.unlockEventsPerThread )
       {
          addUnlockEvents( unlockEvents.second, unlockEvents.first );
       }
-      HOP_PROF_SPLIT( "Fetching CoreEvents" );
+      HOP_LEAVE();
+
+      HOP_ENTER( "Fetching CoreEvents", 0 );
       for( const auto& coreEvents : _serverPendingData.coreEventsPerThread )
       {
          addCoreEvents( coreEvents.second, coreEvents.first );
       }
+      HOP_LEAVE();
    }
 
    // We need to get the thread name even when not recording as they are only sent once
