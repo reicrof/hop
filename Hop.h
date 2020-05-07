@@ -1437,8 +1437,8 @@ static void* open_ipc_memory(
 
    sharedMem =
        (hop_byte_t*)( mmap( NULL, fileStat.st_size, PROT_READ | PROT_WRITE, MAP_SHARED, *handle, 0 ) );
-   *state = sharedMem ? HOP_CONNECTED : HOP_UNKNOWN_CONNECTION_ERROR;
 #endif
+   *state = sharedMem ? HOP_CONNECTED : HOP_UNKNOWN_CONNECTION_ERROR;
    return sharedMem;
 }
 

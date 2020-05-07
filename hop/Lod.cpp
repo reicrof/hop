@@ -48,7 +48,7 @@ LodsArray computeLods( const Entries& entries, size_t idOffset )
 
    LodsArray resLods;
 
-   std::vector<ssize_t> lastTraceAtDepth( entries.maxDepth + 1, -1 );
+   std::vector<size_t> lastTraceAtDepth( entries.maxDepth + 1, hop::INVALID_IDX );
    int lodLvl = 0;
 
    // First LOD is usually never worth merging as they are too small
@@ -72,11 +72,11 @@ LodsArray computeLods( const Entries& entries, size_t idOffset )
       
       for ( const auto& l : *lastComputedLod )
       {
-         ssize_t lodedTraceIdx = -1;
+         size_t lodedTraceIdx = hop::INVALID_IDX;
          const hop_depth_t depth = l.depth;
          if( lastTraceAtDepth[depth] >= 0 )
          {
-            const ssize_t lastTraceAtDepthIndex = lastTraceAtDepth[depth];
+            const size_t lastTraceAtDepthIndex = lastTraceAtDepth[depth];
             auto& lastTrace = resLods[lodLvl][lastTraceAtDepthIndex];
             const hop_timeduration_t timeBetweenTrace = l.start - lastTrace.end;
             if( canBeLoded( lodLvl, timeBetweenTrace, delta( lastTrace ), delta(l) ) )
@@ -105,7 +105,7 @@ LodsArray computeLods( const Entries& entries, size_t idOffset )
          }
 
          // If it was not loded, insert it and keep index
-         if( lodedTraceIdx == -1 )
+         if( lodedTraceIdx == hop::INVALID_IDX )
          {
             // Save idx of the last entry at specific depth
             lastTraceAtDepth[depth] = resLods[lodLvl].size();

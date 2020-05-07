@@ -5,11 +5,10 @@
 #include "Deque.h"
 #include <vector>
 #include <utility>
-#include <limits>
 
 namespace hop
 {
-static constexpr size_t INVALID_IDX = std::numeric_limits<size_t>::max();
+static size_t INVALID_IDX = 0xFFFFFFFFFFFFFFFF;
 
 struct Entries
 {
