@@ -349,8 +349,9 @@ int hop_client_pid( const struct hop_shared_memory* mem );
 #if defined( HOP_IMPLEMENTATION )
 
 #include <errno.h>
-#include <math.h>   // fabsf
-#include <stdio.h>  // printf
+#include <math.h>    // fabsf
+#include <stdio.h>   // printf
+#include <stdlib.h> // malloc/free
 
 #define HOP_MIN( a, b ) ( ( ( a ) < ( b ) ) ? ( a ) : ( b ) )
 #define HOP_MAX( a, b ) ( ( ( a ) > ( b ) ) ? ( a ) : ( b ) )
@@ -1082,13 +1083,13 @@ static void alloc_traces( hop_traces_t_t* t, unsigned size )
 
 static void free_traces( hop_traces_t_t* t )
 {
-   free( t->starts );
-   free( t->ends );
-   free( t->depths );
-   free( t->fctNameIds );
-   free( t->fileNameIds );
-   free( t->lineNumbers );
-   free( t->zones );
+   HOP_FREE( t->starts );
+   HOP_FREE( t->ends );
+   HOP_FREE( t->depths );
+   HOP_FREE( t->fctNameIds );
+   HOP_FREE( t->fileNameIds );
+   HOP_FREE( t->lineNumbers );
+   HOP_FREE( t->zones );
    memset( t, 0, sizeof( hop_traces_t_t ) );
 }
 
@@ -2007,7 +2008,6 @@ void hop_hash_set_clear( hop_hash_set_t set )
  * SUCH DAMAGE.
  */
 
-#include <stdlib.h>
 #include <stddef.h>
 #include <stdbool.h>
 #include <inttypes.h>
