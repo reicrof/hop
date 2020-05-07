@@ -136,6 +136,7 @@ void Profiler::fetchClientData()
       addThreadName(
           _serverPendingData.threadNames[i].second, _serverPendingData.threadNames[i].first );
    }
+   HOP_LEAVE();
 }
 
 void Profiler::addTraces( const TraceData& traces, uint32_t threadIndex )

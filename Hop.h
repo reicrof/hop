@@ -1184,7 +1184,7 @@ static hop_bool_t create_local_context( local_context_t* ctxt )
       return hop_false;
    }
 
-   memset( ctxt, 0, sizeof( *ctxt ) );
+   memset( ctxt, 0, sizeof( local_context_t ) );
    static hop_atomic_uint32 g_totalThreadCount;  // Index of the tread as they are coming in
    ctxt->threadIndex = hop_atomic_fetch_add_explicit( &g_totalThreadCount, 1U, hop_memory_order_seq_cst );
 
@@ -1207,6 +1207,7 @@ static hop_bool_t create_local_context( local_context_t* ctxt )
 
    ctxt->stringDataCapacity = 1024;
    ctxt->stringData = (char*) HOP_MALLOC( 1024 );
+   memset( ctxt->stringData, 0, ctxt->stringDataCapacity );
    ctxt->stringHashSet = hop_hash_set_create();
 
    // Will setup string data and reset timestamp
@@ -1261,11 +1262,13 @@ static hop_bool_t add_string_to_db_internal(
       HOP_ASSERT( ( newEntryPos & 7 ) == 0 );  // Make sure we are 8 byte aligned
       const size_t alignedStrLen = align_on_uint32( strLen + 1, 8 );
 
-      ctxt->stringDataSize += newEntryPos + sizeof( hop_str_ptr_t ) + alignedStrLen;
-      if( ctxt->stringDataSize >= ctxt->stringDataCapacity )
+      ctxt->stringDataSize += alignedStrLen + sizeof( hop_str_ptr_t );
+      if( ctxt->stringDataSize >= ctxt->stringDataCapacity )   
       {
-         ctxt->stringDataCapacity *= 2;
+         const uint32_t prevCapacity = ctxt->stringDataCapacity;
+         ctxt->stringDataCapacity   *= 2;
          ctxt->stringData = (char*)HOP_REALLOC( ctxt->stringData, ctxt->stringDataCapacity );
+         memset( ctxt->stringData + prevCapacity, 0, prevCapacity );
       }
 
       hop_str_ptr_t* strIdPtr = (hop_str_ptr_t*)( &ctxt->stringData[newEntryPos] );
@@ -1593,6 +1596,9 @@ static hop_bool_t send_events(
    info->count        = array->count;
    bufferPtr += sizeof( hop_msg_info_t );
    memcpy( bufferPtr, array->events, array->count * sizeof( *array->events ) );
+
+   ringbuf_produce( ringbuf, ctxt->ringbufWorker );
+   array->count = 0;
 
    return hop_true;
 }
