@@ -57,7 +57,10 @@ struct Array
    void clear() { _count = 0; }
 
    T* begin() { return &_data.data[0]; }
-   T* end() { return &_data.data[_count - 1]; }
+   const T* begin() const { return &_data.data[0]; }
+
+   T* end() { return _data.data + _count; }
+   const T* end() const { return _data.data + _count; }
 
    T& front() { return _data.data[0]; }
    const T& front() const { return _data.data[0]; }

@@ -250,7 +250,7 @@ size_t Server::sharedMemorySize() const
 
 float Server::cpuFreqGHz() const
 {
-   return hop_client_tsc_frequency( _sharedMem );
+   return hop_client_tsc_frequency_mhz( _sharedMem ) * 0.001;
 }
 
 void Server::setRecording( bool recording )

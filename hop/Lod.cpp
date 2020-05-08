@@ -74,7 +74,7 @@ LodsArray computeLods( const Entries& entries, size_t idOffset )
       {
          size_t lodedTraceIdx = hop::INVALID_IDX;
          const hop_depth_t depth = l.depth;
-         if( lastTraceAtDepth[depth] >= 0 )
+         if( lastTraceAtDepth[depth] != hop::INVALID_IDX )
          {
             const size_t lastTraceAtDepthIndex = lastTraceAtDepth[depth];
             auto& lastTrace = resLods[lodLvl][lastTraceAtDepthIndex];

@@ -8,7 +8,7 @@
 
 namespace hop
 {
-static size_t INVALID_IDX = 0xFFFFFFFFFFFFFFFF;
+constexpr size_t INVALID_IDX = 0xFFFFFFFFFFFFFFFF;
 
 struct Entries
 {

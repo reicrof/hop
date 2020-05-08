@@ -339,7 +339,7 @@ hop_bool_t hop_has_connected_producer( const struct hop_shared_memory* mem );
 void hop_update_reset_timestamp( struct hop_shared_memory* mem );
 hop_timestamp_t hop_reset_timestamp( const struct hop_shared_memory* mem );
 uint64_t hop_ipc_memory_size( const struct hop_shared_memory* mem );
-float hop_client_tsc_frequency( const struct hop_shared_memory* mem );
+float hop_client_tsc_frequency_mhz( const struct hop_shared_memory* mem );
 int hop_client_pid( const struct hop_shared_memory* mem );
 #endif // HOP_VIEWER
 
@@ -829,7 +829,7 @@ uint64_t hop_ipc_memory_size( const hop_shared_memory* mem )
    return size;
 }
 
-float hop_client_tsc_frequency( const hop_shared_memory* mem )
+float hop_client_tsc_frequency_mhz( const hop_shared_memory* mem )
 {
    float freq = -1.0f;
    if( mem && mem->ipcSegment )
@@ -1839,8 +1839,7 @@ static float estimate_tsc_freq_mhz()
 
    const uint64_t deltaUs     = os_timestamp_delta_us( &startTime );
    const uint64_t deltaCycles = endCycleCount - startCycleCount;
-   const uint64_t usInASecond = 1000000; 
-   return deltaCycles * usInASecond / (float)deltaUs;;
+   return deltaCycles / (float)deltaUs;
 }
 #endif // estimate_tsc_freq_mhz
 
