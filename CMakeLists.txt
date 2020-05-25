@@ -1,84 +1,123 @@
 cmake_minimum_required (VERSION 3.0)
 project (hop)
 
-#####################
-### Platform specific
-#####################
-if(UNIX)
-   if(APPLE)
-        set( HOP_WRAP_SRC wrap_library/hop_wrap_macos.cpp )
-   else()
-        set( HOP_WRAP_SRC wrap_library/hop_wrap_linux.cpp )
-        set( HOP_LIBRT_FLAG "-lrt" )
-   endif()
-   set( CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -Wextra -pedantic" )
-else()
-   set( CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall" )
-   set( HOP_WRAP_SRC wrap_library/hop_wrap_windows.cpp )
-   set( HOP_WINDOWS_LIB "Shlwapi.lib" ) # Used for StrStrI
-endif()
-
-set( default_build_type "Release" )
-set( CMAKE_CXX_STANDARD 14 )
+set( CMAKE_VERBOSE_MAKEFILE on )
 
 # includes cmake/FindSDL2.cmake
 set(CMAKE_MODULE_PATH ${PROJECT_SOURCE_DIR}/cmake)
 find_package(SDL2 REQUIRED)
 find_package(OpenGL REQUIRED)
 
-set(CMAKE_CXX_FLAGS "-ffast-math -fno-exceptions -fno-rtti ${CMAKE_CXX_FLAGS}")
+set( default_build_type "Release" )
+set( CMAKE_CXX_STANDARD 14 )
+set(ROOT_DIR ${CMAKE_SOURCE_DIR})
+
+# Option
+option( USE_OS_FILE_DIALOG "Use the OS provided file dialog" ON )
+
+#####################
+### Platform specific
+#####################
+if(UNIX)
+   set( PLATFORM_LINK_FLAGS "-lpthread -ldl" )
+   set( CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -Wextra -pedantic -Werror=switch -ffast-math -fno-exceptions -fno-rtti -Wstrict-aliasing=2 " )
+   if(APPLE)
+        set( CMAKE_OSX_DEPLOYMENT_TARGET 10.11 )
+        set( NOC_IMPL_FILE "noc_file_dialog/noc_file_dialog.mm")
+        set( NOC_IMPL_DEFINE "NOC_FILE_DIALOG_OSX" )
+   else()
+      set( PLATFORM_LINK_FLAGS "${PLATFORM_LINK_FLAGS} -lrt -latomic" )
+
+      if( USE_OS_FILE_DIALOG )
+         find_package( PkgConfig REQUIRED )
+         pkg_check_modules( GTK3 REQUIRED gtk+-3.0 )
+         if( GTK3_FOUND )
+            set( NOC_IMPL_FILE "noc_file_dialog/noc_file_dialog.cpp")
+            set( NOC_IMPL_DEFINE "NOC_FILE_DIALOG_GTK" )
+            set( PLATFORM_EXTRA_INCLUDES ${GTK3_INCLUDE_DIRS} )
+            set( PLATFORM_LINK_FLAGS "${PLATFORM_LINK_FLAGS} -l${GTK3_LIBRARIES}" )
+         endif()
+      endif()
+   endif()   
+else() # Windows
+   set( CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /fp:fast" )
+   set( HOP_WRAP_SRC wrap_library/hop_wrap_windows.cpp )
+   set( NOC_IMPL_FILE "noc_file_dialog/noc_file_dialog.cpp")
+   set( NOC_IMPL_DEFINE "NOC_FILE_DIALOG_WIN32" )
+endif()
 
 #####################
 ### Asan
 #####################
-SET(ASAN OFF CACHE BOOL "Enable Address Sanitizer")
-if(ASAN)
-   set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fno-omit-frame-pointer -fsanitize=address")
-   set (CMAKE_LINKER_FLAGS "${CMAKE_STATIC_LINKER_FLAGS} -fno-omit-frame-pointer -fsanitize=address")
+SET(SAN CACHE STRING "Enable Specified Sanitizer")
+if(SAN)
+   set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fno-omit-frame-pointer -fsanitize=${SAN}")
+   set (CMAKE_LINKER_FLAGS "${CMAKE_STATIC_LINKER_FLAGS} -fno-omit-frame-pointer -fsanitize=${SAN}")
 endif()
 
 #####################
-### Main executable
+### HOP common
 #####################
-add_definitions( -DHOP_ENABLED )
-file(GLOB hop_server_src
-    "*.h"
-    "*.cpp"
-    "*.c"
-    "imgui/*.h"
-    "imgui/*.cpp"
+if(UNIX)
+   set( viewer_platform_src "common/platform/Platform_Unix.cpp" )
+else()
+   set( viewer_platform_src "common/platform/Platform_Windows.cpp" )
+endif()
+file( GLOB common_src "common/*.cpp" "common/*.c" )
+set( common_src ${common_src} ${viewer_platform_src} )
+
+#####################
+### HOP GUI
+#####################
+file(GLOB hop_gui_src
+    "hop/*.cpp"
+    "thirdparties/imgui/*.cpp"
 )
-add_executable(hop ${hop_server_src})
 
-target_include_directories( hop SYSTEM PRIVATE  ${OPENGL_INCLUDE_DIRS} ${SDL2_INCLUDE_DIR} )
-target_link_libraries( hop PUBLIC -lpthread ${HOP_LIBRT_FLAG} ${HOP_WINDOWS_LIB} ${OPENGL_LIBRARIES} ${SDL2_LIBRARY} -ldl )
-
-#####################
-### Library for function wrapping
-#####################
-set(CMAKE_MACOSX_RPATH 1)
-add_library(hop_wrap SHARED ${HOP_WRAP_SRC})
-set (CMAKE_SHARED_LINKER_FLAGS "-ldl")
-
-# With clang on MacOs, we need to ignore the missing symbols as they are going to be resolved
-# at runtime when linking against the executable that uses hop.
-if(${CMAKE_CXX_COMPILER_ID} STREQUAL "Clang")
-  set(CMAKE_SHARED_LINKER_FLAGS "${CMAKE_SHARED_LINKER_FLAGS} -undefined dynamic_lookup")
+if( USE_OS_FILE_DIALOG )
+   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DHOP_USE_FILE_DIALOG=1")
+   list(APPEND hop_gui_src "thirdparties/${NOC_IMPL_FILE}" )
+else()
+   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DHOP_USE_FILE_DIALOG=0")
 endif()
 
-set_property(TARGET hop_wrap PROPERTY POSITION_INDEPENDENT_CODE ON)
+add_executable(hop ${common_src} ${hop_gui_src} )
+target_compile_definitions( hop PUBLIC HOP_ENABLED )
+
+set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -DHOP_DEBUG")
+
+target_compile_definitions( hop PUBLIC HOP_ENABLED ${NOC_IMPL_DEFINE} )
+target_include_directories( hop PRIVATE ${ROOT_DIR} ${ROOT_DIR}/thirdparties ${OPENGL_INCLUDE_DIRS} ${SDL2_INCLUDE_DIR} ${PLATFORM_EXTRA_INCLUDES} )
+target_link_libraries( hop PUBLIC ${PLATFORM_LINK_FLAGS} ${HOP_WINDOWS_LIB} ${OPENGL_LIBRARIES} ${SDL2_LIBRARY} )
 
 #####################
-### Test client
+### HOP CLI
 #####################
-file(GLOB hop_client_src
-    "test_client/*.h"
-    "test_client/*.cpp"
+add_executable( hopcli hopcli/hopCLI.cpp  ${common_src} )
+target_compile_definitions( hopcli PUBLIC HOP_ENABLED )
+target_include_directories( hopcli PRIVATE ${ROOT_DIR} )
+target_link_libraries( hopcli PUBLIC ${PLATFORM_LINK_FLAGS} )
+
+#####################
+### Test clients
+#####################
+add_subdirectory(test_clients)
+
+#####################
+### Test executables
+#####################
+enable_testing ()
+add_subdirectory (tests)
+
+#####################
+### Execute the tests after building when not under windows
+#####################
+if(UNIX)
+add_custom_command(
+     TARGET hop
+     COMMENT "Run tests"
+     POST_BUILD 
+     WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
+     COMMAND ctest --verbose
 )
-add_executable(hop_client ${hop_client_src})
-target_link_libraries( hop_client PUBLIC -lpthread ${HOP_LIBRT_FLAG} -ldl )
-include_directories( ${CMAKE_CURRENT_SOURCE_DIR})
-
-set( CMAKE_VERBOSE_MAKEFILE on )
-
-#windows build : cmake -G "Visual Studio 15 2017 Win64" -DSDL2_INCLUDE_DIR:STRING=C:\\Users\\XXXX\\source\\repos\\SDL2\\include -DSDL2_LIBRARY:STRING=C:\\Users\\XXXX\\source\\repos\\SDL2\\lib\\x64\\SDL2.lib .. 
+endif()
