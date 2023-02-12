@@ -39,9 +39,8 @@ class Deque
       BlockArrayPtr* _blocks;
       uint32_t _blockId;
       uint32_t _elementId;
-   
+
       iterator( BlockArrayPtr* lb ) : _blocks( lb ), _blockId( 0 ), _elementId( 0 ) {}
-      iterator( const iterator& rhs ) : _blocks( rhs._blocks ), _blockId( rhs._blockId ), _elementId( rhs._elementId ) {}
       iterator( BlockArrayPtr* lb, uint32_t blockId, uint32_t elId ) : _blocks( lb ), _blockId( blockId ), _elementId( elId ) {}
       inline bool operator==(const iterator& rhs) const { return _blockId == rhs._blockId && _elementId == rhs._elementId; }
       inline bool operator!=(const iterator& rhs) const { return _blockId != rhs._blockId || _elementId != rhs._elementId; }
@@ -91,7 +90,7 @@ class Deque
 
       inline iterator& operator+=( difference_type val )
       {
-         const difference_type newVal = val + _elementId; 
+         const difference_type newVal = val + _elementId;
          _blockId   += newVal / COUNT_PER_BLOCK;
          _elementId =  newVal % COUNT_PER_BLOCK;
          return *this;

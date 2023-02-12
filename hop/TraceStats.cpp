@@ -307,6 +307,7 @@ static void finalizeTraceDetails(
       return lhs.exclusivePct > rhs.exclusivePct;
    } );
 
+   (void)totalPct;
    assert( std::abs( totalPct - 1.0f ) < 0.01f || details.empty() );
 }
 

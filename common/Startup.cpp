@@ -86,6 +86,7 @@ LaunchOptions parseArgs( int argc, char* argv[] )
 
 bool verifyPlatform()
 {
+#if HOP_ARCH_x86
    if ( !hop::supportsRDTSCP() )
    {
       printf(
@@ -100,6 +101,7 @@ bool verifyPlatform()
           "This platform does not seem to support Invariant TSC. Hop will be "
           "able to run, but no precision on the measurement are guaranteed.\n" );
    }
+#endif
    return true;
 }
 

@@ -507,7 +507,7 @@ bool Timeline::handleHotkey()
 
 void Timeline::handleMouseWheel( float mousePosX, float mouseWheel )
 {
-   const float windowWidthPxl = ImGui::GetWindowWidth();
+   const float windowWidthPxl = ImGui::GetIO().DisplaySize.x;
 
    // Handle vertical scroll
    if( ImGui::IsKeyDown( SDL_SCANCODE_LSHIFT ) )
@@ -790,7 +790,7 @@ void Timeline::zoomOn( int64_t cycleToZoomOn, float zoomFactor )
    const int64_t pxlDiff = newPxlPos - prevPxlPos;
    if ( pxlDiff != 0 )
    {
-      const int64_t timeDiff = pxlToCycles( windowWidthPxl, _duration, pxlDiff );
+      const int64_t timeDiff = pxlToCycles<int64_t>( windowWidthPxl, _duration, pxlDiff );
       setStartTime( _timelineStart + timeDiff, ANIMATION_TYPE_NONE );
    }
 }

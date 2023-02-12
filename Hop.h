@@ -70,8 +70,12 @@ For more information, please refer to <http://unlicense.org/>
 // this use case correctly. You can therefore enable the use of std::chrono
 // by setting this variable to 1. This will also increase the over-head of
 // HOP in your application.
-#if !defined( HOP_USE_STD_CHRONO )
-#define HOP_USE_STD_CHRONO 0
+#ifndef HOP_USE_STD_CHRONO
+#if defined(_M_X64) || defined(__x86_64__)
+  #define HOP_USE_STD_CHRONO 0
+ #else
+  #define HOP_USE_STD_CHRONO 1
+ #endif
 #endif
 
 ///////////////////////////////////////////////////////////////
@@ -144,12 +148,18 @@ For more information, please refer to <http://unlicense.org/>
 */
 
 // Useful macros
-#define HOP_VERSION 0.91f
+#define HOP_VERSION 0.92f
 #define HOP_ZONE_MAX  255
 #define HOP_ZONE_DEFAULT 0
 #define HOP_CONSTEXPR constexpr
 #define HOP_NOEXCEPT noexcept
 #define HOP_STATIC_ASSERT static_assert
+
+#ifdef __clang__
+#define HOP_NO_DESTROY [[clang::no_destroy]]
+#else
+#define HOP_NO_DESTROY
+#endif
 
 #include <stdint.h>
 
@@ -161,6 +171,12 @@ For more information, please refer to <http://unlicense.org/>
 #if defined( _MSC_VER )
 #ifndef NOMINMAX
 #define NOMINMAX
+#endif
+
+#if defined( _M_X64 )
+#define HOP_ARCH_x86 1
+#else
+#define HOP_ARCH_x86 0
 #endif
 
 #if defined( HOP_IMPLEMENTATION )
@@ -189,6 +205,12 @@ typedef char HOP_CHAR;
 
 #define HOP_API
 
+#if defined( __x86_64__ )
+#define HOP_ARCH_x86 1
+#else
+#define HOP_ARCH_x86 0
+#endif
+
 #endif
 
 // -----------------------------
@@ -209,6 +231,7 @@ using Core_t       = uint32_t;
 using Depth_t      = uint16_t;
 using ZoneId_t     = uint16_t;
 
+#if !HOP_USE_STD_CHRONO
 inline TimeStamp rdtscp( uint32_t& aux )
 {
 #if defined( _MSC_VER )
@@ -219,19 +242,20 @@ inline TimeStamp rdtscp( uint32_t& aux )
    return ( rdx << 32U ) + rax;
 #endif
 }
+#endif
 
 inline TimeStamp getTimeStamp( Core_t& core )
 {
    // We return the timestamp with the first bit set to 0. We do not require this last cycle/nanosec
    // of precision. It will instead be used to flag if a trace uses dynamic strings or not in its
    // start time. See hop::StartProfileDynString
-#if HOP_USE_STD_CHRONO != 0
+#if HOP_USE_STD_CHRONO
    using namespace std::chrono;
    core = 0;
    return (TimeStamp)duration_cast<nanoseconds>( steady_clock::now().time_since_epoch() ).count() &
           ~1ULL;
 #else
-   return rdtscp( core ) & ~1ULL;
+   return hop::rdtscp( core ) & ~1ULL;
 #endif
 }
 
@@ -701,7 +725,7 @@ void* createSharedMemory(
       return NULL;
    }
 #else
-   *handle = shm_open( path, O_CREAT | O_RDWR, 0666 );
+   *handle = shm_open( path, O_CREAT | O_RDWR, 0600 );
    if( *handle < 0 )
    {
       *state = errorToConnectionState( errno );
@@ -765,7 +789,7 @@ void* openSharedMemory(
    }
    *totalSize = memInfo.RegionSize;
 #else
-   *handle = shm_open( path, O_RDWR, 0666 );
+   *handle = shm_open( path, O_RDWR, 0600 );
    if( *handle < 0 )
    {
       *state = errorToConnectionState( errno );
@@ -1605,7 +1629,7 @@ class Client
 
 Client* ClientManager::Get()
 {
-   thread_local std::unique_ptr<Client> threadClient;
+   HOP_NO_DESTROY thread_local std::unique_ptr<Client> threadClient;
 
    if( unlikely( g_done.load() ) ) return nullptr;
    if( likely( threadClient.get() ) ) return threadClient.get();
@@ -1758,7 +1782,7 @@ void ClientManager::SetLastHeartbeatTimestamp( TimeStamp t ) HOP_NOEXCEPT
 
 SharedMemory& ClientManager::sharedMemory() HOP_NOEXCEPT
 {
-   static SharedMemory _sharedMemory;
+   HOP_NO_DESTROY static SharedMemory _sharedMemory;
    return _sharedMemory;
 }
 

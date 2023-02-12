@@ -29,9 +29,14 @@ namespace hop
 
 void cpuid( int reg[4], int fctId )
 {
+#ifdef __x86_64__
    asm volatile( "cpuid"
                  : "=a"( reg[0] ), "=b"( reg[1] ), "=c"( reg[2] ), "=d"( reg[3] )
                  : "a"( fctId ), "c"( 0 ) );
+#else
+   (void)fctId;
+   memset( reg, 0, sizeof( int ) * 4 );
+#endif
 }
 
 ProcessInfo getProcessInfoFromPID( ProcessID pid )

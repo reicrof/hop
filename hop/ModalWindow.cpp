@@ -56,7 +56,7 @@ void renderModalWindow()
             if ( ImGui::BeginPopupModal( localTitle, NULL, ImGuiWindowFlags_AlwaysAutoResize ) )
             {
                char buf[64];
-               sprintf( buf, "%c %s", "|/-\\"[(int)( ImGui::GetTime() / 0.25f ) & 3], localMsg ? localMsg : localTitle );
+               snprintf( buf, sizeof(buf), "%c %s", "|/-\\"[(int)( ImGui::GetTime() / 0.25f ) & 3], localMsg ? localMsg : localTitle );
                ImGui::Text( "%s", buf );
                if ( shouldClose )
                {

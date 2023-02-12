@@ -9,6 +9,7 @@ namespace hop
 
 static float estimateCpuFreqHz()
 {
+#if !HOP_USE_STD_CHRONO
    using namespace std::chrono;
    uint32_t cpu;
    volatile uint64_t dummy = 0;
@@ -31,6 +32,10 @@ static float estimateCpuFreqHz()
 
    double countPerSec = duration<double>( seconds( 1 ) ) / deltaTimeNs;
    return deltaCycles * countPerSec;
+#else
+   fprintf (stderr, "ERROR : Cpu freq estimation non implemented for non x86 platform\n");
+   return 1.0f;
+#endif
 }
 
 float getCpuFreqGHz()
