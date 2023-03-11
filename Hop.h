@@ -148,7 +148,7 @@ For more information, please refer to <http://unlicense.org/>
 */
 
 // Useful macros
-#define HOP_VERSION 0.92f
+#define HOP_VERSION 0.93f
 #define HOP_ZONE_MAX  255
 #define HOP_ZONE_DEFAULT 0
 #define HOP_CONSTEXPR constexpr

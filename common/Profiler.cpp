@@ -353,6 +353,8 @@ bool hop::Profiler::openFile( const char* path )
       addTraces( timelineTracks[j]._traces, j );
       addLockWaits( timelineTracks[j]._lockWaits, j );
       addCoreEvents( timelineTracks[j]._coreEvents, j );
+      if (timelineTracks[j].name ())
+         addThreadName( timelineTracks[j].name (), j );
       i += timelineTrackSize;
    }
    _srcType = SRC_TYPE_FILE;

@@ -116,7 +116,7 @@ bool TimelineTrack::empty() const
 size_t serializedSize( const TimelineTrack& ti )
 {
    return serializedSize( ti._traces ) + serializedSize( ti._lockWaits ) +
-          serializedSize( ti._coreEvents );
+          serializedSize( ti._coreEvents ) + sizeof( ti._trackName );
 }
 
 size_t serialize( const TimelineTrack& ti, char* data )
@@ -128,7 +128,9 @@ size_t serialize( const TimelineTrack& ti, char* data )
     i += serialize( ti._traces, &data[i] );
     i += serialize( ti._lockWaits, &data[i] );
     i += serialize( ti._coreEvents, &data[i] );
-   
+    memcpy( &data[i], &ti._trackName, sizeof( ti._trackName ) );
+    i += sizeof( sizeof( ti._trackName ) );
+
     assert( i == serialSize );
 
     return i;
@@ -141,6 +143,8 @@ size_t deserialize( const char* data, TimelineTrack& ti )
     i += deserialize( &data[i], ti._traces );
     i += deserialize( &data[i], ti._lockWaits );
     i += deserialize( &data[i], ti._coreEvents );
+    memcpy( &ti._trackName, &data[i], sizeof( ti._trackName ) );
+    i += sizeof( sizeof( ti._trackName ) );
 
     return i;
 }
