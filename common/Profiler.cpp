@@ -22,6 +22,20 @@ Profiler::Profiler( SourceType type, int processId, const char* str )
       _server.start( processId , _name.c_str());
 }
 
+#if HOP_USE_REMOTE_PROFILER
+Profiler::Profiler( NetworkConnection& nc )
+    :
+      //_name( nc._portStr ),
+      _recording( false ),
+      _srcType( SRC_TYPE_NETWORK ),
+      _loadedFileCpuFreqGHz( 0 ),
+      _earliestTimeStamp( 0 ),
+      _latestTimeStamp( 0 )
+{
+   _server.start( nc );
+}
+#endif
+
 const char* Profiler::nameAndPID( int* processId, bool shortName ) const
 {
    if( shortName )
@@ -32,7 +46,7 @@ const char* Profiler::nameAndPID( int* processId, bool shortName ) const
 
 float Profiler::cpuFreqGHz() const
 {
-   if( _srcType == Profiler::SRC_TYPE_PROCESS )
+   if( _srcType != Profiler::SRC_TYPE_FILE )
    {
       return _server.cpuFreqGHz();
    }
@@ -54,7 +68,7 @@ bool Profiler::recording() const
    return _recording;
 }
 
-SharedMemory::ConnectionState Profiler::connectionState() const
+ConnectionState Profiler::connectionState() const
 {
    return _server.connectionState();
 }

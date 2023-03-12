@@ -25,6 +25,8 @@ namespace options
    bool showCoreInfo();
    bool fullscreen();
    bool vsyncOn();
+   const char* lastAddressUsed();
+   void setLastAddressUsed (const char* addr);
    const std::array< uint32_t, HOP_ZONE_MAX + 1 >& zoneColors();
 } 
 

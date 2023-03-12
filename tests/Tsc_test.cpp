@@ -4,6 +4,7 @@
 
 int main()
 {
-   HOP_TEST_ASSERT( hop::supportsRDTSCP() );
+#ifdef __x86_64__
    HOP_TEST_ASSERT( hop::supportsConstantTSC() );
+#endif
 }

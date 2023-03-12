@@ -172,7 +172,7 @@ class Deque
          for( uint32_t i = 0; i < newBlockCount; ++i )
             acquireNewBlock();
       }
-      
+
       assert( _blocks.size() == rhs._blocks.size() );
 
       // Copy the data

@@ -7,55 +7,6 @@
 namespace hop
 {
 
-static float estimateCpuFreqHz()
-{
-#if !HOP_USE_STD_CHRONO
-   using namespace std::chrono;
-   uint32_t cpu;
-   volatile uint64_t dummy = 0;
-   // Do a quick warmup first
-   for( int i = 0; i < 1000; ++i ) { ++dummy; hop::rdtscp( cpu ); }
-
-   // Start timer and get current cycle count
-   const auto startTime = high_resolution_clock::now();
-   const uint64_t startCycleCount = hop::rdtscp( cpu );
-
-   // Make the cpu work hard
-   for( int i = 0; i < 2000000; ++i ) { dummy += i; }
-
-   // Stop timer and get end cycle count
-   const uint64_t endCycleCount = hop::rdtscp( cpu );
-   const auto endTime = high_resolution_clock::now();
-
-   const uint64_t deltaCycles = endCycleCount - startCycleCount;
-   const auto deltaTimeNs = duration_cast<nanoseconds>( endTime - startTime );
-
-   double countPerSec = duration<double>( seconds( 1 ) ) / deltaTimeNs;
-   return deltaCycles * countPerSec;
-#else
-   fprintf (stderr, "ERROR : Cpu freq estimation non implemented for non x86 platform\n");
-   return 1.0f;
-#endif
-}
-
-float getCpuFreqGHz()
-{
-   static float cpuFreq = 0;
-   if( cpuFreq == 0 )
-   {
-      cpuFreq = estimateCpuFreqHz() / 1000000000.0;
-   }
-
-   return cpuFreq;
-}
-
-bool supportsRDTSCP()
-{
-   int reg[4];
-   hop::cpuid( reg, 0x80000001 );
-   return reg[3] & (1 << 27);
-}
-
 bool supportsConstantTSC()
 {
    int reg[4];

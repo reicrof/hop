@@ -7,6 +7,7 @@
 #include "hop/Options.h"
 #include "hop/RendererGL.h"
 #include "hop/Stats.h"
+#include "hop/Snooper.h"
 #include "hop/hop_icon_vect.inline"
 
 #include "common/Profiler.h"
@@ -156,18 +157,18 @@ static void drawBackground( float windowWidth, float windowHeight )
          linePoints.emplace_back( x + xOffset, y + yOffset );
       }
       
-      DrawList->AddPolyline(linePoints.data(), linePoints.size(), 0xFF999999, false , 4.0f);
+      DrawList->AddPolyline(linePoints.data(), (int)linePoints.size(), 0xFF999999, false , 4.0f);
    }
 }
 
 static bool drawHelpMenu()
 {
    ImGui::Text( "Hop version : %.2f\n", HOP_VERSION );
-   static bool rdtscpSupported = hop::supportsRDTSCP();
+   static bool usesStdChrono = HOP_USE_STD_CHRONO;
    static bool constantTscSupported = hop::supportsConstantTSC();
    ImGui::Text(
-         "RDTSCP Supported : %s\nConstant TSC Supported : %s\n",
-         rdtscpSupported ? "yes" : "no",
+         "Uses std::chrono : %s\nConstant TSC Supported : %s\n",
+         usesStdChrono ? "yes" : "no",
          constantTscSupported ? "yes" : "no" );
 
    const char* helpTxt =
@@ -190,6 +191,7 @@ static bool drawHelpMenu()
 static void drawMenuBar( hop::Viewer* v )
 {
    static const char* const menuAddProfiler = "Add Profiler";
+   static const char* const menuAddRemoteProfiler = "Add Remote Profiler";
    static const char* const menuSaveAsHop = "Save as...";
    static const char* const menuOpenHopFile = "Open";
    static const char* const menuHelp = "Help";
@@ -203,6 +205,10 @@ static void drawMenuBar( hop::Viewer* v )
          if ( ImGui::MenuItem( menuAddProfiler, NULL ) )
          {
             addNewProfilerByNamePopUp( v );
+         }
+         if ( ImGui::MenuItem( menuAddRemoteProfiler, NULL ) )
+         {
+            v->openSnooper();
          }
          if( ImGui::MenuItem( menuSaveAsHop, NULL, false, profIdx >= 0 ) )
          {
@@ -336,39 +342,55 @@ static bool drawDeleteTracesButton( const ImVec2& drawPos, bool active )
    return hovering && active && ImGui::IsMouseClicked( 0 );
 }
 
-static void drawStatusIcon( const ImVec2 drawPos, hop::SharedMemory::ConnectionState state )
+static void drawStatusIcon( const ImVec2 drawPos, hop::ConnectionState state )
 {
    ImColor col( 0.5f, 0.5f, 0.5f );
    const char* msg = nullptr;
    switch ( state )
    {
-      case hop::SharedMemory::NO_TARGET_PROCESS:
+      case hop::NO_TARGET_PROCESS:
          col = ImColor( 0.6f, 0.6f, 0.6f );
          msg = "No target process";
          break;
-      case hop::SharedMemory::NOT_CONNECTED:
+      case hop::NOT_CONNECTED:
          col = ImColor( 0.8f, 0.0f, 0.0f );
          msg = "No shared memory found";
          break;
-      case hop::SharedMemory::CONNECTED:
+      case hop::CONNECTED:
          col = ImColor( 0.0f, 0.8f, 0.0f );
          msg = "Connected";
          break;
-      case hop::SharedMemory::CONNECTED_NO_CLIENT:
+      case hop::CONNECTED_NO_CLIENT:
          col = ImColor( 0.8f, 0.8f, 0.0f );
          msg = "Connected to shared memory, but no client";
          break;
-      case hop::SharedMemory::PERMISSION_DENIED:
+      case hop::PERMISSION_DENIED:
          col = ImColor( 0.6f, 0.2f, 0.0f );
          msg = "Permission to shared memory denied";
          break;
-      case hop::SharedMemory::INVALID_VERSION:
+      case hop::INVALID_VERSION:
          col = ImColor( 0.6f, 0.2f, 0.0f );
          msg = "Client version does not match viewer version";
          break;
-      case hop::SharedMemory::UNKNOWN_CONNECTION_ERROR:
+      case hop::UNKNOWN_CONNECTION_ERROR:
          col = ImColor( 0.4f, 0.0f, 0.0f );
          msg = "Unknown connection error";
+         break;
+      case hop::CANNOT_RESOLVE_ADDR:
+         col = ImColor( 0.0f, 0.0f, 0.0f );
+         msg = "Cannot Resolve Address";
+         break;
+      case hop::CANNOT_CONNECT_TO_SERVER:
+         col = ImColor( 0.0f, 0.0f, 0.0f );
+         msg = "Cannot Connect To Server";
+         break;
+      case hop::ADDR_ALREADY_IN_USE:
+         col = ImColor( 0.0f, 0.0f, 0.0f );
+         msg = "Address Already in Use";
+         break;
+      case hop::WOULD_BLOCK:
+         col = ImColor( 0.0f, 0.0f, 0.0f );
+         msg = "Would Block";
          break;
    }
 
@@ -391,7 +413,7 @@ static void drawToolbar( ImVec2 drawPos, float canvasWidth, hop::ProfilerView* p
    drawPos.x += 5.0f;
    const auto& mousePos   = ImGui::GetMousePos();
    const bool isRecording = profView ? profView->data().recording() : false;
-   const bool isActive    = profView ? profView->data().sourceType() == hop::Profiler::SRC_TYPE_PROCESS : false;
+   const bool isActive = profView ? profView->data().sourceType() != hop::Profiler::SRC_TYPE_FILE : false;
 
    const bool pressed = isRecording ? drawStopButton( drawPos, mousePos, isActive ) :
                                       drawPlayButton( drawPos, mousePos, isActive );
@@ -403,7 +425,7 @@ static void drawToolbar( ImVec2 drawPos, float canvasWidth, hop::ProfilerView* p
    const ImVec2 deleteOffset( ( 2.0f * TOOLBAR_BUTTON_PADDING ) + TOOLBAR_BUTTON_WIDTH, 0.0f );
    if ( drawDeleteTracesButton( drawPos + deleteOffset, isActive && profView->canvasHeight() > 0 ) )
    {
-      hop::displayModalWindow( "Delete all traces?", nullptr, hop::MODAL_TYPE_YES_NO, [&]() { profView->clear(); } );
+      hop::displayModalWindow( "Delete all traces?", nullptr, hop::MODAL_TYPE_YES_NO, [profView]() { profView->clear(); } );
    }
 
    if( isActive )
@@ -635,6 +657,7 @@ namespace hop
 {
 Viewer::Viewer( uint32_t screenSizeX, uint32_t /*screenSizeY*/ )
     : _selectedTab( -1 ),
+      _snooper( new Snooper() ),
       _vsyncEnabled( hop::options::vsyncOn() )
 {
    hop::setupLODResolution( screenSizeX );
@@ -653,7 +676,22 @@ int Viewer::addNewProfiler( const char* processName, bool startRecording )
 
    _profilers.emplace_back( new hop::ProfilerView( Profiler::SRC_TYPE_PROCESS, pid, processName ) );
    setRecording( _profilers.back().get(), &_timeline, startRecording );
-   _selectedTab = _profilers.size() - 1;
+   _selectedTab = (int)_profilers.size() - 1;
+   return _selectedTab;
+}
+
+int Viewer::addNewProfiler( NetworkConnection& nc, bool startRecording )
+{
+   // const int pid = getPIDFromString( processName );
+   // if( profilerAlreadyExist( _profilers, pid, processName ) )
+   // {
+   //    hop::displayModalWindow( "Cannot profile process twice !", nullptr, hop::MODAL_TYPE_ERROR );
+   //    return -1;
+   // }
+
+   _profilers.emplace_back( new hop::ProfilerView( nc ) );
+   setRecording( _profilers.back().get(), &_timeline, startRecording );
+   _selectedTab = (int)_profilers.size() - 1;
    return _selectedTab;
 }
 
@@ -661,6 +699,11 @@ void Viewer::openProfilerFile()
 {
    assert( !_pendingProfilerLoad.valid() );
    ::openProfilerFile( _pendingProfilerLoad );
+}
+
+void Viewer::openSnooper()
+{
+   _snooper->enable();
 }
 
 int Viewer::removeProfiler( int index )
@@ -679,7 +722,7 @@ int Viewer::removeProfiler( int index )
    return _selectedTab;
 }
 
-int Viewer::profilerCount() const { return _profilers.size(); }
+int Viewer::profilerCount() const { return (int)_profilers.size(); }
 
 int Viewer::activeProfilerIndex() const { return _selectedTab; }
 
@@ -715,7 +758,7 @@ bool Viewer::fetchClientsData()
          if ( loadedProf.get() )
          {
             _profilers.emplace_back( std::move(loadedProf) );
-            _selectedTab = _profilers.size() - 1;
+            _selectedTab = (int)_profilers.size() - 1;
          }
          // Reset the shared_future
          _pendingProfilerLoad = {};
@@ -823,6 +866,8 @@ bool Viewer::draw( float windowWidth, float windowHeight )
    }
 
    ImGui::End();  // Hop Viewer Window
+
+   _snooper->draw( this );
 
    // Render modal window, if any
    if ( modalWindowShowing() )

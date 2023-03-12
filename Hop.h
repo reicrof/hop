@@ -40,6 +40,7 @@ For more information, please refer to <http://unlicense.org/>
 #define HOP_PROF_MUTEX_UNLOCK( x )
 #define HOP_ZONE( x )
 #define HOP_SET_THREAD_NAME( x )
+#define HOP_SET_CLIENT_NAME( x )
 
 #else  // We do want to profile
 
@@ -61,6 +62,11 @@ For more information, please refer to <http://unlicense.org/>
 // Minimum cycles for a lock to be considered in the profiled data
 #if !defined( HOP_MIN_LOCK_CYCLES )
 #define HOP_MIN_LOCK_CYCLES 1000
+#endif
+
+// Disable remote profiler by default
+#if !defined( HOP_USE_REMOTE_PROFILER )
+#define HOP_USE_REMOTE_PROFILER 1
 #endif
 
 // By default HOP will use a call to RDTSCP to get the current timestamp of the
@@ -111,6 +117,11 @@ For more information, please refer to <http://unlicense.org/>
 // Set the name of the current thread in the profiler. Only the first call will
 // be considered for each thread.
 #define HOP_SET_THREAD_NAME( x ) hop::ClientManager::SetThreadName( ( x ) )
+
+// Set the name of the client app
+#define HOP_SET_CLIENT_NAME( x ) hop::ClientManager::SetClientName( ( x ) )
+
+#define HOP_SHUTDOWN() hop::ClientManager::Shutdown()
 
 ///////////////////////////////////////////////////////////////
 /////     EVERYTHING AFTER THIS IS IMPL DETAILS        ////////
@@ -186,9 +197,12 @@ For more information, please refer to <http://unlicense.org/>
 #endif
 
 #include <tchar.h>
-#include <intrin.h>        // __rdtscp
 typedef void* shm_handle;  // HANDLE is a void*
 typedef TCHAR HOP_CHAR;
+
+#if !HOP_USE_STD_CHRONO
+#include <intrin.h>        // __rdtscp
+#endif
 
 // Type defined in unistd.h
 #ifdef _WIN64
@@ -273,6 +287,7 @@ enum class MsgType : uint32_t
    PROFILER_UNLOCK_EVENT,
    PROFILER_HEARTBEAT,
    PROFILER_CORE_EVENT,
+   PROFILER_HANDSHAKE,
    INVALID_MESSAGE,
 };
 
@@ -307,8 +322,8 @@ struct MsgInfo
    MsgType type;
    // Thread id from which the msg was sent
    uint32_t threadIndex;
+   uint32_t seed;
    uint64_t threadId;
-   TimeStamp timeStamp;
    StrPtr_t threadName;
    // Specific message data
    union {
@@ -322,6 +337,14 @@ struct MsgInfo
 HOP_STATIC_ASSERT(
     sizeof( MsgInfo ) == EXPECTED_MSG_INFO_SIZE,
     "MsgInfo layout has changed unexpectedly" );
+
+struct ViewerMsgInfo
+{
+   uint32_t seed;
+   int8_t listening = -1;  // 0 false, 1 true, -1 no change
+   int8_t connected = -1;  // 0 false, 1 true, -1 no change
+   bool requestHandshake;
+};
 
 struct Traces
 {
@@ -363,8 +386,33 @@ struct CoreEvent
    Core_t core;
 };
 
+struct NetworkHandshake
+{
+   uint32_t pid;
+   uint32_t maxThreadCount;
+   uint64_t sharedMemSize;
+   float cpuFreqGhz;
+   TimeStamp connectionTs;
+   char appName[64];
+};
+
+struct NetworkHandshakeMsgInfo
+{
+   MsgInfo info;
+   NetworkHandshake handshake;
+};
+
+struct NetworkCompressionHeader
+{
+    uint32_t canary;
+    uint32_t compressed;
+    size_t compressedSize;
+    size_t uncompressedSize;
+};
+
 class Client;
 class SharedMemory;
+class NetworkConnection;
 
 class HOP_API ClientManager
 {
@@ -383,6 +431,7 @@ class HOP_API ClientManager
    static void EndLockWait( void* mutexAddr, TimeStamp start, TimeStamp end );
    static void UnlockEvent( void* mutexAddr, TimeStamp time );
    static void SetThreadName( const char* name ) HOP_NOEXCEPT;
+   static void SetClientName( const char* name ) HOP_NOEXCEPT;
    static ZoneId_t PushNewZone( ZoneId_t newZone );
    static bool HasConnectedConsumer() HOP_NOEXCEPT;
    static bool HasListeningConsumer() HOP_NOEXCEPT;
@@ -390,6 +439,9 @@ class HOP_API ClientManager
    static void SetLastHeartbeatTimestamp( TimeStamp t ) HOP_NOEXCEPT;
 
    static SharedMemory& sharedMemory() HOP_NOEXCEPT;
+   static NetworkConnection& networkConnection() HOP_NOEXCEPT;
+
+   static void Shutdown() HOP_NOEXCEPT;
 };
 
 class ProfGuard
@@ -477,6 +529,8 @@ class ZoneGuard
    ZoneId_t _prevZoneId;
 };
 
+void sleepMs( uint32_t ms );
+
 #define HOP_PROF_GUARD_VAR( LINE, ARGS ) hop::ProfGuard HOP_COMBINE( hopProfGuard, LINE ) ARGS
 #define HOP_PROF_ID_GUARD( ID, ARGS ) hop::ProfGuard ID ARGS
 #define HOP_PROF_ID_SPLIT( ID, ARGS ) ID.reset ARGS
@@ -532,6 +586,41 @@ void ringbuf_produce( ringbuf_t*, ringbuf_worker_t* );
 size_t ringbuf_consume( ringbuf_t*, size_t* );
 void ringbuf_release( ringbuf_t*, size_t );
 
+#if HOP_USE_REMOTE_PROFILER
+
+/*
+ *
+ * LZJB Compression Implementation
+ *
+ * CDDL HEADER START
+ *
+ * The contents of this file are subject to the terms of the
+ * Common Development and Distribution License (the "License").
+ * You may not use this file except in compliance with the License.
+ *
+ * You can obtain a copy of the license at usr/src/OPENSOLARIS.LICENSE
+ * or http://www.opensolaris.org/os/licensing.
+ * See the License for the specific language governing permissions
+ * and limitations under the License.
+ *
+ * When distributing Covered Code, include this CDDL HEADER in each
+ * file and include the License file at usr/src/OPENSOLARIS.LICENSE.
+ * If applicable, add the following below this CDDL HEADER, with the
+ * fields enclosed by brackets "[]" replaced with your own identifying
+ * information: Portions Copyright [yyyy] [name of copyright owner]
+ *
+ * CDDL HEADER END
+ */
+
+/*
+ * Copyright (c) 2005, 2010, Oracle and/or its affiliates. All rights reserved.
+ */
+
+size_t lzjb_compress(const void *s_start, void *d_start, size_t s_len, size_t d_len);
+int lzjb_decompress(const void *s_start, void *d_start, size_t s_len, size_t d_len);
+
+#endif
+
 /* ======================================================================
                     End of public declarations
    ==================================================================== */
@@ -544,20 +633,28 @@ void ringbuf_release( ringbuf_t*, size_t );
 #define HOP_SHARED_MEM_MAX_NAME_SIZE 30
 namespace hop
 {
+enum ConnectionState
+{
+   NO_TARGET_PROCESS,
+   NOT_CONNECTED,
+   CONNECTED,
+   CONNECTED_NO_CLIENT,
+   PERMISSION_DENIED,
+   INVALID_VERSION,
+
+   /* Network specific states */
+   CANNOT_RESOLVE_ADDR,
+   ADDR_ALREADY_IN_USE,
+   WOULD_BLOCK,
+   CANNOT_CONNECT_TO_SERVER,
+
+   /* Lazy generic error */
+   UNKNOWN_CONNECTION_ERROR
+};
+
 class SharedMemory
 {
   public:
-   enum ConnectionState
-   {
-      NO_TARGET_PROCESS,
-      NOT_CONNECTED,
-      CONNECTED,
-      CONNECTED_NO_CLIENT,
-      PERMISSION_DENIED,
-      INVALID_VERSION,
-      UNKNOWN_CONNECTION_ERROR
-   };
-
    ConnectionState create( int pid, size_t size, bool isConsumer );
    void destroy();
 
@@ -569,13 +666,13 @@ class SharedMemory
          CONNECTED_CONSUMER = 1 << 1,
          LISTENING_CONSUMER = 1 << 2,
       };
-      std::atomic<uint32_t> flags{0};
-      float clientVersion{0.0f};
-      uint32_t maxThreadNb{0};
-      size_t requestedSize{0};
-      bool usingStdChronoTimeStamps{false};
-      std::atomic<TimeStamp> lastResetTimeStamp{0};
-      std::atomic<TimeStamp> lastHeartbeatTimeStamp{0};
+      std::atomic<uint32_t> flags{ 0 };
+      float clientVersion{ 0.0f };
+      uint32_t maxThreadNb{ 0 };
+      std::atomic<uint32_t> lastResetSeed{ 1 };
+      size_t requestedSize{ 0 };
+      std::atomic<TimeStamp> lastHeartbeatTimeStamp{ 0 };
+      bool usingStdChronoTimeStamps{ false };
    };
 
    bool hasConnectedProducer() const HOP_NOEXCEPT;
@@ -586,8 +683,8 @@ class SharedMemory
    void setListeningConsumer( bool ) HOP_NOEXCEPT;
    bool shouldSendHeartbeat( TimeStamp t ) const HOP_NOEXCEPT;
    void setLastHeartbeatTimestamp( TimeStamp t ) HOP_NOEXCEPT;
-   TimeStamp lastResetTimestamp() const HOP_NOEXCEPT;
-   void setResetTimestamp( TimeStamp t ) HOP_NOEXCEPT;
+   uint32_t lastResetSeed() const HOP_NOEXCEPT;
+   void setResetSeed(uint32_t seed) HOP_NOEXCEPT;
    ringbuf_t* ringbuffer() const HOP_NOEXCEPT;
    uint8_t* data() const HOP_NOEXCEPT;
    bool valid() const HOP_NOEXCEPT;
@@ -597,19 +694,138 @@ class SharedMemory
 
   private:
    // Pointer into the shared memory
-   SharedMetaInfo* _sharedMetaData{NULL};
-   ringbuf_t* _ringbuf{NULL};
-   uint8_t* _data{NULL};
+   SharedMetaInfo* _sharedMetaData{ NULL };
+   ringbuf_t* _ringbuf{ NULL };
+   uint8_t* _data{ NULL };
    // ----------------
-   bool _isConsumer{false};
+   bool _isConsumer{ false };
    shm_handle _sharedMemHandle{};
    int _pid;
    HOP_CHAR _sharedMemPath[HOP_SHARED_MEM_MAX_NAME_SIZE];
-   std::atomic<bool> _valid{false};
-   std::mutex _creationMutex;
+   std::atomic<bool> _valid{ false };
 };
+
+/* Internal viewer functions declaration */
+
+float getCpuFreqGHz();
+
+} //namespace hop
+
+#if HOP_USE_REMOTE_PROFILER
+
+#if defined( _MSC_VER )
+#include <winsock2.h>
+#include <ws2tcpip.h>
+
+typedef SOCKET Socket;
+static const Socket HOP_NET_INVALID_SOCKET = INVALID_SOCKET;
+
+static const int HOP_NET_WOULD_BLOCK  = WSAEWOULDBLOCK;
+static const int HOP_NET_ALREADY_DONE = WSAEISCONN;
+static const int HOP_NET_IN_PROGRESS  = WSAEALREADY;
+static const int HOP_NET_ADDR_IN_USE  = WSAEADDRINUSE;
+static const int HOP_NET_CONN_INVALID = WSAEADDRNOTAVAIL;
+static const int HOP_NET_CONN_REFUSED = WSAECONNREFUSED;
+static const int HOP_NET_ALREADY_CONN = WSAEISCONN;
+static const int HOP_NET_CONN_RESET   = WSAECONNRESET;
+static const int HOP_NET_SOCKET_ERROR = SOCKET_ERROR;
+static const int HOP_NET_SHUT_SEND    = SD_SEND;
+static inline int getLastNetworkError() { return WSAGetLastError(); }
+static inline const char* hop_gai_strerror( int c ) {return gai_strerrorA( c );}
+#else
+#include <sys/socket.h>
+#include <sys/types.h>
+#include <sys/select.h>
+#include <netdb.h>
+
+typedef int Socket;
+static const Socket HOP_NET_INVALID_SOCKET = -1;
+
+static const int HOP_NET_WOULD_BLOCK  = EAGAIN;
+static const int HOP_NET_ALREADY_DONE = EALREADY;
+static const int HOP_NET_IN_PROGRESS  = EINPROGRESS;
+static const int HOP_NET_ADDR_IN_USE  = EADDRINUSE;
+static const int HOP_NET_CONN_REFUSED = ECONNREFUSED;
+static const int HOP_NET_CONN_INVALID = ENETUNREACH;
+static const int HOP_NET_ALREADY_CONN = EISCONN;
+static const int HOP_NET_CONN_RESET   = -1;
+static const int HOP_NET_SOCKET_ERROR = -1;
+static const int HOP_NET_SHUT_SEND    = SHUT_WR;
+static inline int getLastNetworkError() { return errno; };
+static inline const char* hop_gai_strerror( int c ) {return gai_strerror( c );}
+#endif
+
+#include <thread>
+typedef struct addrinfo Address;
+
+namespace hop
+{
+
+class NetworkConnection
+{
+  public:
+   static HOP_CONSTEXPR uint32_t ADDR_MAX_LEN    = 50;
+   enum class Status
+   {
+      INVALID,
+      ALIVE,
+      PENDING_CONNECTION,
+      ERROR_WOULD_BLOCK,
+      ERROR_REFUSED,
+      ERROR_INVALID_ADDR,
+      ERROR_ADDR_IN_USE,
+      ERROR_UNKNOWN,
+      SHUTDOWN,
+   };
+
+   NetworkConnection() = default;
+   NetworkConnection (NetworkConnection&& nc);
+
+   ConnectionState openConnection( bool isViewer );
+   Status status() const HOP_NOEXCEPT { return _status; }
+
+   bool start( SharedMemory& shmem );
+   void stop();
+
+   bool sendAllData( const void* data, size_t size, bool compresss );
+   ssize_t receiveData( void* data, size_t size ) const;
+
+   bool handshakeSent() const HOP_NOEXCEPT { return _handshakeSent; }
+   void setHandshakeSent( bool sent ) HOP_NOEXCEPT { _handshakeSent = sent; }
+   ConnectionState tryConnect();
+
+   bool readReady()
+   {
+      struct timeval tv = { 0, 500 };
+      FD_ZERO(&_socket_set);
+      FD_SET(_clientSocket, &_socket_set);
+      int res = select(FD_SETSIZE, &_socket_set, NULL, NULL, &tv);
+      return res > 0;
+   }
+
+   void terminate();
+   void reset();
+
+   static char* errToStr( int err, char* buf, uint32_t len );
+
+   char _portStr[16] = "12345";
+   char _addressStr[ADDR_MAX_LEN + 1] = {};
+   uint8_t* _compressionBuffer        = nullptr;
+   size_t _compressionBufferSz        = 0;
+
+   std::thread _thread;
+   Socket _socket                     = HOP_NET_INVALID_SOCKET;
+   Socket _clientSocket               = HOP_NET_INVALID_SOCKET;
+   Address* _addr                     = nullptr;
+   Status _status                     = Status::INVALID;
+   fd_set _socket_set;
+   bool _handshakeSent                = false;
+};
+
 }  // namespace hop
-#endif  // defined(HOP_VIEWER)
+
+#endif // HOP_USE_REMOTE_PROFILER
+#endif // defined(HOP_VIEWER)
 
 /* ======================================================================
                     End of private declarations
@@ -649,7 +865,6 @@ const HOP_CHAR HOP_SHARED_MEM_PREFIX[] = "/hop_";
 #define unlikely( x ) __builtin_expect( !!( x ), 0 )
 
 #define HOP_GET_THREAD_ID() reinterpret_cast<size_t>( pthread_self() )
-#define HOP_SLEEP_MS( x ) usleep( x * 1000 )
 
 inline int HOP_GET_PID() HOP_NOEXCEPT{ return getpid(); }
 
@@ -669,7 +884,6 @@ const HOP_CHAR HOP_SHARED_MEM_PREFIX[] = _T("/hop_");
 #define unlikely( x ) ( x )
 
 #define HOP_GET_THREAD_ID() ( size_t ) GetCurrentThreadId()
-#define HOP_SLEEP_MS( x ) Sleep( x )
 
 inline int HOP_GET_PID() HOP_NOEXCEPT { return GetCurrentProcessId(); }
 
@@ -677,16 +891,16 @@ inline int HOP_GET_PID() HOP_NOEXCEPT { return GetCurrentProcessId(); }
 
 namespace
 {
-hop::SharedMemory::ConnectionState errorToConnectionState( uint32_t err )
+hop::ConnectionState errorToConnectionState( uint32_t err )
 {
 #if defined( _MSC_VER )
-   if( err == ERROR_FILE_NOT_FOUND ) return hop::SharedMemory::NOT_CONNECTED;
-   if( err == ERROR_ACCESS_DENIED ) return hop::SharedMemory::PERMISSION_DENIED;
-   return hop::SharedMemory::UNKNOWN_CONNECTION_ERROR;
+   if( err == ERROR_FILE_NOT_FOUND ) return hop::NOT_CONNECTED;
+   if( err == ERROR_ACCESS_DENIED ) return hop::PERMISSION_DENIED;
+   return hop::UNKNOWN_CONNECTION_ERROR;
 #else
-   if( err == ENOENT ) return hop::SharedMemory::NOT_CONNECTED;
-   if( err == EACCES ) return hop::SharedMemory::PERMISSION_DENIED;
-   return hop::SharedMemory::UNKNOWN_CONNECTION_ERROR;
+   if( err == ENOENT ) return hop::NOT_CONNECTED;
+   if( err == EACCES ) return hop::PERMISSION_DENIED;
+   return hop::UNKNOWN_CONNECTION_ERROR;
 #endif
 }
 
@@ -694,7 +908,7 @@ void* createSharedMemory(
     const HOP_CHAR* path,
     uint64_t size,
     shm_handle* handle,
-    hop::SharedMemory::ConnectionState* state )
+    hop::ConnectionState* state )
 {
    uint8_t* sharedMem{NULL};
 #if defined( _MSC_VER )
@@ -742,7 +956,7 @@ void* createSharedMemory(
    sharedMem = reinterpret_cast<uint8_t*>(
        mmap( NULL, size, PROT_READ | PROT_WRITE, MAP_SHARED, *handle, 0 ) );
 #endif
-   if( sharedMem ) *state = hop::SharedMemory::CONNECTED;
+   if( sharedMem ) *state = hop::CONNECTED;
    return sharedMem;
 }
 
@@ -750,7 +964,7 @@ void* openSharedMemory(
     const HOP_CHAR* path,
     shm_handle* handle,
     uint64_t* totalSize,
-    hop::SharedMemory::ConnectionState* state )
+    hop::ConnectionState* state )
 {
    uint8_t* sharedMem{NULL};
 #if defined( _MSC_VER )
@@ -807,7 +1021,7 @@ void* openSharedMemory(
 
    sharedMem = reinterpret_cast<uint8_t*>(
        mmap( NULL, fileStat.st_size, PROT_READ | PROT_WRITE, MAP_SHARED, *handle, 0 ) );
-   *state = sharedMem ? hop::SharedMemory::CONNECTED : hop::SharedMemory::UNKNOWN_CONNECTION_ERROR;
+   *state = sharedMem ? hop::CONNECTED : hop::UNKNOWN_CONNECTION_ERROR;
 #endif
    return sharedMem;
 }
@@ -835,16 +1049,25 @@ static thread_local ZoneId_t tl_zoneId      = HOP_ZONE_DEFAULT;
 static thread_local char tl_threadNameBuffer[64];
 static thread_local StrPtr_t tl_threadName  = 0;
 
+static char g_clientNameBuffer[128];
+static StrPtr_t g_clientName;
 static std::atomic<bool> g_done{false};  // Was the shared memory destroyed? (Are we done?)
 
-SharedMemory::ConnectionState
+void sleepMs( uint32_t ms )
+{
+#if defined( _MSC_VER )
+   Sleep( ms );
+#else
+   usleep( ms * 1000 );
+#endif
+}
+
+static uint64_t alignOn( uint64_t val, uint64_t alignment );
+
+ConnectionState
 SharedMemory::create( int pid, size_t requestedSize, bool isConsumer )
 {
    ConnectionState state = CONNECTED;
-
-   // Mutex needed for clients that might use multiple threads and that might call create inside a
-   // EndProfile block
-   std::lock_guard<std::mutex> g( _creationMutex );
 
    // Create the shared data if it was not already created
    if( !_sharedMetaData )
@@ -852,7 +1075,7 @@ SharedMemory::create( int pid, size_t requestedSize, bool isConsumer )
       _isConsumer = isConsumer;
 
       char pidStr[16];
-      snprintf( pidStr, sizeof( pidStr ), "%d", pid );  
+      snprintf( pidStr, sizeof( pidStr ), "%d", pid );
       // Create shared mem name
       HOP_STRNCPYW(
           _sharedMemPath, HOP_SHARED_MEM_PREFIX, HOP_STRLEN( HOP_SHARED_MEM_PREFIX ) + 1 );
@@ -892,7 +1115,7 @@ SharedMemory::create( int pid, size_t requestedSize, bool isConsumer )
          metaInfo->maxThreadNb               = HOP_MAX_THREAD_NB;
          metaInfo->requestedSize             = HOP_SHARED_MEM_SIZE;
          metaInfo->usingStdChronoTimeStamps  = HOP_USE_STD_CHRONO;
-         metaInfo->lastResetTimeStamp        = getTimeStamp();
+         metaInfo->lastResetSeed             = 1;
 
          // Take a local copy as we do not want to expose the ring buffer before it is
          // actually initialized
@@ -931,7 +1154,6 @@ SharedMemory::create( int pid, size_t requestedSize, bool isConsumer )
 
       if( isConsumer )
       {
-         setResetTimestamp( getTimeStamp() );
          // We can only have one consumer
          if( hasConnectedConsumer() )
          {
@@ -980,7 +1202,11 @@ bool SharedMemory::shouldSendHeartbeat( TimeStamp curTimestamp ) const HOP_NOEXC
    // When a profiled app is open, in the viewer but not listed to, we would spam
    // unnecessary heartbeats every time a trace stack was sent. This make sure we only
    // send them every few milliseconds
-   static const uint64_t cyclesBetweenHB = 100000000;
+#if HOP_USE_STD_CHRONO
+   static const uint64_t cyclesBetweenHB = 1e6;
+#else
+   static const uint64_t cyclesBetweenHB = 1e7;
+#endif
    return curTimestamp - _sharedMetaData->lastHeartbeatTimeStamp.load() > cyclesBetweenHB;
 }
 
@@ -1011,14 +1237,14 @@ void SharedMemory::setListeningConsumer( bool listening ) HOP_NOEXCEPT
       _sharedMetaData->flags &= ~( SharedMetaInfo::LISTENING_CONSUMER );
 }
 
-TimeStamp SharedMemory::lastResetTimestamp() const HOP_NOEXCEPT
+uint32_t SharedMemory::lastResetSeed() const HOP_NOEXCEPT
 {
-   return _sharedMetaData->lastResetTimeStamp.load();
+   return _sharedMetaData->lastResetSeed.load();
 }
 
-void SharedMemory::setResetTimestamp( TimeStamp t ) HOP_NOEXCEPT
+void SharedMemory::setResetSeed( uint32_t seed ) HOP_NOEXCEPT
 {
-   _sharedMetaData->lastResetTimeStamp.store( t );
+   _sharedMetaData->lastResetSeed.store( seed );
 }
 
 uint8_t* SharedMemory::data() const HOP_NOEXCEPT { return _data; }
@@ -1061,11 +1287,522 @@ void SharedMemory::destroy()
       _ringbuf        = NULL;
       _sharedMetaData = NULL;
       _valid          = false;
-      g_done.store( true );
    }
 }
 
 SharedMemory::~SharedMemory() { destroy(); }
+
+/* Remote profiler implementation */
+
+static float estimateCpuFreqHz()
+{
+#if !HOP_USE_STD_CHRONO
+   using namespace std::chrono;
+   uint32_t cpu;
+   volatile uint64_t dummy = 0;
+   // Do a quick warmup first
+   for( int i = 0; i < 1000; ++i )
+   {
+      ++dummy;
+      hop::rdtscp( cpu );
+   }
+
+   // Start timer and get current cycle count
+   const auto startTime           = high_resolution_clock::now();
+   const uint64_t startCycleCount = hop::rdtscp( cpu );
+
+   // Make the cpu work hard
+   for( int i = 0; i < 2000000; ++i )
+   {
+      dummy += i;
+   }
+
+   // Stop timer and get end cycle count
+   const uint64_t endCycleCount = hop::rdtscp( cpu );
+   const auto endTime           = high_resolution_clock::now();
+
+   const uint64_t deltaCycles = endCycleCount - startCycleCount;
+   const auto deltaTimeNs     = duration_cast<nanoseconds>( endTime - startTime );
+
+   double countPerSec = duration<double>( seconds( 1 ) ) / deltaTimeNs;
+   return deltaCycles * countPerSec;
+#else
+   return 2e9;
+#endif
+}
+
+float getCpuFreqGHz()
+{
+   static float cpuFreq = 0;
+   if( cpuFreq == 0 )
+   {
+      cpuFreq = estimateCpuFreqHz() / 1000000000.0;
+   }
+
+   return cpuFreq;
+}
+
+#if HOP_USE_REMOTE_PROFILER
+
+static void networkThreadLoop( NetworkConnection& connection, SharedMemory& shmem );
+
+NetworkConnection::NetworkConnection( NetworkConnection&& nc )
+{
+   memcpy( _portStr, nc._portStr, sizeof( _portStr ) );
+   memcpy( _addressStr, nc._addressStr, sizeof( _addressStr ) );
+
+   _thread        = std::move( nc._thread );
+   _socket        = nc._socket;
+   _clientSocket  = nc._clientSocket;
+   _addr          = nc._addr;
+   _status        = nc._status;
+   _handshakeSent = nc._handshakeSent;
+
+   _compressionBufferSz = 0;
+   _compressionBuffer = nullptr;
+}
+
+bool NetworkConnection::start( SharedMemory& shmem )
+{
+   _thread = std::thread( networkThreadLoop, std::ref(*this), std::ref(shmem));
+   return true;
+}
+
+void NetworkConnection::stop()
+{
+   reset();
+   _thread.join();
+}
+
+char* NetworkConnection::errToStr( int err, char* buf, uint32_t len )
+{
+#if defined( _MSC_VER )
+   FormatMessage(
+       FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS,
+       NULL,
+       err,
+       MAKELANGID( LANG_NEUTRAL, SUBLANG_DEFAULT ),
+       (LPSTR)buf,
+       len,
+       NULL );
+#else
+   strerror_r( err, buf, len );
+#endif
+   return buf;
+}
+
+ConnectionState NetworkConnection::tryConnect() { return openConnection( false ); }
+
+static void setSocketBlocking( Socket socket, bool blocking )
+{
+#ifdef _MSC_VER
+      u_long iBlocking = blocking ? 0 : 1;  // 0 is blocking, 1 is non blocking
+      const int res    = ioctlsocket( socket, FIONBIO, &iBlocking );
+      if( res != NO_ERROR )
+      {
+         char msgBuffer[256];
+         fprintf( stderr, "ioctlsocket failed: %s\n", NetworkConnection::errToStr( res, msgBuffer, 256 ) );
+      }
+#else
+      const unsigned currentFlags = fcntl( socket, F_GETFL, 0 );
+      if( (currentFlags & O_NONBLOCK) != !blocking )
+      {
+         unsigned newFlags = blocking ? currentFlags & ~O_NONBLOCK : currentFlags | O_NONBLOCK;
+         fcntl( socket, F_SETFL, newFlags );
+      }
+#endif
+}
+
+ConnectionState NetworkConnection::openConnection( bool isViewer )
+{
+#if defined( _MSC_VER )
+   static bool first = true;
+   if( first )
+   {
+      struct WSAData wsData;
+      if( WSAStartup( MAKEWORD( 2, 2 ), &wsData ) )
+      {
+         char msgBuffer[256];
+         fprintf(
+             stderr, "WSAStartup() failed : %s\n", errToStr( WSAGetLastError(), msgBuffer, 256 ) );
+         return PERMISSION_DENIED;
+      }
+      first = false;
+   }
+#endif
+
+   // Resolve the address
+   if(!_addr && (_addressStr[0] || !isViewer) && _portStr[0] )
+   {
+      struct addrinfo hints = {};
+      hints.ai_family       = AF_INET6;
+      hints.ai_socktype     = SOCK_STREAM;
+      hints.ai_protocol     = IPPROTO_TCP;
+      hints.ai_flags        = isViewer ? 0 : AI_PASSIVE;
+
+      int resolvedAddr = getaddrinfo( isViewer ? _addressStr : NULL, _portStr, &hints, &_addr );
+      if( resolvedAddr != 0 )
+      {
+         //fprintf( stderr, "Error resolving address: %s\n", hop_gai_strerror( resolvedAddr ) );
+         reset();
+         return CANNOT_RESOLVE_ADDR;
+      }
+   }
+
+   // Open the socket
+   if( _socket == HOP_NET_INVALID_SOCKET )
+   {
+      _socket = socket( _addr->ai_family, _addr->ai_socktype, _addr->ai_protocol );
+      if( _socket == HOP_NET_INVALID_SOCKET )
+      {
+         reset();
+         return CANNOT_RESOLVE_ADDR;
+      }
+
+      // Set the socket as non-blocking
+      setSocketBlocking( _socket, false );
+
+      // Start listening on the socket for a viewer if we are a client
+      if( !isViewer )
+      {
+         const int bindRes = bind( _socket, _addr->ai_addr, (int)_addr->ai_addrlen );
+         if( bindRes == HOP_NET_SOCKET_ERROR )
+         {
+            const int errval = getLastNetworkError();
+            reset();
+            if( errval != HOP_NET_ADDR_IN_USE )
+            {
+               char msgBuffer[256];
+               fprintf(
+                   stderr,
+                   "bind failed error: %s\n",
+                   errToStr( getLastNetworkError(), msgBuffer, 256 ) );
+               return CANNOT_RESOLVE_ADDR;
+            }
+            else
+            {
+               _status = Status::ERROR_ADDR_IN_USE;
+               return ADDR_ALREADY_IN_USE;
+            }
+         }
+
+         if( listen( _socket, 1 ) == HOP_NET_SOCKET_ERROR )
+         {
+            char msgBuffer[256];
+            fprintf(
+                stderr,
+                "Listen failed error: %s\n",
+                errToStr( getLastNetworkError(), msgBuffer, 256 ) );
+            reset();
+            return CANNOT_RESOLVE_ADDR;
+         }
+      }
+   }
+
+   ConnectionState result = NOT_CONNECTED;
+
+   // If we are the viewer, try to connect to the specified client
+   if( isViewer )
+   {
+      const int connectRes = connect( _socket, _addr->ai_addr, (int)_addr->ai_addrlen );
+      if( connectRes == HOP_NET_SOCKET_ERROR )
+      {
+         const int err = getLastNetworkError();
+
+         if( err == HOP_NET_WOULD_BLOCK || err == HOP_NET_IN_PROGRESS)
+         {
+            // Connection request sent, but could not complete in time
+            _status = Status::ERROR_WOULD_BLOCK;
+            result  = WOULD_BLOCK;
+         }
+         else if( err == HOP_NET_CONN_REFUSED )
+         {
+            // Connection refused. Probably because target is not up
+            _status = Status::ERROR_REFUSED;
+            result  = CANNOT_CONNECT_TO_SERVER;
+         }
+         else if( err == HOP_NET_CONN_INVALID )
+         {
+            _status = Status::ERROR_INVALID_ADDR;
+            result  = CANNOT_CONNECT_TO_SERVER;
+         }
+         else if( err == HOP_NET_ALREADY_DONE || err == HOP_NET_ALREADY_CONN )
+         {
+            // Already connected, nothing to be done
+            result = CONNECTED;
+         }
+         else
+         {
+            // Unknown error
+            char msgBuffer[256];
+            fprintf( stderr, "Connect failed: %s\n", errToStr( err, msgBuffer, 256 ) );
+            _status = Status::ERROR_UNKNOWN;
+            result  = UNKNOWN_CONNECTION_ERROR;
+         }
+      }
+      else
+         result = CONNECTED;
+      if( result == CONNECTED )
+          _clientSocket = _socket;
+   }
+   else  // If we are the client, try accepting incoming viewer connection
+   {
+      int viewerSocket = -1;
+      struct sockaddr_storage saddr;
+      socklen_t sz = sizeof( saddr );
+      while( viewerSocket == -1 )
+      {
+         viewerSocket = accept( _socket, (struct sockaddr*)&saddr, &sz );
+         if( viewerSocket == -1 )
+         {
+            const int err = getLastNetworkError();
+            if( err != HOP_NET_WOULD_BLOCK )
+            {
+               char msgBuffer[256];
+               fprintf( stderr, "Accept failed  %s\n", errToStr( err, msgBuffer, 256 ) );
+               break;
+            }
+         }
+         hop::sleepMs( 500 );
+      }
+      _clientSocket = viewerSocket;
+      result        = viewerSocket > 0 ? CONNECTED : NOT_CONNECTED;
+   }
+
+   if( result == CONNECTED)
+   {
+       _status = Status::ALIVE;
+       if( !isViewer )
+           setSocketBlocking( _clientSocket, true );
+   }
+
+   return result;
+}
+
+static void resetSocket( Socket* s )
+{
+   if( *s != HOP_NET_INVALID_SOCKET )
+   {
+      shutdown( *s, HOP_NET_SHUT_SEND );
+#ifdef _MSC_VER
+      closesocket( *s );
+#else
+      close( *s );
+#endif
+      *s = HOP_NET_INVALID_SOCKET;
+   }
+}
+
+void NetworkConnection::reset()
+{
+   _status = Status::INVALID;
+   resetSocket( &_socket );
+   resetSocket( &_clientSocket );
+
+   if( _addr )
+   {
+      freeaddrinfo( _addr );
+      _addr = nullptr;
+   }
+}
+
+void NetworkConnection::terminate()
+{
+   reset();
+   _status = Status::SHUTDOWN;
+   free( _compressionBuffer );
+   _compressionBuffer = nullptr;
+   _compressionBufferSz = 0;
+}
+
+bool NetworkConnection::sendAllData( const void* data, size_t size, bool compress )
+{
+#ifdef _MSC_VER
+   const int flags = 0;
+#else
+   const int flags = MSG_NOSIGNAL;
+#endif
+
+   uint8_t* dataToSend = (uint8_t*)data;
+   size_t sizeToSend   = size;
+   if( compress )
+   {
+      const size_t required_size = size + sizeof( NetworkCompressionHeader );
+      if( required_size > _compressionBufferSz )
+      {
+         _compressionBufferSz = alignOn( required_size, (size_t)1024 );
+         _compressionBuffer   = (uint8_t*) realloc( _compressionBuffer, _compressionBufferSz );
+         assert( _compressionBuffer );
+      }
+
+      const bool do_compress = size > 512;
+      dataToSend             = _compressionBuffer;
+
+      NetworkCompressionHeader* header = (NetworkCompressionHeader*)dataToSend;
+      uint8_t* dataDest                = _compressionBuffer + sizeof( NetworkCompressionHeader );
+      header->canary                   = 0xBADC0FFE;
+      header->compressed               = do_compress;
+      header->uncompressedSize         = size;
+      if( do_compress )
+      {
+         header->compressedSize = lzjb_compress( data, dataDest, size, size );
+         assert( header->compressedSize > 0 );
+      }
+      else
+      {
+         header->compressedSize = size;
+         memcpy( dataDest, data, size );
+      }
+      sizeToSend = header->compressedSize + sizeof( NetworkCompressionHeader );
+   }
+
+   size_t totalSent = 0;
+   while( totalSent < sizeToSend )
+   {
+      const int sent =
+          send( _clientSocket, (const char*)dataToSend + totalSent, (int)( sizeToSend - totalSent ), flags );
+      if( sent < 0 )
+      {
+         int err = getLastNetworkError();
+         if (err != HOP_NET_WOULD_BLOCK)
+         {
+             char msgBuffer[256];
+             fprintf( stderr, "send failed: %s\n", errToStr( err, msgBuffer, 256 ) );
+             break;
+         }
+      }
+      totalSent += sent;
+   }
+
+   if( totalSent != sizeToSend ) fprintf( stderr, "Error, partial data sent\n" );
+
+   return totalSent == sizeToSend;
+}
+
+ssize_t NetworkConnection::receiveData( void* data, size_t size ) const
+{
+   return recv( _clientSocket, (char*)data, size, 0 );
+}
+
+static bool sendHandshake( NetworkConnection& connection, SharedMemory& shmem )
+{
+   TimeStamp ts = getTimeStamp();
+
+   NetworkHandshakeMsgInfo msg = {};
+   msg.info.type               = MsgType::PROFILER_HANDSHAKE;
+   msg.info.threadId           = tl_threadId;
+   msg.info.threadName         = tl_threadName;
+   msg.info.threadIndex        = tl_threadIndex;
+   msg.info.seed               = shmem.lastResetSeed();
+
+   msg.handshake.pid            = shmem.pid();
+   msg.handshake.maxThreadCount = shmem.sharedMetaInfo()->maxThreadNb;
+   msg.handshake.sharedMemSize  = HOP_SHARED_MEM_SIZE;
+   msg.handshake.cpuFreqGhz     = getCpuFreqGHz();
+   msg.handshake.connectionTs   = ts;
+   if( g_clientName )
+   {
+       snprintf( msg.handshake.appName, sizeof( msg.handshake.appName ), "%s", &g_clientNameBuffer[0] );
+   }
+   else
+   {
+       snprintf( msg.handshake.appName, sizeof( msg.handshake.appName ), "hop client (%u)", shmem.pid() );
+   }
+   return connection.sendAllData( &msg, sizeof( msg ), true );
+}
+
+static void networkThreadLoop( NetworkConnection& connection, SharedMemory& shmem )
+{
+   const int32_t HOP_NETWORK_HEARTBEAT_RATE = 200;
+
+   HOP_SET_THREAD_NAME ("HOP Network Thread");
+
+   uint8_t readBuffer[2048];
+   uint8_t sendBuffer[4096*4];
+
+   uint32_t curSendBufferSize = 0;
+   while( true )
+   {
+      if( g_done.load() ) break;
+
+      if( !shmem.valid() )
+      {
+         sleepMs( 250 );
+         continue;
+      }
+
+      NetworkConnection::Status connStatus = connection.status();
+      if( connStatus != NetworkConnection::Status::ALIVE )
+         connection.tryConnect();
+
+      connStatus = connection.status();
+      if( connStatus == NetworkConnection::Status::ALIVE )
+      {
+         if( !connection.handshakeSent() )
+         {
+            bool sent = sendHandshake( connection, shmem );
+            connection.setHandshakeSent( sent );
+            shmem.setConnectedConsumer( sent );
+         }
+
+         while (connection.readReady())
+         {
+            ssize_t bytesToRead = connection.receiveData( readBuffer, sizeof( readBuffer ) );
+            while( bytesToRead > 0 )
+            {
+               ssize_t bytesRead = 0;
+               while( bytesRead < bytesToRead )
+               {
+                  const ViewerMsgInfo* msg = (const ViewerMsgInfo*)( readBuffer + bytesRead );
+                  if( msg->listening >= 0 ) shmem.setListeningConsumer( msg->listening );
+                  if( msg->connected >= 0 ) shmem.setConnectedConsumer( msg->connected );
+                  if( msg->seed > 0 ) shmem.setResetSeed( msg->seed );
+                  if( msg->requestHandshake ) sendHandshake( connection, shmem );
+                  bytesRead += sizeof( ViewerMsgInfo );
+               }
+               bytesToRead -= bytesRead;
+            }
+         }
+      }
+      else if( connStatus == NetworkConnection::Status::ERROR_ADDR_IN_USE )
+      {
+         int port = atoi( connection._portStr );
+         /* Try the next port */
+         port++;
+         snprintf( connection._portStr, sizeof(connection._portStr), "%u", port);
+      }
+
+      HOP_PROF("Network Loop send data");
+      size_t offset         = 0;
+      const size_t size     = ringbuf_consume( shmem.ringbuffer(), &offset );
+      if( size > 0 )
+      {
+         const bool exceed_thresh = size > sizeof( sendBuffer ) / 8;
+         if( curSendBufferSize && (exceed_thresh || curSendBufferSize + size > sizeof( sendBuffer )))
+         {
+            const bool sent = connection.sendAllData( sendBuffer, curSendBufferSize, true );
+            if( !sent )
+               fprintf( stderr, "HOP - Failed to send %u bytes to remote\n", (unsigned)size );
+             curSendBufferSize = 0;
+         }
+
+         if( !exceed_thresh )
+         {
+             memcpy( sendBuffer + curSendBufferSize, shmem.data() + offset, size );
+             curSendBufferSize += size;
+         }
+         else
+         {
+             const bool sent = connection.sendAllData( shmem.data() + offset, size, true );
+             if( !sent )
+                fprintf( stderr, "HOP - Failed to send %u bytes to remote\n", (unsigned)size );
+         }
+         ringbuf_release( shmem.ringbuffer(), size );
+      }
+   }
+}
+
+#endif // HOP_USE_REMOTE_PROFILER
 
 // C-style string hash inspired by Stackoverflow question
 // based on the Java string hash fct. If its good enough
@@ -1082,6 +1819,11 @@ static StrPtr_t cStringHash( const char* str, size_t strLen )
 }
 
 static uint32_t alignOn( uint32_t val, uint32_t alignment )
+{
+   return ( ( val + alignment - 1 ) & ~( alignment - 1 ) );
+}
+
+static uint64_t alignOn( uint64_t val, uint64_t alignment )
 {
    return ( ( val + alignment - 1 ) & ~( alignment - 1 ) );
 }
@@ -1234,6 +1976,17 @@ class Client
       }
    }
 
+   void SetClientName( StrPtr_t name )
+   {
+      if( !g_clientName )
+      {
+         HOP_STRNCPY(
+             &g_clientNameBuffer[0], reinterpret_cast<const char*>( name ), sizeof( g_clientNameBuffer ) - 1 );
+         g_clientNameBuffer[sizeof( g_clientNameBuffer ) - 1] = '\0';
+         g_clientName = addDynamicStringToDb( g_clientNameBuffer );
+      }
+   }
+
    StrPtr_t addDynamicStringToDb( const char* dynStr )
    {
       // Should not have null as dyn string, but just in case...
@@ -1294,7 +2047,7 @@ class Client
       _stringPtr.clear();
       _stringData.clear();
       _sentStringDataSize   = 0;
-      _clientResetTimeStamp = ClientManager::sharedMemory().lastResetTimestamp();
+      _clientResetSeed = ClientManager::sharedMemory().lastResetSeed();
 
       // Push back thread name
       if( tl_threadNameBuffer[0] != '\0' )
@@ -1302,6 +2055,13 @@ class Client
          const auto hash = addDynamicStringToDb( tl_threadNameBuffer );
          HOP_UNUSED( hash );
          assert( hash == tl_threadName );
+      }
+      // Push back client name
+      if( g_clientNameBuffer[0] != '\0' )
+      {
+         const auto hash = addDynamicStringToDb( g_clientNameBuffer );
+         HOP_UNUSED( hash );
+         assert( hash == g_clientName );
       }
    }
 
@@ -1330,7 +2090,7 @@ class Client
       return data;
    }
 
-   bool sendStringData( TimeStamp timeStamp )
+   bool sendStringData( uint32_t seed )
    {
       // Add all strings to the database
       for( uint32_t i = 0; i < _traces.count; ++i )
@@ -1373,7 +2133,7 @@ class Client
          msgInfo->threadId        = tl_threadId;
          msgInfo->threadName      = tl_threadName;
          msgInfo->threadIndex     = tl_threadIndex;
-         msgInfo->timeStamp       = timeStamp;
+         msgInfo->seed       = seed;
          msgInfo->stringData.size = stringToSendSize;
 
          // Copy string data into its array
@@ -1389,7 +2149,7 @@ class Client
       return true;
    }
 
-   bool sendTraces( TimeStamp timeStamp )
+   bool sendTraces(uint32_t seed)
    {
       // Get size of profiling traces message
       const size_t profilerMsgSize = sizeof( MsgInfo ) + traceDataSize( &_traces );
@@ -1417,7 +2177,7 @@ class Client
          tracesInfo->threadId     = tl_threadId;
          tracesInfo->threadName   = tl_threadName;
          tracesInfo->threadIndex  = tl_threadIndex;
-         tracesInfo->timeStamp    = timeStamp;
+         tracesInfo->seed         = seed;
          tracesInfo->traces.count = _traces.count;
 
          // Copy trace information into buffer to send
@@ -1432,7 +2192,7 @@ class Client
       return true;
    }
 
-   bool sendCores( TimeStamp timeStamp )
+   bool sendCores( uint32_t seed )
    {
       if( _cores.empty() ) return false;
 
@@ -1456,7 +2216,7 @@ class Client
          coreInfo->threadId         = tl_threadId;
          coreInfo->threadName       = tl_threadName;
          coreInfo->threadIndex      = tl_threadIndex;
-         coreInfo->timeStamp        = timeStamp;
+         coreInfo->seed             = seed;
          coreInfo->coreEvents.count = static_cast<uint32_t>( _cores.size() );
          bufferPtr += sizeof( MsgInfo );
          memcpy( bufferPtr, _cores.data(), _cores.size() * sizeof( CoreEvent ) );
@@ -1471,7 +2231,7 @@ class Client
       return true;
    }
 
-   bool sendLockWaits( TimeStamp timeStamp )
+   bool sendLockWaits( uint32_t seed )
    {
       if( _lockWaits.empty() ) return false;
 
@@ -1495,7 +2255,7 @@ class Client
          lwInfo->threadId        = tl_threadId;
          lwInfo->threadName      = tl_threadName;
          lwInfo->threadIndex     = tl_threadIndex;
-         lwInfo->timeStamp       = timeStamp;
+         lwInfo->seed       = seed;
          lwInfo->lockwaits.count = static_cast<uint32_t>( _lockWaits.size() );
          bufferPtr += sizeof( MsgInfo );
          memcpy( bufferPtr, _lockWaits.data(), _lockWaits.size() * sizeof( LockWait ) );
@@ -1508,7 +2268,7 @@ class Client
       return true;
    }
 
-   bool sendUnlockEvents( TimeStamp timeStamp )
+   bool sendUnlockEvents( uint32_t seed )
    {
       if( _unlockEvents.empty() ) return false;
 
@@ -1533,7 +2293,7 @@ class Client
          uInfo->threadId           = tl_threadId;
          uInfo->threadName         = tl_threadName;
          uInfo->threadIndex        = tl_threadIndex;
-         uInfo->timeStamp          = timeStamp;
+         uInfo->seed               = seed;
          uInfo->unlockEvents.count = static_cast<uint32_t>( _unlockEvents.size() );
          bufferPtr += sizeof( MsgInfo );
          memcpy( bufferPtr, _unlockEvents.data(), _unlockEvents.size() * sizeof( UnlockEvent ) );
@@ -1546,7 +2306,7 @@ class Client
       return true;
    }
 
-   bool sendHeartbeat( TimeStamp timeStamp )
+   bool sendHeartbeat( TimeStamp timeStamp, uint32_t seed )
    {
       ClientManager::SetLastHeartbeatTimestamp( timeStamp );
 
@@ -1569,7 +2329,7 @@ class Client
          hbInfo->threadId    = tl_threadId;
          hbInfo->threadName  = tl_threadName;
          hbInfo->threadIndex = tl_threadIndex;
-         hbInfo->timeStamp   = timeStamp;
+         hbInfo->seed        = seed;
          bufferPtr += sizeof( MsgInfo );
       }
 
@@ -1580,12 +2340,12 @@ class Client
 
    void flushToConsumer()
    {
-      const TimeStamp timeStamp = getTimeStamp();
-
       // If we have a consumer, send life signal
+      const TimeStamp timeStamp = getTimeStamp();
+      const uint32_t seed  = ClientManager::sharedMemory().lastResetSeed();
       if( ClientManager::HasConnectedConsumer() && ClientManager::ShouldSendHeartbeat( timeStamp ) )
       {
-         sendHeartbeat( timeStamp );
+         sendHeartbeat( timeStamp, seed );
       }
 
       // If no one is there to listen, no need to send any data
@@ -1596,19 +2356,18 @@ class Client
          // already took care of it. Since some traces might depend on strings
          // that were added dynamically (ie before clearing the db), we cannot
          // consider them and need to return here.
-         TimeStamp resetTimeStamp = ClientManager::sharedMemory().lastResetTimestamp();
-         if( _clientResetTimeStamp < resetTimeStamp )
+         if( _clientResetSeed < seed)
          {
             resetStringData();
             resetPendingTraces();
             return;
          }
 
-         sendStringData( timeStamp );  // Always send string data first
-         sendTraces( timeStamp );
-         sendLockWaits( timeStamp );
-         sendUnlockEvents( timeStamp );
-         sendCores( timeStamp );
+         sendStringData( seed );  // Always send string data first
+         sendTraces( seed );
+         sendLockWaits( seed );
+         sendUnlockEvents( seed );
+         sendCores( seed );
       }
       else
       {
@@ -1622,30 +2381,46 @@ class Client
    std::vector<UnlockEvent> _unlockEvents;
    std::unordered_set<StrPtr_t> _stringPtr;
    std::vector<char> _stringData;
-   TimeStamp _clientResetTimeStamp{0};
+   uint32_t _clientResetSeed{0};
    ringbuf_worker_t* _worker{NULL};
    uint32_t _sentStringDataSize{0};  // The size of the string array on viewer side
 };
 
 Client* ClientManager::Get()
 {
+   static bool initialized;
    HOP_NO_DESTROY thread_local std::unique_ptr<Client> threadClient;
 
    if( unlikely( g_done.load() ) ) return nullptr;
    if( likely( threadClient.get() ) ) return threadClient.get();
 
    // If we have not yet created our shared memory segment, do it here
-   if( !ClientManager::sharedMemory().valid() )
+   if( !initialized )
    {
-      SharedMemory::ConnectionState state =
-          ClientManager::sharedMemory().create( HOP_GET_PID(), HOP_SHARED_MEM_SIZE, false );
-      if( state != SharedMemory::CONNECTED )
-      {
-         const char* reason = "";
-         if( state == SharedMemory::PERMISSION_DENIED ) reason = " : Permission Denied";
+      // Make sure only the first thread to ever get here can create the shared memory
+      HOP_NO_DESTROY static std::mutex g_creationMutex;
+      std::lock_guard<std::mutex> g( g_creationMutex );
 
-         printf( "HOP - Could not create shared memory%s. HOP will not be able to run\n", reason );
-         return NULL;
+      if( !initialized )
+      {
+         ConnectionState state =
+             ClientManager::sharedMemory().create( HOP_GET_PID(), HOP_SHARED_MEM_SIZE, false );
+         if( state != CONNECTED )
+         {
+            const char* reason = "";
+            if( state == PERMISSION_DENIED ) reason = " : Permission Denied";
+
+            fprintf(stderr, "HOP - Could not create shared memory%s. HOP will not be able to run\n", reason );
+            return NULL;
+         }
+
+   #if HOP_USE_REMOTE_PROFILER
+         if( state == CONNECTED )
+         {
+            ClientManager::networkConnection().start( ClientManager::sharedMemory() );
+         }
+   #endif
+        initialized = true;
       }
    }
 
@@ -1750,6 +2525,14 @@ void ClientManager::SetThreadName( const char* name ) HOP_NOEXCEPT
    client->setThreadName( reinterpret_cast<StrPtr_t>( name ) );
 }
 
+void ClientManager::SetClientName( const char* name ) HOP_NOEXCEPT
+{
+   auto client = ClientManager::Get();
+   if( unlikely( !client ) ) return;
+
+   client->SetClientName( reinterpret_cast<StrPtr_t>( name ) );
+}
+
 ZoneId_t ClientManager::PushNewZone( ZoneId_t newZone )
 {
    ZoneId_t prevZone = tl_zoneId;
@@ -1786,6 +2569,23 @@ SharedMemory& ClientManager::sharedMemory() HOP_NOEXCEPT
    return _sharedMemory;
 }
 
+#if HOP_USE_REMOTE_PROFILER
+NetworkConnection& ClientManager::networkConnection() HOP_NOEXCEPT
+{
+   HOP_NO_DESTROY static NetworkConnection _networkConnection;
+   return _networkConnection;
+}
+#endif
+
+void ClientManager::Shutdown() HOP_NOEXCEPT
+{
+   g_done.store( true );
+#if HOP_USE_REMOTE_PROFILER
+   networkConnection().stop();
+#endif
+   sharedMemory().destroy();
+}
+
 }  // end of namespace hop
 
 #include <stdio.h>
@@ -1795,6 +2595,7 @@ SharedMemory& ClientManager::sharedMemory() HOP_NOEXCEPT
 #include <string.h>
 #include <assert.h>
 #include <algorithm>
+#include <limits.h>
 
 /*
  * Exponential back-off for the spinning paths.
@@ -2172,6 +2973,101 @@ void ringbuf_release( ringbuf_t* rbuf, size_t nbytes )
 
    rbuf->written = ( nwritten == rbuf->space ) ? 0 : nwritten;
 }
+
+#if HOP_USE_REMOTE_PROFILER
+
+/*
+ * LZJB Compression implementation
+ */
+
+#define LZJB_MATCH_BITS   6
+#define LZJB_MATCH_MIN    3
+#define LZJB_MATCH_MAX    ((1 << LZJB_MATCH_BITS) + (LZJB_MATCH_MIN - 1))
+#define LZJB_OFFSET_MASK  ((1 << (16 - LZJB_MATCH_BITS)) - 1)
+#define LZJB_LEMPEL_SIZE  1024
+
+#ifndef NBBY
+#define NBBY CHAR_BIT
+#endif
+
+size_t
+lzjb_compress(const void *s_start, void *d_start, size_t s_len, size_t d_len)
+{
+   const uint8_t *src = (const uint8_t*)s_start;
+   const uint8_t *cpy = NULL;
+   uint8_t *dst = (uint8_t*)d_start;
+   uint8_t *copymap = NULL;
+   int copymask = 1 << (NBBY - 1);
+   int mlen, offset, hash;
+   uint16_t *hp;
+   uint16_t lempel[LZJB_LEMPEL_SIZE] = { 0 };
+
+   while (src < (uint8_t *)s_start + s_len) {
+      if ((copymask <<= 1) == (1 << NBBY)) {
+         if (dst >= (uint8_t *)d_start + d_len - 1 - 2 * NBBY)
+            return (s_len);
+         copymask = 1;
+         copymap = dst;
+         *dst++ = 0;
+      }
+      if (src > (uint8_t *)s_start + s_len - LZJB_MATCH_MAX) {
+         *dst++ = *src++;
+         continue;
+      }
+      hash = (src[0] << 16) + (src[1] << 8) + src[2];
+      hash += hash >> 9;
+      hash += hash >> 5;
+      hp = &lempel[hash & (LZJB_LEMPEL_SIZE - 1)];
+      offset = (intptr_t)(src - *hp) & LZJB_OFFSET_MASK;
+      *hp = (uint16_t)(uintptr_t)src;
+      cpy = src - offset;
+      if (cpy >= (uint8_t *)s_start && cpy != src &&
+          src[0] == cpy[0] && src[1] == cpy[1] && src[2] == cpy[2]) {
+         *copymap |= copymask;
+         for (mlen = LZJB_MATCH_MIN; mlen < LZJB_MATCH_MAX; mlen++)
+            if (src[mlen] != cpy[mlen])
+               break;
+         *dst++ = (uint8_t)(((mlen - LZJB_MATCH_MIN) << (NBBY - LZJB_MATCH_BITS)) | (offset >> NBBY));
+         *dst++ = (uint8_t)offset;
+         src += mlen;
+      } else {
+         *dst++ = *src++;
+      }
+   }
+   return (dst - (uint8_t *)d_start);
+}
+
+int
+lzjb_decompress(const void *s_start, void *d_start, size_t s_len, size_t d_len)
+{
+   (void)s_len;
+   const uint8_t *src = (const uint8_t*)s_start;
+   uint8_t *dst = (uint8_t *)d_start;
+   uint8_t *d_end = (uint8_t *)d_start + d_len;
+   uint8_t *cpy = NULL, copymap = 0;
+   int copymask = 1 << (NBBY - 1);
+
+   while (dst < d_end) {
+      if ((copymask <<= 1) == (1 << NBBY)) {
+         copymask = 1;
+         copymap = *src++;
+      }
+      if (copymap & copymask) {
+         int mlen = (src[0] >> (NBBY - LZJB_MATCH_BITS)) + LZJB_MATCH_MIN;
+         int offset = ((src[0] << NBBY) | src[1]) & LZJB_OFFSET_MASK;
+         src += 2;
+         if ((cpy = dst - offset) < (uint8_t *)d_start)
+            return (-1);
+         while (--mlen >= 0 && dst < d_end)
+            *dst++ = *cpy++;
+      } else {
+         *dst++ = *src++;
+      }
+   }
+   return (0);
+}
+
+#endif  // HOP_USE_REMOTE_PROFILER
 
 #endif  // end HOP_IMPLEMENTATION
 

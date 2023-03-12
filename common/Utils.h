@@ -18,11 +18,8 @@
 
 namespace hop
 {
-bool supportsRDTSCP();
 
 bool supportsConstantTSC();
-
-float getCpuFreqGHz();
 
 int formatCyclesDurationToDisplay(
     uint64_t duration,
@@ -79,11 +76,15 @@ inline T pxlToCycles( double windowWidth, uint64_t timelineRange, double pxl )
 
 inline int64_t cyclesToNanos( int64_t cycles, float cpuFreqGHz )
 {
+   if( cpuFreqGHz == 1.0 )
+      return cycles;
    return llround( cycles / cpuFreqGHz);
 }
 
 inline uint64_t nanosToCycles( uint64_t nanos, float cpuFreqGHz )
 {
+   if (cpuFreqGHz == 1.0)
+      return nanos;
    return llround(nanos * cpuFreqGHz);
 }
 

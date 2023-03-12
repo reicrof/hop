@@ -40,6 +40,11 @@ hop::ProfilerView::ProfilerView( hop::Profiler::SourceType type, int processId, 
 {
 }
 
+hop::ProfilerView::ProfilerView( NetworkConnection& nc )
+    : _profiler( nc ), _lodLevel( 0 ), _highlightValue( 0.0f )
+{
+}
+
 bool hop::ProfilerView::fetchClientData()
 {
    return _profiler.fetchClientData();

@@ -10,17 +10,21 @@
 namespace hop
 {
 class ProfilerView;
+class Snooper;
+class NetworkConnection;
 class Viewer
 {
   public:
    Viewer( uint32_t screenSizeX, uint32_t screenSizeY );
    ~Viewer();
    int addNewProfiler( const char* processname, bool startRecording );
+   int addNewProfiler( NetworkConnection& nc, bool startRecording );
    void openProfilerFile();
    int removeProfiler( int index );
    int profilerCount() const;
    int activeProfilerIndex() const;
    bool fetchClientsData();
+   void openSnooper();
 
   const ProfilerView* getProfiler( int index ) const;
   ProfilerView* getProfiler( int index );
@@ -44,6 +48,8 @@ class Viewer
    Timeline _timeline;
    std::vector<std::unique_ptr<hop::ProfilerView> > _profilers;
    int _selectedTab;
+
+   std::unique_ptr<Snooper> _snooper;
 
    std::shared_future< ProfilerView* > _pendingProfilerLoad;
 

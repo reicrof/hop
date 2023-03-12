@@ -65,7 +65,9 @@ size_t StringDb::getStringIndex( hop::StrPtr_t strId ) const
    if( strId == 0 ) { return 0; }
 
    const auto it = _stringIndices.find( strId );
-   assert( it != _stringIndices.end() );
+   //assert( it != _stringIndices.end() );
+    if (it == _stringIndices.end())
+        return 0;
    return it->second;
 }
 

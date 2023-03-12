@@ -375,7 +375,7 @@ static hop::ProcessID startViewer( SDL_Window* window, const hop::LaunchOptions&
       {
          no_redraw_counter = 0; // Clamp to zero
          // Nothing happening, go to sleep
-         HOP_SLEEP_MS( 16 );
+         //HOP_SLEEP_MS( 16 );
       }
 
       prev_mouse_state = mouse;
@@ -434,6 +434,7 @@ int main( int argc, char* argv[] )
 
    createIcon( window );
 
+   HOP_SET_CLIENT_NAME( "Hop Viewer" );
    HOP_SET_THREAD_NAME( "Main" );
 
    // Start the viewer and all its profilers
@@ -452,6 +453,8 @@ int main( int argc, char* argv[] )
    destroyIcon();
 
    ImGui::DestroyContext();
+
+   HOP_SHUTDOWN();
 
    SDL_GL_DeleteContext( mainContext );
    SDL_DestroyWindow( window );

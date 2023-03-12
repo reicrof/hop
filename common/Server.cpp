@@ -55,19 +55,19 @@ static int mergeAndRemoveDuplicates( hop::CoreEvent* coreEvents, uint32_t count,
    return std::distance( coreEvents, newEnd );
 }
 
-static hop::SharedMemory::ConnectionState updateConnectionState(
+static hop::ConnectionState updateConnectionState(
     const hop::SharedMemory& sharedMem,
     int pollFailCount )
 {
-   hop::SharedMemory::ConnectionState state = hop::SharedMemory::CONNECTED;
+   hop::ConnectionState state = hop::CONNECTED;
    const bool producerLost =
        !sharedMem.hasConnectedProducer() || pollFailCount > POLL_COUNT_FAIL_DISCONNECTION;
    if( producerLost )
    {
       // We have lost the producer. Check if it is becaused the process was terminated or
       // if it is simply not feeling chatty
-      state = hop::processAlive( sharedMem.pid() ) ? hop::SharedMemory::CONNECTED_NO_CLIENT
-                                                   : hop::SharedMemory::NOT_CONNECTED;
+      state = hop::processAlive( sharedMem.pid() ) ? hop::CONNECTED_NO_CLIENT
+                                                   : hop::NOT_CONNECTED;
    }
    return state;
 }
@@ -83,6 +83,282 @@ static uint16_t getShortNameIndex( const std::string longname )
 
 namespace hop
 {
+class Transport
+{
+  public:
+   Transport() = default;
+#if HOP_USE_REMOTE_PROFILER
+   Transport( NetworkConnection* nc ) : _network( nc ) {}
+#endif
+
+   bool create( int /* pid */, const char* /* name */ ) { return true; }
+
+   void setConsumerState(int connected, int listening)
+   {
+      if( _shmem.valid () )
+      {
+          if( connected >= 0 )
+            _shmem.setConnectedConsumer( connected );
+          if( listening >= 0 )
+            _shmem.setListeningConsumer( listening );
+      }
+#if HOP_USE_REMOTE_PROFILER
+      if( _network && _network->status() == NetworkConnection::Status::ALIVE )
+      {
+         ViewerMsgInfo info = {};
+         info.connected = connected;
+         info.listening = listening;
+         info.requestHandshake = !connected || !listening;
+         _network->sendAllData( &info, sizeof( info ), false );
+      }
+#endif
+   }
+
+   void setResetSeed( uint32_t seed )
+   {
+      if( _shmem.valid() ) _shmem.setResetSeed( seed );
+
+#if HOP_USE_REMOTE_PROFILER
+      if( _network && _network->status() == NetworkConnection::Status::ALIVE )
+      {
+         ViewerMsgInfo info  = {};
+         info.seed      = seed;
+         _network->sendAllData( &info, sizeof( info ), false );
+      }
+#endif
+   }
+
+   void requestHandshake()
+   {
+#if HOP_USE_REMOTE_PROFILER
+      if( _network && _network->status() == NetworkConnection::Status::ALIVE )
+      {
+         ViewerMsgInfo info    = {};
+         info.requestHandshake = true;
+         _network->sendAllData( &info, sizeof( info ), false );
+      }
+#endif
+   }
+
+   SharedMemory _shmem;
+#if HOP_USE_REMOTE_PROFILER
+   NetworkConnection *_network;
+#endif
+};
+
+static void shmemTransportLoop( Server* server, Transport *transport, int pid )
+{
+   int pollFailedCount                 = 0;
+   ConnectionState prevConnectionState = NOT_CONNECTED;
+
+   uint32_t reconnectTimeoutMs = 10;
+   uint32_t seed          = 0;
+   while( true )
+   {
+      // Try to get the shared memory
+      if( !transport->_shmem.valid() )
+      {
+         if( server->tryConnect( pid, prevConnectionState ) )
+         {
+            // Sleep few ms before retrying. Increase timeout time each try
+            hop::sleepMs( reconnectTimeoutMs );
+            static constexpr uint32_t MAX_RECONNECT_TIMEOUT_MS = 500;
+            reconnectTimeoutMs = std::min( reconnectTimeoutMs + 10, MAX_RECONNECT_TIMEOUT_MS );
+            continue;  // No connection, let's retry
+         }
+
+         if( prevConnectionState != CONNECTED )
+            break;  // No connection was found and we should not retry.
+
+         printf( "Connection to shared data successful.\n" );
+         std::lock_guard<hop::Mutex> guard( server->_stateMutex );
+         seed = server->_state.seed = transport->_shmem.lastResetSeed();
+      }
+
+      HOP_PROF_FUNC();
+
+      // Check if its been a while since we have been signaleds
+      const auto newConnectionState = updateConnectionState( transport->_shmem, pollFailedCount );
+      const bool clientAlive        = newConnectionState != NOT_CONNECTED;
+
+      // Check and update current server state
+      {
+         std::lock_guard<hop::Mutex> guard( server->_stateMutex );
+
+         //  Stop processing if we are done running
+         if( !server->_state.running ) break;
+
+         // A clear was requested so we need to clear our string database
+         if( server->_state.seed > seed )
+         {
+            server->_stringDb.clear();
+            server->clearPendingMessages();
+            server->_threadNamesReceived.clear();
+            transport->_shmem.setResetSeed( server->_state.seed );
+            seed = server->_state.seed;
+            continue;
+         }
+
+         // Update state if it has changed
+         if( prevConnectionState != newConnectionState )
+         {
+            prevConnectionState    = newConnectionState;
+            server->_state.connectionState = newConnectionState;
+         }
+
+         if( !clientAlive )
+         {
+            server->_state.pid = -1;
+            transport->_shmem.destroy();
+            continue;
+         }
+      }
+
+      size_t offset            = 0;
+      const size_t bytesToRead = ringbuf_consume( transport->_shmem.ringbuffer(), &offset );
+      if( bytesToRead > 0 )
+      {
+         HOP_PROF( "Server - Handling new messages" );
+         pollFailedCount              = 0;
+         size_t bytesRead             = 0;
+         while( bytesRead < bytesToRead )
+         {
+            size_t bread = server->handleNewMessage(
+                transport->_shmem.data() + offset + bytesRead, bytesToRead - bytesRead, seed );
+            if( bread <= 0 ) break;
+
+            bytesRead += bread;
+         }
+         ringbuf_release( server->_transport->_shmem.ringbuffer(), bytesToRead );
+      }
+      else
+      {
+         // Nothing was sent
+         ++pollFailedCount;
+         HOP_PROF( "Nothing send..." );
+
+         // If we have a connected producer and we timed out, it simply means the app is either
+         // not very productive or is being debuged. If we do not have a producer, it means the
+         // app was closed.
+         using namespace std::chrono;
+         if( clientAlive )
+         {
+            // Relax our polling after a few attemps
+            hop::sleepMs( 1 * std::min( pollFailedCount, 10 ) );
+         }
+         else
+         {
+            hop::sleepMs( 500 );
+         }
+      }
+   }
+}
+
+#if HOP_USE_REMOTE_PROFILER
+static uint32_t processUncompressData( Server* server, uint32_t curSeed, const uint8_t *data, ssize_t size )
+{
+    ssize_t bytesRead = 0;
+    while( bytesRead < size )
+    {
+       uint32_t newSeed = curSeed;
+       size_t bread =
+           server->handleNewMessage( data + bytesRead, size - bytesRead, newSeed );
+       if( bread <= 0 ) break;
+
+       bytesRead += bread;
+
+       // If we have received a new handshake, the seed might have been changed. We need to act
+       // on it now, otherwise we could skip some incoming string data
+       if( newSeed > curSeed )
+       {
+          curSeed = newSeed;
+          std::lock_guard<hop::Mutex> guard( server->_stateMutex );
+          server->_stringDb.clear();
+          server->_threadNamesReceived.clear();
+       }
+    }
+    assert( bytesRead == size);
+    return curSeed;
+}
+static void
+networkTransportLoop( Server* server, Transport* transport, NetworkConnection* nc )
+{
+   const uint32_t bufSize = 1024 * 1024 * 8;
+   uint8_t* buf           = (uint8_t*)malloc( bufSize );
+   uint8_t* compBuf       = (uint8_t*)malloc( bufSize );
+
+   transport->requestHandshake();
+   server->_networkThreadReady.store( true );
+
+   uint32_t curSeed = 0;
+   uint32_t curDataSize = 0;
+   while( true )
+   {
+      // Check and update current server state
+      {
+         std::lock_guard<hop::Mutex> guard( server->_stateMutex );
+         //  Stop processing if we are done running
+         if( !server->_state.running ) break;
+
+         if( server->_state.seed > curSeed )
+         {
+            server->_stringDb.clear();
+            server->_threadNamesReceived.clear();
+            transport->setResetSeed( server->_state.seed );
+            curSeed = server->_state.seed;
+            continue;
+         }
+      }
+
+      const ssize_t recSize = nc->receiveData( compBuf + curDataSize, bufSize - curDataSize );
+      if( recSize > 0 )
+         curDataSize += recSize;
+
+      NetworkCompressionHeader compressionHeader = {};
+      if( curDataSize >= sizeof( NetworkCompressionHeader ) )
+      {
+         compressionHeader = *(NetworkCompressionHeader*)( compBuf );
+         assert( compressionHeader.canary == 0xbadc0ffe );
+      }
+
+      uint8_t* compBufIt = compBuf;
+      while( curDataSize > compressionHeader.compressedSize + sizeof( compressionHeader ) )
+      {
+         const size_t cmpSize  = compressionHeader.compressedSize;
+         const size_t ucmpSize = compressionHeader.uncompressedSize;
+         compBufIt += sizeof( compressionHeader );
+
+         const uint8_t* uncompressedData = compBufIt;
+         if( compressionHeader.compressed )
+         {
+            int decomp_res = lzjb_decompress( compBufIt, buf, cmpSize, ucmpSize );
+            assert( decomp_res >= 0 );
+            uncompressedData = buf;
+         }
+
+         curSeed = processUncompressData( server, curSeed, uncompressedData, ucmpSize );
+
+         assert( curDataSize > cmpSize + sizeof( compressionHeader ) );
+         curDataSize -= cmpSize + sizeof( compressionHeader );
+         compBufIt += cmpSize;
+
+         /* Fetch next compression header */
+         if( curDataSize >= sizeof( compressionHeader ) )
+         {
+            memcpy( &compressionHeader, compBufIt, sizeof( NetworkCompressionHeader ) );
+            assert( compressionHeader.canary == 0xbadc0ffe );
+         }
+      }
+
+      if( curDataSize && compBuf != compBufIt )
+         memmove( compBuf, compBufIt, curDataSize );
+   }
+
+   free( buf );
+   free( compBuf );
+}
+#endif
+
 bool Server::start( int inPid, const char* name )
 {
    assert( name != nullptr );
@@ -91,115 +367,35 @@ bool Server::start( int inPid, const char* name )
    _state.pid = -1;
    _state.processName = name;
    _state.shortNameIndex = getShortNameIndex( _state.processName );
-   _state.connectionState = SharedMemory::NOT_CONNECTED;
+   _state.connectionState = NOT_CONNECTED;
 
-   _thread = std::thread( [this, inPid]() {
-      int pollFailedCount = 0;
-      SharedMemory::ConnectionState prevConnectionState = SharedMemory::NOT_CONNECTED;
+   _transport = new Transport();
 
-      uint32_t reconnectTimeoutMs = 10;
-      while ( true )
-      {
-         // Try to get the shared memory
-         if ( !_sharedMem.valid() )
-         {
-            if( tryConnect( inPid, prevConnectionState ) )
-            {
-               // Sleep few ms before retrying. Increase timeout time each try
-               std::this_thread::sleep_for( std::chrono::milliseconds( reconnectTimeoutMs ) );
-               static constexpr uint32_t MAX_RECONNECT_TIMEOUT_MS = 500;
-               reconnectTimeoutMs = std::min( reconnectTimeoutMs + 10, MAX_RECONNECT_TIMEOUT_MS );
-               continue; // No connection, let's retry
-            }
-
-            if( prevConnectionState != SharedMemory::CONNECTED  )
-               break; // No connection was found and we should not retry.
-
-            printf( "Connection to shared data successful.\n" );
-         }
-
-         HOP_PROF_FUNC();
-
-         // Check if its been a while since we have been signaleds
-         const auto newConnectionState =
-             updateConnectionState( _sharedMem, pollFailedCount );
-         const bool clientAlive = newConnectionState != SharedMemory::NOT_CONNECTED;
-
-         // Check and update current server state
-         {
-            std::lock_guard<hop::Mutex> guard( _stateMutex );
-
-            //  Stop processing if we are done running
-            if( !_state.running ) break;
-
-            // A clear was requested so we need to clear our string database
-            if( _state.clearingRequested )
-            {
-               _stringDb.clear();
-               clearPendingMessages();
-               _state.clearingRequested = false;
-               _sharedMem.setResetTimestamp( getTimeStamp() );
-               _threadNamesReceived.clear();
-               continue;
-            }
-
-            // Update state if it has changed
-            if( prevConnectionState != newConnectionState )
-            {
-               prevConnectionState    = newConnectionState;
-               _state.connectionState = newConnectionState;
-            }
-
-            if( !clientAlive )
-            {
-               _state.pid = -1;
-               _sharedMem.destroy();
-               continue;
-            }
-         }
-
-         size_t offset = 0;
-         const size_t bytesToRead = ringbuf_consume( _sharedMem.ringbuffer(), &offset );
-         if ( bytesToRead > 0 )
-         {
-            HOP_PROF( "Server - Handling new messages" );
-            pollFailedCount = 0;
-            const TimeStamp minTimestamp = _sharedMem.lastResetTimestamp();
-            size_t bytesRead = 0;
-            while ( bytesRead < bytesToRead )
-            {
-               bytesRead += handleNewMessage(
-                   &_sharedMem.data()[offset + bytesRead], bytesToRead - bytesRead, minTimestamp );
-            }
-            ringbuf_release( _sharedMem.ringbuffer(), bytesToRead );
-         }
-         else
-         {
-            // Nothing was sent
-            ++pollFailedCount;
-            HOP_PROF( "Nothing send..." );
-
-            // If we have a connected producer and we timed out, it simply means the app is either
-            // not very productive or is being debuged. If we do not have a producer, it means the
-            // app was closed.
-            using namespace std::chrono;
-            if( clientAlive )
-            {
-               // Relax our polling after a few attemps
-               std::this_thread::sleep_for( microseconds( 500 ) * std::min( pollFailedCount, 10 ) );
-            }
-            else
-            {
-               std::this_thread::sleep_for( milliseconds( 500 ) );
-            }
-         }
-      }
-   } );
+   _thread = std::thread( shmemTransportLoop, this, _transport, inPid );
 
    return true;
 }
 
-bool Server::tryConnect( int32_t pid, SharedMemory::ConnectionState& newState )
+#if HOP_USE_REMOTE_PROFILER
+bool Server::start( NetworkConnection& nc )
+{
+   _state.running         = true;
+   _state.pid             = -1;
+   _state.connectionState = NOT_CONNECTED;
+
+   _transport = new Transport(&nc);
+
+   _thread = std::thread( networkTransportLoop, this, _transport, &nc );
+   while( !_networkThreadReady.load() )
+   {
+      hop::sleepMs( 100 );
+   }
+
+   return true;
+}
+#endif
+
+bool Server::tryConnect( int32_t pid, ConnectionState& newState )
 {
    HOP_PROF_FUNC();
 
@@ -239,9 +435,9 @@ bool Server::tryConnect( int32_t pid, SharedMemory::ConnectionState& newState )
       }
    }
 
-   newState = _sharedMem.create( procInfo.pid, 0 /*will be define in shared metadata*/, true );
+   newState = _transport->_shmem.create(procInfo.pid, 0 /*will be define in shared metadata*/, true);
 
-   if( newState != SharedMemory::CONNECTED )
+   if( newState != CONNECTED )
    {
       {  // Update state then go to sleep a few MS
          std::lock_guard<hop::Mutex> guard( _stateMutex );
@@ -257,9 +453,9 @@ bool Server::tryConnect( int32_t pid, SharedMemory::ConnectionState& newState )
    clearPendingMessages();
 
    std::lock_guard<hop::Mutex> guard( _stateMutex );
-   _sharedMem.setListeningConsumer( _state.recording );
+   _transport->setConsumerState( 1, _state.recording );
 
-   _state.connectionState = newState;
+    _state.connectionState = newState;
    _state.pid             = procInfo.pid;
    _state.processName     = std::string( procInfo.name );
    _state.shortNameIndex  = getShortNameIndex( _state.processName );
@@ -289,7 +485,7 @@ const char* Server::shortProcessInfo( int* processId ) const
    return _state.processName.empty() ? noProcessStr : _state.processName.c_str() + _state.shortNameIndex;
 }
 
-SharedMemory::ConnectionState Server::connectionState() const
+ConnectionState Server::connectionState() const
 {
    std::lock_guard<hop::Mutex> guard( _stateMutex );
    return _state.connectionState;
@@ -297,9 +493,9 @@ SharedMemory::ConnectionState Server::connectionState() const
 
 size_t Server::sharedMemorySize() const
 {
-   if ( _sharedMem.valid() )
+   if (_transport && _transport->_shmem.valid() )
    {
-      return _sharedMem.sharedMetaInfo()->requestedSize;
+      return _transport->_shmem.sharedMetaInfo()->requestedSize;
    }
 
    return 0;
@@ -307,9 +503,9 @@ size_t Server::sharedMemorySize() const
 
 float Server::cpuFreqGHz() const
 {
-   if( _cpuFreqGHz == 0 && _sharedMem.valid() )
+   if( _cpuFreqGHz == 0 && _transport && _transport->_shmem.valid() )
    {
-      if( _sharedMem.sharedMetaInfo()->usingStdChronoTimeStamps )
+      if( _transport->_shmem.sharedMetaInfo()->usingStdChronoTimeStamps )
       {
          // Using std::chrono means we are already using nanoseconds -> 1Ghz
          _cpuFreqGHz = 1.0f;
@@ -327,10 +523,8 @@ void Server::setRecording( bool recording )
 {
    std::lock_guard<hop::Mutex> guard( _stateMutex );
    _state.recording = recording;
-   if ( _sharedMem.valid() )
-   {
-      _sharedMem.setListeningConsumer( recording );
-   }
+   if (_transport)
+      _transport->setConsumerState( 1, recording );
 }
 
 void Server::getPendingData( PendingData& data )
@@ -358,19 +552,66 @@ bool Server::addUniqueThreadName( uint32_t threadIndex, StrPtr_t name )
    return newInsert;
 }
 
-size_t Server::handleNewMessage( uint8_t* data, size_t maxSize, TimeStamp minTimestamp )
+static size_t msgSize (const MsgInfo *msgInfo)
 {
-   uint8_t* bufPtr = data;
+    size_t size = sizeof(MsgInfo);
+    switch ( msgInfo->type )
+    {
+        case MsgType::PROFILER_HEARTBEAT:
+            break;
+        case MsgType::PROFILER_STRING_DATA:
+            size += msgInfo->stringData.size;
+            assert (size % 8 == 0);
+            break;
+        case MsgType::PROFILER_TRACE:
+        {
+            constexpr size_t trace_size = ( sizeof( TimeStamp ) + sizeof( TimeStamp ) + sizeof( Depth_t ) +
+                                           sizeof( StrPtr_t ) + sizeof( StrPtr_t ) + sizeof( LineNb_t ) +
+                                           sizeof( ZoneId_t ) );
+            size += trace_size * msgInfo->traces.count;
+            break;
+        }
+        case MsgType::PROFILER_WAIT_LOCK:
+            size += msgInfo->lockwaits.count * sizeof( LockWait );
+            break;
+        case MsgType::PROFILER_UNLOCK_EVENT:
+            size += msgInfo->unlockEvents.count * sizeof( UnlockEvent );
+            break;
+        case MsgType::PROFILER_CORE_EVENT:
+            size += msgInfo->coreEvents.count * sizeof( CoreEvent );
+            break;
+        case MsgType::PROFILER_HANDSHAKE:
+            size += sizeof (NetworkHandshake);
+            break;
+        default:
+            assert( false );
+
+    }
+
+    return size;
+}
+
+ssize_t Server::handleNewMessage( const uint8_t* data, size_t maxSize, uint32_t &seed )
+{
+   // Do we even have enough data to make sense of the headers
+   if( maxSize < sizeof( MsgInfo ) ) return 0;
+
+   const uint8_t* bufPtr = data;
    const MsgInfo* msgInfo = (const MsgInfo*)bufPtr;
    const MsgType msgType = msgInfo->type;
    const uint32_t threadIndex = msgInfo->threadIndex;
 
+   assert ((uint32_t)msgInfo->type < (uint32_t)MsgType::INVALID_MESSAGE);
    bufPtr += sizeof( MsgInfo );
-   assert( ( size_t )( bufPtr - data ) <= maxSize );
-   (void)maxSize;  // Removed unused warning
 
-   // If the message was sent prior to the last reset timestamp, ignore it
-   if ( msgInfo->timeStamp < minTimestamp ) { return maxSize; }
+   const size_t totalMsgSize = msgSize (msgInfo);
+
+   // If the message was sent from a previous reset seed ignore it, unless
+   // it is a handshake message
+   if( msgInfo->seed != seed && msgType != MsgType::PROFILER_HANDSHAKE ) return totalMsgSize;
+
+   // If the whole message is not contain in the buffer, bail out here.
+   if( totalMsgSize > maxSize ) return 0;
 
    // If the thread has an assigned name
    if ( msgInfo->threadName != 0 && addUniqueThreadName( threadIndex, msgInfo->threadName ) )
@@ -381,6 +622,8 @@ size_t Server::handleNewMessage( uint8_t* data, size_t maxSize, TimeStamp minTim
 
     switch ( msgType )
     {
+       case MsgType::PROFILER_HEARTBEAT:
+         break;
        case MsgType::PROFILER_STRING_DATA:
        {
           // Copy string and add it to database
@@ -389,7 +632,7 @@ size_t Server::handleNewMessage( uint8_t* data, size_t maxSize, TimeStamp minTim
           {
              const char* strDataPtr = (const char*)bufPtr;
              bufPtr += strSize;
-             assert( ( size_t )( bufPtr - data ) <= maxSize );
+             assert (bufPtr - data <= maxSize);
 
              // TODO: Could lock later when we received all the messages
              std::lock_guard<hop::Mutex> guard( _sharedPendingDataMutex );
@@ -397,7 +640,7 @@ size_t Server::handleNewMessage( uint8_t* data, size_t maxSize, TimeStamp minTim
              _sharedPendingData.stringData.insert(
                  _sharedPendingData.stringData.end(), strDataPtr, strDataPtr + strSize );
           }
-          return ( size_t )( bufPtr - data );
+          break;
        }
        case MsgType::PROFILER_TRACE:
        {
@@ -410,8 +653,16 @@ size_t Server::handleNewMessage( uint8_t* data, size_t maxSize, TimeStamp minTim
              const StrPtr_t* fileNames = (const StrPtr_t*)( ends + tracesCount );
              const StrPtr_t* fctNames = fileNames + tracesCount;
              const LineNb_t* lineNbs = (const LineNb_t*)( fctNames + tracesCount );
-             const Depth_t* depths = (const Depth_t*)( lineNbs + tracesCount );
-             const ZoneId_t* zones = (const ZoneId_t*)( depths + tracesCount );
+             const Depth_t* depths     = (const Depth_t*)( lineNbs + tracesCount );
+             const ZoneId_t* zones     = (const ZoneId_t*)( depths + tracesCount );
+
+             HOP_CONSTEXPR size_t trace_size =
+                 ( sizeof( TimeStamp ) + sizeof( TimeStamp ) + sizeof( Depth_t ) +
+                   sizeof( StrPtr_t ) + sizeof( StrPtr_t ) + sizeof( LineNb_t ) +
+                   sizeof( ZoneId_t ) );
+
+             bufPtr += trace_size * tracesCount;
+             assert( bufPtr - data <= maxSize );
 
              traceData.entries.ends.append( ends, ends + tracesCount );
              traceData.entries.starts.append( starts, starts + tracesCount );
@@ -431,20 +682,13 @@ size_t Server::handleNewMessage( uint8_t* data, size_t maxSize, TimeStamp minTim
              // The ends time should already be sorted
              assert_is_sorted( traceData.entries.ends.begin(), traceData.entries.ends.end() );
 
-             bufPtr +=
-                 ( ( sizeof( TimeStamp ) + sizeof( TimeStamp ) + sizeof( Depth_t ) +
-                     sizeof( StrPtr_t ) + sizeof( StrPtr_t ) + sizeof( LineNb_t ) +
-                     sizeof( ZoneId_t ) ) *
-                   tracesCount );
-             assert( ( size_t )( bufPtr - data ) <= maxSize );
-
              static_assert(
                  std::is_move_constructible<TraceData>::value, "Trace Data not moveable" );
              // TODO: Could lock later when we received all the messages
              std::lock_guard<hop::Mutex> guard( _sharedPendingDataMutex );
              _sharedPendingData.tracesPerThread[threadIndex].append( traceData );
           }
-          return ( size_t )( bufPtr - data );
+          break;
        }
       case MsgType::PROFILER_WAIT_LOCK:
       {
@@ -464,6 +708,7 @@ size_t Server::handleNewMessage( uint8_t* data, size_t maxSize, TimeStamp minTim
          lockwaitData.entries.maxDepth = maxDepth;
 
          bufPtr += ( lwCount * sizeof( LockWait ) );
+         assert (bufPtr - data <= maxSize);
 
          // The ends time should already be sorted
          assert_is_sorted( lockwaitData.entries.ends.begin(), lockwaitData.entries.ends.end() );
@@ -471,8 +716,7 @@ size_t Server::handleNewMessage( uint8_t* data, size_t maxSize, TimeStamp minTim
          // TODO: Could lock later when we received all the messages
          std::lock_guard<hop::Mutex> guard( _sharedPendingDataMutex );
          _sharedPendingData.lockWaitsPerThread[threadIndex].append( lockwaitData );
-
-         return ( size_t )( bufPtr - data );
+         break;
       }
       case MsgType::PROFILER_UNLOCK_EVENT:
       {
@@ -480,7 +724,7 @@ size_t Server::handleNewMessage( uint8_t* data, size_t maxSize, TimeStamp minTim
          UnlockEvent* eventPtr = (UnlockEvent*)bufPtr;
 
          bufPtr += eventCount * sizeof( UnlockEvent );
-         assert( ( size_t )( bufPtr - data ) <= maxSize );
+         assert (bufPtr - data <= maxSize);
 
          std::sort(
              eventPtr, eventPtr + eventCount, []( const UnlockEvent& lhs, const UnlockEvent& rhs ) {
@@ -492,11 +736,7 @@ size_t Server::handleNewMessage( uint8_t* data, size_t maxSize, TimeStamp minTim
          auto& unlocks = _sharedPendingData.unlockEventsPerThread[threadIndex];
          unlocks.insert( unlocks.end(), eventPtr, eventPtr + eventCount );
 
-         return ( size_t )( bufPtr - data );
-      }
-      case MsgType::PROFILER_HEARTBEAT:
-      {
-         return ( size_t )( bufPtr - data );
+         break;
       }
       case MsgType::PROFILER_CORE_EVENT:
       {
@@ -505,7 +745,8 @@ size_t Server::handleNewMessage( uint8_t* data, size_t maxSize, TimeStamp minTim
 
          // Must be done before removing duplicates
          bufPtr += eventCount * sizeof( CoreEvent );
-         assert( ( size_t )( bufPtr - data ) <= maxSize );
+         assert (bufPtr - data <= maxSize);
+         assert (eventCount > 0);
 
          const size_t newCount = mergeAndRemoveDuplicates( coreEventsPtr, eventCount, cpuFreqGHz() );
 
@@ -521,20 +762,35 @@ size_t Server::handleNewMessage( uint8_t* data, size_t maxSize, TimeStamp minTim
          // TODO: Could lock later when we received all the messages
          std::lock_guard<hop::Mutex> guard( _sharedPendingDataMutex );
          _sharedPendingData.coreEventsPerThread[threadIndex].append( coresData );
-         return ( size_t )( bufPtr - data );
+         break;
+      }
+      case MsgType::PROFILER_HANDSHAKE:
+      {
+         static_assert( offsetof( NetworkHandshakeMsgInfo, handshake ) == sizeof( MsgInfo ), "Struct alignment changed" );
+         const NetworkHandshake* handshakePtr = (const NetworkHandshake*)bufPtr;
+         std::lock_guard<hop::Mutex> guard( _stateMutex );
+         _cpuFreqGHz = handshakePtr->cpuFreqGhz;
+         _state.processName = handshakePtr->appName;
+         _state.pid         = handshakePtr->pid;
+         _state.seed        = msgInfo->seed;
+         seed               = msgInfo->seed;
+         bufPtr += sizeof( *handshakePtr );
+         break;
       }
       default:
          assert( false );
-         return ( size_t )( bufPtr - data );
    }
+
+    assert (totalMsgSize == bufPtr - data);
+   return ( size_t )( bufPtr - data );
 }
 
 void Server::clearPendingMessages()
 {
    size_t offset = 0;
-   while ( size_t bytesToRead = ringbuf_consume( _sharedMem.ringbuffer(), &offset ) )
+   while ( size_t bytesToRead = ringbuf_consume( _transport->_shmem.ringbuffer(), &offset ) )
    {
-      ringbuf_release( _sharedMem.ringbuffer(), bytesToRead );
+      ringbuf_release( _transport->_shmem.ringbuffer(), bytesToRead );
    }
 }
 
@@ -543,7 +799,7 @@ void Server::clear()
    setRecording( false );
 
    std::lock_guard<hop::Mutex> guard( _stateMutex );
-   _state.clearingRequested = true;
+   _state.seed++;
 }
 
 void Server::stop()
@@ -561,11 +817,14 @@ void Server::stop()
 
    if( wasRunning )
    {
-      if( _sharedMem.valid() )
+      uint32_t seed;
       {
-         _sharedMem.setListeningConsumer( false );
-         _sharedMem.setConnectedConsumer( false );
+         /* Set the new seed before shutting down the connection */
+         std::lock_guard<hop::Mutex> guard( _stateMutex );
+         seed = ++_state.seed;
       }
+      _transport->setResetSeed( seed );
+      _transport->setConsumerState(0, 0);
 
       if( _thread.joinable() )
       {

@@ -14,6 +14,7 @@ set(ROOT_DIR ${CMAKE_SOURCE_DIR})
 
 # Option
 option( USE_OS_FILE_DIALOG "Use the OS provided file dialog" ON )
+option( USE_REMOTE_PROFILER "Allow the use of hop over network" ON )
 
 #####################
 ### Platform specific
@@ -25,6 +26,7 @@ if(UNIX)
         set( CMAKE_OSX_DEPLOYMENT_TARGET 10.11 )
         set( NOC_IMPL_FILE "noc_file_dialog/noc_file_dialog.mm")
         set( NOC_IMPL_DEFINE "NOC_FILE_DIALOG_OSX" )
+        set( PLATFORM_DEFINE "HOP_USE_STD_CHRONO" )
    else()
       set( PLATFORM_LINK_FLAGS "${PLATFORM_LINK_FLAGS} -lrt -latomic" )
 
@@ -38,8 +40,11 @@ if(UNIX)
             set( PLATFORM_LINK_FLAGS "${PLATFORM_LINK_FLAGS} -l${GTK3_LIBRARIES}" )
          endif()
       endif()
-   endif()   
+   endif()
 else() # Windows
+   if(USE_REMOTE_PROFILER)
+      set( PLATFORM_LINK_FLAGS "Ws2_32.lib" )
+   endif()
    set( CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /fp:fast" )
    set( HOP_WRAP_SRC wrap_library/hop_wrap_windows.cpp )
    set( NOC_IMPL_FILE "noc_file_dialog/noc_file_dialog.cpp")
@@ -86,7 +91,13 @@ target_compile_definitions( hop PUBLIC HOP_ENABLED )
 
 set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -DHOP_DEBUG")
 
-target_compile_definitions( hop PUBLIC HOP_ENABLED ${NOC_IMPL_DEFINE} )
+set( HOP_CLIENT_DEFINE "HOP_ENABLED" )
+if(USE_REMOTE_PROFILER)
+   set( HOP_GUI_DEFINE "HOP_USE_REMOTE_PROFILER" )
+   set( HOP_CLIENT_DEFINE "${HOP_CLIENT_DEFINE}" "HOP_USE_REMOTE_PROFILER=1" )
+endif()
+
+target_compile_definitions( hop PUBLIC HOP_ENABLED ${PLATFORM_DEFINE} ${HOP_GUI_DEFINE} ${NOC_IMPL_DEFINE} )
 target_include_directories( hop PRIVATE ${ROOT_DIR} ${ROOT_DIR}/thirdparties ${OPENGL_INCLUDE_DIRS} ${SDL2_INCLUDE_DIR} ${PLATFORM_EXTRA_INCLUDES} )
 target_link_libraries( hop PUBLIC ${PLATFORM_LINK_FLAGS} ${HOP_WINDOWS_LIB} ${OPENGL_LIBRARIES} ${SDL2_LIBRARY} )
 
@@ -94,7 +105,7 @@ target_link_libraries( hop PUBLIC ${PLATFORM_LINK_FLAGS} ${HOP_WINDOWS_LIB} ${OP
 ### HOP CLI
 #####################
 add_executable( hopcli hopcli/hopCLI.cpp  ${common_src} )
-target_compile_definitions( hopcli PUBLIC HOP_ENABLED )
+target_compile_definitions( hopcli PUBLIC HOP_ENABLED ${PLATFORM_DEFINE} )
 target_include_directories( hopcli PRIVATE ${ROOT_DIR} )
 target_link_libraries( hopcli PUBLIC ${PLATFORM_LINK_FLAGS} )
 
@@ -112,3 +123,12 @@ add_subdirectory (tests)
 #####################
 ### Execute the tests after building when not under windows
 #####################
+if(UNIX AND NOT APPLE)
+add_custom_command(
+     TARGET hop
+     COMMENT "Run tests"
+     POST_BUILD
+     WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
+     COMMAND ctest --verbose
+)
+endif()

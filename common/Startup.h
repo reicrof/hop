@@ -5,7 +5,7 @@
 
 namespace hop
 {
-static constexpr uint64_t VIRT_MEM_BLK_SIZE = 16 * 1024 * 1024 * 1024ULL;
+static constexpr uint64_t VIRT_MEM_BLK_SIZE = 4 * 1024 * 1024 * 1024ULL;
 
 struct LaunchOptions
 {

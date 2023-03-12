@@ -11,7 +11,7 @@ else()
 endif()
 
 add_executable (Tsc_test Tsc_test.cpp ${platform_src} ${ROOT_DIR}/common/Utils.cpp)
-target_compile_definitions( Tsc_test PUBLIC HOP_ENABLED )
+target_compile_definitions( Tsc_test PUBLIC HOP_ENABLED ${PLATFORM_DEFINE} )
 
 add_executable (Pid_test Pid_test.cpp ${platform_src} )
 

@@ -15,16 +15,20 @@
 
 namespace hop
 {
+class Transport;
 class Server
 {
   public:
    bool start( int processId, const char* name );
+#if HOP_USE_REMOTE_PROFILER
+   bool start( NetworkConnection& nc );
+#endif
    void setRecording( bool recording );
    void stop();
    void clear();
    const char* processInfo( int* processId ) const;
    const char* shortProcessInfo( int* processId ) const;
-   SharedMemory::ConnectionState connectionState() const;
+   ConnectionState connectionState() const;
    size_t sharedMemorySize() const;
    float cpuFreqGHz() const;
 
@@ -44,31 +48,36 @@ class Server
 
    void getPendingData(PendingData& data);
 
-  private:
-   // Return wether or not we should retry to connect and fill the connection state
-   bool tryConnect( int32_t pid, SharedMemory::ConnectionState& newState );
+   Transport *_transport = nullptr;
 
-   // Returns the number of bytes processed
-   size_t handleNewMessage( uint8_t* data, size_t maxSize, TimeStamp minTimestamp );
+   // Return wether or not we should retry to connect and fill the connection state
+   bool tryConnect( int32_t pid, ConnectionState& newState );
+
+   // Returns the bytes read
+   ssize_t handleNewMessage( const uint8_t* data, size_t maxSize, uint32_t &seed );
    bool addUniqueThreadName( uint32_t threadIndex, StrPtr_t name );
 
    void clearPendingMessages();
 
    std::thread _thread;
-   SharedMemory _sharedMem;
    StringDb _stringDb;
+
+#if HOP_USE_REMOTE_PROFILER
+   NetworkConnection _networkConnection;
+   std::atomic<bool> _networkThreadReady;
+#endif
 
    mutable float _cpuFreqGHz{0};
    mutable hop::Mutex _stateMutex;
    struct ServerState
    {
-      SharedMemory::ConnectionState connectionState;
+      ConnectionState connectionState;
       std::string processName;
       uint16_t shortNameIndex{0}; // Short name starting index
       int pid{-1};
+      uint32_t seed{ 0 };
       bool running{false};
       bool recording{false};
-      bool clearingRequested{false};
    } _state;
 
    hop::Mutex _sharedPendingDataMutex;

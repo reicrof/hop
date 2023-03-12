@@ -84,15 +84,16 @@ void* acquire()
    MemoryBlock* acquiredBlk = prevHead.node
                                   ? prevHead.node
                                   : (MemoryBlock*)g_allocator._end.fetch_add( BLK_AND_HEADER_SIZE );
-   acquiredBlk->next = nullptr;
-
    // Out of memory
    assert( (uint64_t)acquiredBlk < (uint64_t)g_allocator._baseAlloc + g_allocator._vmAllocSize );
+
    if( (uint64_t)acquiredBlk >= (uint64_t)g_allocator._baseAlloc + g_allocator._vmAllocSize )
    {
       printf( "No more memory. Exiting..." );
       exit( -2 );
    }
+
+   acquiredBlk->next = nullptr;
 
    return (uint8_t*)acquiredBlk + sizeof( MemoryBlock );
 }

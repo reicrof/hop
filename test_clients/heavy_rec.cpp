@@ -39,7 +39,7 @@ void rec( int& i )
    {
       std::lock_guard<MyMutex> g{mxs[i]};
       if( i%5 == 0 )
-         std::this_thread::sleep_for(std::chrono::microseconds(1));
+         std::this_thread::sleep_for(std::chrono::microseconds(10));
       rec(--i);
    }
 }
@@ -66,6 +66,8 @@ int main( int argc, const char** argv )
    signal(SIGINT, terminateCallback);
    signal(SIGTERM, terminateCallback);
 #endif
+
+   HOP_SET_CLIENT_NAME("Heavy Rec");
 
    int threadNum = 1;
    if( argc > 1 )

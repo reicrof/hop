@@ -25,9 +25,13 @@ public:
       SRC_TYPE_NONE,
       SRC_TYPE_FILE,
       SRC_TYPE_PROCESS,
+      SRC_TYPE_NETWORK,
    };
 
    Profiler( SourceType type, int processId, const char* str );
+#if HOP_USE_REMOTE_PROFILER
+   Profiler( NetworkConnection& nc );
+#endif
    ~Profiler();
 
    const char* nameAndPID( int* processId = nullptr, bool shortName = false ) const;
@@ -35,7 +39,7 @@ public:
    ProfilerStats stats() const;
    SourceType sourceType() const;
    bool recording() const;
-   SharedMemory::ConnectionState connectionState() const;
+   ConnectionState connectionState() const;
    const std::vector<TimelineTrack>& timelineTracks() const;
    const StringDb& stringDb() const;
    TimeStamp earliestTimestamp() const;

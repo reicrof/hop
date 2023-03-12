@@ -113,7 +113,7 @@ void* virtualAlloc( size_t size )
 
 void virtualFree( void* memory, uint64_t size )
 {
-   VirtualFree( memory, size, MEM_RELEASE );
+   VirtualFree( memory, 0, MEM_RELEASE );
 }
 
 uint32_t getTempFolderPath( char* buffer, uint32_t size )

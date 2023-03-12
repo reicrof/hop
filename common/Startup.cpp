@@ -86,12 +86,12 @@ LaunchOptions parseArgs( int argc, char* argv[] )
 
 bool verifyPlatform()
 {
-#if HOP_ARCH_x86
-   if ( !hop::supportsRDTSCP() )
+   auto t0 = hop::getTimeStamp();
+   hop::sleepMs(5);
+   auto t1 = hop::getTimeStamp();
+   if ( t1-t0 <= 0 )
    {
-      printf(
-          "This platform does not seem to support RDTSCP. Hop will not be "
-          "able to work properly.\n" );
+      printf("Invalid or too coarse timestamp function provided for local profiling");
       return false;
    }
 
@@ -101,7 +101,6 @@ bool verifyPlatform()
           "This platform does not seem to support Invariant TSC. Hop will be "
           "able to run, but no precision on the measurement are guaranteed.\n" );
    }
-#endif
    return true;
 }
 
