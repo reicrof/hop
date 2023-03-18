@@ -978,7 +978,7 @@ void TimelineTracksView::drawTraceDetailsWindow(
 
 bool TimelineTracksView::handleHotkeys()
 {
-   if( ImGui::GetIO().KeyCtrl && ImGui::IsKeyPressed( 'f' ) )
+   if( ImGui::GetIO().HopLogicalCtrl && ImGui::IsKeyPressed( 'f' ) )
    {
       _searchResult.searchWindowOpen = true;
       _searchResult.focusSearchWindow = true;

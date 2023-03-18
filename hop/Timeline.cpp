@@ -459,7 +459,7 @@ bool Timeline::handleMouse( float posX, float posY, bool /*lmPressed*/, bool /*r
       handleMouseDrag( mousePosInCanvas.x, mousePosInCanvas.y );
 
       // Handle left mouse click to reset range selection
-      if( ImGui::GetIO().KeyCtrl && ImGui::IsMouseClicked( 0 ) )
+      if( ImGui::GetIO().HopLogicalCtrl && ImGui::IsMouseClicked( 0 ) )
          _rangeSelectTimeStamp[0] = _rangeSelectTimeStamp[1] = 0;
       handled = true;
    }
@@ -481,12 +481,12 @@ bool Timeline::handleHotkey()
       setRealtime( true );
       handled = true;
    }
-   else if ( ImGui::GetIO().KeyCtrl && ImGui::IsKeyPressed( 'z' ) )
+   else if ( ImGui::GetIO().HopLogicalCtrl && ImGui::IsKeyPressed( 'z' ) )
    {
       undoNavigation();
       handled = true;
    }
-   else if ( ImGui::GetIO().KeyCtrl && ImGui::IsKeyPressed( 'y' ) )
+   else if ( ImGui::GetIO().HopLogicalCtrl && ImGui::IsKeyPressed( 'y' ) )
    {
       redoNavigation();
       handled = true;
@@ -542,7 +542,7 @@ void Timeline::handleMouseDrag( float mouseInCanvasX, float /*mouseInCanvasY*/ )
           _timelineStart + pxlToCycles<int64_t>( windowWidthPxl, _duration, mouseInCanvasX );
 
    // Ctrl + left mouse dragging ( Range Selection )
-   if( ImGui::GetIO().KeyCtrl && ImGui::IsMouseDragging( 0 ) )
+   if( ImGui::GetIO().HopLogicalCtrl && ImGui::IsMouseDragging( 0 ) )
    {
       // If it is the first time we enter, setup the start position
       if ( _rangeSelectTimeStamp[0] == 0 )

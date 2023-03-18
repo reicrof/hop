@@ -65,9 +65,10 @@
 #define ImDrawIdx unsigned int
 
 //---- Tip: You can add extra functions within the ImGui:: namespace, here or in your own headers files.
-/*
-namespace ImGui
-{
-    void MyFunction(const char* name, const MyMatrix44& v);
-}
-*/
+
+#ifdef __APPLE__
+    #define HopLogicalCtrl KeySuper
+#else
+    #define HopLogicalCtrl KeyCtrl
+#endif
+

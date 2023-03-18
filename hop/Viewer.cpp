@@ -826,7 +826,11 @@ void Viewer::draw( float windowWidth, float windowHeight )
    _timeline.handleDeferredActions( msgArray );
 
    handleMouse( selectedProf );
-   handleHotkey( selectedProf );
+
+   if( !modalWindowShowing() )
+   {
+      handleHotkey( selectedProf );
+   }
 
    ImGui::End();  // Hop Viewer Window
 
@@ -862,63 +866,61 @@ void Viewer::draw( float windowWidth, float windowHeight )
 bool Viewer::handleHotkey( ProfilerView* selectedProf )
 {
    bool handled = false;
-   if( !modalWindowShowing() )
+
+   // Let the profiler view handle the hotkey first
+   if( selectedProf )
    {
-      // Let the profiler view handle the hotkey first
-      if( selectedProf )
-      {
-         handled = selectedProf->handleHotkey();
-      }
+      handled = selectedProf->handleHotkey();
+   }
 
-      // If not handled, let the timeline handle it
-      if( !handled )
-      {
-         handled = _timeline.handleHotkey();
-      }
+   // If not handled, let the timeline handle it
+   if( !handled )
+   {
+      handled = _timeline.handleHotkey();
+   }
 
-      // If still not handle, let the viewer do its thing
-      if( !handled )
+   // If still not handle, let the viewer do its thing
+   if( !handled )
+   {
+      if ( ImGui::IsKeyReleased( 'r' ) && ImGui::IsRootWindowOrAnyChildFocused() )
       {
-         if ( ImGui::IsKeyReleased( 'r' ) && ImGui::IsRootWindowOrAnyChildFocused() )
+         if( selectedProf )
          {
-            if( selectedProf )
-            {
-               const bool recording = selectedProf->data().recording();
-               setRecording( selectedProf, &_timeline, !recording );
-            }
+            const bool recording = selectedProf->data().recording();
+            setRecording( selectedProf, &_timeline, !recording );
          }
-         else if ( ImGui::GetIO().KeyCtrl && ImGui::IsKeyPressed( 'w' ) )
+      }
+      else if ( ImGui::GetIO().HopLogicalCtrl && ImGui::IsKeyPressed( 'w' ) )
+      {
+         if ( _selectedTab >= 0 )
          {
-            if ( _selectedTab >= 0 )
-            {
-               removeProfiler( _selectedTab );
-            }
+            removeProfiler( _selectedTab );
+         }
+         handled = true;
+      }
+      else if ( ImGui::GetIO().HopLogicalCtrl && ImGui::IsKeyPressed( 't' ) )
+      {
+         addNewProfilerByNamePopUp( this );
+         handled = true;
+      }
+      else if ( ImGui::GetIO().HopLogicalCtrl && ImGui::IsKeyPressed( 's' ) )
+      {
+         const int profIdx = activeProfilerIndex();
+         if( profIdx >= 0 )
+         {
+            saveProfilerToFile( getProfiler( profIdx ) );
             handled = true;
          }
-         else if ( ImGui::GetIO().KeyCtrl && ImGui::IsKeyPressed( 't' ) )
-         {
-            addNewProfilerByNamePopUp( this );
-            handled = true;
-         }
-         else if ( ImGui::GetIO().KeyCtrl && ImGui::IsKeyPressed( 's' ) )
-         {
-            const int profIdx = activeProfilerIndex();
-            if( profIdx >= 0 )
-            {
-               saveProfilerToFile( getProfiler( profIdx ) );
-               handled = true;
-            }
-         }
-         else if ( ImGui::GetIO().KeyCtrl && ImGui::IsKeyPressed( 'o' ) )
-         {
-            openProfilerFile();
-            handled = true;
-         }
-         else if ( ImGui::IsKeyPressed( ImGui::GetKeyIndex( ImGuiKey_Escape ) ) )
-         {
-            hop::displayModalWindow( "Exit ?", nullptr, hop::MODAL_TYPE_YES_NO, [&]() { g_run = false; } );
-            handled = true;
-         }
+      }
+      else if ( ImGui::GetIO().HopLogicalCtrl && ImGui::IsKeyPressed( 'o' ) )
+      {
+         openProfilerFile();
+         handled = true;
+      }
+      else if ( ImGui::IsKeyPressed( ImGui::GetKeyIndex( ImGuiKey_Escape ) ) )
+      {
+         hop::displayModalWindow( "Exit ?", nullptr, hop::MODAL_TYPE_YES_NO, [&]() { g_run = false; } );
+         handled = true;
       }
    }
 
