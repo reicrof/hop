@@ -10,13 +10,18 @@ typedef int64_t ProcessID;
 struct ProcessInfo
 {
    ProcessID pid;
-   char name[64];
+   char name[256];
+};
+struct ProcessesInfo
+{
+   ProcessInfo infos[6];
+   uint8_t count;
 };
 
 void cpuid( int reg[4], int fctId );
 
 ProcessInfo getProcessInfoFromPID( ProcessID pid );
-ProcessInfo getProcessInfoFromProcessName( const char* name );
+ProcessesInfo getProcessInfoFromProcessName( const char* name );
 
 ProcessID startChildProcess( const char* path, char** args );
 

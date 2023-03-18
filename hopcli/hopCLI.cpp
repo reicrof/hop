@@ -77,9 +77,20 @@ static std::string righttrim( const std::string& s )
 static std::unique_ptr<hop::Profiler> createProfiler( const char* processName, bool startRecording )
 {
    using namespace hop;
-   const int pid = getPIDFromString( processName );
-   const hop::ProcessInfo procInfo = pid != -1 ? hop::getProcessInfoFromPID( pid )
-                                               : hop::getProcessInfoFromProcessName( processName );
+   const int pid = pidStrToInt( processName );
+   hop::ProcessInfo procInfo = {-1, {}};
+   if (pid != -1)
+      procInfo = hop::getProcessInfoFromPID( pid );
+   else
+   {
+      hop::ProcessesInfo infos = hop::getProcessInfoFromProcessName( processName );
+      if (infos.count > 0)
+      {
+         procInfo = infos.infos[0];
+         if (infos.count > 1)
+            fprintf (stderr, "HOP Ambiguous process name. Arbitrarily chosing pid %lld\n", infos.infos[0].pid );
+      }
+   }
 
    auto profiler = std::unique_ptr<hop::Profiler>(
        new hop::Profiler( Profiler::SRC_TYPE_PROCESS, procInfo.pid, processName ) );

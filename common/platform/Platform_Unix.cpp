@@ -59,9 +59,15 @@ ProcessInfo getProcessInfoFromPID( ProcessID pid )
    return info;
 }
 
-ProcessInfo getProcessInfoFromProcessName( const char* name )
+static inline bool isSpace (const char c)
 {
-   ProcessInfo info = {};
+   return c == ' ' || c == '\n';
+}
+
+ProcessesInfo getProcessInfoFromProcessName( const char* name )
+{
+   ProcessesInfo infos;
+   infos.count = 0;
 
    if( strlen( name ) > 0 )
    {
@@ -77,21 +83,30 @@ ProcessInfo getProcessInfoFromProcessName( const char* name )
       // Get name from PID
       if( FILE* fp = popen( cmd, "r" ) )
       {
-         char pidStr[16] = {};
-         if( fgets( pidStr, sizeof( pidStr ), fp ) != nullptr )
+         const int max_count = sizeof( infos.infos ) / sizeof( infos.infos[0] );
+         int count = 0;
+         char line[256];
+         while (fgets(line, sizeof(line), fp) && count < max_count)
          {
-            info.pid = strtol( pidStr, nullptr, 10 );
-            strncpy( info.name, name, sizeof( info.name ) - 1 );
+            /* fgets keep the newline so remove it */
+            size_t length = strlen( line );
+            if (line[length-1] == '\n')
+               line[length-1] = '\0';
+
+            char* end;
+            infos.infos[count].pid = strtol( line, &end, 10 );
+            while (isSpace( *end ) && *end != '\0')
+               ++end;
+            const char *actual_name = *end != '\0' ? end : name;
+            strncpy( infos.infos[count].name, actual_name, sizeof( infos.infos[count].name ) - 1 );
+            count++;
          }
-         else
-         {
-            info.pid = -1;
-         }
+         infos.count = count;
          pclose( fp );
       }
    }
 
-   return info;
+   return infos;
 }
 
 ProcessID startChildProcess( const char* path, char** args )

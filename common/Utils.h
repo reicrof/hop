@@ -108,7 +108,7 @@ int findSubstrNoCase(
     const char* needle,
     uint32_t needleSize );
 
-int getPIDFromString( const char* str );
+int pidStrToInt( const char* str );
 
 template< typename IT >
 void insertionSort( IT begin, IT end )

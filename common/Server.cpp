@@ -193,9 +193,33 @@ bool Server::tryConnect( int32_t pid, SharedMemory::ConnectionState& newState )
 {
    HOP_PROF_FUNC();
 
-   const hop::ProcessInfo procInfo =
-       pid != -1 ? hop::getProcessInfoFromPID( pid )
-                   : hop::getProcessInfoFromProcessName( _state.processName.c_str() );
+   hop::ProcessInfo procInfo = {-1, {}};
+   if( pid != -1 )
+      procInfo = hop::getProcessInfoFromPID( pid );
+   else
+   {
+      hop::ProcessesInfo infos = hop::getProcessInfoFromProcessName( _state.processName.c_str() );
+      if( infos.count > 0 )
+      {
+         procInfo = infos.infos[0];
+         if( infos.count > 1 )
+         {
+            std::string msg;
+            msg.reserve (512);
+            msg += "Ambiguous process name\n";
+            char buffer[512];
+            for( int i = 0; i < infos.count; i++ )
+            {
+               snprintf (buffer, sizeof( buffer ), "  [%lld] %s\n", infos.infos[i].pid, infos.infos[i].name);
+               msg += buffer;
+            }
+            snprintf (buffer, sizeof( buffer ), "Arbitrarily choosing pid %lld\n", infos.infos[0].pid);
+            msg += buffer;
+            fprintf( stderr, "%s\n", msg.c_str() );
+         }
+      }
+   }
+
    newState = _sharedMem.create( procInfo.pid, 0 /*will be define in shared metadata*/, true );
 
    if( newState != SharedMemory::CONNECTED )

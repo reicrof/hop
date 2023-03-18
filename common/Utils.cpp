@@ -180,7 +180,7 @@ static bool isNumber( const char* str )
    return std::all_of( str, str + length, ::isdigit );
 }
 
-int getPIDFromString( const char* str )
+int pidStrToInt( const char* str )
 {
    int pid = -1;
    if( isNumber( str ) )

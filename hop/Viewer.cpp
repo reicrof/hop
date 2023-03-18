@@ -662,7 +662,7 @@ Viewer::Viewer( uint32_t screenSizeX, uint32_t /*screenSizeY*/ )
 
 int Viewer::addNewProfiler( const char* processName, bool startRecording )
 {
-   const int pid = getPIDFromString( processName );
+   const int pid = pidStrToInt( processName );
    if( profilerAlreadyExist( _profilers, pid, processName ) )
    {
       hop::displayModalWindow( "Cannot profile process twice !", nullptr, hop::MODAL_TYPE_ERROR );

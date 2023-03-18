@@ -50,10 +50,10 @@ ProcessInfo getProcessInfoFromPID( ProcessID pid )
    return info;
 }
 
-ProcessInfo getProcessInfoFromProcessName( const char* name )
+ProcessesInfo getProcessInfoFromProcessName( const char* name )
 {
-   ProcessInfo info = {};
-   info.pid         = -1;
+   ProcessesInfo infos;
+   infos.count = 0;
 
    HANDLE snapshot = CreateToolhelp32Snapshot( TH32CS_SNAPPROCESS, NULL );
    PROCESSENTRY32 entry;
@@ -64,16 +64,19 @@ ProcessInfo getProcessInfoFromProcessName( const char* name )
       {
          if( _stricmp( entry.szExeFile, name ) == 0 )
          {
-            info.pid = entry.th32ProcessID;
-            strncpy( info.name, name, sizeof( info.name ) - 1 );
-            break;
+            infos.infos[infos.count].pid = entry.th32ProcessID;
+            strncpy(
+                infos.infos[infos.count].name,
+                entry.szExeFile,
+                sizeof( infos.infos[infos.count].name ) - 1 );
+            infos.count++;
          }
       }
    }
 
    CloseHandle( snapshot );
 
-   return info;
+   return infos;
 }
 
 bool processAlive( hop::ProcessID id )
