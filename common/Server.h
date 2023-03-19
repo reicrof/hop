@@ -22,6 +22,7 @@ class Server
    bool start( int processId, const char* name );
 #if HOP_USE_REMOTE_PROFILER
    bool start( NetworkConnection& nc );
+   const NetworkConnection* networkConnection() const;
 #endif
    void setRecording( bool recording );
    void stop();
@@ -61,11 +62,6 @@ class Server
 
    std::thread _thread;
    StringDb _stringDb;
-
-#if HOP_USE_REMOTE_PROFILER
-   NetworkConnection _networkConnection;
-   std::atomic<bool> _networkThreadReady;
-#endif
 
    mutable float _cpuFreqGHz{0};
    mutable hop::Mutex _stateMutex;

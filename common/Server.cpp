@@ -143,6 +143,7 @@ class Transport
    SharedMemory _shmem;
 #if HOP_USE_REMOTE_PROFILER
    NetworkConnection *_network;
+   std::atomic<bool> _networkThreadReady;
 #endif
 };
 
@@ -288,7 +289,7 @@ networkTransportLoop( Server* server, Transport* transport, NetworkConnection* n
    uint8_t* compBuf       = (uint8_t*)malloc( bufSize );
 
    transport->requestHandshake();
-   server->_networkThreadReady.store( true );
+   transport->_networkThreadReady.store( true );
 
    uint32_t curSeed = 0;
    uint32_t curDataSize = 0;
@@ -386,12 +387,18 @@ bool Server::start( NetworkConnection& nc )
    _transport = new Transport(&nc);
 
    _thread = std::thread( networkTransportLoop, this, _transport, &nc );
-   while( !_networkThreadReady.load() )
+   while( !_transport->_networkThreadReady.load() )
    {
       hop::sleepMs( 100 );
    }
 
    return true;
+}
+
+const NetworkConnection* Server::networkConnection() const
+{
+   if( _transport ) return _transport->_network;
+   return nullptr;
 }
 #endif
 

@@ -44,6 +44,16 @@ const char* Profiler::nameAndPID( int* processId, bool shortName ) const
       return _server.processInfo( processId );
 }
 
+const NetworkConnection* Profiler::networkConnection() const
+{
+#if HOP_USE_REMOTE_PROFILER
+   if( _srcType != SRC_TYPE_NETWORK ) return nullptr;
+
+   return _server.networkConnection();
+#endif
+   return nullptr;
+}
+
 float Profiler::cpuFreqGHz() const
 {
    if( _srcType != Profiler::SRC_TYPE_FILE )

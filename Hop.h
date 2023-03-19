@@ -779,7 +779,8 @@ class NetworkConnection
    };
 
    NetworkConnection() = default;
-   NetworkConnection (NetworkConnection&& nc);
+   NetworkConnection( NetworkConnection&& nc );
+   bool operator==( const NetworkConnection& rhs ) const;
 
    ConnectionState openConnection( bool isViewer );
    Status status() const HOP_NOEXCEPT { return _status; }
@@ -1360,6 +1361,17 @@ NetworkConnection::NetworkConnection( NetworkConnection&& nc )
 
    _compressionBufferSz = 0;
    _compressionBuffer = nullptr;
+}
+
+bool NetworkConnection::operator==( const NetworkConnection& rhs ) const
+{
+   if (strcmp (_addressStr, rhs._addressStr) != 0)
+      return false;
+
+   if (strcmp (_portStr, rhs._portStr) != 0)
+      return false;
+
+   return true;
 }
 
 bool NetworkConnection::start( SharedMemory& shmem )

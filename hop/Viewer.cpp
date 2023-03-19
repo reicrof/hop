@@ -156,7 +156,7 @@ static void drawBackground( float windowWidth, float windowHeight )
       {
          linePoints.emplace_back( x + xOffset, y + yOffset );
       }
-      
+
       DrawList->AddPolyline(linePoints.data(), (int)linePoints.size(), 0xFF999999, false , 4.0f);
    }
 }
@@ -182,7 +182,7 @@ static bool drawHelpMenu()
        "- Use CTRL+F to search traces\n"
        "- Use arrow keys <-/-> to navigate bookmarks\n"
        "- Use Del to delete all recorded traces\n";
-   ImGui::Separator();       
+   ImGui::Separator();
    ImGui::Text( "%s", helpTxt );
    ImGui::Spacing();
    return ImGui::Button( "Close", ImVec2( 120, 0 ) );
@@ -633,6 +633,24 @@ static bool profilerAlreadyExist(
    return alreadyExist;
 }
 
+static bool profilerAlreadyExist(
+    const std::vector<std::unique_ptr<hop::ProfilerView> >& profilers,
+    const hop::NetworkConnection& nc )
+{
+   bool alreadyExist = false;
+   alreadyExist      = std::find_if(
+                      profilers.begin(),
+                      profilers.end(),
+                      [&]( const std::unique_ptr<hop::ProfilerView>& pv )
+                      {
+                         if( const hop::NetworkConnection* lhs = pv->data().networkConnection() )
+                            return *lhs == nc;
+                         return false;
+                      } ) != profilers.end();
+
+   return alreadyExist;
+}
+
 static bool drawCanvasContent(
    float wndWidth,
    float wndHeight,
@@ -682,12 +700,11 @@ int Viewer::addNewProfiler( const char* processName, bool startRecording )
 
 int Viewer::addNewProfiler( NetworkConnection& nc, bool startRecording )
 {
-   // const int pid = getPIDFromString( processName );
-   // if( profilerAlreadyExist( _profilers, pid, processName ) )
-   // {
-   //    hop::displayModalWindow( "Cannot profile process twice !", nullptr, hop::MODAL_TYPE_ERROR );
-   //    return -1;
-   // }
+   if( profilerAlreadyExist( _profilers, nc ) )
+   {
+      hop::displayModalWindow( "Cannot profile process twice !", nullptr, hop::MODAL_TYPE_ERROR );
+      return -1;
+   }
 
    _profilers.emplace_back( new hop::ProfilerView( nc ) );
    setRecording( _profilers.back().get(), &_timeline, startRecording );
