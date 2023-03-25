@@ -36,6 +36,44 @@ Profiler::Profiler( NetworkConnection& nc )
 }
 #endif
 
+bool Profiler::operator==( const Profiler& rhs ) const
+{
+   if( _srcType != rhs._srcType )
+      return false;
+
+   switch( _srcType )
+   {
+      case SRC_TYPE_FILE:
+      {
+         return _name == rhs._name;
+      }
+      case SRC_TYPE_PROCESS:
+      {
+         int lhsPID, rhsPID;
+         const char* lhsName = nameAndPID( &lhsPID );
+         const char* rhsName = rhs.nameAndPID( &rhsPID );
+         if( lhsPID == -1 || rhsPID == -1)
+            return strcmp( lhsName, rhsName ) == 0;
+         else
+            return lhsPID == rhsPID;
+         break;
+      }
+      case SRC_TYPE_NETWORK:
+      {
+         const NetworkConnection* lconn = networkConnection();
+         const NetworkConnection* rconn = rhs.networkConnection();
+         if( !lconn || !rconn )
+            return false;
+         else
+            return *lconn == *rconn;
+         break;
+      }
+      default:
+         break;
+   }
+   return false;
+}
+
 const char* Profiler::nameAndPID( int* processId, bool shortName ) const
 {
    if( shortName )

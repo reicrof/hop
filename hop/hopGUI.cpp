@@ -3,6 +3,7 @@
 #include "hop/Stats.h"
 #include "hop/Options.h"
 #include "hop/Viewer.h"
+#include "hop/ProfilerView.h"
 #include "hop_icon_raster.inline"
 
 #include "common/miniz.h"
@@ -311,7 +312,8 @@ static hop::ProcessID startViewer( SDL_Window* window, const hop::LaunchOptions&
       }
 
       // Add new profiler after having potentially started it.
-      viewer.addNewProfiler( opts.processName, opts.startExec );
+      auto profiler = std::make_unique < hop::ProfilerView >( hop::Profiler::SRC_TYPE_PROCESS, -1,  opts.processName );
+      viewer.addProfiler( std::move( profiler ), opts.startExec );
    }
 
    using namespace std::chrono;

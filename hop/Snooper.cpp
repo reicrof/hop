@@ -2,6 +2,8 @@
 
 #include "hop/Options.h"
 #include "hop/Viewer.h"
+#include "hop/ProfilerView.h"
+#include "hop/ModalWindow.h"
 
 #include "imgui/imgui.h"
 
@@ -40,32 +42,34 @@ void Snooper::draw( Viewer* viewer )
          if( strlen(_addressStr) > 0 )
            hop::options::setLastAddressUsed (_addressStr);
 
+         _pending_connections.clear();
          if( _pending_connections.empty() )
          {
             uint32_t port = atoi( _portStr );
-            for( uint32_t i = 0; i < 16; i++ )
+            uint32_t endPort = port + 16;
+            for( ; port < endPort; port++ )
             {
                /* Check if we already have this connection opened */
                bool exists = false;
                for( const auto& cn : _connections )
                {
-                  if( strcmp( cn->_addressStr, _addressStr ) == 0 &&
-                      strcmp( cn->_portStr, _portStr ) == 0 )
+                  uint32_t cn_port = atoi( cn->_portStr );
+                  if( strcmp( cn->_addressStr, _addressStr ) == 0 && cn_port == port )
                   {
                      exists = true;
                      break;
                   }
                }
+
                if( exists ) continue;
 
                NetworkConnection nc = {};
                memcpy( nc._addressStr, _addressStr, sizeof( _addressStr ) );
                snprintf( nc._portStr, sizeof( _portStr ), "%u", port );
-               //state = nc.openConnection( true );
-               nc.openConnection( true );
+               state = nc.openConnection( true );
+               // nc.openConnection( true );
                if( state == CANNOT_RESOLVE_ADDR || state == CANNOT_CONNECT_TO_SERVER ) break;
                _pending_connections.emplace_back( new NetworkConnection( std::move( nc ) ) );
-               port++;
             }
          }
 
@@ -107,8 +111,9 @@ void Snooper::draw( Viewer* viewer )
 
       if (ImGui::Button( "Connect" ) && _selectedConnection >= 0)
       {
-         viewer->addNewProfiler( *_connections[_selectedConnection], true );
-         printf("connecting...\n");
+         auto profiler = std::make_unique<hop::ProfilerView>( *_connections[_selectedConnection] );
+         viewer->addProfiler( std::move( profiler ), true );
+
       }
 
       ImGui::End();

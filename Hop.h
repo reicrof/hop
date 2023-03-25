@@ -585,6 +585,7 @@ ssize_t ringbuf_acquire( ringbuf_t*, ringbuf_worker_t*, size_t );
 void ringbuf_produce( ringbuf_t*, ringbuf_worker_t* );
 size_t ringbuf_consume( ringbuf_t*, size_t* );
 void ringbuf_release( ringbuf_t*, size_t );
+void ringbuf_clear( ringbuf_t* );
 
 #if HOP_USE_REMOTE_PROFILER
 
@@ -685,6 +686,7 @@ class SharedMemory
    void setLastHeartbeatTimestamp( TimeStamp t ) HOP_NOEXCEPT;
    uint32_t lastResetSeed() const HOP_NOEXCEPT;
    void setResetSeed(uint32_t seed) HOP_NOEXCEPT;
+   void reset() HOP_NOEXCEPT;
    ringbuf_t* ringbuffer() const HOP_NOEXCEPT;
    uint8_t* data() const HOP_NOEXCEPT;
    bool valid() const HOP_NOEXCEPT;
@@ -1248,6 +1250,15 @@ void SharedMemory::setResetSeed( uint32_t seed ) HOP_NOEXCEPT
    _sharedMetaData->lastResetSeed.store( seed );
 }
 
+void SharedMemory::reset() HOP_NOEXCEPT
+{
+   uint32_t next_seed = lastResetSeed() + 1;
+   setResetSeed( next_seed );
+   setListeningConsumer( false );
+   setConnectedConsumer( false );
+   ringbuf_clear( _ringbuf );
+}
+
 uint8_t* SharedMemory::data() const HOP_NOEXCEPT { return _data; }
 
 bool SharedMemory::valid() const HOP_NOEXCEPT { return _valid; }
@@ -1455,7 +1466,7 @@ ConnectionState NetworkConnection::openConnection( bool isViewer )
       int resolvedAddr = getaddrinfo( isViewer ? _addressStr : NULL, _portStr, &hints, &_addr );
       if( resolvedAddr != 0 )
       {
-         //fprintf( stderr, "Error resolving address: %s\n", hop_gai_strerror( resolvedAddr ) );
+         fprintf( stderr, "Error resolving address: %s\n", hop_gai_strerror( resolvedAddr ) );
          reset();
          return CANNOT_RESOLVE_ADDR;
       }
@@ -1610,6 +1621,7 @@ void NetworkConnection::reset()
    _status = Status::INVALID;
    resetSocket( &_socket );
    resetSocket( &_clientSocket );
+   setHandshakeSent( false );
 
    if( _addr )
    {
@@ -1760,19 +1772,38 @@ static void networkThreadLoop( NetworkConnection& connection, SharedMemory& shme
          while (connection.readReady())
          {
             ssize_t bytesToRead = connection.receiveData( readBuffer, sizeof( readBuffer ) );
-            while( bytesToRead > 0 )
+            if( bytesToRead == -1 )
             {
-               ssize_t bytesRead = 0;
-               while( bytesRead < bytesToRead )
+               int err = getLastNetworkError();
+               if( err == HOP_NET_CONN_RESET )
                {
-                  const ViewerMsgInfo* msg = (const ViewerMsgInfo*)( readBuffer + bytesRead );
-                  if( msg->listening >= 0 ) shmem.setListeningConsumer( msg->listening );
-                  if( msg->connected >= 0 ) shmem.setConnectedConsumer( msg->connected );
-                  if( msg->seed > 0 ) shmem.setResetSeed( msg->seed );
-                  if( msg->requestHandshake ) sendHandshake( connection, shmem );
-                  bytesRead += sizeof( ViewerMsgInfo );
+                  shmem.reset();
+                  connection.reset();
+                  curSendBufferSize = 0;
                }
-               bytesToRead -= bytesRead;
+               else
+                  fprintf( stderr, "HOP unknown error %d\n", err );
+            }
+            else
+            {
+               while( bytesToRead > 0 )
+               {
+                  ssize_t bytesRead = 0;
+                  while( bytesRead < bytesToRead )
+                  {
+                     const ViewerMsgInfo* msg = (const ViewerMsgInfo*)( readBuffer + bytesRead );
+                     if( msg->listening >= 0 ) shmem.setListeningConsumer( msg->listening );
+                     if( msg->connected >= 0 ) shmem.setConnectedConsumer( msg->connected );
+                     if( msg->seed > 0 )
+                     {
+                        shmem.setResetSeed( msg->seed );
+                        ringbuf_clear( shmem.ringbuffer() );
+                     }
+                     if( msg->requestHandshake ) sendHandshake( connection, shmem );
+                     bytesRead += sizeof( ViewerMsgInfo );
+                  }
+                  bytesToRead -= bytesRead;
+               }
             }
          }
       }
@@ -2984,6 +3015,13 @@ void ringbuf_release( ringbuf_t* rbuf, size_t nbytes )
    assert( nwritten <= rbuf->space );
 
    rbuf->written = ( nwritten == rbuf->space ) ? 0 : nwritten;
+}
+
+void ringbuf_clear( ringbuf_t* rbuf )
+{
+   size_t offset = 0;
+   while ( size_t bytesToRead = ringbuf_consume( rbuf, &offset ) )
+     ringbuf_release( rbuf, bytesToRead );
 }
 
 #if HOP_USE_REMOTE_PROFILER

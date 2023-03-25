@@ -128,7 +128,8 @@ static void addNewProfilerByNamePopUp( hop::Viewer* v )
 {
    hop::displayStringInputModalWindow(
        "Add New Profiler", "Enter name or PID of process", [=]( const char* str ) {
-          v->addNewProfiler( str, false );
+          auto profiler = std::make_unique < hop::ProfilerView >( hop::Profiler::SRC_TYPE_PROCESS, -1, str );
+          v->addProfiler( std::move( profiler ), false );
        } );
 }
 
@@ -604,53 +605,6 @@ static bool updateTimeline( hop::Timeline* tl, float deltaMs, const hop::Profile
    return needs_redraw;
 }
 
-static bool profilerAlreadyExist(
-    const std::vector<std::unique_ptr<hop::ProfilerView> >& profilers,
-    int pid,
-    const char* processName )
-{
-   bool alreadyExist = false;
-   if( pid > -1 )
-   {
-      alreadyExist =
-          std::find_if(
-              profilers.begin(), profilers.end(), [pid]( const std::unique_ptr<hop::ProfilerView>& pv ) {
-                 int curPid;
-                 pv->data().nameAndPID( &curPid );
-                 return curPid == pid;
-              } ) != profilers.end();
-   }
-   else  // Do a string comparison since we do not have a pid
-   {
-      alreadyExist = std::find_if(
-                         profilers.begin(),
-                         profilers.end(),
-                         [processName]( const std::unique_ptr<hop::ProfilerView>& pv ) {
-                            return strcmp( pv->data().nameAndPID(), processName ) == 0;
-                         } ) != profilers.end();
-   }
-
-   return alreadyExist;
-}
-
-static bool profilerAlreadyExist(
-    const std::vector<std::unique_ptr<hop::ProfilerView> >& profilers,
-    const hop::NetworkConnection& nc )
-{
-   bool alreadyExist = false;
-   alreadyExist      = std::find_if(
-                      profilers.begin(),
-                      profilers.end(),
-                      [&]( const std::unique_ptr<hop::ProfilerView>& pv )
-                      {
-                         if( const hop::NetworkConnection* lhs = pv->data().networkConnection() )
-                            return *lhs == nc;
-                         return false;
-                      } ) != profilers.end();
-
-   return alreadyExist;
-}
-
 static bool drawCanvasContent(
    float wndWidth,
    float wndHeight,
@@ -683,30 +637,22 @@ Viewer::Viewer( uint32_t screenSizeX, uint32_t /*screenSizeY*/ )
    renderer::createResources();
 }
 
-int Viewer::addNewProfiler( const char* processName, bool startRecording )
+int Viewer::addProfiler( std::unique_ptr<ProfilerView> prof, bool startRecording )
 {
-   const int pid = pidStrToInt( processName );
-   if( profilerAlreadyExist( _profilers, pid, processName ) )
-   {
-      hop::displayModalWindow( "Cannot profile process twice !", nullptr, hop::MODAL_TYPE_ERROR );
+   if( !prof )
       return -1;
+
+   for(uint32_t i = 0; i < _profilers.size(); i++)
+   {
+      if( _profilers[i]->data() == prof->data() )
+      {
+         hop::displayModalWindow(
+                "Cannot profile process twice !", nullptr, hop::MODAL_TYPE_ERROR );
+         return -1;
+      }
    }
 
-   _profilers.emplace_back( new hop::ProfilerView( Profiler::SRC_TYPE_PROCESS, pid, processName ) );
-   setRecording( _profilers.back().get(), &_timeline, startRecording );
-   _selectedTab = (int)_profilers.size() - 1;
-   return _selectedTab;
-}
-
-int Viewer::addNewProfiler( NetworkConnection& nc, bool startRecording )
-{
-   if( profilerAlreadyExist( _profilers, nc ) )
-   {
-      hop::displayModalWindow( "Cannot profile process twice !", nullptr, hop::MODAL_TYPE_ERROR );
-      return -1;
-   }
-
-   _profilers.emplace_back( new hop::ProfilerView( nc ) );
+   _profilers.emplace_back( std::move( prof ) );
    setRecording( _profilers.back().get(), &_timeline, startRecording );
    _selectedTab = (int)_profilers.size() - 1;
    return _selectedTab;
@@ -772,11 +718,10 @@ bool Viewer::fetchClientsData()
       if ( waitRes == std::future_status::ready )
       {
          std::unique_ptr<ProfilerView> loadedProf( _pendingProfilerLoad.get() );
-         if ( loadedProf.get() )
-         {
-            _profilers.emplace_back( std::move(loadedProf) );
-            _selectedTab = (int)_profilers.size() - 1;
-         }
+         int newTab = addProfiler( std::move( loadedProf ), false );
+         if( newTab != -1 )
+            _selectedTab = newTab;
+
          // Reset the shared_future
          _pendingProfilerLoad = {};
          needs_redraw = true;

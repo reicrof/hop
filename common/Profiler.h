@@ -34,6 +34,7 @@ public:
    const NetworkConnection* networkConnection() const;
 #endif
    ~Profiler();
+   bool operator==( const Profiler& rhs ) const;
 
    const char* nameAndPID( int* processId = nullptr, bool shortName = false ) const;
    float cpuFreqGHz() const;

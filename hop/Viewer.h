@@ -17,8 +17,7 @@ class Viewer
   public:
    Viewer( uint32_t screenSizeX, uint32_t screenSizeY );
    ~Viewer();
-   int addNewProfiler( const char* processname, bool startRecording );
-   int addNewProfiler( NetworkConnection& nc, bool startRecording );
+   int addProfiler( std::unique_ptr<ProfilerView> prof, bool startRecording );
    void openProfilerFile();
    int removeProfiler( int index );
    int profilerCount() const;

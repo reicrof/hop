@@ -108,7 +108,6 @@ class Transport
          ViewerMsgInfo info = {};
          info.connected = connected;
          info.listening = listening;
-         info.requestHandshake = !connected || !listening;
          _network->sendAllData( &info, sizeof( info ), false );
       }
 #endif
@@ -195,7 +194,7 @@ static void shmemTransportLoop( Server* server, Transport *transport, int pid )
             server->_stringDb.clear();
             server->clearPendingMessages();
             server->_threadNamesReceived.clear();
-            transport->_shmem.setResetSeed( server->_state.seed );
+            transport->setResetSeed( server->_state.seed );
             seed = server->_state.seed;
             continue;
          }
@@ -788,25 +787,25 @@ ssize_t Server::handleNewMessage( const uint8_t* data, size_t maxSize, uint32_t 
          assert( false );
    }
 
-    assert (totalMsgSize == bufPtr - data);
+   assert (totalMsgSize == bufPtr - data);
    return ( size_t )( bufPtr - data );
 }
 
 void Server::clearPendingMessages()
 {
-   size_t offset = 0;
-   while ( size_t bytesToRead = ringbuf_consume( _transport->_shmem.ringbuffer(), &offset ) )
-   {
-      ringbuf_release( _transport->_shmem.ringbuffer(), bytesToRead );
-   }
+   if( _transport->_shmem.valid() )
+      ringbuf_clear( _transport->_shmem.ringbuffer() );
 }
 
 void Server::clear()
 {
+   uint32_t newSeed;
+   {
+      std::lock_guard<hop::Mutex> guard( _stateMutex );
+      newSeed = ++_state.seed;
+   }
+   _transport->setResetSeed( newSeed );
    setRecording( false );
-
-   std::lock_guard<hop::Mutex> guard( _stateMutex );
-   _state.seed++;
 }
 
 void Server::stop()
