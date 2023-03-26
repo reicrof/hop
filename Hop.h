@@ -1747,8 +1747,6 @@ static bool sendHandshake( NetworkConnection& connection, SharedMemory& shmem )
 
 static void networkThreadLoop( NetworkConnection& connection, SharedMemory& shmem )
 {
-   const int32_t HOP_NETWORK_HEARTBEAT_RATE = 200;
-
    HOP_SET_THREAD_NAME ("HOP Network Thread");
 
    uint8_t readBuffer[2048];

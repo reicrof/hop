@@ -23,6 +23,7 @@ class Viewer
    int removeProfiler( int index );
    int profilerCount() const;
    int activeProfilerIndex() const;
+   int setActiveProfiler( int index );
    bool fetchClientsData();
    void openSnooper();
 

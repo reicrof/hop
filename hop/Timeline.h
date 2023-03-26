@@ -89,6 +89,7 @@ class Timeline
    // Update timeline to always display last race
    void setRealtime( bool isRealtime ) noexcept;
    bool realtime() const noexcept;
+   void setImmediateUpdate();
 
    void setDisplayType( DisplayType type );
 
@@ -136,7 +137,8 @@ class Timeline
    uint64_t _duration{5000000000};
 
    uint64_t _stepSize{1000000};
-   bool _realtime{true};
+   bool _realtime{ true };
+   bool _immediateUpdate{ false };
 
    // Drawing Data
    float _verticalPosPxl{0.0f};

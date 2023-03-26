@@ -472,7 +472,7 @@ static bool drawAddTabButton( const ImVec2& drawPos )
    return clicked;
 }
 
-static int drawTabs( hop::Viewer& viewer, const ImVec2 drawPos, int selectedTab )
+static int drawTabs( const ImVec2 drawPos, hop::Viewer& viewer, int selectedTab )
 {
    const ImVec2 windowSize = ImGui::GetWindowSize();
 
@@ -654,8 +654,7 @@ int Viewer::addProfiler( std::unique_ptr<ProfilerView> prof, bool startRecording
 
    _profilers.emplace_back( std::move( prof ) );
    setRecording( _profilers.back().get(), &_timeline, startRecording );
-   _selectedTab = (int)_profilers.size() - 1;
-   return _selectedTab;
+   return setActiveProfiler( (int)_profilers.size() - 1 );
 }
 
 void Viewer::openProfilerFile()
@@ -673,21 +672,32 @@ int Viewer::removeProfiler( int index )
 {
    assert( index >= 0 && index < (int)_profilers.size() );
 
+   int newTab;
    if ( index == _selectedTab )
    {
-      _selectedTab = std::min( profilerCount() - 2, _selectedTab );
+      newTab = std::min( profilerCount() - 2, _selectedTab );
    }
    else if ( index < _selectedTab )
    {
-      _selectedTab = std::max( _selectedTab - 1, 0 );
+      newTab = std::max( _selectedTab - 1, 0 );
    }
    _profilers.erase( _profilers.begin() + index );
-   return _selectedTab;
+   return setActiveProfiler( newTab );
 }
 
 int Viewer::profilerCount() const { return (int)_profilers.size(); }
 
 int Viewer::activeProfilerIndex() const { return _selectedTab; }
+
+int Viewer::setActiveProfiler( int index )
+{
+   if( index != _selectedTab )
+   {
+      _timeline.setImmediateUpdate();
+      _selectedTab = index;
+   }
+   return _selectedTab;
+}
 
 const ProfilerView* Viewer::getProfiler( int index ) const
 {
@@ -720,7 +730,7 @@ bool Viewer::fetchClientsData()
          std::unique_ptr<ProfilerView> loadedProf( _pendingProfilerLoad.get() );
          int newTab = addProfiler( std::move( loadedProf ), false );
          if( newTab != -1 )
-            _selectedTab = newTab;
+            setActiveProfiler( newTab );
 
          // Reset the shared_future
          _pendingProfilerLoad = {};
@@ -807,7 +817,9 @@ bool Viewer::draw( float windowWidth, float windowHeight )
 
    // Then draw
    drawMenuBar( this );
-   _selectedTab = drawTabs( *this, ImGui::GetCursorPos(), _selectedTab );
+   int newSelectedTab = drawTabs( ImGui::GetCursorPos(), *this, _selectedTab );
+   setActiveProfiler( newSelectedTab );
+
    ProfilerView* const selectedProf = _selectedTab >= 0 ? _profilers[_selectedTab].get() : nullptr;
    drawToolbar( ImGui::GetCursorPos(), windowWidth, selectedProf, &_timeline );
 

@@ -38,7 +38,7 @@ static void drawHoveringTimelineLine(float posInScreenX, float timelineStartPosY
 {
    constexpr float LINE_PADDING = 5.0f;
    constexpr float TEXT_PADDING = 10.0f;
-   
+
    auto drawList = ImGui::GetWindowDrawList();
    drawList->PushClipRectFullScreen();
    drawList->AddLine(
@@ -147,7 +147,9 @@ bool Timeline::update( float deltaTimeMs ) noexcept
    // If we are in realtime, move the timeline to the current time
    if( realtime() )
    {
-      moveToPresentTime( Timeline::ANIMATION_TYPE_NONE );
+      moveToPresentTime(
+          _immediateUpdate ? Timeline::ANIMATION_TYPE_NONE : Timeline::ANIMATION_TYPE_FAST );
+      _immediateUpdate = false;
    }
 
    switch ( _animationState.type )
@@ -649,6 +651,8 @@ void Timeline::setRealtime( bool isRealtime ) noexcept
    _realtime = isRealtime;
 }
 
+void Timeline::setImmediateUpdate() { _immediateUpdate = true; }
+
 hop::TimeStamp Timeline::globalStartTime() const noexcept
 {
    return _globalStartTime;
@@ -782,7 +786,7 @@ void Timeline::setZoom( TimeDuration timelineDuration, AnimationType animType )
 void Timeline::zoomOn( int64_t cycleToZoomOn, float zoomFactor )
 {
    const float windowWidthPxl = ImGui::GetWindowWidth();
-   const int64_t cycleToZoom = cycleToZoomOn - _timelineStart;
+   const int64_t cycleToZoom  = cycleToZoomOn - _animationState.targetTimelineStart;
 
    const auto prevTimelineRange = _duration;
    setZoom( _duration * zoomFactor, ANIMATION_TYPE_NONE );
@@ -794,7 +798,7 @@ void Timeline::zoomOn( int64_t cycleToZoomOn, float zoomFactor )
    if ( pxlDiff != 0 )
    {
       const int64_t timeDiff = pxlToCycles<int64_t>( windowWidthPxl, _duration, pxlDiff );
-      setStartTime( _timelineStart + timeDiff, ANIMATION_TYPE_NONE );
+      setStartTime( _animationState.targetTimelineStart + timeDiff, ANIMATION_TYPE_NONE );
    }
 }
 
