@@ -23,16 +23,15 @@ Profiler::Profiler( SourceType type, int processId, const char* str )
 }
 
 #if HOP_USE_REMOTE_PROFILER
-Profiler::Profiler( NetworkConnection& nc )
+Profiler::Profiler( std::unique_ptr<NetworkConnection> nc )
     :
-      //_name( nc._portStr ),
       _recording( false ),
       _srcType( SRC_TYPE_NETWORK ),
       _loadedFileCpuFreqGHz( 0 ),
       _earliestTimeStamp( 0 ),
       _latestTimeStamp( 0 )
 {
-   _server.start( nc );
+   _server.start( std::move( nc ) );
 }
 #endif
 

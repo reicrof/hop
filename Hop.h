@@ -123,6 +123,12 @@ For more information, please refer to <http://unlicense.org/>
 
 #define HOP_SHUTDOWN() hop::ClientManager::Shutdown()
 
+
+#if HOP_USE_REMOTE_PROFILER
+#define HOP_DEFAULT_PORT "33435"
+#endif
+
+
 ///////////////////////////////////////////////////////////////
 /////     EVERYTHING AFTER THIS IS IMPL DETAILS        ////////
 ///////////////////////////////////////////////////////////////
@@ -783,6 +789,7 @@ class NetworkConnection
    NetworkConnection() = default;
    NetworkConnection( NetworkConnection&& nc );
    bool operator==( const NetworkConnection& rhs ) const;
+   ~NetworkConnection() { terminate (); }
 
    ConnectionState openConnection( bool isViewer );
    Status status() const HOP_NOEXCEPT { return _status; }
@@ -811,7 +818,7 @@ class NetworkConnection
 
    static char* errToStr( int err, char* buf, uint32_t len );
 
-   char _portStr[16] = "12345";
+   char _portStr[16] = HOP_DEFAULT_PORT;
    char _addressStr[ADDR_MAX_LEN + 1] = {};
    uint8_t* _compressionBuffer        = nullptr;
    size_t _compressionBufferSz        = 0;
@@ -1370,6 +1377,9 @@ NetworkConnection::NetworkConnection( NetworkConnection&& nc )
    _status        = nc._status;
    _handshakeSent = nc._handshakeSent;
 
+   nc._socket = nc._clientSocket = HOP_NET_INVALID_SOCKET;
+   nc._addr = nullptr;
+
    _compressionBufferSz = 0;
    _compressionBuffer = nullptr;
 }
@@ -1793,7 +1803,15 @@ static void networkThreadLoop( NetworkConnection& connection, SharedMemory& shme
                   {
                      const ViewerMsgInfo* msg = (const ViewerMsgInfo*)( readBuffer + bytesRead );
                      if( msg->listening >= 0 ) shmem.setListeningConsumer( msg->listening );
-                     if( msg->connected >= 0 ) shmem.setConnectedConsumer( msg->connected );
+                     if( msg->connected >= 0 )
+                     {
+                        shmem.setConnectedConsumer( msg->connected );
+                        if( msg->connected == 0 )
+                        {
+                           connection.reset();
+                           curSendBufferSize = 0;
+                        }
+                     }
                      if( msg->seed > 0 )
                      {
                         shmem.setResetSeed( msg->seed );

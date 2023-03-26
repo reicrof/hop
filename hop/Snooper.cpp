@@ -16,7 +16,7 @@ namespace hop
 Snooper::Snooper() : _selectedConnection( -1 ), _windowOpen( false )
 {
    snprintf( _addressStr, sizeof( _addressStr ), "%s", hop::options::lastAddressUsed() );
-   snprintf( _portStr, sizeof( _portStr ), "12345" );
+   snprintf( _portStr, sizeof( _portStr ), hop::options::lastPortUsed() );
 }
 
 void Snooper::enable()
@@ -39,8 +39,8 @@ void Snooper::draw( Viewer* viewer )
       static ConnectionState state = NOT_CONNECTED;
       if( ImGui::Button( "Scan" ) )
       {
-         if( strlen(_addressStr) > 0 )
-           hop::options::setLastAddressUsed (_addressStr);
+         if( _addressStr[0] != '\0' && _portStr[0] != '\0')
+            hop::options::setLastAddressUsed( _addressStr, _portStr );
 
          _pending_connections.clear();
          if( _pending_connections.empty() )
@@ -51,13 +51,32 @@ void Snooper::draw( Viewer* viewer )
             {
                /* Check if we already have this connection opened */
                bool exists = false;
-               for( const auto& cn : _connections )
+               for( const auto& p : _profilers )
                {
+                  const NetworkConnection* cn = p->data().networkConnection();
                   uint32_t cn_port = atoi( cn->_portStr );
                   if( strcmp( cn->_addressStr, _addressStr ) == 0 && cn_port == port )
                   {
                      exists = true;
                      break;
+                  }
+               }
+
+               if( !exists )
+               {
+                  int profCount = viewer->profilerCount();
+                  for( int i = 0; i < profCount; i++ )
+                  {
+                     const ProfilerView* pview   = viewer->getProfiler( i );
+                     const NetworkConnection* cn = pview->data().networkConnection();
+                     if( !cn )
+                        continue;
+                     uint32_t cn_port            = atoi( cn->_portStr );
+                     if( strcmp( cn->_addressStr, _addressStr ) == 0 && cn_port == port )
+                     {
+                        exists = true;
+                        break;
+                     }
                   }
                }
 
@@ -67,7 +86,6 @@ void Snooper::draw( Viewer* viewer )
                memcpy( nc._addressStr, _addressStr, sizeof( _addressStr ) );
                snprintf( nc._portStr, sizeof( _portStr ), "%u", port );
                state = nc.openConnection( true );
-               // nc.openConnection( true );
                if( state == CANNOT_RESOLVE_ADDR || state == CANNOT_CONNECT_TO_SERVER ) break;
                _pending_connections.emplace_back( new NetworkConnection( std::move( nc ) ) );
             }
@@ -76,7 +94,9 @@ void Snooper::draw( Viewer* viewer )
          for( auto &pcn : _pending_connections)
          {
             if( pcn->openConnection( true ) == CONNECTED )
-               _connections.emplace_back (pcn.release());
+            {
+               _profilers.push_back ( std::make_unique<hop::ProfilerView>( std::move( pcn ) ) );
+            }
          }
 
          _pending_connections.erase(
@@ -94,13 +114,16 @@ void Snooper::draw( Viewer* viewer )
       }
 
       char label[256];
-      for( int32_t i = 0; i < (int32_t)_connections.size(); i++ )
+      for( int32_t i = 0; i < (int32_t)_profilers.size(); i++ )
       {
-         const auto& c = _connections[i];
+         const Profiler& prof       = _profilers[i]->data();
+         const NetworkConnection *c = prof.networkConnection();
          if( c->status() == NetworkConnection::Status::ALIVE )
          {
             ImGui::PushID( i );
-            snprintf( label, sizeof( label ), "[%u] %s:%s", i, c->_addressStr, c->_portStr );
+            int pid;
+            const char *name = prof.nameAndPID(&pid);
+            snprintf( label, sizeof( label ), "[%u - %s:%s] %s (%d)", i, c->_addressStr, c->_portStr, name, pid );
             if( ImGui::Selectable( label, i == _selectedConnection ) )
             {
                _selectedConnection = i;
@@ -111,9 +134,9 @@ void Snooper::draw( Viewer* viewer )
 
       if (ImGui::Button( "Connect" ) && _selectedConnection >= 0)
       {
-         auto profiler = std::make_unique<hop::ProfilerView>( *_connections[_selectedConnection] );
-         viewer->addProfiler( std::move( profiler ), true );
-
+         viewer->addProfiler( std::move( _profilers[_selectedConnection] ), true );
+         _profilers.erase( _profilers.begin() + _selectedConnection );
+         _selectedConnection = _selectedConnection > 0 ? _selectedConnection - 1 : 0;
       }
 
       ImGui::End();

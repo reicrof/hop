@@ -88,7 +88,7 @@ class Transport
   public:
    Transport() = default;
 #if HOP_USE_REMOTE_PROFILER
-   Transport( NetworkConnection* nc ) : _network( nc ) {}
+   Transport( std::unique_ptr<NetworkConnection> nc ) : _network( std::move(nc) ) {}
 #endif
 
    bool create( int /* pid */, const char* /* name */ ) { return true; }
@@ -141,7 +141,7 @@ class Transport
 
    SharedMemory _shmem;
 #if HOP_USE_REMOTE_PROFILER
-   NetworkConnection *_network;
+   std::unique_ptr<NetworkConnection> _network;
    std::atomic<bool> _networkThreadReady;
 #endif
 };
@@ -281,7 +281,7 @@ static uint32_t processUncompressData( Server* server, uint32_t curSeed, const u
     return curSeed;
 }
 static void
-networkTransportLoop( Server* server, Transport* transport, NetworkConnection* nc )
+networkTransportLoop( Server* server, Transport* transport)
 {
    const uint32_t bufSize = 1024 * 1024 * 8;
    uint8_t* buf           = (uint8_t*)malloc( bufSize );
@@ -310,7 +310,8 @@ networkTransportLoop( Server* server, Transport* transport, NetworkConnection* n
          }
       }
 
-      const ssize_t recSize = nc->receiveData( compBuf + curDataSize, bufSize - curDataSize );
+      const ssize_t recSize =
+          transport->_network->receiveData( compBuf + curDataSize, bufSize - curDataSize );
       if( recSize > 0 )
          curDataSize += recSize;
 
@@ -369,7 +370,7 @@ bool Server::start( int inPid, const char* name )
    _state.shortNameIndex = getShortNameIndex( _state.processName );
    _state.connectionState = NOT_CONNECTED;
 
-   _transport = new Transport();
+   _transport = new Transport;
 
    _thread = std::thread( shmemTransportLoop, this, _transport, inPid );
 
@@ -377,15 +378,15 @@ bool Server::start( int inPid, const char* name )
 }
 
 #if HOP_USE_REMOTE_PROFILER
-bool Server::start( NetworkConnection& nc )
+bool Server::start( std::unique_ptr<NetworkConnection> nc )
 {
    _state.running         = true;
    _state.pid             = -1;
    _state.connectionState = NOT_CONNECTED;
 
-   _transport = new Transport(&nc);
+   _transport = new Transport( std::move( nc ) );
 
-   _thread = std::thread( networkTransportLoop, this, _transport, &nc );
+   _thread = std::thread( networkTransportLoop, this, _transport);
    while( !_transport->_networkThreadReady.load() )
    {
       hop::sleepMs( 100 );
@@ -396,7 +397,7 @@ bool Server::start( NetworkConnection& nc )
 
 const NetworkConnection* Server::networkConnection() const
 {
-   if( _transport ) return _transport->_network;
+   if( _transport ) return _transport->_network.get();
    return nullptr;
 }
 #endif
@@ -831,6 +832,8 @@ void Server::stop()
       }
       _transport->setResetSeed( seed );
       _transport->setConsumerState(0, 0);
+      delete _transport;
+      _transport = nullptr;
 
       if( _thread.joinable() )
       {

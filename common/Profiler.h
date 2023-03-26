@@ -30,7 +30,7 @@ public:
 
    Profiler( SourceType type, int processId, const char* str );
 #if HOP_USE_REMOTE_PROFILER
-   Profiler( NetworkConnection& nc );
+   Profiler( std::unique_ptr<NetworkConnection> nc );
    const NetworkConnection* networkConnection() const;
 #endif
    ~Profiler();

@@ -9,10 +9,11 @@
 namespace hop
 {
 class Viewer;
+class ProfilerView;
 class Snooper
 {
    std::vector<std::unique_ptr<NetworkConnection>> _pending_connections;
-   std::vector<std::unique_ptr<NetworkConnection>> _connections;
+   std::vector<std::unique_ptr<ProfilerView>> _profilers;
    char _addressStr[sizeof( NetworkConnection::_addressStr )];
    char _portStr[sizeof( NetworkConnection::_portStr )];
    int32_t _selectedConnection;

@@ -20,6 +20,7 @@ static const char* vsyncOnToken         = "vsync_on";
 
 // Persisted data
 static const char* lastAddressUsedToken = "last_address_used";
+static const char* lastPortUsedToken = "last_port_used";
 
 static const uint32_t DEFAULT_COLORS[] = {
     0xffe7073e, 0xffd64c91, 0xffa9842d, 0xff0082c8, 0xfff58231, 0xff911eb4, 0xff46f0f0, 0xfff032e6,
@@ -27,6 +28,7 @@ static const uint32_t DEFAULT_COLORS[] = {
     0xff0000ff };
 
 static constexpr int MAX_ADDR_LEN = 64;
+static constexpr int MAX_PORT_LEN = 6;
 
 namespace hop
 {
@@ -42,6 +44,7 @@ struct Options
    bool showCoreInfo{true};
    bool optionWindowOpened{false};
    char lastAddressUsed[MAX_ADDR_LEN] = "localhost";
+   char lastPortUsed[MAX_PORT_LEN] = HOP_DEFAULT_PORT;
    std::array< uint32_t, HOP_ZONE_MAX + 1 > zoneColors;
 } g_options = {};
 
@@ -90,13 +93,21 @@ const char* options::lastAddressUsed()
    return g_options.lastAddressUsed;
 }
 
-void options::setLastAddressUsed (const char* addr)
+const char* options::lastPortUsed()
+{
+   return g_options.lastPortUsed;
+}
+
+void options::setLastAddressUsed (const char* addr, const char* port)
 {
    if (!addr) return;
 
-   size_t len = strlen (addr);
-   if( len < MAX_ADDR_LEN )
+   size_t addrlen = strlen( addr );
+   if( addrlen < MAX_ADDR_LEN )
       strncpy( g_options.lastAddressUsed, addr, MAX_ADDR_LEN );
+   size_t portlen = strlen( port );
+   if( portlen < MAX_PORT_LEN )
+      strncpy( g_options.lastPortUsed, port, MAX_PORT_LEN );
 }
 
 const std::array< uint32_t, HOP_ZONE_MAX + 1 >& options::zoneColors()
@@ -135,6 +146,9 @@ bool options::save()
 
       // Last address used
       outOptions << lastAddressUsedToken << " " << g_options.lastAddressUsed << '\n';
+
+      // Last port used
+      outOptions << lastPortUsedToken << " " << g_options.lastPortUsed << '\n';
 
       // Zone colors options
       outOptions << zoneColorsToken << " " << g_options.zoneColors.size() << " " ;
@@ -196,9 +210,13 @@ bool options::load()
          {
             inOptions >> g_options.windowOpacity;
          }
-         else if (strcmp( token.c_str(), lastAddressUsedToken ) == 0 )
+         else if( strcmp( token.c_str(), lastAddressUsedToken ) == 0 )
          {
             inOptions >> g_options.lastAddressUsed;
+         }
+         else if( strcmp( token.c_str(), lastPortUsedToken ) == 0 )
+         {
+            inOptions >> g_options.lastPortUsed;
          }
          else if( strcmp( token.c_str(), zoneColorsToken ) == 0 )
          {

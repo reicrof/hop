@@ -21,7 +21,7 @@ class Server
   public:
    bool start( int processId, const char* name );
 #if HOP_USE_REMOTE_PROFILER
-   bool start( NetworkConnection& nc );
+   bool start( std::unique_ptr<NetworkConnection> nc );
    const NetworkConnection* networkConnection() const;
 #endif
    void setRecording( bool recording );

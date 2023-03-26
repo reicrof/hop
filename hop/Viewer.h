@@ -9,6 +9,7 @@
 
 namespace hop
 {
+class Profiler;
 class ProfilerView;
 class Snooper;
 class NetworkConnection;

@@ -16,7 +16,7 @@ class ProfilerView
 {
 public:
    ProfilerView( Profiler::SourceType type, int processId, const char* str );
-   ProfilerView( NetworkConnection& nc );
+   ProfilerView( std::unique_ptr<NetworkConnection> nc );
    bool fetchClientData();
    void update( float globalTimeMs, TimeDuration timelineDuration );
    bool draw( float drawPosX, float drawPosY, const TimelineInfo& tlInfo, TimelineMsgArray* msgArray );
