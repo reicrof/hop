@@ -859,6 +859,7 @@ class NetworkConnection
 // Unix shared memory includes
 #include <fcntl.h>     // O_CREAT
 #include <cstring>     // memcpy
+#include <limits.h>    // CHAR_BIT
 #include <pthread.h>   // pthread_self
 #include <sys/mman.h>  // shm_open
 #include <sys/stat.h>  // stat

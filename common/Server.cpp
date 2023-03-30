@@ -639,7 +639,7 @@ ssize_t Server::handleNewMessage( const uint8_t* data, size_t maxSize, uint32_t 
           {
              const char* strDataPtr = (const char*)bufPtr;
              bufPtr += strSize;
-             assert (bufPtr - data <= maxSize);
+             assert ((size_t)(bufPtr - data) <= maxSize);
 
              // TODO: Could lock later when we received all the messages
              std::lock_guard<hop::Mutex> guard( _sharedPendingDataMutex );
@@ -669,7 +669,7 @@ ssize_t Server::handleNewMessage( const uint8_t* data, size_t maxSize, uint32_t 
                    sizeof( ZoneId_t ) );
 
              bufPtr += trace_size * tracesCount;
-             assert( bufPtr - data <= maxSize );
+             assert( (size_t)(bufPtr - data) <= maxSize );
 
              traceData.entries.ends.append( ends, ends + tracesCount );
              traceData.entries.starts.append( starts, starts + tracesCount );
@@ -715,7 +715,7 @@ ssize_t Server::handleNewMessage( const uint8_t* data, size_t maxSize, uint32_t 
          lockwaitData.entries.maxDepth = maxDepth;
 
          bufPtr += ( lwCount * sizeof( LockWait ) );
-         assert (bufPtr - data <= maxSize);
+         assert ((size_t)(bufPtr - data) <= maxSize);
 
          // The ends time should already be sorted
          assert_is_sorted( lockwaitData.entries.ends.begin(), lockwaitData.entries.ends.end() );
@@ -731,7 +731,7 @@ ssize_t Server::handleNewMessage( const uint8_t* data, size_t maxSize, uint32_t 
          UnlockEvent* eventPtr = (UnlockEvent*)bufPtr;
 
          bufPtr += eventCount * sizeof( UnlockEvent );
-         assert (bufPtr - data <= maxSize);
+         assert ((size_t)(bufPtr - data) <= maxSize);
 
          std::sort(
              eventPtr, eventPtr + eventCount, []( const UnlockEvent& lhs, const UnlockEvent& rhs ) {
@@ -752,7 +752,7 @@ ssize_t Server::handleNewMessage( const uint8_t* data, size_t maxSize, uint32_t 
 
          // Must be done before removing duplicates
          bufPtr += eventCount * sizeof( CoreEvent );
-         assert (bufPtr - data <= maxSize);
+         assert ((size_t)(bufPtr - data) <= maxSize);
          assert (eventCount > 0);
 
          const size_t newCount = mergeAndRemoveDuplicates( coreEventsPtr, eventCount, cpuFreqGHz() );
@@ -788,8 +788,8 @@ ssize_t Server::handleNewMessage( const uint8_t* data, size_t maxSize, uint32_t 
          assert( false );
    }
 
-   assert (totalMsgSize == bufPtr - data);
-   return ( size_t )( bufPtr - data );
+   assert (totalMsgSize == (size_t)(bufPtr - data));
+   return (size_t)(bufPtr - data);
 }
 
 void Server::clearPendingMessages()

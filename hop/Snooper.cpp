@@ -16,7 +16,7 @@ namespace hop
 Snooper::Snooper() : _selectedConnection( -1 ), _windowOpen( false )
 {
    snprintf( _addressStr, sizeof( _addressStr ), "%s", hop::options::lastAddressUsed() );
-   snprintf( _portStr, sizeof( _portStr ), hop::options::lastPortUsed() );
+   snprintf( _portStr, sizeof( _portStr ), "%s", hop::options::lastPortUsed() );
 }
 
 void Snooper::enable()
