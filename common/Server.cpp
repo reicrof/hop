@@ -832,13 +832,14 @@ void Server::stop()
       }
       _transport->setResetSeed( seed );
       _transport->setConsumerState(0, 0);
-      delete _transport;
-      _transport = nullptr;
 
       if( _thread.joinable() )
       {
          _thread.join();
       }
+
+      delete _transport;
+      _transport = nullptr;
    }
 }
 

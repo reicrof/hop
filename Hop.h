@@ -1694,7 +1694,7 @@ bool NetworkConnection::sendAllData( const void* data, size_t size, bool compres
    size_t totalSent = 0;
    while( totalSent < sizeToSend )
    {
-      const int sent =
+      const ssize_t sent =
           send( _clientSocket, (const char*)dataToSend + totalSent, (int)( sizeToSend - totalSent ), flags );
       if( sent < 0 )
       {
