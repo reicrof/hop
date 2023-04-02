@@ -15,7 +15,9 @@ namespace options
    bool load();
    void draw();
    void enableOptionWindow();
+   void setDisplayScaling(float scaling);
 
+   float displayScaling();
    float traceHeight();
    float traceTextAlignment();
    float windowOpacity();

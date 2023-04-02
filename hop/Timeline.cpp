@@ -481,12 +481,12 @@ bool Timeline::handleHotkey()
       setRealtime( true );
       handled = true;
    }
-   else if ( ImGui::GetIO().HopLogicalCtrl && ImGui::IsKeyPressed( 'z' ) )
+   else if ( ImGui::GetIO().HopLogicalCtrl && ImGui::IsKeyPressed( ImGuiKey_Z ) )
    {
       undoNavigation();
       handled = true;
    }
-   else if ( ImGui::GetIO().HopLogicalCtrl && ImGui::IsKeyPressed( 'y' ) )
+   else if ( ImGui::GetIO().HopLogicalCtrl && ImGui::IsKeyPressed( ImGuiKey_Y ) )
    {
       redoNavigation();
       handled = true;
@@ -510,7 +510,7 @@ void Timeline::handleMouseWheel( float mousePosX, float mouseWheel )
    const float windowWidthPxl = ImGui::GetIO().DisplaySize.x;
 
    // Handle vertical scroll
-   if( ImGui::IsKeyDown( SDL_SCANCODE_LSHIFT ) )
+   if( ImGui::IsKeyDown( ImGuiKey_LeftShift ) )
    {
       constexpr float scrollAmount = 50.0f;
       if( mouseWheel > 0)
@@ -526,11 +526,11 @@ void Timeline::handleMouseWheel( float mousePosX, float mouseWheel )
    {
       if( mouseWheel > 0)
       {
-         zoomOn( pxlToCycles( windowWidthPxl, _duration, mousePosX ) + _timelineStart, ImGui::IsKeyDown(SDL_SCANCODE_LCTRL) ? 0.5 : 0.9f );
+         zoomOn( pxlToCycles( windowWidthPxl, _duration, mousePosX ) + _timelineStart, ImGui::IsKeyDown(ImGuiKey_LeftCtrl) ? 0.5 : 0.9f );
       }
       else if( mouseWheel < 0 )
       {
-         zoomOn( pxlToCycles( windowWidthPxl, _duration, mousePosX ) + _timelineStart, ImGui::IsKeyDown(SDL_SCANCODE_LCTRL) ? 1.5 : 1.1f );
+         zoomOn( pxlToCycles( windowWidthPxl, _duration, mousePosX ) + _timelineStart, ImGui::IsKeyDown(ImGuiKey_LeftCtrl) ? 1.5 : 1.1f );
       }
    }
 }

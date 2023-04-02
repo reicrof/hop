@@ -107,11 +107,11 @@ static bool drawThreadLabel(
    char nameBuffer[128];
    if( threadName )
    {
-      snprintf( nameBuffer, sizeof( nameBuffer ), "%s", threadName );
+      snprintf( nameBuffer, sizeof( nameBuffer ), "[%u] %s", trackIndex, threadName );
    }
    else
    {
-      snprintf( nameBuffer, sizeof( nameBuffer ), "Thread %u", trackIndex );
+      snprintf( nameBuffer, sizeof( nameBuffer ), "[%u] Thread %u", trackIndex, trackIndex );
    }
 
    const ImVec2 threadLabelSize = ImGui::CalcTextSize( nameBuffer );
@@ -142,7 +142,7 @@ static bool drawThreadLabel(
 
 static void drawTrackHighlight( float trackX, float trackY, float trackHeight )
 {
-   if( ImGui::IsRootWindowOrAnyChildFocused() )
+   if( ImGui::IsWindowFocused(ImGuiFocusedFlags_RootAndChildWindows) )
    {
       const ImVec2 trackTopLeft = ImVec2( trackX, trackY );
       const ImVec2 trackBotRight = ImVec2( trackX + 9999, trackY + trackHeight );
@@ -545,7 +545,7 @@ static std::vector<LockOwnerInfo> highlightLockOwner(
    const TimeStamp highlightedLWStart = tlt[threadIdx]._lockWaits.entries.starts[hoveredLwIndex];
 
    // Data for drawing the owner's highlight
-   ImDrawList* DrawList          = ImGui::GetOverlayDrawList();
+   ImDrawList* DrawList          = ImGui::GetForegroundDrawList();
    const float wndWidth          = ImGui::GetWindowWidth();
    const int highlightAlpha      = 70.0f * data.highlightValue;
    const TimeDuration tlDuration = data.timeline.duration;
@@ -786,7 +786,7 @@ void TimelineTracksView::draw( const TimelineTrackDrawData& data, TimelineMsgArr
       const float trackHeight = trackHeightWithThreadLabel( i );
 
       // First draw the separator of the track
-      const bool highlightSeparator = ImGui::IsRootWindowOrAnyChildFocused();
+      const bool highlightSeparator = ImGui::IsWindowFocused(ImGuiFocusedFlags_RootAndChildWindows);
       const bool separatorHovered = drawSeparator( i, highlightSeparator );
 
       const char* customName = trackData.name() != 0 ? stringDb.getString( stringDb.getStringIndex( trackData.name() ) ) : nullptr;
@@ -823,6 +823,8 @@ void TimelineTracksView::draw( const TimelineTrackDrawData& data, TimelineMsgArr
          }
       }
 
+      const bool viewHovered = ImGui::IsWindowHovered(ImGuiFocusedFlags_RootAndChildWindows);
+
       ImVec2 curDrawPos = absDrawPos;
       if( !threadHidden )
       {
@@ -848,14 +850,18 @@ void TimelineTracksView::draw( const TimelineTrackDrawData& data, TimelineMsgArr
             // Draw the lock waits  entries (before traces so that they are not hiding them)
             const size_t lwHoveredIdx =
                 drawLockWaits( curDrawPos, i, data, _tracks[i].lockwaitsLodsData );
-            handleHoveredLockWait( *this, data, i, lwHoveredIdx, highlightInfo, msgArray );
+
+            if( viewHovered )
+               handleHoveredLockWait( *this, data, i, lwHoveredIdx, highlightInfo, msgArray );
 
             // Draw the traces entries
             const size_t traceHoveredIdx =
                 drawTraces( curDrawPos, i, data, _tracks[i].traceLodsData );
-            handleHoveredTrace( _contextMenu, data, i, traceHoveredIdx, highlightInfo, msgArray );
 
-            if( lwHoveredIdx == hop::INVALID_IDX && traceHoveredIdx == hop::INVALID_IDX )
+            if( viewHovered )
+               handleHoveredTrace( _contextMenu, data, i, traceHoveredIdx, highlightInfo, msgArray );
+
+            if( viewHovered && lwHoveredIdx == hop::INVALID_IDX && traceHoveredIdx == hop::INVALID_IDX )
             {
                // No trace were right clicked. Check for right click in canvas
                handleHoveredTrack( _contextMenu, _tracks, data );
@@ -978,7 +984,7 @@ void TimelineTracksView::drawTraceDetailsWindow(
 
 bool TimelineTracksView::handleHotkeys()
 {
-   if( ImGui::GetIO().HopLogicalCtrl && ImGui::IsKeyPressed( 'f' ) )
+   if( ImGui::GetIO().HopLogicalCtrl && ImGui::IsKeyPressed( ImGuiKey_F ) )
    {
       _searchResult.searchWindowOpen = true;
       _searchResult.focusSearchWindow = true;

@@ -125,6 +125,16 @@ void insertionSort( IT begin, IT end )
    }
 }
 
+inline constexpr uint64_t prevPowerOfTwo( unsigned long long x )
+{
+   return 1ULL << (63ULL - __builtin_clzll (x));
+}
+
+inline constexpr bool isPowerOfTwo( uint64_t x )
+{
+   return x && (!(x & (x-1)));
+}
+
 } // namespace hop
 
 #endif  // UTILS_H_

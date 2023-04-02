@@ -69,6 +69,23 @@ static void sortSearchResOnDuration(
           return cmp(
               tracks[lhs.second]._traces.entries.ends[lhs.first] - tracks[lhs.second]._traces.entries.starts[lhs.first],
               tracks[rhs.second]._traces.entries.ends[rhs.first] - tracks[rhs.second]._traces.entries.starts[rhs.first] );
+           } );
+}
+
+template <typename CMP>
+static void sortSearchResOnThread(
+    hop::SearchResult& sr,
+    const std::vector<hop::TimelineTrack>& tracks,
+    const CMP& cmp )
+{
+   HOP_PROF_FUNC();
+
+   std::stable_sort(
+       sr.tracesIdxThreadIdx.begin(),
+       sr.tracesIdxThreadIdx.end(),
+       [&tracks, &cmp](
+           const std::pair<size_t, uint32_t>& lhs, const std::pair<size_t, uint32_t>& rhs ) {
+          return cmp(lhs.second, rhs.second);
        } );
 }
 
@@ -130,9 +147,13 @@ SearchSelection drawSearchResult(
 
    if ( searchRes.searchWindowOpen )
    {
+      ImVec2 size = ImGui::GetIO().DisplaySize * ImVec2( 0.6f, 0.4f );
+      ImVec2 pos = ImGui::GetIO().DisplaySize * ImVec2( 0.5f, 0.5f );
+      ImGui::SetNextWindowSize( size, ImGuiCond_Appearing );
+      ImGui::SetNextWindowPos( pos, ImGuiCond_Appearing, ImVec2( 0.5f, 0.5f ) );
+
       const float wndOpacity = hop::options::windowOpacity();
       ImGui::PushStyleColor( ImGuiCol_WindowBg, ImVec4( 0.20f, 0.20f, 0.20f, wndOpacity ) );
-      ImGui::SetNextWindowSize( ImVec2( 600, 300 ), ImGuiSetCond_FirstUseEver );
       if ( ImGui::Begin( "Search Window", &searchRes.searchWindowOpen ) )
       {
          static char input[512];
@@ -157,128 +178,137 @@ SearchSelection drawSearchResult(
 
          ImGui::Text( "Found %zu matches", searchRes.matchCount );
 
-         const float entryHeight = ImGui::GetTextLineHeightWithSpacing();
-         const float totalEntrySize = entryHeight * ( searchRes.tracesIdxThreadIdx.size() + 10 );
-         ImGui::SetNextWindowContentSize( ImVec2( 0, totalEntrySize ) );
+         // Creating the table modifies the window size, so query values here *
+         const float entryHeight    = ImGui::GetTextLineHeightWithSpacing();
 
          ImGui::PushStyleColor( ImGuiCol_ChildBg, ImVec4( 0.20f, 0.20f, 0.20f, wndOpacity ) );
 
-         // Draw the table header
-         const auto buttonCol = ImVec4( 0.20f, 0.20f, 0.20f, 0.0f );
-         ImGui::PushStyleColor( ImGuiCol_Button, buttonCol );
-         ImGui::PushStyleColor( ImGuiCol_ButtonHovered, buttonCol );
-         ImGui::PushStyleColor( ImGuiCol_ButtonActive, buttonCol );
-         ImGui::BeginChild( "SearchWindow", ImVec2( 0, 0 ), true );
-         ImGui::Columns( 3, "SearchResult" );
-         if ( ImGui::Button( "Time" ) )
+         uint32_t tableFlags = ImGuiTableFlags_Resizable | ImGuiTableFlags_Reorderable |
+                               ImGuiTableFlags_Sortable | ImGuiTableFlags_ScrollY | ImGuiTableFlags_RowBg | ImGuiTableFlags_BordersOuter;
+         if( ImGui::BeginTable( "SearchResult", 4, tableFlags ) )
          {
-            static bool descending = false;
-            descending = !descending;
+            const float id_width = ImGui::CalcTextSize("10000000.00 s").x;
+            ImGui::TableSetupScrollFreeze(0, 1); // Make top row always visible
+            ImGui::TableSetupColumn( "Time", ImGuiTableColumnFlags_WidthFixed, id_width );
+            ImGui::TableSetupColumn( "Thread", ImGuiTableColumnFlags_WidthStretch );
+            ImGui::TableSetupColumn( "Function", ImGuiTableColumnFlags_WidthStretch );
+            ImGui::TableSetupColumn( "Duration", ImGuiTableColumnFlags_WidthStretch );
+            ImGui::TableHeadersRow();
 
-            if ( descending )
-               sortSearchResOnTime( searchRes, tracks, std::greater<TimeStamp>() );
-            else
-               sortSearchResOnTime( searchRes, tracks, std::less<TimeStamp>() );
-         }
-         ImGui::NextColumn();
-         if ( ImGui::Button( "Trace Name" ) )
-         {
-            static bool descending = false;
-            descending = !descending;
-
-            if ( descending )
-               sortSearchResOnName( searchRes, tracks, strDb, std::greater<int>() );
-            else
-               sortSearchResOnName( searchRes, tracks, strDb, std::less<int>() );
-         }
-         ImGui::NextColumn();
-         if ( ImGui::Button( "Duration" ) )
-         {
-            static bool descending = false;
-            descending = !descending;
-
-            if ( descending )
-               sortSearchResOnDuration( searchRes, tracks, std::greater<TimeStamp>() );
-            else
-               sortSearchResOnDuration( searchRes, tracks, std::less<TimeStamp>() );
-         }
-         ImGui::NextColumn();
-         ImGui::Separator();
-
-         // Find out where to start drawing
-         const float curScrollY = ImGui::GetScrollY();
-         const size_t startIndex = std::max( ( int64_t )( curScrollY / entryHeight ) - 8ll, 0ll );
-
-         const size_t entryToShow = ImGui::GetWindowHeight() / entryHeight;
-         const size_t lastIndex =
-             std::min( startIndex + entryToShow + 10, searchRes.tracesIdxThreadIdx.size() );
-
-         // Add dummy invisible button so the next entry show up where they
-         // should in the search table
-         const float paddingHeight = std::max( curScrollY - ( 3.0f * entryHeight ), 0.1f );
-         ImGui::InvisibleButton( "padding1", ImVec2( 1.0f, paddingHeight ) );
-         ImGui::NextColumn();
-         ImGui::InvisibleButton( "padding2", ImVec2( 1.0f, paddingHeight ) );
-         ImGui::NextColumn();
-         ImGui::InvisibleButton( "padding3", ImVec2( 1.0f, paddingHeight ) );
-         ImGui::NextColumn();
-
-         static size_t selectedId = -1;
-         size_t hoveredId = -1;
-         char traceTime[64] = {};
-         char traceDuration[64] = {};
-         bool selectedSomething = false;
-         for ( size_t i = startIndex; i < lastIndex; ++i )
-         {
-            ImGui::PushID( i );
-            const auto& traceIdThreadId = searchRes.tracesIdxThreadIdx[i];
-            const auto& ti              = tracks[traceIdThreadId.second];
-            const size_t traceId        = traceIdThreadId.first;
-            const TimeStamp start       = ti._traces.entries.starts[traceId];
-            const TimeStamp end         = ti._traces.entries.ends[traceId];
-            const TimeDuration delta    = end - start;
-
-            hop::formatCyclesTimepointToDisplay(
-                start - tlInfo.globalStartTime,
-                tlInfo.duration,
-                traceTime,
-                sizeof( traceTime ),
-                tlInfo.useCycles,
-                cpuFreqGHz );
-            if ( ImGui::Selectable(
-                     traceTime, selectedId == i, ImGuiSelectableFlags_SpanAllColumns ) )
+            if( ImGuiTableSortSpecs* sortSpec = ImGui::TableGetSortSpecs() )
             {
-               selectedId = i;
-               selectedSomething = true;
-            }
-            if ( ImGui::IsItemHovered() )
-            {
-               hoveredId = i;
-            }
-            ImGui::NextColumn();
-            ImGui::Text( "%s", strDb.getString( ti._traces.fctNameIds[traceId] ) );
-            ImGui::NextColumn();
-            hop::formatCyclesDurationToDisplay(
-                delta, traceDuration, sizeof( traceDuration ), tlInfo.useCycles, cpuFreqGHz );
-            ImGui::Text( "%s", traceDuration );
-            ImGui::NextColumn();
-            ImGui::PopID();
-         }
-         ImGui::Columns( 1 );
-         ImGui::EndChild();
-         ImGui::PopStyleColor( 3 );
+                if( sortSpec->SpecsDirty && sortSpec->SpecsCount > 0 )
+                {
+                   bool descending =
+                       sortSpec->Specs[0].SortDirection == ImGuiSortDirection_Descending;
+                   switch( sortSpec->Specs[0].ColumnIndex )
+                   {
+                      case 0: /* Time */
+                         if( descending )
+                            sortSearchResOnTime( searchRes, tracks, std::greater<TimeStamp>() );
+                         else
+                            sortSearchResOnTime( searchRes, tracks, std::less<TimeStamp>() );
+                         break;
+                      case 1: /* Thread */
+                         if( descending )
+                            sortSearchResOnThread( searchRes, tracks, std::greater<uint32_t>() );
+                         else
+                            sortSearchResOnThread( searchRes, tracks, std::less<uint32_t>() );
+                         break;
+                      case 2: /* Name */
+                         if( descending )
+                            sortSearchResOnName( searchRes, tracks, strDb, std::greater<int>() );
+                         else
+                            sortSearchResOnName( searchRes, tracks, strDb, std::less<int>() );
+                         break;
+                      case 3: /* Duration */
+                         if( descending )
+                            sortSearchResOnDuration( searchRes, tracks, std::greater<TimeStamp>() );
+                         else
+                            sortSearchResOnDuration( searchRes, tracks, std::less<TimeStamp>() );
+                         break;
+                   }
 
-         if ( selectedSomething && selectedId != (size_t)-1 )
-         {
-            const auto& traceIdThreadId = searchRes.tracesIdxThreadIdx[selectedId];
-            selectedTraceId = traceIdThreadId.first;
-            selectedThreadId = traceIdThreadId.second;
-         }
-         if ( hoveredId != (size_t)-1 )
-         {
-            const auto& traceIdThreadId = searchRes.tracesIdxThreadIdx[hoveredId];
-            hoveredTraceId = traceIdThreadId.first;
-            hoveredThreadId = traceIdThreadId.second;
+                   sortSpec->SpecsDirty = false;
+                }
+            }
+
+            static int selectedId    = -1;
+            int hoveredId            = -1;
+            char traceTime[64]       = {};
+            char traceDuration[64]   = {};
+            bool selectedSomething   = false;
+
+            ImGuiListClipper clipper;
+            clipper.Begin( (int)searchRes.tracesIdxThreadIdx.size(), entryHeight );
+            while( clipper.Step() )
+            {
+                for( int i = clipper.DisplayStart; i < clipper.DisplayEnd; i++ )
+                {
+                   ImGui::TableNextRow();
+                   ImGui::PushID( i );
+
+                   const auto& traceIdThreadId = searchRes.tracesIdxThreadIdx[i];
+                   const auto& ti              = tracks[traceIdThreadId.second];
+                   const size_t traceId        = traceIdThreadId.first;
+                   const TimeStamp start       = ti._traces.entries.starts[traceId];
+                   const TimeStamp end         = ti._traces.entries.ends[traceId];
+                   const TimeDuration delta    = end - start;
+
+                   hop::formatCyclesTimepointToDisplay(
+                       start - tlInfo.globalStartTime,
+                       5e9 * cpuFreqGHz,
+                       traceTime,
+                       sizeof( traceTime ),
+                       tlInfo.useCycles,
+                       cpuFreqGHz );
+
+                   ImGui::TableSetColumnIndex( 0 );
+                   if( ImGui::Selectable(
+                           traceTime, selectedId == i, ImGuiSelectableFlags_SpanAllColumns ) )
+                   {
+                      selectedId        = i;
+                      selectedSomething = true;
+                   }
+                   if( ImGui::IsItemHovered() )
+                   {
+                      hoveredId = i;
+                   }
+
+                   ImGui::TableSetColumnIndex( 1 );
+                   if (ti.name ())
+                     ImGui::Text("%s", strDb.getString( strDb.getStringIndex( ti.name () ) ));
+                   else
+                     ImGui::Text("Thread %u", traceIdThreadId.second);
+
+                   ImGui::TableSetColumnIndex( 2 );
+                   ImGui::Text( "%s", strDb.getString( ti._traces.fctNameIds[traceId] ) );
+
+                   ImGui::TableSetColumnIndex( 3 );
+                   hop::formatCyclesDurationToDisplay(
+                       delta,
+                       traceDuration,
+                       sizeof( traceDuration ),
+                       tlInfo.useCycles,
+                       cpuFreqGHz );
+                   ImGui::Text( "%s", traceDuration );
+                   ImGui::PopID();
+                }
+            }
+
+            if( selectedSomething && selectedId != -1 )
+            {
+                const auto& traceIdThreadId = searchRes.tracesIdxThreadIdx[selectedId];
+                selectedTraceId             = traceIdThreadId.first;
+                selectedThreadId            = traceIdThreadId.second;
+            }
+            if( hoveredId != -1 )
+            {
+                const auto& traceIdThreadId = searchRes.tracesIdxThreadIdx[hoveredId];
+                hoveredTraceId              = traceIdThreadId.first;
+                hoveredThreadId             = traceIdThreadId.second;
+            }
+            ImGui::EndTable();
          }
          ImGui::PopStyleColor();
       }

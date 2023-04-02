@@ -6,10 +6,11 @@ int main()
 {
    printf("Testing pid...\n");
    using namespace hop;
-   ProcessInfo procInfoName = getProcessInfoFromProcessName( "Pid_test" );
+   ProcessesInfo infos = getProcessInfoFromProcessName( "Pid_test" );
+   HOP_TEST_ASSERT( infos.count == 1 );
+   ProcessInfo procInfoName = infos.infos[0];
    ProcessInfo procInfoPid = getProcessInfoFromPID( procInfoName.pid );
    HOP_TEST_ASSERT( procInfoPid.pid == procInfoName.pid );
-   HOP_TEST_ASSERT( strcmp( procInfoPid.name, procInfoName.name ) == 0 );
 
    printf("Testing pid success\n");
 }

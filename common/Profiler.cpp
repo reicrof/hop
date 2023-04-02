@@ -22,9 +22,12 @@ Profiler::Profiler( SourceType type, int processId, const char* str )
       _server.start( processId , _name.c_str());
 }
 
-const char* Profiler::nameAndPID( int* processId ) const
+const char* Profiler::nameAndPID( int* processId, bool shortName ) const
 {
-   return _server.processInfo( processId );
+   if( shortName )
+      return _server.shortProcessInfo( processId );
+   else
+      return _server.processInfo( processId );
 }
 
 float Profiler::cpuFreqGHz() const
