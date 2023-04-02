@@ -23,6 +23,7 @@ class Server
    void stop();
    void clear();
    const char* processInfo( int* processId ) const;
+   const char* shortProcessInfo( int* processId ) const;
    SharedMemory::ConnectionState connectionState() const;
    size_t sharedMemorySize() const;
    float cpuFreqGHz() const;
@@ -63,6 +64,7 @@ class Server
    {
       SharedMemory::ConnectionState connectionState;
       std::string processName;
+      uint16_t shortNameIndex{0}; // Short name starting index
       int pid{-1};
       bool running{false};
       bool recording{false};

@@ -412,11 +412,8 @@ TraceDetailDrawResult drawTraceDetails(
 {
    HOP_PROF_FUNC();
 
-   static constexpr float pctColumnWidth = 65.0f;
-   static constexpr float timeColumnWidth = 90.0f;
-
-   TraceDetailDrawResult result = { std::vector< size_t >(), 0, false };
-   if ( details.open )
+   TraceDetailDrawResult result = { std::vector<size_t>(), 0, false };
+   if( details.open )
    {
       if( details.shouldFocusWindow )
       {
@@ -425,6 +422,11 @@ TraceDetailDrawResult drawTraceDetails(
          details.shouldFocusWindow = false;
       }
 
+      ImVec2 size = ImGui::GetIO().DisplaySize * ImVec2( 0.6f, 0.5f );
+      ImVec2 pos = ImGui::GetIO().DisplaySize * ImVec2( 0.5f, 0.5f );
+      ImGui::SetNextWindowSize( size, ImGuiCond_Appearing );
+      ImGui::SetNextWindowPos( pos, ImGuiCond_Appearing, ImVec2( 0.5f, 0.5f ) );
+
       const float wndOpacity = hop::options::windowOpacity();
       ImGui::PushStyleColor( ImGuiCol_WindowBg, ImVec4( 0.20f, 0.20f, 0.20f, wndOpacity ) );
       // Draw the table header
@@ -432,162 +434,146 @@ TraceDetailDrawResult drawTraceDetails(
       ImGui::PushStyleColor( ImGuiCol_Button, buttonCol );
       ImGui::PushStyleColor( ImGuiCol_ButtonHovered, buttonCol );
       ImGui::PushStyleColor( ImGuiCol_ButtonActive, buttonCol );
-      ImGui::SetNextWindowSize(ImVec2(600, 300), ImGuiSetCond_FirstUseEver);
-      if ( ImGui::Begin( "Trace Details Window", &details.open ) )
+      if( ImGui::Begin( "Trace Details Window", &details.open ) )
       {
-         ImGui::Columns( 6, "TraceDetailsTable" );
-         ImGui::SetColumnWidth( 0, ImGui::GetWindowWidth() - 400 );
-         ImGui::SetColumnWidth( 1, 80 );
-         ImGui::SetColumnWidth( 2, timeColumnWidth );
-         ImGui::SetColumnWidth( 3, pctColumnWidth );
-         ImGui::SetColumnWidth( 4, timeColumnWidth );
-         ImGui::SetColumnWidth( 5, pctColumnWidth );
-         ImGui::Separator();
-         if ( ImGui::Button( "Trace" ) )
+         uint32_t tableFlags = ImGuiTableFlags_Resizable | ImGuiTableFlags_Reorderable |
+                               ImGuiTableFlags_Sortable | ImGuiTableFlags_ScrollY |
+                               ImGuiTableFlags_RowBg | ImGuiTableFlags_BordersOuter;
+         if( ImGui::BeginTable( "TraceDetailsTable", 6, tableFlags ) )
          {
-            static bool descending = false;
-            descending = !descending;
+            ImGui::TableSetupScrollFreeze( 0, 1 );  // Make top row always visible
+            ImGui::TableSetupColumn( "Trace", ImGuiTableColumnFlags_WidthStretch );
+            ImGui::TableSetupColumn( "Incl. %", ImGuiTableColumnFlags_WidthStretch );
+            ImGui::TableSetupColumn( "Incl Time", ImGuiTableColumnFlags_WidthStretch );
+            ImGui::TableSetupColumn( "Excl. %", ImGuiTableColumnFlags_WidthStretch );
+            ImGui::TableSetupColumn( "Excl. Time", ImGuiTableColumnFlags_WidthStretch );
+            ImGui::TableSetupColumn( "Count", ImGuiTableColumnFlags_WidthStretch );
+            ImGui::TableHeadersRow();
 
-            if ( descending )
+            if( ImGuiTableSortSpecs* sortSpec = ImGui::TableGetSortSpecs() )
             {
-               sortTraceDetailOnName(
-                   details.details,
-                   tracks[details.threadIndex],
-                   strDb,
-                   std::greater<int>() );
-            }
-            else
-            {
-               sortTraceDetailOnName(
-                   details.details, tracks[details.threadIndex], strDb, std::less<int>() );
-            }
-         }
+               if( sortSpec->SpecsDirty && sortSpec->SpecsCount > 0 )
+               {
+                  bool descending =
+                      sortSpec->Specs[0].SortDirection == ImGuiSortDirection_Descending;
+                  switch( sortSpec->Specs[0].ColumnIndex )
+                  {
+                     case 0: /* Name */
+                        if( descending )
+                        {
+                           sortTraceDetailOnName(
+                               details.details,
+                               tracks[details.threadIndex],
+                               strDb,
+                               std::greater<int>() );
+                        }
+                        else
+                        {
+                           sortTraceDetailOnName(
+                               details.details,
+                               tracks[details.threadIndex],
+                               strDb,
+                               std::less<int>() );
+                        }
+                        break;
+                     case 1: /* Inclusive % */
+                        sortTraceDetailOnMember(
+                            details.details, &TraceDetail::inclusivePct, descending );
+                        break;
+                     case 2: /* Inclusive Time */
+                        sortTraceDetailOnMember(
+                            details.details, &TraceDetail::inclusiveTimeInNanos, descending );
+                        break;
+                     case 3: /* Exclusive % */
+                        sortTraceDetailOnMember(
+                            details.details, &TraceDetail::exclusivePct, descending );
+                        break;
+                     case 4: /* Exclusive Time */
+                        sortTraceDetailOnMember(
+                            details.details, &TraceDetail::exclusiveTimeInNanos, descending );
+                        break;
+                     case 5:
+                        sortTraceDetailOnCount( details.details, descending );
+                        break;
+                  }
 
-         ImGui::NextColumn();
-         if ( ImGui::Button( "Incl. %" ) )
-         {
-            static bool descending = false;
-            descending = !descending;
-
-            sortTraceDetailOnMember(
-                details.details,
-                &TraceDetail::inclusivePct,
-                descending );
-         }
-
-         ImGui::NextColumn();
-         if ( ImGui::Button( "Incl Time" ) )
-         {
-            static bool descending = false;
-            descending = !descending;
-
-            sortTraceDetailOnMember(
-                details.details,
-                &TraceDetail::inclusiveTimeInNanos,
-                descending );
-         }
-
-         ImGui::NextColumn();
-         if ( ImGui::Button( "Excl. %" ) )
-         {
-            static bool descending = false;
-            descending = !descending;
-
-            sortTraceDetailOnMember(
-                details.details,
-                &TraceDetail::exclusivePct,
-                descending );
-         }
-
-         ImGui::NextColumn();
-         if ( ImGui::Button( "Excl Time" ) )
-         {
-            static bool descending = false;
-            descending = !descending;
-
-            sortTraceDetailOnMember(
-                details.details,
-                &TraceDetail::exclusiveTimeInNanos,
-                descending );
-         }
-
-         ImGui::NextColumn();
-         if ( ImGui::Button( "Count" ) )
-         {
-            static bool descending = false;
-            descending = !descending;
-            sortTraceDetailOnCount( details.details, descending );
-         }
-
-         ImGui::NextColumn();
-         ImGui::Separator();
-
-         const auto& track = tracks[details.threadIndex];
-         char traceName[256] = {};
-         char traceDuration[128] = {};
-         static size_t selected = -1;
-         size_t hoveredId = -1;
-         bool selectedSomething = false;
-         for ( size_t i = 0; i < details.details.size(); ++i )
-         {
-            const size_t traceId = details.details[i].traceIds[0];
-            const StrPtr_t fctIdx = track._traces.fctNameIds[traceId];
-            snprintf( traceName, sizeof( traceName ), "%s", strDb.getString( fctIdx ) );
-            if ( ImGui::Selectable(
-                     traceName, selected == i, ImGuiSelectableFlags_SpanAllColumns ) )
-            {
-               selected = i;
-               selectedSomething = true;
+                  sortSpec->SpecsDirty = false;
+               }
             }
 
-            if ( ImGui::IsItemHovered() )
+            const auto& track       = tracks[details.threadIndex];
+            char traceName[256]     = {};
+            char traceDuration[128] = {};
+            static size_t selected  = -1;
+            size_t hoveredId        = -1;
+            bool selectedSomething  = false;
+            for( size_t i = 0; i < details.details.size(); ++i )
             {
-               char fileLineNbStr[128];
-               snprintf(
-                   fileLineNbStr,
-                   sizeof( fileLineNbStr ),
-                   "%s:%d",
-                   strDb.getString( track._traces.fileNameIds[traceId] ),
-                   track._traces.lineNbs[traceId] );
-               ImGui::BeginTooltip();
-               ImGui::TextUnformatted( fileLineNbStr );
-               ImGui::EndTooltip();
+               ImGui::TableNextRow();
+               ImGui::TableSetColumnIndex( 0 );
+               const size_t traceId  = details.details[i].traceIds[0];
+               const StrPtr_t fctIdx = track._traces.fctNameIds[traceId];
+               snprintf( traceName, sizeof( traceName ), "%s", strDb.getString( fctIdx ) );
+               if( ImGui::Selectable(
+                       traceName, selected == i, ImGuiSelectableFlags_SpanAllColumns ) )
+               {
+                  selected          = i;
+                  selectedSomething = true;
+               }
 
-               hoveredId = i;
+               if( ImGui::IsItemHovered() )
+               {
+                  char fileLineNbStr[128];
+                  snprintf(
+                      fileLineNbStr,
+                      sizeof( fileLineNbStr ),
+                      "%s:%d",
+                      strDb.getString( track._traces.fileNameIds[traceId] ),
+                      track._traces.lineNbs[traceId] );
+                  ImGui::BeginTooltip();
+                  ImGui::TextUnformatted( fileLineNbStr );
+                  ImGui::EndTooltip();
+
+                  hoveredId = i;
+               }
+
+               ImGui::TableSetColumnIndex( 1 );
+               ImGui::Text( "%3.2f", details.details[i].inclusivePct * 100.0f );
+
+               ImGui::TableSetColumnIndex( 2 );
+               formatCyclesDurationToDisplay(
+                   details.details[i].inclusiveTimeInNanos,
+                   traceDuration,
+                   sizeof( traceDuration ),
+                   drawAsCycles,
+                   cpuFreqGHz );
+               ImGui::Text( "%s", traceDuration );
+
+               ImGui::TableSetColumnIndex( 3 );
+               ImGui::Text( "%3.2f", details.details[i].exclusivePct * 100.0f );
+
+               ImGui::TableSetColumnIndex( 4 );
+               formatCyclesDurationToDisplay(
+                   details.details[i].exclusiveTimeInNanos,
+                   traceDuration,
+                   sizeof( traceDuration ),
+                   drawAsCycles,
+                   cpuFreqGHz );
+               ImGui::Text( "%s", traceDuration );
+
+               ImGui::TableSetColumnIndex( 5 );
+               ImGui::Text( "%zu", details.details[i].traceIds.size() );
+               if( hoveredId != (size_t)-1 )
+               {
+                  result.hoveredTraceIds = details.details[hoveredId].traceIds;
+                  result.clicked         = selectedSomething;
+               }
             }
-            ImGui::NextColumn();
-            ImGui::Text( "%3.2f", details.details[i].inclusivePct * 100.0f );
-            ImGui::NextColumn();
-            formatCyclesDurationToDisplay(
-                details.details[i].inclusiveTimeInNanos,
-                traceDuration,
-                sizeof( traceDuration ),
-                drawAsCycles,
-                cpuFreqGHz );
-            ImGui::Text( "%s", traceDuration );
-            ImGui::NextColumn();
-            ImGui::Text( "%3.2f", details.details[i].exclusivePct * 100.0f );
-            ImGui::NextColumn();
-            formatCyclesDurationToDisplay(
-                details.details[i].exclusiveTimeInNanos,
-                traceDuration,
-                sizeof( traceDuration ),
-                drawAsCycles,
-                cpuFreqGHz );
-            ImGui::Text( "%s", traceDuration );
-            ImGui::NextColumn();
-            ImGui::Text( "%zu", details.details[i].traceIds.size() );
-            ImGui::NextColumn();
-         }
-         ImGui::Columns( 1 );
-         if( hoveredId != (size_t) -1 )
-         {
-            result.hoveredTraceIds = details.details[hoveredId].traceIds;
-            result.clicked = selectedSomething;
+            ImGui::EndTable();
          }
       }
       ImGui::End();
-      ImGui::PopStyleColor(4);
+      ImGui::PopStyleColor( 4 );
 
       result.hoveredThreadIdx = details.threadIndex;
    }

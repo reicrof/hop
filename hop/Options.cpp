@@ -1,4 +1,5 @@
 #include "hop/Options.h"
+#include "common/Utils.h"
 
 #include "imgui/imgui.h"
 
@@ -8,6 +9,7 @@
 #include <fstream>
 
 static const char* startFullScreenToken = "start_full_screen";
+static const char* displayScalingToekn  = "display_scaling";
 static const char* traceHeightsToken    = "trace_height";
 static const char* traceTextAlignToken  = "trace_text_alignment";
 static const char* windowOpacityToken   = "window_opacity";
@@ -17,14 +19,15 @@ static const char* showCoreInfoToken    = "show_core_info";
 static const char* vsyncOnToken         = "vsync_on";
 
 static const uint32_t DEFAULT_COLORS[] = {
-    0xffe6194b, 0xff3cb44b, 0xffffe119, 0xff0082c8, 0xfff58231, 0xff911eb4, 0xff46f0f0, 0xfff032e6,
-    0xffd2f53c, 0xfffabebe, 0xff008080, 0xffe6beff, 0xffaa6e28, 0xfffffac8, 0xff800000, 0xff375fbc,
+    0xffe7073e, 0xffd64c91, 0xffa9842d, 0xff0082c8, 0xfff58231, 0xff911eb4, 0xff46f0f0, 0xfff032e6,
+    0xff8da524, 0xfffabebe, 0xff008080, 0xffe6beff, 0xffaa6e28, 0xfffffac8, 0xff800000, 0xff375fbc,
     0xff0000ff };
 
 namespace hop
 {
 struct Options
 {
+   float displayScaling{1.0f};
    float traceHeight{20.0f};
    float traceTextAlignment{0.5f};
    float windowOpacity{0.8f};
@@ -35,6 +38,11 @@ struct Options
    std::array< uint32_t, HOP_ZONE_MAX + 1 > zoneColors;
    bool optionWindowOpened{false};
 } g_options = {};
+
+float options::displayScaling()
+{
+   return g_options.displayScaling;
+}
 
 float options::traceHeight()
 {
@@ -93,6 +101,9 @@ bool options::save()
       // Vsync state
       outOptions << vsyncOnToken << " " << (g_options.vsyncOn ? 1 : 0) << '\n';
 
+      // Display scaling
+      outOptions << displayScalingToekn << " " << g_options.displayScaling << '\n';
+
       // Trace height option
       outOptions << traceHeightsToken << " " << g_options.traceHeight << '\n';
 
@@ -146,6 +157,10 @@ bool options::load()
          {
             inOptions >> g_options.showCoreInfo;
          }
+         else if( strcmp( token.c_str(), displayScalingToekn ) == 0 )
+         {
+            inOptions >> g_options.displayScaling;
+         }
          else if( strcmp( token.c_str(), traceHeightsToken ) == 0 )
          {
             inOptions >> g_options.traceHeight;
@@ -181,6 +196,11 @@ void options::enableOptionWindow()
    g_options.optionWindowOpened = true;
 }
 
+void options::setDisplayScaling(float scaling)
+{
+   g_options.displayScaling = hop::clamp( scaling, 0.5f, 5.0f );
+}
+
 void options::draw()
 {
    if ( !g_options.optionWindowOpened ) return;
@@ -188,13 +208,18 @@ void options::draw()
    ImGui::PushStyleColor( ImGuiCol_WindowBg, ImVec4( 0.20f, 0.20f, 0.20f, g_options.windowOpacity ) );
    if ( ImGui::Begin( "Options", &g_options.optionWindowOpened, ImGuiWindowFlags_AlwaysAutoResize ) )
    {
-      ImGui::Checkbox( "Start in Fullscreen", &g_options.startFullScreen );
-      ImGui::Checkbox("Show Debug Window", &g_options.showDebugWindow );
-      ImGui::Checkbox("Show Core Information", &g_options.showCoreInfo );
-      ImGui::Checkbox("Vsync Enabled", &g_options.vsyncOn );
-      ImGui::SliderFloat( "Trace Height", &g_options.traceHeight, 15.0f, 50.0f );
-      ImGui::SliderFloat( "Trace Text Alignment", &g_options.traceTextAlignment, 0.0f, 1.0f );
-      ImGui::SliderFloat( "Window Opacity", &g_options.windowOpacity, 0.0f, 1.0f );
+      static bool options_dirty = false;
+      options_dirty |= ImGui::Checkbox( "Start in Fullscreen", &g_options.startFullScreen );
+      options_dirty |= ImGui::Checkbox("Show Debug Window", &g_options.showDebugWindow );
+      options_dirty |= ImGui::Checkbox("Show Core Information", &g_options.showCoreInfo );
+      options_dirty |= ImGui::Checkbox("Vsync Enabled", &g_options.vsyncOn );
+      options_dirty |= ImGui::InputFloat( "Display Scaling", &g_options.displayScaling, 0.25f, 0.25f, "%.2f" );
+      options_dirty |= ImGui::SliderFloat( "Trace Height", &g_options.traceHeight, 15.0f, 50.0f );
+      options_dirty |= ImGui::SliderFloat( "Trace Text Alignment", &g_options.traceTextAlignment, 0.0f, 1.0f );
+      options_dirty |= ImGui::SliderFloat( "Window Opacity", &g_options.windowOpacity, 0.0f, 1.0f );
+
+      // Make sure to clamp the valid to something reasonable
+      setDisplayScaling( g_options.displayScaling );
 
       ImGui::Spacing();
 
@@ -205,7 +230,7 @@ void options::draw()
          ImGui::PushID( i );
          ImGui::Text( "Default Zone" );
          ImGui::SameLine();
-         ImGui::ColorEdit3( "", (float*)&color.Value );
+         options_dirty |=ImGui::ColorEdit3( "", (float*)&color.Value );
          ImGui::PopID();
          g_options.zoneColors[i] = color;
 
@@ -215,10 +240,16 @@ void options::draw()
             ImGui::PushID( i );
             ImGui::Text( "Zone #%d", (int)i );
             ImGui::SameLine();
-            ImGui::ColorEdit3( "", (float*)&color.Value );
+            options_dirty |=ImGui::ColorEdit3( "", (float*)&color.Value );
             ImGui::PopID();
             g_options.zoneColors[i] = color;
          }
+      }
+
+      if( options_dirty && ImGui::IsMouseReleased( ImGuiMouseButton_Left ) )
+      {
+         save();
+         options_dirty = false;
       }
    }
    ImGui::End();

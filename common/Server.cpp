@@ -72,6 +72,15 @@ static hop::SharedMemory::ConnectionState updateConnectionState(
    return state;
 }
 
+static uint16_t getShortNameIndex( const std::string longname )
+{
+   uint16_t shortnameIdx = 0;
+   size_t shortNamePos = longname.find_last_of("/\\") + 1;
+   if (shortNamePos != std::string::npos)
+      shortnameIdx = (uint16_t)shortNamePos;
+   return shortnameIdx;
+}
+
 namespace hop
 {
 bool Server::start( int inPid, const char* name )
@@ -81,6 +90,7 @@ bool Server::start( int inPid, const char* name )
    _state.running = true;
    _state.pid = -1;
    _state.processName = name;
+   _state.shortNameIndex = getShortNameIndex( _state.processName );
    _state.connectionState = SharedMemory::NOT_CONNECTED;
 
    _thread = std::thread( [this, inPid]() {
@@ -104,7 +114,7 @@ bool Server::start( int inPid, const char* name )
 
             if( prevConnectionState != SharedMemory::CONNECTED  )
                break; // No connection was found and we should not retry.
-            
+
             printf( "Connection to shared data successful.\n" );
          }
 
@@ -208,14 +218,23 @@ bool Server::tryConnect( int32_t pid, SharedMemory::ConnectionState& newState )
             msg.reserve (512);
             msg += "Ambiguous process name\n";
             char buffer[512];
+            size_t minProcSize = strlen( infos.infos[0].name );
+            size_t minProcSizeIdx = 0;
             for( int i = 0; i < infos.count; i++ )
             {
+               size_t len = strlen( infos.infos[i].name );
+               if ( len < minProcSize)
+               {
+                  minProcSize = len;
+                  minProcSizeIdx = i;
+               }
                snprintf (buffer, sizeof( buffer ), "  [%lld] %s\n", infos.infos[i].pid, infos.infos[i].name);
                msg += buffer;
             }
-            snprintf (buffer, sizeof( buffer ), "Arbitrarily choosing pid %lld\n", infos.infos[0].pid);
+            snprintf (buffer, sizeof( buffer ), "Arbitrarily choosing pid %lld\n", infos.infos[minProcSizeIdx].pid);
             msg += buffer;
             fprintf( stderr, "%s\n", msg.c_str() );
+            procInfo = infos.infos[minProcSizeIdx];
          }
       }
    }
@@ -243,10 +262,11 @@ bool Server::tryConnect( int32_t pid, SharedMemory::ConnectionState& newState )
    _state.connectionState = newState;
    _state.pid             = procInfo.pid;
    _state.processName     = std::string( procInfo.name );
+   _state.shortNameIndex  = getShortNameIndex( _state.processName );
 
    // Set HOP thread name
    char serverName[64];
-   snprintf( serverName, sizeof( serverName ), "%s [Producer]", _state.processName.c_str() );
+   snprintf( serverName, sizeof( serverName ), "%s [Producer]", _state.processName.c_str() + _state.shortNameIndex );
    HOP_SET_THREAD_NAME( serverName );
 
    // Got the connection, signal that we should to retry
@@ -259,6 +279,14 @@ const char* Server::processInfo( int* processId ) const
    static const char* noProcessStr = "<No Process>";
    if( processId ) *processId = _state.pid;
    return _state.processName.empty() ? noProcessStr : _state.processName.c_str();
+}
+
+const char* Server::shortProcessInfo( int* processId ) const
+{
+   std::lock_guard<hop::Mutex> guard( _stateMutex );
+   static const char* noProcessStr = "<No Process>";
+   if( processId ) *processId = _state.pid;
+   return _state.processName.empty() ? noProcessStr : _state.processName.c_str() + _state.shortNameIndex;
 }
 
 SharedMemory::ConnectionState Server::connectionState() const
@@ -520,6 +548,7 @@ void Server::clear()
 
 void Server::stop()
 {
+   HOP_PROF_FUNC();
    bool wasRunning = false;
    {
       std::lock_guard<hop::Mutex> guard( _stateMutex );

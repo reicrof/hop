@@ -30,7 +30,7 @@ public:
    Profiler( SourceType type, int processId, const char* str );
    ~Profiler();
 
-   const char* nameAndPID( int* processId = nullptr ) const;
+   const char* nameAndPID( int* processId = nullptr, bool shortName = false ) const;
    float cpuFreqGHz() const;
    ProfilerStats stats() const;
    SourceType sourceType() const;

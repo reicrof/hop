@@ -14,6 +14,7 @@
 #include "common/platform/Platform.h"
 
 #include "imgui/imgui.h"
+#include "imgui/imgui_internal.h"
 
 #include <thread> // For saving/opening files
 #include <sstream>
@@ -32,6 +33,11 @@ static constexpr float TAB_HEIGHT = 30.0f;
 static constexpr float TOOLBAR_BUTTON_HEIGHT = 15.0f;
 static constexpr float TOOLBAR_BUTTON_WIDTH = 15.0f;
 static constexpr float TOOLBAR_BUTTON_PADDING = 5.0f;
+
+static inline bool IsMouseHoveringWindow()
+{
+   return ImGui::IsWindowHovered(ImGuiHoveredFlags_AllowWhenBlockedByPopup | ImGuiHoveredFlags_AllowWhenBlockedByActiveItem);
+}
 
 static void saveProfilerToFile( hop::ProfilerView* prof )
 {
@@ -239,7 +245,7 @@ static void drawMenuBar( hop::Viewer* v )
 
 static bool drawPlayButton( const ImVec2 drawPos, const ImVec2 mousePos, bool active )
 {
-   const bool hovering = ImGui::IsMouseHoveringWindow() && hop::ptInRect(
+   const bool hovering = IsMouseHoveringWindow() && hop::ptInRect(
                                                                mousePos.x,
                                                                mousePos.y,
                                                                drawPos.x,
@@ -268,7 +274,7 @@ static bool drawPlayButton( const ImVec2 drawPos, const ImVec2 mousePos, bool ac
 
 static bool drawStopButton( const ImVec2 drawPos, const ImVec2 mousePos, bool active )
 {
-   const bool hovering = ImGui::IsMouseHoveringWindow() && hop::ptInRect(
+   const bool hovering = IsMouseHoveringWindow() && hop::ptInRect(
                                                                mousePos.x,
                                                                mousePos.y,
                                                                drawPos.x,
@@ -298,7 +304,7 @@ static bool drawDeleteTracesButton( const ImVec2& drawPos, bool active )
    ImDrawList* DrawList = ImGui::GetWindowDrawList();
 
    const auto& mousePos = ImGui::GetMousePos();
-   const bool hovering = ImGui::IsMouseHoveringWindow() && hop::ptInRect(
+   const bool hovering = IsMouseHoveringWindow() && hop::ptInRect(
                                                                mousePos.x,
                                                                mousePos.y,
                                                                drawPos.x,
@@ -370,7 +376,7 @@ static void drawStatusIcon( const ImVec2 drawPos, hop::SharedMemory::ConnectionS
    DrawList->AddCircleFilled( drawPos, 10.0f, col );
 
    const auto& mousePos = ImGui::GetMousePos();
-   const bool hovering = ImGui::IsMouseHoveringWindow() &&
+   const bool hovering = IsMouseHoveringWindow() &&
                          hop::ptInCircle( mousePos.x, mousePos.y, drawPos.x, drawPos.y, 10.0f );
    if ( hovering && msg )
    {
@@ -408,10 +414,10 @@ static void drawToolbar( ImVec2 drawPos, float canvasWidth, hop::ProfilerView* p
    ImGui::SetCursorPosY( drawPos.y + TOOLBAR_BUTTON_HEIGHT );
 }
 
-static int displayableProfilerName( const hop::ProfilerView* prof, char* outName, uint32_t size )
+static int displayableProfilerName( const hop::ProfilerView* prof, char* outName, uint32_t size, bool shortname )
 {
    int pid;
-   const char* profName = prof->data().nameAndPID( &pid );
+   const char* profName = prof->data().nameAndPID( &pid, shortname );
    if( !profName )
    {
       return snprintf( outName, size, "%s", "<No Target Process>" );
@@ -443,7 +449,7 @@ static bool drawAddTabButton( const ImVec2& drawPos )
    return clicked;
 }
 
-static int drawTabs( const ImVec2 drawPos, hop::Viewer& viewer, int selectedTab )
+static int drawTabs( hop::Viewer& viewer, const ImVec2 drawPos, int selectedTab )
 {
    const ImVec2 windowSize = ImGui::GetWindowSize();
 
@@ -451,15 +457,11 @@ static int drawTabs( const ImVec2 drawPos, hop::Viewer& viewer, int selectedTab 
    const float fullSizeTab = tabBarWidth / MAX_FULL_SIZE_TAB_COUNT;
    const int profCount = viewer.profilerCount();
    const float tabWidth = std::min( tabBarWidth / profCount, fullSizeTab );
+   const float closeButtonWidth = 30.0f;
+   const float activeTabWidth = tabWidth - closeButtonWidth;
    const uint32_t activeWindowColor = ImGui::GetColorU32( ImGuiCol_WindowBg );
    const uint32_t inactiveWindowColor = activeWindowColor + 0x00303030;
    const float tabFramePadding = 0.1f;
-   ImGui::PushStyleColor( ImGuiCol_Border, activeWindowColor );
-   ImGui::PushStyleColor( ImGuiCol_Button, inactiveWindowColor );
-   ImGui::PushStyleColor( ImGuiCol_ButtonHovered, ImGui::GetColorU32( ImGuiCol_TitleBgCollapsed ) );
-   ImGui::PushStyleColor( ImGuiCol_ButtonActive, ImGui::GetColorU32( ImGuiCol_TitleBg ) );
-   ImGui::PushStyleVar( ImGuiStyleVar_ItemSpacing, ImVec2( 0.0f, 0.0f ) );
-   ImGui::PushStyleVar( ImGuiStyleVar_FrameBorderSize, tabFramePadding );
 
    // Draw tab bar background color
    ImDrawList* dl = ImGui::GetWindowDrawList();
@@ -469,62 +471,61 @@ static int drawTabs( const ImVec2 drawPos, hop::Viewer& viewer, int selectedTab 
        ImVec2( drawPos.x + windowSize.x, drawPos.y + TAB_HEIGHT - 1.0f ),
        inactiveWindowColor );
 
-   int newTabSelection = selectedTab;
+   // Push style for the "x" close button
+   ImGui::PushStyleColor( ImGuiCol_Button, 0XFF101077 );
+   ImGui::PushStyleColor( ImGuiCol_ButtonHovered, 0XFF101099 );
+   ImGui::PushStyleColor( ImGuiCol_ButtonActive, 0XFF101055 );
 
    // Draw all non selected tabs, whilst keeping the position of the selected one
-   ImVec2 defaultTabSize( tabWidth, TAB_HEIGHT );
+   const ImVec2 defaultTabSize( activeTabWidth, TAB_HEIGHT );
+   const ImVec2 textAlign( 0.5, 0.5 );
+   const ImVec2 tabTitlePad = ImGui::GetStyle().FramePadding;
+   char profName[64];
+   ImVec2 tabDrawPos = drawPos;
+   int newTabSelection = selectedTab;
+   int deletedTab = -1;
    for ( int i = 0; i < profCount; ++i )
    {
-      if ( selectedTab == i )
-      {
-         // Draw the selected tab as its own entity
-         ImGui::SetCursorPos( ImVec2( ImGui::GetCursorPosX() + tabWidth, drawPos.y ) );
-         continue;
-      }
-
-      char profName[64];
-      displayableProfilerName( viewer.getProfiler( i ), profName, sizeof( profName ) );
       ImGui::PushID( i );
-      if ( ImGui::Button( profName, defaultTabSize ) )
+      ImGui::SetCursorPos(tabDrawPos);
+      if( ImGui::InvisibleButton("#tab", defaultTabSize) )
+        newTabSelection = i;
+      const bool hovered = ImGui::IsItemHovered();
+      const bool longHovered = ImGui::IsItemHovered( ImGuiHoveredFlags_DelayNormal );
+
+      displayableProfilerName( viewer.getProfiler( i ), profName, sizeof( profName ), true );
+      uint32_t tabColor = (hovered || selectedTab == i) ? ImGui::GetColorU32( ImGuiCol_TitleBgCollapsed )
+                                                        : inactiveWindowColor;
+      ImVec2 to = tabDrawPos + ImVec2( tabWidth, TAB_HEIGHT - 1.0f );
+      dl->AddRectFilled( tabDrawPos, to, tabColor );
+      ImGui::RenderTextClipped( tabDrawPos + tabTitlePad, to - tabTitlePad, profName, nullptr, nullptr, textAlign );
+
+      if ( longHovered )
       {
-         newTabSelection = i;
-      }
-      ImGui::SetItemAllowOverlap();  // Since we will be drawing a close button on top this is
-                                     // needed
-      if ( ImGui::IsItemHovered() )
-      {
+         displayableProfilerName( viewer.getProfiler( i ), profName, sizeof( profName ), false );
          ImGui::BeginTooltip();
          ImGui::TextUnformatted( profName );
          ImGui::EndTooltip();
       }
 
+      ImVec2 closeButtonPos = tabDrawPos;
+      closeButtonPos.x += tabWidth - 25.0f;
+      closeButtonPos.y += 5.0f;
+      ImGui::PushID( i + 40 );
+      ImGui::SetCursorPos( closeButtonPos );
+      if ( ImGui::Button( "x", ImVec2( 20.0f, 20.0f ) ) )
+      {
+         deletedTab = i;
+      }
+      closeButtonPos.x += tabWidth;
       ImGui::PopID();
-      ImGui::SameLine();
+      tabDrawPos.x += tabWidth;
+      ImGui::PopID();
    }
+   ImGui::PopStyleColor( 3 );
 
-   // Draw the selected tab
-   if ( selectedTab >= 0 )
-   {
-      const ImVec2 selTabOffset( selectedTab * ( tabWidth + tabFramePadding ), 0.0f );
-      ImGui::SetCursorPos( drawPos + selTabOffset );
-      ImGui::PushStyleColor( ImGuiCol_Button, activeWindowColor );
-      ImGui::PushStyleColor( ImGuiCol_ButtonHovered, activeWindowColor );
-      ImGui::PushStyleColor( ImGuiCol_ButtonActive, activeWindowColor );
-
-      char profName[64];
-      displayableProfilerName( viewer.getProfiler( selectedTab ), profName, sizeof( profName ) );
-      ImGui::Button( profName, defaultTabSize );
-      ImGui::SetItemAllowOverlap();  // Since we will be drawing a close button on top this is
-                                     // needed
-      if ( ImGui::IsItemHovered() )
-      {
-         ImGui::BeginTooltip();
-         ImGui::TextUnformatted( profName );
-         ImGui::EndTooltip();
-      }
-
-      ImGui::PopStyleColor( 3 );
-   }
+   if( deletedTab >= 0 )
+     newTabSelection = viewer.removeProfiler( deletedTab );
 
    // Draw the "+" button to add a tab
    const ImVec2 addTabOffset = ImVec2( profCount * (tabWidth + tabFramePadding), 0.0f );
@@ -532,29 +533,6 @@ static int drawTabs( const ImVec2 drawPos, hop::Viewer& viewer, int selectedTab 
    {
       addNewProfilerByNamePopUp( &viewer );
    }
-
-   ImGui::PopStyleVar( 2 );
-   ImGui::PopStyleColor( 4 );
-
-   // Draw the "x" to close tabs
-   ImGui::PushStyleColor( ImGuiCol_Button, 0XFF101077 );
-   ImGui::PushStyleColor( ImGuiCol_ButtonHovered, 0XFF101099 );
-   ImGui::PushStyleColor( ImGuiCol_ButtonActive, 0XFF101055 );
-   ImVec2 closeButtonPos = drawPos;
-   closeButtonPos.x += tabWidth - 25.0f;
-   closeButtonPos.y += 5.0f;
-   for ( int i = 0; i < profCount; ++i )
-   {
-      ImGui::PushID( i + 40 );
-      ImGui::SetCursorPos( closeButtonPos );
-      if ( ImGui::Button( "x", ImVec2( 20.0f, 20.0f ) ) )
-      {
-         newTabSelection = viewer.removeProfiler( i );
-      }
-      closeButtonPos.x += tabWidth;
-      ImGui::PopID();
-   }
-   ImGui::PopStyleColor( 3 );
 
    // Restore cursor pos for next drawing
    ImGui::SetCursorPos( ImVec2( drawPos.x, drawPos.y + TAB_HEIGHT + 10.0f ) );
@@ -812,7 +790,7 @@ void Viewer::draw( float windowWidth, float windowHeight )
 
    // Then draw
    drawMenuBar( this );
-   _selectedTab = drawTabs( ImGui::GetCursorPos(), *this, _selectedTab );
+   _selectedTab = drawTabs( *this, ImGui::GetCursorPos(), _selectedTab );
    ProfilerView* const selectedProf = _selectedTab >= 0 ? _profilers[_selectedTab].get() : nullptr;
    drawToolbar( ImGui::GetCursorPos(), windowWidth, selectedProf, &_timeline );
 
@@ -882,7 +860,7 @@ bool Viewer::handleHotkey( ProfilerView* selectedProf )
    // If still not handle, let the viewer do its thing
    if( !handled )
    {
-      if ( ImGui::IsKeyReleased( 'r' ) && ImGui::IsRootWindowOrAnyChildFocused() )
+      if ( ImGui::IsKeyReleased( ImGuiKey_R ) && ImGui::IsWindowFocused(ImGuiFocusedFlags_RootAndChildWindows) )
       {
          if( selectedProf )
          {
@@ -890,7 +868,7 @@ bool Viewer::handleHotkey( ProfilerView* selectedProf )
             setRecording( selectedProf, &_timeline, !recording );
          }
       }
-      else if ( ImGui::GetIO().HopLogicalCtrl && ImGui::IsKeyPressed( 'w' ) )
+      else if ( ImGui::GetIO().HopLogicalCtrl && ImGui::IsKeyPressed( ImGuiKey_W ) )
       {
          if ( _selectedTab >= 0 )
          {
@@ -898,12 +876,12 @@ bool Viewer::handleHotkey( ProfilerView* selectedProf )
          }
          handled = true;
       }
-      else if ( ImGui::GetIO().HopLogicalCtrl && ImGui::IsKeyPressed( 't' ) )
+      else if ( ImGui::GetIO().HopLogicalCtrl && ImGui::IsKeyPressed( ImGuiKey_T ) )
       {
          addNewProfilerByNamePopUp( this );
          handled = true;
       }
-      else if ( ImGui::GetIO().HopLogicalCtrl && ImGui::IsKeyPressed( 's' ) )
+      else if ( ImGui::GetIO().HopLogicalCtrl && ImGui::IsKeyPressed( ImGuiKey_S ) )
       {
          const int profIdx = activeProfilerIndex();
          if( profIdx >= 0 )
@@ -912,7 +890,7 @@ bool Viewer::handleHotkey( ProfilerView* selectedProf )
             handled = true;
          }
       }
-      else if ( ImGui::GetIO().HopLogicalCtrl && ImGui::IsKeyPressed( 'o' ) )
+      else if ( ImGui::GetIO().HopLogicalCtrl && ImGui::IsKeyPressed( ImGuiKey_O ) )
       {
          openProfilerFile();
          handled = true;
@@ -921,6 +899,14 @@ bool Viewer::handleHotkey( ProfilerView* selectedProf )
       {
          hop::displayModalWindow( "Exit ?", nullptr, hop::MODAL_TYPE_YES_NO, [&]() { g_run = false; } );
          handled = true;
+      }
+      else if ( ImGui::GetIO().HopLogicalCtrl && ImGui::IsKeyPressed( ImGuiKey_Equal ) )
+      {
+         hop::options::setDisplayScaling( (hop::options::displayScaling() + 0.25));
+      }
+      else if ( ImGui::GetIO().HopLogicalCtrl && ImGui::IsKeyPressed( ImGuiKey_Minus ) )
+      {
+         hop::options::setDisplayScaling( (hop::options::displayScaling() - 0.25));
       }
    }
 

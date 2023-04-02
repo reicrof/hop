@@ -3,6 +3,7 @@
 
 #include "common/BlockAllocator.h"
 #include "common/Array.h"
+#include "common/Utils.h"
 
 #include <array>
 #include <algorithm>
@@ -21,7 +22,8 @@ class Deque
    struct Block;
    using BlockPtrContainer = hop::Array<Block*>;
   public:
-   static constexpr uint32_t COUNT_PER_BLOCK = (HOP_BLK_SIZE_BYTES - sizeof(uint32_t)) / sizeof( T );
+   static constexpr uint32_t COUNT_PER_BLOCK = prevPowerOfTwo( (HOP_BLK_SIZE_BYTES - sizeof(uint32_t)) / sizeof( T ) );
+   static_assert (isPowerOfTwo( COUNT_PER_BLOCK ) && COUNT_PER_BLOCK > 0, "Invalid count per block");
    using value_type = T;
     /**
     * Iterator Implementation
@@ -92,14 +94,14 @@ class Deque
       {
          const difference_type newVal = val + _elementId;
          _blockId   += newVal / COUNT_PER_BLOCK;
-         _elementId =  newVal % COUNT_PER_BLOCK;
+         _elementId =  newVal & (COUNT_PER_BLOCK-1);
          return *this;
       }
 
       inline iterator& operator-=( difference_type val )
       {
          const uint32_t quot = val / COUNT_PER_BLOCK;
-         const uint32_t rem  = val % COUNT_PER_BLOCK;
+         const uint32_t rem  = val & (COUNT_PER_BLOCK-1);
          assert( _blockId >= quot );
          _blockId -= quot;
          if( rem > _elementId )
@@ -187,12 +189,12 @@ class Deque
 
    const T& operator[]( int64_t idx ) const
    {
-      return (*_blocks[idx/COUNT_PER_BLOCK])[idx%COUNT_PER_BLOCK];
+      return (*_blocks[idx/COUNT_PER_BLOCK])[idx & (COUNT_PER_BLOCK-1)];
    }
 
    T& operator[]( int64_t idx )
    {
-      return (*_blocks[idx/COUNT_PER_BLOCK])[idx%COUNT_PER_BLOCK];
+      return (*_blocks[idx/COUNT_PER_BLOCK])[idx & (COUNT_PER_BLOCK-1)];
    }
 
    T& front()
@@ -331,17 +333,17 @@ class Deque
    auto end() const
    {
       const uint64_t sz = size();
-      return iterator<true>( &_blocks, sz / COUNT_PER_BLOCK, sz % COUNT_PER_BLOCK );
+      return iterator<true>( &_blocks, sz / COUNT_PER_BLOCK, sz & (COUNT_PER_BLOCK-1) );
    }
    auto end()
    {
       const uint64_t sz = size();
-      return iterator<false>( &_blocks, sz / COUNT_PER_BLOCK, sz % COUNT_PER_BLOCK );
+      return iterator<false>( &_blocks, sz / COUNT_PER_BLOCK, sz & (COUNT_PER_BLOCK-1) );
    }
    auto cend() const
    {
       const uint64_t sz = size();
-      return iterator<true>( &_blocks, sz / COUNT_PER_BLOCK, sz % COUNT_PER_BLOCK );
+      return iterator<true>( &_blocks, sz / COUNT_PER_BLOCK, sz & (COUNT_PER_BLOCK-1) );
    }
 
    friend std::ostream& operator<<( std::ostream& out, const Deque& bsv )

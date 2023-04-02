@@ -48,6 +48,9 @@ void renderModalWindow()
    {
       const bool enterPressed = ImGui::IsKeyPressed( ImGui::GetKeyIndex( ImGuiKey_Enter ), false );
       const bool escPressed = ImGui::IsKeyPressed( ImGui::GetKeyIndex( ImGuiKey_Escape ), false );
+
+      ImVec2 position = ImGui::GetIO().DisplaySize * ImVec2( 0.5, 0.5 );
+      ImGui::SetNextWindowPos( position, ImGuiCond_Appearing, ImVec2( 0.5, 0.5 ) );
       switch ( type )
       {
          case MODAL_TYPE_NO_CLOSE:
@@ -154,7 +157,7 @@ void renderModalWindow()
                      ImGui::SetKeyboardFocusHere();
 
                   const bool textEnterPressed = ImGui::InputText(
-                      "",
+                      "##ModalTextInput",
                       textField,
                       sizeof( textField ),
                       ImGuiInputTextFlags_AutoSelectAll | ImGuiInputTextFlags_EnterReturnsTrue );
