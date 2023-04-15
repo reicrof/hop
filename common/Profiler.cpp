@@ -92,9 +92,11 @@ ProfilerStats Profiler::stats() const
    return stats;
 }
 
-void Profiler::fetchClientData()
+bool Profiler::fetchClientData()
 {
    HOP_PROF_FUNC();
+
+   bool got_data = false;
 
    _server.getPendingData( _serverPendingData );
 
@@ -107,22 +109,22 @@ void Profiler::fetchClientData()
       HOP_PROF_SPLIT( "Fetching Traces" );
       for( const auto& threadTraces : _serverPendingData.tracesPerThread )
       {
-         addTraces( threadTraces.second, threadTraces.first );
+         got_data |= addTraces( threadTraces.second, threadTraces.first );
       }
       HOP_PROF_SPLIT( "Fetching Lock Waits" );
       for( const auto& lockwaits : _serverPendingData.lockWaitsPerThread )
       {
-         addLockWaits( lockwaits.second, lockwaits.first );
+         got_data |= addLockWaits( lockwaits.second, lockwaits.first );
       }
       HOP_PROF_SPLIT( "Fetching Unlock Events" );
       for( const auto& unlockEvents : _serverPendingData.unlockEventsPerThread )
       {
-         addUnlockEvents( unlockEvents.second, unlockEvents.first );
+         got_data |= addUnlockEvents( unlockEvents.second, unlockEvents.first );
       }
       HOP_PROF_SPLIT( "Fetching CoreEvents" );
       for( const auto& coreEvents : _serverPendingData.coreEventsPerThread )
       {
-         addCoreEvents( coreEvents.second, coreEvents.first );
+         got_data |= addCoreEvents( coreEvents.second, coreEvents.first );
       }
    }
 
@@ -131,13 +133,15 @@ void Profiler::fetchClientData()
    {
       addThreadName(
           _serverPendingData.threadNames[i].second, _serverPendingData.threadNames[i].first );
+      got_data |= true;
    }
+   return got_data;
 }
 
-void Profiler::addTraces( const TraceData& traces, uint32_t threadIndex )
+bool Profiler::addTraces( const TraceData& traces, uint32_t threadIndex )
 {
    // Ignore empty traces
-   if ( traces.entries.ends.empty() ) return;
+   if ( traces.entries.ends.empty() ) return false;
 
    // Add new thread as they come
    if ( threadIndex >= _tracks.size() )
@@ -162,20 +166,22 @@ void Profiler::addTraces( const TraceData& traces, uint32_t threadIndex )
    }
 
    _tracks[threadIndex].addTraces( traces );
+   return true;
 }
 
-void Profiler::addStringData( const std::vector<char>& strData )
+bool Profiler::addStringData( const std::vector<char>& strData )
 {
    HOP_PROF_FUNC();
    // We should read the string data even when not recording since the string data
    // is sent only once (the first time a function is used)
-   if ( !strData.empty() )
-   {
-      _strDb.addStringData( strData );
-   }
+   if ( strData.empty() )
+      return false;
+
+   _strDb.addStringData( strData );
+   return true;
 }
 
-void Profiler::addLockWaits( const LockWaitData& lockWaits, uint32_t threadIndex )
+bool Profiler::addLockWaits( const LockWaitData& lockWaits, uint32_t threadIndex )
 {
    HOP_PROF_FUNC();
    // Check if new thread
@@ -184,13 +190,14 @@ void Profiler::addLockWaits( const LockWaitData& lockWaits, uint32_t threadIndex
       _tracks.resize( threadIndex + 1 );
    }
 
-   if ( !lockWaits.entries.ends.empty() )
-   {
-      _tracks[threadIndex].addLockWaits( lockWaits );
-   }
+   if ( lockWaits.entries.ends.empty() )
+      return false;
+
+   _tracks[threadIndex].addLockWaits( lockWaits );
+   return true;
 }
 
-void Profiler::addUnlockEvents( const std::vector<UnlockEvent>& unlockEvents, uint32_t threadIndex )
+bool Profiler::addUnlockEvents( const std::vector<UnlockEvent>& unlockEvents, uint32_t threadIndex )
 {
    HOP_PROF_FUNC();
    // Check if new thread
@@ -199,13 +206,14 @@ void Profiler::addUnlockEvents( const std::vector<UnlockEvent>& unlockEvents, ui
       _tracks.resize( threadIndex + 1 );
    }
 
-   if ( !unlockEvents.empty() )
-   {
-      _tracks[threadIndex].addUnlockEvents( unlockEvents );
-   }
+   if ( unlockEvents.empty() )
+      return false;
+
+   _tracks[threadIndex].addUnlockEvents( unlockEvents );
+   return true;
 }
 
-void Profiler::addCoreEvents( const CoreEventData& coreEvents, uint32_t threadIndex )
+bool Profiler::addCoreEvents( const CoreEventData& coreEvents, uint32_t threadIndex )
 {
    HOP_PROF_FUNC();
    // Check if new thread
@@ -214,10 +222,11 @@ void Profiler::addCoreEvents( const CoreEventData& coreEvents, uint32_t threadIn
       _tracks.resize( threadIndex + 1 );
    }
 
-   if ( !coreEvents.cores.empty() )
-   {
-      _tracks[threadIndex].addCoreEvents( coreEvents );
-   }
+   if ( coreEvents.cores.empty() )
+      return false;
+
+   _tracks[threadIndex].addCoreEvents( coreEvents );
+   return true;
 }
 
 void Profiler::addThreadName( StrPtr_t name, uint32_t threadIndex )

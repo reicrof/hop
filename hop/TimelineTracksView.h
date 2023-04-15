@@ -34,7 +34,7 @@ public:
    float trackAbsoluteDrawPosY( uint32_t trackIdx ) const;
 
    void update( const Profiler& profiler );
-   void draw( const TimelineTrackDrawData& data, TimelineMsgArray* msgArray );
+   bool draw( const TimelineTrackDrawData& data, TimelineMsgArray* msgArray );
 
    // Returns true if the mouse/keys was handled by the tracks
    bool handleHotkeys();

@@ -26,7 +26,7 @@ class Timeline
       DISPLAY_TIMES
    };
 
-   void update( float deltaTimeMs ) noexcept;
+   bool update( float deltaTimeMs ) noexcept;
    void draw();
    void clear();
    void beginDrawCanvas( float canvasHeightPxl );
@@ -111,7 +111,6 @@ class Timeline
       int64_t targetTimelineStart{0};
       TimeDuration targetTimelineRange{5000000000};
       float targetVerticalPosPxl{0.0f};
-      float highlightPercent{0.0f};
       AnimationType type{ANIMATION_TYPE_NONE};
    } _animationState;
 

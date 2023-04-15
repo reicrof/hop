@@ -40,9 +40,9 @@ hop::ProfilerView::ProfilerView( hop::Profiler::SourceType type, int processId, 
 {
 }
 
-void hop::ProfilerView::fetchClientData()
+bool hop::ProfilerView::fetchClientData()
 {
-   _profiler.fetchClientData();
+   return _profiler.fetchClientData();
 }
 
 void hop::ProfilerView::update( float globalTimeMs, TimeDuration timelineDuration )
@@ -71,16 +71,18 @@ bool hop::ProfilerView::openFile( const char* path )
    return _profiler.openFile( path );
 }
 
-void hop::ProfilerView::draw( float drawPosX, float drawPosY, const TimelineInfo& tlInfo, TimelineMsgArray* msgArray )
+bool hop::ProfilerView::draw( float drawPosX, float drawPosY, const TimelineInfo& tlInfo, TimelineMsgArray* msgArray )
 {
    HOP_PROF_FUNC();
    ImGui::SetCursorPos( ImVec2( drawPosX, drawPosY ) );
 
+   bool needs_redraw = false;
    if ( _trackViews.count() > 0 )
    {
       TimelineTrackDrawData drawData = { _profiler, tlInfo, _lodLevel, _highlightValue };
-      _trackViews.draw( drawData, msgArray );
+      needs_redraw = _trackViews.draw( drawData, msgArray );
    }
+   return needs_redraw;
 }
 
 bool hop::ProfilerView::handleHotkey()
