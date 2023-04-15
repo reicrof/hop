@@ -16,9 +16,9 @@ class ProfilerView
 {
 public:
    ProfilerView( Profiler::SourceType type, int processId, const char* str );
-   void fetchClientData();
+   bool fetchClientData();
    void update( float globalTimeMs, TimeDuration timelineDuration );
-   void draw( float drawPosX, float drawPosY, const TimelineInfo& tlInfo, TimelineMsgArray* msgArray );
+   bool draw( float drawPosX, float drawPosY, const TimelineInfo& tlInfo, TimelineMsgArray* msgArray );
 
    bool handleHotkey();
    bool handleMouse( float posX, float posY, bool lmClicked, bool rmClicked, float wheel );

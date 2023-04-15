@@ -142,7 +142,7 @@ static void drawRangeSelection( float fromPxl, float toPxl, float heightPos, con
 namespace hop
 {
 
-void Timeline::update( float deltaTimeMs ) noexcept
+bool Timeline::update( float deltaTimeMs ) noexcept
 {
    // If we are in realtime, move the timeline to the current time
    if( realtime() )
@@ -194,6 +194,9 @@ void Timeline::update( float deltaTimeMs ) noexcept
          break;
       }
    }
+   return _timelineStart != _animationState.targetTimelineStart ||
+          _verticalPosPxl != _animationState.targetVerticalPosPxl ||
+          _duration != _animationState.targetTimelineRange;
 }
 
 void Timeline::draw()
@@ -831,7 +834,6 @@ void Timeline::pushNavigationState() noexcept
 {
    _redoPositionStates.clear();
    AnimationState animState = _animationState;
-   animState.highlightPercent = 0.0f;
    animState.type = ANIMATION_TYPE_FAST;
    _undoPositionStates.push_back( animState );
 }

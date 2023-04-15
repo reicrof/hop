@@ -465,7 +465,7 @@ static size_t drawTraces(
    return hoveredIdx;
 }
 
-static void drawHighlightedTraces(
+static bool drawHighlightedTraces(
     const std::vector<hop::TimelineTracksView::TrackViewData>& tracksView,
     const hop::TimelineTrackDrawData& data,
     const std::vector<HighlightInfo>& traceToHighlight,
@@ -485,6 +485,7 @@ static void drawHighlightedTraces(
 
       drawList->AddRectFilled( ImVec2( startPxl, posYPxl ), ImVec2( endPxl, posYPxl + PADDED_TRACE_SIZE ), color );
    }
+   return !traceToHighlight.empty();
 }
 
 static void handleHoveredTrace(
@@ -549,7 +550,7 @@ static std::vector<LockOwnerInfo> highlightLockOwner(
    const float wndWidth          = ImGui::GetWindowWidth();
    const int highlightAlpha      = 70.0f * data.highlightValue;
    const TimeDuration tlDuration = data.timeline.duration;
-   const TimeDuration tlStart    = data.timeline.globalStartTime + data.timeline.relativeStartTime;   
+   const TimeDuration tlStart    = data.timeline.globalStartTime + data.timeline.relativeStartTime;
 
    // Go through all the threads and find the one that owned the lock during the
    // highlighted periods
@@ -759,8 +760,9 @@ void TimelineTracksView::update( const hop::Profiler& profiler )
        std::chrono::duration<double, std::milli>( ( updateEnd - updateStart ) ).count();
 }
 
-void TimelineTracksView::draw( const TimelineTrackDrawData& data, TimelineMsgArray* msgArray )
+bool TimelineTracksView::draw( const TimelineTrackDrawData& data, TimelineMsgArray* msgArray )
 {
+   bool needs_redraw = false;
    std::vector<HighlightInfo> highlightInfo;
    highlightInfo.reserve( 16 );
 
@@ -869,7 +871,7 @@ void TimelineTracksView::draw( const TimelineTrackDrawData& data, TimelineMsgArr
 
             // Finish by drawing all the highlighted entries if no context menu is open
             if( !_contextMenu.open )
-               drawHighlightedTraces( _tracks, data, highlightInfo, data.highlightValue );
+               needs_redraw |= drawHighlightedTraces( _tracks, data, highlightInfo, data.highlightValue );
 
             ImGui::PopClipRect();
          }
@@ -881,6 +883,7 @@ void TimelineTracksView::draw( const TimelineTrackDrawData& data, TimelineMsgArr
    }
 
    drawContextMenu( data );
+   return needs_redraw;
 }
 
 void TimelineTracksView::drawSearchWindow(

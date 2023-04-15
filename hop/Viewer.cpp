@@ -567,9 +567,9 @@ static void updateProfilers(
    }
 }
 
-static void updateTimeline( hop::Timeline* tl, float deltaMs, const hop::ProfilerView* selectedProf )
+static bool updateTimeline( hop::Timeline* tl, float deltaMs, const hop::ProfilerView* selectedProf )
 {
-   tl->update( deltaMs );
+   bool needs_redraw = tl->update( deltaMs );
 
    if( selectedProf )
    {
@@ -578,6 +578,8 @@ static void updateTimeline( hop::Timeline* tl, float deltaMs, const hop::Profile
       tl->setGlobalEndTime( profData.latestTimestamp() );
       tl->setCpuFreqGHz( profData.cpuFreqGHz() );
    }
+
+   return needs_redraw;
 }
 
 static bool profilerAlreadyExist(
@@ -609,22 +611,24 @@ static bool profilerAlreadyExist(
    return alreadyExist;
 }
 
-static void drawCanvasContent(
+static bool drawCanvasContent(
    float wndWidth,
    float wndHeight,
    hop::ProfilerView* prof,
    const hop::TimelineInfo& tlInfo,
    hop::TimelineMsgArray* msgArr )
 {
+   bool needs_redraw = false;
    if ( prof )
    {
       const ImVec2 curPos = ImGui::GetCursorPos();
-      prof->draw( curPos.x, curPos.y, tlInfo, msgArr );
+      needs_redraw = prof->draw( curPos.x, curPos.y, tlInfo, msgArr );
    }
    else
    {
       drawBackground( wndWidth, wndHeight );
    }
+   return needs_redraw;
 }
 
 namespace hop
@@ -688,14 +692,18 @@ const ProfilerView* Viewer::getProfiler( int index ) const
 ProfilerView* Viewer::getProfiler( int index )
 {
    assert( index >= 0 && index < (int)_profilers.size() );
-   return _profilers[index].get();  
+   return _profilers[index].get();
 }
 
-void Viewer::fetchClientsData()
+bool Viewer::fetchClientsData()
 {
-   for( auto& pv : _profilers )
+   bool needs_redraw = false;
+   size_t activeIdx = _selectedTab;
+   for( size_t i = 0; i < _profilers.size(); i++ )
    {
-      pv->fetchClientData();
+      bool got_data = _profilers[i]->fetchClientData();
+      if( i == activeIdx )
+         needs_redraw = got_data;
    }
 
    if ( _pendingProfilerLoad.valid() )
@@ -711,8 +719,10 @@ void Viewer::fetchClientsData()
          }
          // Reset the shared_future
          _pendingProfilerLoad = {};
+         needs_redraw = true;
       }
    }
+   return needs_redraw;
 }
 
 void Viewer::onNewFrame(
@@ -759,13 +769,15 @@ void Viewer::onNewFrame(
 
    // Reset cursor at start of the frame
    hop::setCursor( hop::CURSOR_ARROW );
-
-   // Update
-   updateProfilers( _timeline.duration(), _profilers, _selectedTab );
-   updateTimeline( &_timeline, deltaMs, _selectedTab >= 0 ? _profilers[_selectedTab].get() : nullptr );
 }
 
-void Viewer::draw( float windowWidth, float windowHeight )
+bool Viewer::update( float deltaMs )
+{
+   updateProfilers( _timeline.duration(), _profilers, _selectedTab );
+   return updateTimeline( &_timeline, deltaMs, _selectedTab >= 0 ? _profilers[_selectedTab].get() : nullptr );
+}
+
+bool Viewer::draw( float windowWidth, float windowHeight )
 {
    const auto drawStart = std::chrono::system_clock::now();
 
@@ -798,7 +810,7 @@ void Viewer::draw( float windowWidth, float windowHeight )
    _timeline.draw();
    _timeline.beginDrawCanvas( selectedProf ? selectedProf->canvasHeight() : 0.0f );
 
-   drawCanvasContent( windowWidth, windowHeight, selectedProf, _timeline.createTimelineInfo(), &msgArray );
+   bool redraw = drawCanvasContent( windowWidth, windowHeight, selectedProf, _timeline.createTimelineInfo(), &msgArray );
 
    _timeline.endDrawCanvas();
    _timeline.handleDeferredActions( msgArray );
@@ -839,6 +851,7 @@ void Viewer::draw( float windowWidth, float windowHeight )
    renderer::renderDrawlist( ImGui::GetDrawData() );
 
    hop::drawCursor();
+   return redraw;
 }
 
 bool Viewer::handleHotkey( ProfilerView* selectedProf )

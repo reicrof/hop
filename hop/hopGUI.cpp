@@ -21,7 +21,6 @@
 using ClockType = std::chrono::steady_clock;
 
 bool g_run = true;
-static float g_mouseWheel = 0.0f;
 static SDL_Surface* iconSurface = nullptr;
 
 static void terminateCallback( int /*sig*/ )
@@ -212,28 +211,14 @@ static ImGuiKey sdlToImguiKey(int keycode)
     return ImGuiKey_None;
 }
 
-static void handleMouseWheel( const SDL_Event& e )
-{
-   if ( e.wheel.y > 0 )  // scroll up
-   {
-      g_mouseWheel = 1.0f;
-   }
-   else if ( e.wheel.y < 0 )  // scroll down
-   {
-      g_mouseWheel = -1.0f;
-   }
-   else
-   {
-      g_mouseWheel = 0.0f;
-   }
-}
-
-static void handleInput()
+static bool handleEvents(float* mouse_wheel)
 {
    SDL_Event event;
    ImGuiIO& io = ImGui::GetIO();
    bool key_event = false;
+   bool wheel_event = false;
    bool window_closing = false;
+   bool window_event = false;
    while ( g_run && SDL_PollEvent( &event ) )
    {
       switch ( event.type )
@@ -246,7 +231,7 @@ static void handleInput()
             g_run = false;
             break;
          case SDL_MOUSEWHEEL:
-            handleMouseWheel( event );
+            *mouse_wheel = hop::sign( event.wheel.y );
             break;
          case SDL_TEXTINPUT:
          {
@@ -268,19 +253,38 @@ static void handleInput()
             key_event = true;
             break;
          }
-#ifdef __APPLE__
          case SDL_WINDOWEVENT:
+            window_event = true;
             if (event.window.event == SDL_WINDOWEVENT_CLOSE)
                 window_closing = true;
             break;
-#endif
 
          default:
             break;
       }
    }
-   HOP_UNUSED( key_event );
    HOP_UNUSED( window_closing );
+   return key_event || wheel_event || window_event;
+}
+
+struct MouseState
+{
+   int x, y;
+   float wheel;
+   bool lmb, rmb;
+   bool operator!=( const MouseState& rhs){ return !operator==(rhs);}
+   bool operator==( const MouseState& rhs) {
+      return x == rhs.x && y == rhs.y && lmb == rhs.lmb && rmb == rhs.rmb && wheel == rhs.wheel;
+   }
+};
+
+static inline MouseState get_mouse_state()
+{
+   MouseState ms = {};
+   const uint32_t buttonState = SDL_GetMouseState( &ms.x, &ms.y );
+   ms.lmb = buttonState & SDL_BUTTON( SDL_BUTTON_LEFT );
+   ms.rmb = buttonState & SDL_BUTTON( SDL_BUTTON_RIGHT );
+   return ms;
 }
 
 static hop::ProcessID startViewer( SDL_Window* window, const hop::LaunchOptions& opts )
@@ -312,54 +316,71 @@ static hop::ProcessID startViewer( SDL_Window* window, const hop::LaunchOptions&
 
    using namespace std::chrono;
    time_point<ClockType> lastFrameTime = ClockType::now();
+
+   static constexpr int MAX_NO_REDRAW = 3;
+   int no_redraw_counter = MAX_NO_REDRAW;
+   MouseState prev_mouse_state = {};
    while ( g_run )
    {
       HOP_PROF( "Main Loop" );
       const auto frameStart = ClockType::now();
 
-      handleInput();
-
-      const auto startFetch = ClockType::now();
-      viewer.fetchClientsData();
-      const auto endFetch = ClockType::now();
-      hop::g_stats.fetchTimeMs =
-          duration<double, std::milli>( ( endFetch - startFetch ) ).count();
-
+      int w, h;
+      SDL_GetWindowSize( window, &w, &h );
       // Display scaling
       const float scaling = hop::options::displayScaling();
       ImGui::GetIO().DisplayFramebufferScale = ImVec2(scaling, scaling);
 
-      int w, h, x, y;
-      SDL_GetWindowSize( window, &w, &h );
-      const uint32_t buttonState = SDL_GetMouseState( &x, &y );
-      const bool lmb = buttonState & SDL_BUTTON( SDL_BUTTON_LEFT );
-      const bool rmb = buttonState & SDL_BUTTON( SDL_BUTTON_RIGHT );
+      MouseState mouse = get_mouse_state();
+      bool needs_redraw = prev_mouse_state != mouse;
+      needs_redraw |= handleEvents(&mouse.wheel);
+
+      // Fetch the client data
+      const auto startFetch = ClockType::now();
+      needs_redraw |= viewer.fetchClientsData();
+      const auto endFetch = ClockType::now();
+      hop::g_stats.fetchTimeMs =
+          duration<double, std::milli>( ( endFetch - startFetch ) ).count();
 
       // Get delta time for current frame
       const auto curTime = ClockType::now();
       const float deltaTime = static_cast<float>(
          duration_cast<milliseconds>( ( curTime - lastFrameTime ) ).count() );
 
-      const float wndWidth = (float)w/scaling;
-      const float wndHeight = (float)h/scaling;
-      viewer.onNewFrame( deltaTime, wndWidth, wndHeight, x / scaling, y / scaling, lmb, rmb, g_mouseWheel );
+      needs_redraw |= viewer.update( deltaTime );
 
-      g_mouseWheel = 0;
-      lastFrameTime = curTime;
-
-      viewer.draw( wndWidth, wndHeight);
-
-      auto frameEnd = ClockType::now();
-
-      // If we rendered fast, fetch data again instead of stalling on the vsync
-      if ( duration<double, std::milli>( ( frameEnd - frameStart ) ).count() < 10.0 )
+      no_redraw_counter = needs_redraw ? MAX_NO_REDRAW : no_redraw_counter-1;
+      if( no_redraw_counter > 0 )
       {
-         viewer.fetchClientsData();
+         const float wndWidth = (float)w/scaling;
+         const float wndHeight = (float)h/scaling;
+         viewer.onNewFrame( deltaTime, wndWidth, wndHeight, mouse.x / scaling, mouse.y / scaling, mouse.lmb, mouse.rmb, mouse.wheel );
+
+         lastFrameTime = curTime;
+
+         if( viewer.draw( wndWidth, wndHeight) )
+            no_redraw_counter = MAX_NO_REDRAW;
+
+         auto frameEnd = ClockType::now();
+
+         // If we rendered fast, fetch data again instead of stalling on the vsync
+         if ( duration<double, std::milli>( ( frameEnd - frameStart ) ).count() < 10.0 )
+         {
+            viewer.fetchClientsData();
+         }
+
+         SDL_GL_SwapWindow( window );
+      }
+      else
+      {
+         no_redraw_counter = 0; // Clamp to zero
+         // Nothing happening, go to sleep
+         HOP_SLEEP_MS( 16 );
       }
 
-      SDL_GL_SwapWindow( window );
+      prev_mouse_state = mouse;
 
-      frameEnd = ClockType::now();
+      auto frameEnd = ClockType::now();
 
       hop::g_stats.frameTimeMs = duration<double, std::milli>( ( frameEnd - frameStart ) ).count();
    }

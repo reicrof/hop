@@ -42,12 +42,12 @@ public:
    TimeStamp latestTimestamp() const;
 
    void setRecording( bool recording );
-   void fetchClientData();
-   void addStringData( const std::vector< char >& stringData );
-   void addTraces( const TraceData& traces, uint32_t threadIndex );
-   void addLockWaits( const LockWaitData& lockWaits, uint32_t threadIndex);
-   void addUnlockEvents(const std::vector<UnlockEvent>& unlockEvents, uint32_t threadIndex);
-   void addCoreEvents( const CoreEventData& coreEvents, uint32_t threadIndex );
+   bool fetchClientData();
+   bool addStringData( const std::vector< char >& stringData );
+   bool addTraces( const TraceData& traces, uint32_t threadIndex );
+   bool addLockWaits( const LockWaitData& lockWaits, uint32_t threadIndex);
+   bool addUnlockEvents(const std::vector<UnlockEvent>& unlockEvents, uint32_t threadIndex);
+   bool addCoreEvents( const CoreEventData& coreEvents, uint32_t threadIndex );
    void addThreadName( StrPtr_t name, uint32_t threadIndex );
    void clear();
 

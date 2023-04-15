@@ -20,7 +20,7 @@ class Viewer
    int removeProfiler( int index );
    int profilerCount() const;
    int activeProfilerIndex() const;
-   void fetchClientsData();
+   bool fetchClientsData();
 
   const ProfilerView* getProfiler( int index ) const;
   ProfilerView* getProfiler( int index );
@@ -34,7 +34,8 @@ class Viewer
        bool lmbPressed,
        bool rmbPressed,
        float mouseWheel );
-   void draw( float windowWidth, float windowHeight );
+   bool update(float deltaMs);
+   bool draw( float windowWidth, float windowHeight );
 
    bool handleHotkey( ProfilerView* selectedProf );
    bool handleMouse( ProfilerView* selectedProf );
