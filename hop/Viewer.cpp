@@ -574,6 +574,7 @@ static void updateOptions( const hop::ProfilerView* selectedProf, hop::Stats& st
 }
 
 static void updateProfilers(
+    hop::TimeStamp tlAbsStart,
     hop::TimeDuration tlDuration,
     std::vector<std::unique_ptr<hop::ProfilerView> >& profilers,
     int selectedTab )
@@ -581,7 +582,7 @@ static void updateProfilers(
    const float globalTimeMs = ImGui::GetTime() * 1000.0f;
    for ( auto& p : profilers )
    {
-      p->update( globalTimeMs, tlDuration );
+      p->update( tlDuration, globalTimeMs );
    }
 
    if( hop::options::showDebugWindow() && selectedTab >= 0 )
@@ -652,6 +653,7 @@ int Viewer::addProfiler( std::unique_ptr<ProfilerView> prof, bool startRecording
       }
    }
 
+   prof->saveTimelineState( -(_timeline.duration() / 2), _timeline.duration() );
    _profilers.emplace_back( std::move( prof ) );
    setRecording( _profilers.back().get(), &_timeline, startRecording );
    return setActiveProfiler( (int)_profilers.size() - 1 );
@@ -682,6 +684,7 @@ int Viewer::removeProfiler( int index )
       newTab = std::max( _selectedTab - 1, 0 );
    }
    _profilers.erase( _profilers.begin() + index );
+   _selectedTab = -1;
    return setActiveProfiler( newTab );
 }
 
@@ -693,7 +696,30 @@ int Viewer::setActiveProfiler( int index )
 {
    if( index != _selectedTab )
    {
-      _timeline.setImmediateUpdate();
+      // We are about to switch to a new tab, save the timeline state for the current tab
+      if( _selectedTab < _profilers.size() )
+      {
+         _profilers[_selectedTab]->saveTimelineState( _timeline.relativeStartTime(), _timeline.duration() );
+      }
+
+      const auto& pv = _profilers[index];
+      // Update timeline to push new duration/start time
+      updateTimeline( &_timeline, 16.0f, pv.get() );
+      if( pv->recording() )
+      {
+         _timeline.setRealtime( true );
+         _timeline.setImmediateUpdate();
+         _timeline.setZoom( pv->timelineDuration(), Timeline::ANIMATION_TYPE_NONE );
+      }
+      else
+      {
+         _timeline.setRealtime( false );
+         _timeline.frameToTime(
+             pv->timelineStartTime(),
+             pv->timelineDuration(),
+             false,
+             Timeline::ANIMATION_TYPE_NONE );
+      }
       _selectedTab = index;
    }
    return _selectedTab;
@@ -788,7 +814,7 @@ void Viewer::onNewFrame(
 
 bool Viewer::update( float deltaMs )
 {
-   updateProfilers( _timeline.duration(), _profilers, _selectedTab );
+   updateProfilers( _timeline.absoluteStartTime(), _timeline.duration(), _profilers, _selectedTab );
    return updateTimeline( &_timeline, deltaMs, _selectedTab >= 0 ? _profilers[_selectedTab].get() : nullptr );
 }
 

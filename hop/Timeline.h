@@ -84,8 +84,9 @@ class Timeline
    // Move timeline vertically to specified pixel position
    void moveVerticalPositionPxl( float positionPxl, AnimationType animType = ANIMATION_TYPE_NORMAL );
    // Frame the timeline to display the specified range of time
-   void frameToTime( int64_t time, TimeDuration duration, bool pushNavState ) noexcept;
-   void frameToAbsoluteTime( TimeStamp time, TimeDuration duration, bool pushNavState ) noexcept;
+   void frameToTime( int64_t time, TimeDuration duration, bool pushNavState, AnimationType animType = ANIMATION_TYPE_NORMAL) noexcept;
+   void frameToAbsoluteTime( TimeStamp time, TimeDuration duration, bool pushNavState, AnimationType animType = ANIMATION_TYPE_NORMAL ) noexcept;
+   void setZoom( TimeDuration microsToDisplay, AnimationType animType = ANIMATION_TYPE_NORMAL );
    // Update timeline to always display last race
    void setRealtime( bool isRealtime ) noexcept;
    bool realtime() const noexcept;
@@ -126,7 +127,6 @@ class Timeline
    void handleMouseWheel( float mousePosX, float mouseWheel );
    void zoomOn( int64_t cycleToZoomOn, float zoomFactor );
    void setStartTime( int64_t timeInCyle, AnimationType animType = ANIMATION_TYPE_NORMAL ) noexcept;
-   void setZoom( TimeDuration microsToDisplay, AnimationType animType = ANIMATION_TYPE_NORMAL );
 
    // Origin of the timeline in absolute time
    TimeStamp _globalStartTime{0};

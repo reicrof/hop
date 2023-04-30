@@ -36,12 +36,12 @@ static int closestLodLevel( hop::TimeDuration timelineDuration )
 }
 
 hop::ProfilerView::ProfilerView( hop::Profiler::SourceType type, int processId, const char* str )
-   : _profiler( type, processId, str ), _lodLevel( 0 ), _highlightValue( 0.0f )
+   : _profiler( type, processId, str ), _timelineStart ( 0 ), _timelineDuration ( 200 ), _lodLevel( 0 ), _highlightValue( 0.0f )
 {
 }
 
 hop::ProfilerView::ProfilerView( std::unique_ptr<NetworkConnection> nc )
-    : _profiler( std::move( nc ) ), _lodLevel( 0 ), _highlightValue( 0.0f )
+    : _profiler( std::move( nc ) ), _timelineStart ( 0 ), _timelineDuration ( 200 ), _lodLevel( 0 ), _highlightValue( 0.0f )
 {
 }
 
@@ -50,7 +50,7 @@ bool hop::ProfilerView::fetchClientData()
    return _profiler.fetchClientData();
 }
 
-void hop::ProfilerView::update( float globalTimeMs, TimeDuration timelineDuration )
+void hop::ProfilerView::update( TimeDuration timelineDuration, float globalTimeMs )
 {
    HOP_PROF_FUNC();
    _highlightValue = (std::sin( 0.007f * globalTimeMs ) * 0.8f + 1.0f) / 2.0f;
@@ -64,6 +64,11 @@ void hop::ProfilerView::update( float globalTimeMs, TimeDuration timelineDuratio
 void hop::ProfilerView::setRecording( bool recording )
 {
    _profiler.setRecording( recording );
+}
+
+bool hop::ProfilerView::recording() const
+{
+   return _profiler.recording();
 }
 
 bool hop::ProfilerView::saveToFile( const char* path )
@@ -133,6 +138,22 @@ float hop::ProfilerView::canvasHeight() const
 int hop::ProfilerView::lodLevel() const
 {
    return _lodLevel;
+}
+
+void hop::ProfilerView::saveTimelineState( TimeStamp time, TimeDuration duration )
+{
+   _timelineStart = time;
+   _timelineDuration = duration;
+}
+
+hop::TimeStamp hop::ProfilerView::timelineStartTime() const
+{
+   return _timelineStart;
+}
+
+hop::TimeDuration hop::ProfilerView::timelineDuration() const
+{
+   return _timelineDuration;
 }
 
 const hop::Profiler& hop::ProfilerView::data() const

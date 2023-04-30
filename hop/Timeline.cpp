@@ -758,17 +758,17 @@ void Timeline::moveToPresentTime( AnimationType animType ) noexcept
    moveToTime( ( _globalEndTime - _globalStartTime ), animType );
 }
 
-void Timeline::frameToTime( int64_t time, TimeDuration duration, bool pushNavState ) noexcept
+void Timeline::frameToTime( int64_t time, TimeDuration duration, bool pushNavState, AnimationType animType ) noexcept
 {
    if( pushNavState ) pushNavigationState();
 
-   setStartTime( time );
-   setZoom( duration );
+   setStartTime( time, animType );
+   setZoom( duration, animType );
 }
 
-void Timeline::frameToAbsoluteTime( TimeStamp time, TimeDuration duration, bool pushNavState ) noexcept
+void Timeline::frameToAbsoluteTime( TimeStamp time, TimeDuration duration, bool pushNavState, AnimationType animType ) noexcept
 {
-   frameToTime( time - _globalStartTime, duration, pushNavState );
+   frameToTime( time - _globalStartTime, duration, pushNavState, animType );
 }
 
 void Timeline::setZoom( TimeDuration timelineDuration, AnimationType animType )
