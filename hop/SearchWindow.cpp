@@ -9,6 +9,7 @@
 
 #include "imgui/imgui.h"
 
+#include <unordered_set>
 #include <functional> //std::greater
 
 template <typename CMP>
@@ -122,6 +123,14 @@ void findTraces( const char* string, const StringDb& strDb, const std::vector<ho
    sortSearchResOnDuration( result, tracks, std::greater<TimeStamp>() );
 }
 
+struct TableSelection
+{
+   std::unordered_set<int32_t> selections;
+   TimeDuration average;
+   int32_t lastSelectedId = -1;
+   bool dirty;
+};
+
 SearchSelection drawSearchResult(
    SearchResult& searchRes,
    const StringDb& strDb,
@@ -157,6 +166,7 @@ SearchSelection drawSearchResult(
       if ( ImGui::Begin( "Search Window", &searchRes.searchWindowOpen ) )
       {
          static char input[512];
+         static TableSelection tableSelection;
 
          if ( inputFocus ) ImGui::SetKeyboardFocusHere();
 
@@ -177,6 +187,31 @@ SearchSelection drawSearchResult(
          }
 
          ImGui::Text( "Found %zu matches", searchRes.matchCount );
+         if( tableSelection.selections.size() > 1 )
+         {
+            if( tableSelection.dirty )
+            {
+               tableSelection.average = 0;
+               for( int32_t i : tableSelection.selections )
+               {
+                  const auto& traceIdThreadId = searchRes.tracesIdxThreadIdx[i];
+                  const size_t traceId        = traceIdThreadId.first;
+                  const auto& ti              = tracks[traceIdThreadId.second];
+                  tableSelection.average +=
+                      ti._traces.entries.ends[traceId] - ti._traces.entries.starts[traceId];
+               }
+               tableSelection.average /= tableSelection.selections.size();
+               tableSelection.dirty = false;
+            }
+            char buffer[128];
+            int cat = snprintf(
+                buffer, sizeof( buffer ), "count %zu average ", tableSelection.selections.size() );
+            hop::formatCyclesDurationToDisplay(
+                tableSelection.average, buffer + cat, sizeof( buffer ) - cat, tlInfo.useCycles, cpuFreqGHz );
+            ImVec2 textSize = ImGui::CalcTextSize( buffer );
+            ImGui::SameLine( ImGui::GetWindowWidth() - textSize.x - 10.0f );
+            ImGui::Text( "%s", buffer );
+         }
 
          // Creating the table modifies the window size, so query values here *
          const float entryHeight    = ImGui::GetTextLineHeightWithSpacing();
@@ -230,14 +265,14 @@ SearchSelection drawSearchResult(
                    }
 
                    sortSpec->SpecsDirty = false;
+                   tableSelection.selections.clear();
                 }
             }
 
-            static int selectedId    = -1;
+            int doubleClickedId      = -1;
             int hoveredId            = -1;
             char traceTime[64]       = {};
             char traceDuration[64]   = {};
-            bool selectedSomething   = false;
 
             ImGuiListClipper clipper;
             clipper.Begin( (int)searchRes.tracesIdxThreadIdx.size(), entryHeight );
@@ -263,16 +298,44 @@ SearchSelection drawSearchResult(
                        tlInfo.useCycles,
                        cpuFreqGHz );
 
+                   auto& sel = tableSelection.selections;
+                   const bool selected = sel.find( i ) != sel.end();
                    ImGui::TableSetColumnIndex( 0 );
-                   if( ImGui::Selectable(
-                           traceTime, selectedId == i, ImGuiSelectableFlags_SpanAllColumns ) )
+                   if( ImGui::Selectable( traceTime, selected, ImGuiSelectableFlags_SpanAllColumns ) )
                    {
-                      selectedId        = i;
-                      selectedSomething = true;
+                      tableSelection.dirty = true;
+                      if( ImGui::GetIO().HopLogicalCtrl )
+                      {
+                         if( selected )
+                            sel.erase( i );
+                         else
+                            sel.insert( i );
+                      }
+                      else if( ImGui::GetIO().KeyShift )
+                      {
+                         if( !sel.empty() )
+                         {
+                            auto minmax  = std::minmax( tableSelection.lastSelectedId, i );
+                            for(int32_t i = minmax.first ; i < minmax.second; i++ )
+                               sel.insert( i );
+                         }
+                         else
+                         {
+                            sel.insert( i );
+                         }
+                      }
+                      else
+                      {
+                         sel.clear();
+                         sel.insert( i );
+                      }
+                      tableSelection.lastSelectedId = i;
                    }
                    if( ImGui::IsItemHovered() )
                    {
                       hoveredId = i;
+                      if( ImGui::IsMouseDoubleClicked( ImGuiMouseButton_Left ) )
+                         doubleClickedId = i;
                    }
 
                    ImGui::TableSetColumnIndex( 1 );
@@ -296,9 +359,9 @@ SearchSelection drawSearchResult(
                 }
             }
 
-            if( selectedSomething && selectedId != -1 )
+            if( doubleClickedId != -1 )
             {
-                const auto& traceIdThreadId = searchRes.tracesIdxThreadIdx[selectedId];
+                const auto& traceIdThreadId = searchRes.tracesIdxThreadIdx[doubleClickedId];
                 selectedTraceId             = traceIdThreadId.first;
                 selectedThreadId            = traceIdThreadId.second;
             }
