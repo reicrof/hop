@@ -77,7 +77,7 @@ For more information, please refer to <http://unlicense.org/>
 // by setting this variable to 1. This will also increase the over-head of
 // HOP in your application.
 #ifndef HOP_USE_STD_CHRONO
-#if defined(_M_X64) || defined(__x86_64__)
+ #if defined(_M_X64) || defined(__x86_64__)
   #define HOP_USE_STD_CHRONO 0
  #else
   #define HOP_USE_STD_CHRONO 1
@@ -223,6 +223,10 @@ typedef TCHAR HOP_CHAR;
 typedef int shm_handle;
 typedef char HOP_CHAR;
 
+#if __APPLE__
+#include <mach/mach_time.h>
+#endif
+
 #define HOP_API
 
 #if defined( __x86_64__ )
@@ -270,10 +274,14 @@ inline TimeStamp getTimeStamp( Core_t& core )
    // of precision. It will instead be used to flag if a trace uses dynamic strings or not in its
    // start time. See hop::StartProfileDynString
 #if HOP_USE_STD_CHRONO
+  #if __APPLE__
+   return mach_continuous_time ();
+  #else
    using namespace std::chrono;
    core = 0;
    return (TimeStamp)duration_cast<nanoseconds>( steady_clock::now().time_since_epoch() ).count() &
           ~1ULL;
+  #endif
 #else
    return hop::rdtscp( core ) & ~1ULL;
 #endif
@@ -397,7 +405,7 @@ struct NetworkHandshake
    uint32_t pid;
    uint32_t maxThreadCount;
    uint64_t sharedMemSize;
-   float cpuFreqGhz;
+   float timerFreqGHz;
    TimeStamp connectionTs;
    char appName[64];
 };
@@ -536,6 +544,7 @@ class ZoneGuard
 };
 
 void sleepMs( uint32_t ms );
+float getTimerFreqGHz();
 
 #define HOP_PROF_GUARD_VAR( LINE, ARGS ) hop::ProfGuard HOP_COMBINE( hopProfGuard, LINE ) ARGS
 #define HOP_PROF_ID_GUARD( ID, ARGS ) hop::ProfGuard ID ARGS
@@ -679,7 +688,7 @@ class SharedMemory
       std::atomic<uint32_t> lastResetSeed{ 1 };
       size_t requestedSize{ 0 };
       std::atomic<TimeStamp> lastHeartbeatTimeStamp{ 0 };
-      bool usingStdChronoTimeStamps{ false };
+      float timerFreqGHz{ 1.0f };
    };
 
    bool hasConnectedProducer() const HOP_NOEXCEPT;
@@ -714,8 +723,6 @@ class SharedMemory
 };
 
 /* Internal viewer functions declaration */
-
-float getCpuFreqGHz();
 
 } //namespace hop
 
@@ -1073,7 +1080,10 @@ void sleepMs( uint32_t ms )
 #endif
 }
 
-static uint64_t alignOn( uint64_t val, uint64_t alignment );
+uint64_t alignOn( uint64_t val, uint64_t alignment )
+{
+   return ( ( val + alignment - 1 ) & ~( alignment - 1 ) );
+}
 
 ConnectionState
 SharedMemory::create( int pid, size_t requestedSize, bool isConsumer )
@@ -1125,7 +1135,7 @@ SharedMemory::create( int pid, size_t requestedSize, bool isConsumer )
          metaInfo->clientVersion             = HOP_VERSION;
          metaInfo->maxThreadNb               = HOP_MAX_THREAD_NB;
          metaInfo->requestedSize             = HOP_SHARED_MEM_SIZE;
-         metaInfo->usingStdChronoTimeStamps  = HOP_USE_STD_CHRONO;
+         metaInfo->timerFreqGHz              = getTimerFreqGHz();
          metaInfo->lastResetSeed             = 1;
 
          // Take a local copy as we do not want to expose the ring buffer before it is
@@ -1314,44 +1324,58 @@ SharedMemory::~SharedMemory() { destroy(); }
 
 /* Remote profiler implementation */
 
-static float estimateCpuFreqHz()
+static double estimateCpuFreqHz()
 {
+   static double estimation = 0.0;
+
+   if( estimation == 0.0 )
+   {
 #if !HOP_USE_STD_CHRONO
-   using namespace std::chrono;
-   uint32_t cpu;
-   volatile uint64_t dummy = 0;
-   // Do a quick warmup first
-   for( int i = 0; i < 1000; ++i )
-   {
-      ++dummy;
-      hop::rdtscp( cpu );
-   }
+      using namespace std::chrono;
+      uint32_t cpu;
+      volatile uint64_t dummy = 0;
+      // Do a quick warmup first
+      for( int i = 0; i < 1000; ++i )
+      {
+         ++dummy;
+         hop::rdtscp( cpu );
+      }
 
-   // Start timer and get current cycle count
-   const auto startTime           = high_resolution_clock::now();
-   const uint64_t startCycleCount = hop::rdtscp( cpu );
+      // Start timer and get current cycle count
+      const auto startTime           = high_resolution_clock::now();
+      const uint64_t startCycleCount = hop::rdtscp( cpu );
 
-   // Make the cpu work hard
-   for( int i = 0; i < 2000000; ++i )
-   {
-      dummy += i;
-   }
+      // Make the cpu work hard
+      for( int i = 0; i < 2000000; ++i )
+      {
+         dummy += i;
+      }
 
-   // Stop timer and get end cycle count
-   const uint64_t endCycleCount = hop::rdtscp( cpu );
-   const auto endTime           = high_resolution_clock::now();
+      // Stop timer and get end cycle count
+      const uint64_t endCycleCount = hop::rdtscp( cpu );
+      const auto endTime           = high_resolution_clock::now();
 
-   const uint64_t deltaCycles = endCycleCount - startCycleCount;
-   const auto deltaTimeNs     = duration_cast<nanoseconds>( endTime - startTime );
+      const uint64_t deltaCycles = endCycleCount - startCycleCount;
+      const auto deltaTimeNs     = duration_cast<nanoseconds>( endTime - startTime );
 
-   double countPerSec = duration<double>( seconds( 1 ) ) / deltaTimeNs;
-   return deltaCycles * countPerSec;
+      double countPerSec = duration<double>( seconds( 1 ) ) / deltaTimeNs;
+      estimation = deltaCycles * countPerSec;
 #else
-   return 2e9;
+   #if __APPLE__
+     struct mach_timebase_info info;
+     if (mach_timebase_info( &info ) == KERN_SUCCESS)
+       estimation = 1.0 / (((double) info.numer / (double) info.denom) * 1e-9);
+     else
+       assert(false);
+   #else
+     estimation = 2e9;
+   #endif
 #endif
+   }
+   return estimation;
 }
 
-float getCpuFreqGHz()
+float getTimerFreqGHz()
 {
    static float cpuFreq = 0;
    if( cpuFreq == 0 )
@@ -1733,7 +1757,7 @@ static bool sendHandshake( NetworkConnection& connection, SharedMemory& shmem )
    msg.handshake.pid            = shmem.pid();
    msg.handshake.maxThreadCount = shmem.sharedMetaInfo()->maxThreadNb;
    msg.handshake.sharedMemSize  = HOP_SHARED_MEM_SIZE;
-   msg.handshake.cpuFreqGhz     = getCpuFreqGHz();
+   msg.handshake.timerFreqGHz   = getTimerFreqGHz();
    msg.handshake.connectionTs   = ts;
    if( g_clientName )
    {
@@ -1876,16 +1900,6 @@ static StrPtr_t cStringHash( const char* str, size_t strLen )
       result = str[i] + ( result * prime );
    }
    return result;
-}
-
-static uint32_t alignOn( uint32_t val, uint32_t alignment )
-{
-   return ( ( val + alignment - 1 ) & ~( alignment - 1 ) );
-}
-
-static uint64_t alignOn( uint64_t val, uint64_t alignment )
-{
-   return ( ( val + alignment - 1 ) & ~( alignment - 1 ) );
 }
 
 static void allocTraces( Traces* t, unsigned size )

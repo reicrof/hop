@@ -283,7 +283,7 @@ static uint32_t processUncompressData( Server* server, uint32_t curSeed, const u
 static void
 networkTransportLoop( Server* server, Transport* transport)
 {
-   const uint32_t bufSize = 1024 * 1024 * 8;
+   uint32_t bufSize       = 1024 * 1024 * 8;
    uint8_t* buf           = (uint8_t*)malloc( bufSize );
    uint8_t* compBuf       = (uint8_t*)malloc( bufSize );
 
@@ -332,6 +332,8 @@ networkTransportLoop( Server* server, Transport* transport)
          const uint8_t* uncompressedData = compBufIt;
          if( compressionHeader.compressed )
          {
+            if (compressionHeader.uncompressedSize > bufSize)
+              buf = (uint8_t*) realloc( buf, alignOn( compressionHeader.uncompressedSize, 4096 ));
             int decomp_res = lzjb_decompress( compBufIt, buf, cmpSize, ucmpSize );
             assert( decomp_res >= 0 );
             uncompressedData = buf;
@@ -512,15 +514,7 @@ float Server::cpuFreqGHz() const
 {
    if( _cpuFreqGHz == 0 && _transport && _transport->_shmem.valid() )
    {
-      if( _transport->_shmem.sharedMetaInfo()->usingStdChronoTimeStamps )
-      {
-         // Using std::chrono means we are already using nanoseconds -> 1Ghz
-         _cpuFreqGHz = 1.0f;
-      }
-      else
-      {
-         _cpuFreqGHz = hop::getCpuFreqGHz();
-      }
+      _cpuFreqGHz = _transport->_shmem.sharedMetaInfo()->timerFreqGHz;
    }
 
    return _cpuFreqGHz;
@@ -776,7 +770,7 @@ ssize_t Server::handleNewMessage( const uint8_t* data, size_t maxSize, uint32_t 
          static_assert( offsetof( NetworkHandshakeMsgInfo, handshake ) == sizeof( MsgInfo ), "Struct alignment changed" );
          const NetworkHandshake* handshakePtr = (const NetworkHandshake*)bufPtr;
          std::lock_guard<hop::Mutex> guard( _stateMutex );
-         _cpuFreqGHz = handshakePtr->cpuFreqGhz;
+         _cpuFreqGHz        = handshakePtr->timerFreqGHz;
          _state.processName = handshakePtr->appName;
          _state.pid         = handshakePtr->pid;
          _state.seed        = msgInfo->seed;

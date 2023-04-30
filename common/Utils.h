@@ -126,6 +126,9 @@ void insertionSort( IT begin, IT end )
    }
 }
 
+/* Define in Hop.h implementation */
+extern uint64_t alignOn( uint64_t val, uint64_t alignment );
+
 inline constexpr uint64_t prevPowerOfTwo( uint64_t x )
 {
    x = x | ( x >> 1 );

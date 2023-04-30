@@ -4,11 +4,6 @@
 #include <cassert>
 #include <cstring>
 
-static uint32_t alignOn( uint32_t val, uint32_t alignment )
-{
-   return (( val + alignment-1) & ~(alignment-1));
-}
-
 namespace hop
 {
 
